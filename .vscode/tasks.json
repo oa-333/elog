@@ -1,0 +1,80 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "Build all",
+            "command": "c:\\msys64\\msys2_shell.cmd",
+            "args": [
+                "-defterm",
+                "-no-start",
+                "-ucrt64",
+                "-where",
+                "${workspaceFolder}",
+                "-c",
+                "make -j -f Makefile MINGW=1 all"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": { "INSTALL_DIR": "/c/oren/swe/install" }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "cppbuild",
+            "label": "Clean",
+            "command": "c:\\msys64\\msys2_shell.cmd",
+            "args": [
+                "-defterm",
+                "-no-start",
+                "-ucrt64",
+                "-where",
+                "${workspaceFolder}",
+                "-c",
+                "make -j -f Makefile MINGW=1 clean"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": { "INSTALL_DIR": "/c/oren/swe/install" }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "type": "cppbuild",
+            "label": "Install",
+            "command": "c:\\msys64\\msys2_shell.cmd",
+            "args": [
+                "-defterm",
+                "-no-start",
+                "-ucrt64",
+                "-where",
+                "${workspaceFolder}",
+                "-c",
+                "make -j -f Makefile MINGW=1 install"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": { "INSTALL_DIR": "/c/oren/swe/install" }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        }
+    ],
+    "version": "2.0.0"
+}
