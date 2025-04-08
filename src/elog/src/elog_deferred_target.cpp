@@ -6,15 +6,8 @@
 
 namespace elog {
 
-ELogDeferredTarget::ELogDeferredTarget(ELogTarget* logTarget)
-    : m_logTarget(logTarget), m_stop(false) {
-    m_logThread = std::thread(logThread, this);
-}
-
-ELogDeferredTarget::~ELogDeferredTarget() { stopLogThread(); }
-
 bool ELogDeferredTarget::start() {
-    m_logThread = std::thread(logThread, this);
+    m_logThread = std::thread(&ELogDeferredTarget::logThread, this);
     return true;
 }
 

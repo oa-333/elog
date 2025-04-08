@@ -46,7 +46,7 @@ public:
      * ${src} ${msg}.
      * @return true If log line format specification was parsed successfully, otherwise false.
      */
-    inline bool initialize(const char* logLineFormatSpec = "${time} ${tid} ${level} ${msg}") {
+    inline bool initialize(const char* logLineFormatSpec = "${time} ${level:6} [${tid}] ${msg}") {
         return parseFormatSpec(logLineFormatSpec);
     }
 
@@ -63,9 +63,10 @@ protected:
      * method, and it can be extended to include new field selectors, even ones that extract data
      * from external systems.
      * @param fieldName The field name.
+     * @param justify Field justification value. Positive value represents left justification.
      * @return ELogFieldSelector* The resulting field selector or null if failed.
      */
-    virtual ELogFieldSelector* createFieldSelector(const char* fieldName);
+    virtual ELogFieldSelector* createFieldSelector(const char* fieldName, int justify);
 
 private:
     std::vector<ELogFieldSelector*> m_fieldSelectors;

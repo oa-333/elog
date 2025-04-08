@@ -2,8 +2,8 @@
 #define __ELOG_LOGGER_H__
 
 #include <atomic>
-#include <vector>
 
+#include "elog_buffer.h"
 #include "elog_level.h"
 #include "elog_record.h"
 #include "elog_source.h"
@@ -61,18 +61,13 @@ public:
     void finishLog();
 
     /** @brief Queries whether a multi-part log message is being constructed. */
-    inline bool isLogging() const { return sMsgBufferOffset > 0; }
+    bool isLogging() const;
 
     /** @brief Queries whether the logger can issue log message with the given level. */
     inline bool canLog(ELogLevel logLevel) const { return m_logSource->canLog(logLevel); }
 
 private:
     ELogSource* m_logSource;
-
-    static thread_local std::vector<char> sMsgBuffer;
-    static thread_local uint32_t sMsgBufferOffset;
-    static thread_local ELogRecord sLogRecord;
-    static std::atomic<uint64_t> sNextRecordId;
 
     /**
      * @brief Starts a multi-part log message.
@@ -84,11 +79,7 @@ private:
 
     void appendMsg(const char* msg);
 
-    inline void ensureBufferLength(uint32_t requiredBytes) {
-        if (sMsgBuffer.size() - sMsgBufferOffset < requiredBytes) {
-            sMsgBuffer.resize(sMsgBufferOffset + requiredBytes);
-        }
-    }
+    bool ensureBufferLength(uint32_t requiredBytes);
 };
 
 }  // namespace elog

@@ -25,10 +25,25 @@
 
 namespace elog {
 
-thread_local std::vector<char> ELogLogger::sMsgBuffer;
-thread_local uint32_t ELogLogger::sMsgBufferOffset;
+// ATTENTION: the following thread local cannot be class members, because these causes some conflict
+// in TLS destruction under MinGW (the logger object in which they might be defined is overwritten
+// with dead-land bit pattern when destroyed, so when C runtime TLS destruction runs for some thread
+// when thread exits, the destructor the TLS variable runs with an object whose contents is
+// dead-land and the application crashes)
+
+// static thread_local LogRecordData sRecordData;
+static thread_local ELogBuffer sMsgBuffer;
+static thread_local uint32_t sMsgBufferOffset;
+static thread_local bool sBufferFull;
+static thread_local ELogRecord sLogRecord;
+static std::atomic<uint64_t> sNextRecordId;
+
+// thread_local LogRecordData sRecordData;
+/*thread_local ELogBuffer ELogLogger::sMsgBuffer;
+thread_local uint32_t ELogLogger::sMsgBufferOffset = 0;
+thread_local bool ELogLogger::sBufferFull = false;
 thread_local ELogRecord ELogLogger::sLogRecord;
-std::atomic<uint64_t> ELogLogger::sNextRecordId = 0;
+std::atomic<uint64_t> ELogLogger::sNextRecordId = 0;*/
 
 static uint64_t getCurrentThreadId() {
 #ifdef __WIN32__
@@ -149,24 +164,29 @@ void ELogLogger::finishLog() {
     if (isLogging()) {
         // add terminating null and transfer to log record
         appendMsg("\n");
-        sLogRecord.m_logMsg = (const char*)&sMsgBuffer[0];
+        sLogRecord.m_logMsg = sMsgBuffer.getRef();
 
         // send to log targets
         ELogSystem::log(sLogRecord);
 
-        // reset log buffer
+        // reset log record data
+        sMsgBuffer.reset();
         sMsgBufferOffset = 0;
+        sBufferFull = false;
     } else {
         fprintf(stderr, "attempt to end log message without start-log being issued first\n");
     }
 }
 
+bool ELogLogger::isLogging() const { return sMsgBufferOffset > 0; }
+
 void ELogLogger::startLogRecord(ELogLevel logLevel) {
-    sLogRecord.m_logRecordId = sNextRecordId.fetch_add(1, std::memory_order_relaxed);
-    sLogRecord.m_logLevel = logLevel;
-    gettimeofday(&sLogRecord.m_logTime, NULL);
-    sLogRecord.m_threadId = getCurrentThreadId();
-    sLogRecord.m_sourceId = m_logSource->getId();
+    ELogRecord& logRecord = sLogRecord;
+    logRecord.m_logRecordId = sNextRecordId.fetch_add(1, std::memory_order_relaxed);
+    logRecord.m_logLevel = logLevel;
+    gettimeofday(&logRecord.m_logTime, NULL);
+    logRecord.m_threadId = getCurrentThreadId();
+    logRecord.m_sourceId = m_logSource->getId();
 }
 
 void ELogLogger::appendMsgV(const char* fmt, va_list ap) {
@@ -174,14 +194,25 @@ void ELogLogger::appendMsgV(const char* fmt, va_list ap) {
     va_copy(apCopy, ap);
     uint32_t requiredBytes = (vsnprintf(nullptr, 0, fmt, apCopy) + 1);
     ensureBufferLength(requiredBytes);
-    sMsgBufferOffset +=
-        vsnprintf(&sMsgBuffer[sMsgBufferOffset], sMsgBuffer.size() - sMsgBufferOffset, fmt, ap);
+    sMsgBufferOffset += vsnprintf(sMsgBuffer.getRef() + sMsgBufferOffset,
+                                  sMsgBuffer.size() - sMsgBufferOffset, fmt, ap);
 }
 
 void ELogLogger::appendMsg(const char* msg) {
     uint32_t requiredBytes = (strlen(msg) + 1);
     ensureBufferLength(requiredBytes);
-    sMsgBufferOffset += elog_strncpy(&sMsgBuffer[sMsgBufferOffset], msg, requiredBytes);
+    sMsgBufferOffset += elog_strncpy(sMsgBuffer.getRef() + sMsgBufferOffset, msg, requiredBytes);
+}
+
+bool ELogLogger::ensureBufferLength(uint32_t requiredBytes) {
+    bool res = true;
+    if (sMsgBuffer.size() - sMsgBufferOffset < requiredBytes) {
+        res = sMsgBuffer.resize(sMsgBufferOffset + requiredBytes);
+        if (!res) {
+            sBufferFull = true;
+        }
+    }
+    return res;
 }
 
 }  // namespace elog

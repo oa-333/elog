@@ -2,13 +2,14 @@
 # 			Directories									#
 #########################################################
 
-IS_MINGW := $(shell uname -a | grep MINGW | wc -l)
+MINGW := $(shell uname -a | grep MINGW | wc -l)
+PLATFORM := $(shell uname -s)
 
 #INC_DIR := ./inc
 SRC_DIR := ./src
 BIN_DIR := ./bin
 LIB_DIR := ./lib
-BUILD_DIR := ./build
+BUILD_DIR := ./build/$(PLATFORM)
 DEP_DIR := $(BUILD_DIR)/dep
 OBJ_DIR := $(BUILD_DIR)/obj
 
@@ -171,10 +172,22 @@ install: all $(INSTALL_FILES) $(INSTALL_TARGETS)
 # 			Compile Rules								#
 #########################################################
 
-# compile/link flags
+# compiler
 CPP := g++
+
+# compilation flags
+CPPFLAGS := -std=c++23 -g3
+
+# project include path
+CPPFLAGS += -I. -I$(ELOG_INC_DIR)
+
+# special MinGW include dirs
+ifeq ($(MINGW), 1)
+CPPFLAGS += -I/ucrt64/include
+endif
+
+# link flags
 #DEP_FLAGS := -MT $@ -MMD -MP -MF $(patsubst $(OBJ_DIR)/%.o,$(DEP_DIR)/%.tmp.dep,$@)
-CPPFLAGS := -std=c++23 -g3 -I. -I$(ELOG_INC_DIR) -I/ucrt64/include
 LDFLAGS := -L$(BIN_DIR)
 ifeq ($(MINGW), 1)
 	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32 -ldbghelp -lbacktrace -lpsapi

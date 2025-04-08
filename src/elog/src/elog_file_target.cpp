@@ -8,28 +8,18 @@ ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolic
     : ELogAbstractTarget(flushPolicy),
       m_filePath(filePath),
       m_fileHandle(nullptr),
-      m_shouldClose(false) {
-    m_fileHandle = fopen(filePath, "a");
-    if (m_fileHandle == nullptr) {
-        ELOG_SYS_ERROR(ELogSystem::getDefaultLogger(), fopen,
-                       "Failed to redirect log message to file %s", filePath);
-    } else {
-        m_shouldClose = true;
-    }
-}
+      m_shouldClose(false) {}
 
-ELogFileTarget::~ELogFileTarget() {
-    if (m_fileHandle != nullptr && m_shouldClose) {
-        fclose(m_fileHandle);
-    }
-}
+ELogFileTarget::~ELogFileTarget() {}
 
 bool ELogFileTarget::start() {
-    m_fileHandle = fopen(m_filePath.c_str(), "a");
     if (m_fileHandle == nullptr) {
-        ELOG_SYS_ERROR(ELogSystem::getDefaultLogger(), fopen, "Failed to open log file %s",
-                       m_filePath.c_str());
-        return false;
+        m_fileHandle = fopen(m_filePath.c_str(), "a");
+        if (m_fileHandle == nullptr) {
+            ELOG_SYS_ERROR(fopen, "Failed to open log file %s", m_filePath.c_str());
+            return false;
+        }
+        m_shouldClose = true;
     }
     return true;
 }
@@ -37,8 +27,7 @@ bool ELogFileTarget::start() {
 bool ELogFileTarget::stop() {
     if (m_fileHandle != nullptr && m_shouldClose) {
         if (fclose(m_fileHandle) == -1) {
-            ELOG_SYS_ERROR(ELogSystem::getDefaultLogger(), fopen, "Failed to close log file %s",
-                           m_filePath.c_str());
+            ELOG_SYS_ERROR(fopen, "Failed to close log file %s", m_filePath.c_str());
             return false;
         }
     }

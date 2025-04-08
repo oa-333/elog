@@ -7,6 +7,8 @@
 
 namespace elog {
 
+extern void initFieldSelectors();
+
 class ELogFieldSelector {
 public:
     virtual ~ELogFieldSelector() {}
@@ -14,12 +16,17 @@ public:
     virtual void selectField(const ELogRecord& record, std::stringstream& msgStream) = 0;
 
 protected:
-    ELogFieldSelector() {}
+    ELogFieldSelector(int justify = 0) : m_justify(justify) {}
+
+    void applyJustify(std::stringstream& msgStream);
+
+private:
+    int m_justify;
 };
 
 class ELogStaticTextSelector : public ELogFieldSelector {
 public:
-    ELogStaticTextSelector(const char* text) { m_text = text; }
+    ELogStaticTextSelector(const char* text) : m_text(text) {}
     ~ELogStaticTextSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -30,15 +37,18 @@ private:
 
 class ELogRecordIdSelector : public ELogFieldSelector {
 public:
-    ELogRecordIdSelector() {}
+    ELogRecordIdSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogRecordIdSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
+
+private:
+    int m_justify;
 };
 
 class ELogTimeSelector : public ELogFieldSelector {
 public:
-    ELogTimeSelector() {}
+    ELogTimeSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogTimeSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -46,7 +56,7 @@ public:
 
 class ELogHostNameSelector : public ELogFieldSelector {
 public:
-    ELogHostNameSelector() {}
+    ELogHostNameSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogHostNameSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -54,7 +64,7 @@ public:
 
 class ELogUserNameSelector : public ELogFieldSelector {
 public:
-    ELogUserNameSelector() {}
+    ELogUserNameSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogUserNameSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -62,7 +72,7 @@ public:
 
 class ELogProcessIdSelector : public ELogFieldSelector {
 public:
-    ELogProcessIdSelector() {}
+    ELogProcessIdSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogProcessIdSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -70,7 +80,7 @@ public:
 
 class ELogThreadIdSelector : public ELogFieldSelector {
 public:
-    ELogThreadIdSelector() {}
+    ELogThreadIdSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogThreadIdSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -78,7 +88,7 @@ public:
 
 class ELogSourceSelector : public ELogFieldSelector {
 public:
-    ELogSourceSelector() {}
+    ELogSourceSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogSourceSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -86,7 +96,7 @@ public:
 
 class ELogLevelSelector : public ELogFieldSelector {
 public:
-    ELogLevelSelector() {}
+    ELogLevelSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogLevelSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
@@ -94,7 +104,7 @@ public:
 
 class ELogMsgSelector : public ELogFieldSelector {
 public:
-    ELogMsgSelector() {}
+    ELogMsgSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogMsgSelector() final {}
 
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;

@@ -75,7 +75,7 @@ private:
     std::unordered_set<ELogLogger*> m_loggers;
 
     ELogSource(ELogSourceId sourceId, const char* name, ELogSource* parent = nullptr,
-               ELogLevel logLevel = ELOG_INFO)
+               ELogLevel logLevel = ELEVEL_INFO)
         : m_sourceId(sourceId),
           m_name(name),
           m_moduleName(name),

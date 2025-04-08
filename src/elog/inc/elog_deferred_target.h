@@ -28,8 +28,8 @@ public:
      * @brief Construct a new ELogDeferredTarget object.
      * @param logTarget The deferred log target.
      */
-    ELogDeferredTarget(ELogTarget* logTarget);
-    ~ELogDeferredTarget() override;
+    ELogDeferredTarget(ELogTarget* logTarget) : m_logTarget(logTarget), m_stop(false) {}
+    ~ELogDeferredTarget() override {}
 
     /** @brief Order the log target to start (required for threaded targets). */
     bool start() final;

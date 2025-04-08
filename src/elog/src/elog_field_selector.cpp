@@ -13,19 +13,67 @@
 #endif
 
 #include <climits>
+#include <cstring>
+#include <iomanip>
 
 #include "elog_system.h"
 
-// TODO: we would like to have host name, user name and process id retrieves once at startup and
-// cached for later use
-
 namespace elog {
 
+static char hostName[HOST_NAME_MAX];
+static char userName[LOGIN_NAME_MAX];
+#ifdef __WIN32__
+static DWORD pid = 0;
+#else
+static pid_t pid = 0;
+#endif
+
+extern void initFieldSelectors() {
+    // initialize host name
+    if (gethostname(hostName, HOST_NAME_MAX) != 0) {
+        strcpy(hostName, "<N/A>");
+    }
+
+    // initialize user name
+#ifdef __WIN32__
+    DWORD len = 256;
+    if (!GetUserNameA(userName, &len)) {
+        strcpy(userName, "<N/A>");
+    }
+#else
+    if (getlogin_r(userName, LOGIN_NAME_MAX) != 0) {
+        strcpy(userName, "<N/A>");
+    }
+#endif
+
+    // initialize pid
+#ifdef __WIN32__
+    pid = GetCurrentProcessId();
+#else
+    pid = getpid();
+#endif
+}
+
+void ELogFieldSelector::applyJustify(std::stringstream& msgStream) {
+    if (m_justify > 0) {
+        // left justify
+        msgStream << std::setw(m_justify) << std::left;
+    } else if (m_justify < 0) {
+        // right justify
+        msgStream << std::setw(-m_justify) << std::right;
+    } else {
+        // no justify
+        msgStream << std::setw(0);
+    }
+}
+
 void ELogStaticTextSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
     msgStream << m_text;
 }
 
 void ELogRecordIdSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
     msgStream << std::to_string(record.m_logRecordId);
 }
 
@@ -35,57 +83,33 @@ void ELogTimeSelector::selectField(const ELogRecord& record, std::stringstream& 
     char buffer[64];
     size_t offset = strftime(buffer, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
     offset += sprintf(buffer + offset, "%.3u", (unsigned)(record.m_logTime.tv_usec / 1000));
+
+    applyJustify(msgStream);
     msgStream << buffer;
 }
 
 void ELogHostNameSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
-    static thread_local char hostName[HOST_NAME_MAX];
-    static thread_local bool hostNameInit = false;
-    if (!hostNameInit) {
-        if (gethostname(hostName, HOST_NAME_MAX) != 0) {
-            strcpy(hostName, "<N/A>");
-        }
-        hostNameInit = true;
-    }
+    applyJustify(msgStream);
     msgStream << hostName;
 }
 
 void ELogUserNameSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
-    static thread_local char userName[LOGIN_NAME_MAX];
-    static thread_local bool userNameInit = false;
-    if (!userNameInit) {
-#ifdef __WIN32__
-        DWORD len = 256;
-        if (!GetUserNameA(userName, &len)) {
-            strcpy(userName, "<N/A>");
-        }
-#else
-        if (getlogin_r(userName, LOGIN_NAME_MAX) != 0) {
-            strcpy(userName, "<N/A>");
-        }
-#endif
-        userNameInit = true;
-    }
+    applyJustify(msgStream);
     msgStream << userName;
 }
 
 void ELogProcessIdSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
-#ifdef __WIN32__
-    // cache this call (at least per-thread) by having a thread local variable
-    static thread_local DWORD pid = GetCurrentProcessId();
+    applyJustify(msgStream);
     msgStream << std::to_string(pid);
-#else
-    // cache this call (at least per-thread) by having a thread local variable
-    static thread_local pid_t pid = getpid();
-    msgStream << std::to_string(pid);
-#endif
 }
 
 void ELogThreadIdSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
     msgStream << std::to_string(record.m_threadId);
 }
 
 void ELogSourceSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
     ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
     if (logSource != nullptr) {
         msgStream << logSource->getQualifiedName();
@@ -95,14 +119,12 @@ void ELogSourceSelector::selectField(const ELogRecord& record, std::stringstream
 }
 
 void ELogLevelSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
     msgStream << elogLevelToStr(record.m_logLevel);
 }
 
 void ELogMsgSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
-    msgStream << record.m_logMsg;
-}
-
-void selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
     msgStream << record.m_logMsg;
 }
 

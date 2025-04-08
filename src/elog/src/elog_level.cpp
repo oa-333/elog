@@ -4,8 +4,8 @@
 
 namespace elog {
 
-static ELogLevel gLogLevels[] = {ELOG_FATAL, ELOG_ERROR, ELOG_WARN,  ELOG_NOTICE,
-                                 ELOG_INFO,  ELOG_TRACE, ELOG_DEBUG, ELOG_DIAG};
+static ELogLevel gLogLevels[] = {ELEVEL_FATAL, ELEVEL_ERROR, ELEVEL_WARN,  ELEVEL_NOTICE,
+                                 ELEVEL_INFO,  ELEVEL_TRACE, ELEVEL_DEBUG, ELEVEL_DIAG};
 
 static const char* gLogLevelStr[] = {"FATAL", "ERROR", "WARN",  "NOTICE",
                                      "INFO",  "TRACE", "DEBUG", "DIAG"};

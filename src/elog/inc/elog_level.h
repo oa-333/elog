@@ -11,35 +11,35 @@ enum ELogLevel : uint32_t {
      * @var Fatal log level. Application cannot continue operation and will terminate by itself or
      * abruptly crash.
      */
-    ELOG_FATAL,
+    ELEVEL_FATAL,
 
     /** @var Error log level. An error condition occurred. Application can continue operating. */
-    ELOG_ERROR,
+    ELEVEL_ERROR,
 
     /**
      * @var Warning log level. User is warned about some error condition, but not as severe as error
      * log level.
      */
-    ELOG_WARN,
+    ELEVEL_WARN,
 
     /**
      * @var Notice log level. User should note about some condition. It is not an error. Usually
      * application can cope with it, but there might be some implications (e.g. reduced
      * performance).
      */
-    ELOG_NOTICE,
+    ELEVEL_NOTICE,
 
     /** @var Informative log level. Should be used to log infrequent important details. */
-    ELOG_INFO,
+    ELEVEL_INFO,
 
     /** @var Trace log level. Used for debugging not so noisy components. */
-    ELOG_TRACE,
+    ELEVEL_TRACE,
 
     /** @var Trace log level. Used for debugging noisy components. */
-    ELOG_DEBUG,
+    ELEVEL_DEBUG,
 
     /** @var Trace log level. Used for debugging very noisy components. Log flooding is expected. */
-    ELOG_DIAG
+    ELEVEL_DIAG
 };
 
 /** @brief Converts log level constant to string. */

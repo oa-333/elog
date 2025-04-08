@@ -62,10 +62,6 @@ void ELogSystem::termGlobals() {
         delete sGlobalFormatter;
         sGlobalFormatter = nullptr;
     }
-    if (sDefaultLogger != nullptr) {
-        delete sDefaultLogger;
-        sDefaultLogger = nullptr;
-    }
     if (sRootLogSource != nullptr) {
         delete sRootLogSource;
         sRootLogSource = nullptr;
@@ -76,10 +72,11 @@ bool ELogSystem::initialize() {
     if (!initGlobals()) {
         return false;
     }
-    if (setFileLogTarget(stderr) == ELOG_INVALID_TARGET_ID) {
+    if (setLogFileTarget(stderr) == ELOG_INVALID_TARGET_ID) {
         termGlobals();
         return false;
     }
+    initFieldSelectors();
     return true;
 }
 
@@ -94,7 +91,7 @@ bool ELogSystem::initializeLogFile(const char* logFilePath,
 
     ELogTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR(getDefaultLogger(), "Failed to create log file target, out of memory");
+        ELOG_ERROR("Failed to create log file target, out of memory");
         termGlobals();
         return ELOG_INVALID_TARGET_ID;
     }
@@ -127,7 +124,7 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
     ELogTarget* logTarget =
         new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR(getDefaultLogger(), "Failed to create segmented log file target, out of memory");
+        ELOG_ERROR("Failed to create segmented log file target, out of memory");
         termGlobals();
         return ELOG_INVALID_TARGET_ID;
     }
@@ -148,49 +145,104 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
     return true;
 }
 
+void ELogSystem::terminate() {
+    for (ELogTarget* logTarget : sLogTargets) {
+        if (logTarget != nullptr) {
+            logTarget->stop();
+            delete logTarget;
+        }
+    }
+    sLogTargets.clear();
+
+    setLogFormatter(nullptr);
+    setLogFilter(nullptr);
+    termGlobals();
+}
+
 ELogTargetId ELogSystem::setLogTarget(ELogTarget* logTarget, bool printBanner /* = false */) {
     // first start the log target
     if (!logTarget->start()) {
-        delete logTarget;
-        ELOG_ERROR(getDefaultLogger(), "Failed to start log target");
+        ELOG_ERROR("Failed to start log target");
         return ELOG_INVALID_TARGET_ID;
     }
 
     // check if this is the first log target or not
     if (!sLogTargets.empty()) {
-        sLogTargets[0]->stop();
-        delete sLogTargets[0];
-        sLogTargets[0] = logTarget;
-        return 0;
-    } else {
-        sLogTargets.push_back(logTarget);
-        if (printBanner) {
-            ELOG_INFO(getDefaultLogger(), "======================================================");
+        for (ELogTarget* logTarget : sLogTargets) {
+            if (logTarget != nullptr) {
+                logTarget->stop();
+            }
         }
-        return (ELogTargetId)(sLogTargets.size() - 1);
+        sLogTargets.clear();
     }
+
+    sLogTargets.push_back(logTarget);
+    if (printBanner) {
+        ELOG_INFO("======================================================");
+    }
+    return (ELogTargetId)(sLogTargets.size() - 1);
 }
 
-ELogTargetId ELogSystem::setFileLogTarget(const char* logFilePath, bool printBanner /* = true */) {
+ELogTargetId ELogSystem::setLogFileTarget(const char* logFilePath,
+                                          ELogFlushPolicy* flushPolicy /* = nullptr */,
+                                          bool printBanner /* = true */) {
     // create new log target
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, &sDefaultPolicy);
+    if (flushPolicy == nullptr) {
+        flushPolicy = &sDefaultPolicy;
+    }
+    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR(getDefaultLogger(), "Failed to create log target, out of memory");
+        ELOG_ERROR("Failed to create log file target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
-    return ELogSystem::setLogTarget(logTarget, printBanner);
+    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
 }
 
-ELogTargetId ELogSystem::setFileLogTarget(FILE* fileHandle, bool printBanner /* = false */) {
+ELogTargetId ELogSystem::setLogFileTarget(FILE* fileHandle,
+                                          ELogFlushPolicy* flushPolicy /* = nullptr */,
+                                          bool printBanner /* = false */) {
     // create new log target
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, &sDefaultPolicy);
+    if (flushPolicy == nullptr) {
+        flushPolicy = &sDefaultPolicy;
+    }
+    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR(getDefaultLogger(), "Failed to create log target, out of memory");
+        ELOG_ERROR("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
-    return ELogSystem::setLogTarget(logTarget, printBanner);
+    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
+}
+
+ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const char* logName,
+                                                   uint32_t segmentLimitMB,
+                                                   ELogFlushPolicy* flushPolicy /* = nullptr */,
+                                                   bool printBanner /* = true */) {
+    // create new log target
+    if (flushPolicy == nullptr) {
+        flushPolicy = &sDefaultPolicy;
+    }
+    ELogTarget* logTarget =
+        new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
+    if (logTarget == nullptr) {
+        ELOG_ERROR("Failed to create segmented log file target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
 }
 
 ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
@@ -201,25 +253,62 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
     return (ELogTargetId)(sLogTargets.size() - 1);
 }
 
-ELogTargetId ELogSystem::addFileLogTarget(const char* logFilePath) {
+ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath,
+                                          ELogFlushPolicy* flushPolicy /* = nullptr */) {
     // create new log target
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, &sDefaultPolicy);
+    if (flushPolicy == nullptr) {
+        flushPolicy = &sDefaultPolicy;
+    }
+    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR(getDefaultLogger(), "Failed to create log target, out of memory");
+        ELOG_ERROR("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
-    return ELogSystem::addLogTarget(logTarget);
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
 }
 
-ELogTargetId ELogSystem::addFileLogTarget(FILE* fileHandle) {
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, &sDefaultPolicy);
+ELogTargetId ELogSystem::addLogFileTarget(FILE* fileHandle,
+                                          ELogFlushPolicy* flushPolicy /* = nullptr */) {
+    if (flushPolicy == nullptr) {
+        flushPolicy = &sDefaultPolicy;
+    }
+    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR(getDefaultLogger(), "Failed to create log target, out of memory");
+        ELOG_ERROR("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
-    return addLogTarget(logTarget);
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
+}
+
+ELogTargetId ELogSystem::addSegmentedLogFileTarget(const char* logPath, const char* logName,
+                                                   uint32_t segmentLimitMB,
+                                                   ELogFlushPolicy* flushPolicy /* = nullptr */) {
+    // create new log target
+    if (flushPolicy == nullptr) {
+        flushPolicy = &sDefaultPolicy;
+    }
+    ELogTarget* logTarget =
+        new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
+    if (logTarget == nullptr) {
+        ELOG_ERROR("Failed to create segmented log file target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
 }
 
 void ELogSystem::removeLogTarget(ELogTargetId targetId) {
@@ -250,7 +339,7 @@ void ELogSystem::removeLogTarget(ELogTargetId targetId) {
 
     // no log sinks left, so put back stderr
     sLogTargets.clear();
-    addFileLogTarget(stderr);
+    addLogFileTarget(stderr);
 }
 
 void ELogSystem::removeLogTarget(ELogTarget* target) {

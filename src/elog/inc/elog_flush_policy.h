@@ -51,14 +51,7 @@ public:
     ELogAndFlushPolicy(ELogAndFlushPolicy&&) = delete;
     ~ELogAndFlushPolicy() {}
 
-    bool shouldFlush(uint32_t msgSizeBytes) final {
-        for (ELogFlushPolicy* flushPolicy : m_flushPolicies) {
-            if (!flushPolicy->shouldFlush(msgSizeBytes)) {
-                return false;
-            }
-        }
-        return true;
-    }
+    bool shouldFlush(uint32_t msgSizeBytes) final;
 };
 
 /** @class A combined flush policy, for enforcing one of many flush policies. */
@@ -69,14 +62,7 @@ public:
     ELogOrFlushPolicy(ELogOrFlushPolicy&&) = delete;
     ~ELogOrFlushPolicy() {}
 
-    bool shouldFlush(uint32_t msgSizeBytes) final {
-        for (ELogFlushPolicy* flushPolicy : m_flushPolicies) {
-            if (flushPolicy->shouldFlush(msgSizeBytes)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    bool shouldFlush(uint32_t msgSizeBytes) final;
 };
 
 /** @class A immediate flush policy, for enforcing log target flush after every log message.  */
@@ -87,7 +73,7 @@ public:
     ELogImmediateFlushPolicy(ELogImmediateFlushPolicy&&) = delete;
     ~ELogImmediateFlushPolicy() {}
 
-    bool shouldFlush(uint32_t msgSizeBytes) final { return true; }
+    bool shouldFlush(uint32_t msgSizeBytes) final;
 };
 
 /**
@@ -102,10 +88,7 @@ public:
     ELogCountFlushPolicy(ELogCountFlushPolicy&&) = delete;
     ~ELogCountFlushPolicy() {}
 
-    bool shouldFlush(uint32_t msgSizeBytes) final {
-        uint64_t logCount = m_currentLogCount.fetch_add(1, std::memory_order_relaxed);
-        return (logCount % m_logCountLimit == 0);
-    }
+    bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
     const uint64_t m_logCountLimit;
@@ -124,12 +107,7 @@ public:
     ELogSizeFlushPolicy(ELogSizeFlushPolicy&&) = delete;
     ~ELogSizeFlushPolicy() {}
 
-    bool shouldFlush(uint32_t msgSizeBytes) final {
-        uint64_t prevSizeBytes =
-            m_currentLogSizeBytes.fetch_add(msgSizeBytes, std::memory_order_relaxed);
-        uint64_t currSizeBytes = prevSizeBytes + msgSizeBytes;
-        return (currSizeBytes % m_logSizeLimitBytes) > (prevSizeBytes & m_logSizeLimitBytes);
-    }
+    bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
     const uint64_t m_logSizeLimitBytes;
@@ -143,36 +121,12 @@ private:
  */
 class ELogTimedFlushPolicy : public ELogFlushPolicy {
 public:
-    ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarget* logTarget)
-        : m_prevFlushTime(getTimestamp()),
-          m_logTimeLimitMillis(logTimeLimitMillis),
-          m_logTarget(logTarget),
-          m_stopTimer(false) {
-        m_timerThread = std::thread(onTimer, this);
-    }
+    ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarget* logTarget);
     ELogTimedFlushPolicy(const ELogTimedFlushPolicy&) = delete;
     ELogTimedFlushPolicy(ELogTimedFlushPolicy&&) = delete;
-    ~ELogTimedFlushPolicy() {
-        m_stopTimer = true;
-        m_timerThread.join();
-    }
+    ~ELogTimedFlushPolicy();
 
-    bool shouldFlush(uint32_t msgSizeBytes) final {
-        // start flush thread on demand
-
-        // get timestamp
-        Timestamp now = std::chrono::steady_clock::now();
-
-        // compare with previous flush time
-        Timestamp prev = m_prevFlushTime.load(std::memory_order_relaxed);
-        if (getTimeDiff(now, prev) > m_logTimeLimitMillis) {
-            // the one that sets the new flush time will notify caller to flush
-            if (m_prevFlushTime.compare_exchange_strong(prev, now, std::memory_order_seq_cst)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
     typedef std::chrono::time_point<std::chrono::steady_clock> Timestamp;
@@ -190,15 +144,7 @@ private:
     bool m_stopTimer;
     std::thread m_timerThread;
 
-    void onTimer() {
-        while (!m_stopTimer) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(m_logTimeLimitMillis));
-            // we participate with the rest as a phantom logger, to avoid duplicate flushes
-            if (shouldFlush(0)) {
-                m_logTarget->flush();
-            }
-        }
-    }
+    void onTimer();
 };
 
 }  // namespace elog

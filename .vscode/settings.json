@@ -73,6 +73,7 @@
         "climits": "cpp"
     },
     "cSpell.ignoreWords": [
+        "ELEVEL",
         "HDRS",
         "IMAGEHLP",
         "MAKEDEPEND",
