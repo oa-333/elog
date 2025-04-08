@@ -5,16 +5,24 @@
 
 namespace elog {
 
+/** @brief Parent interface for all log filters. */
 class ELogFilter {
 public:
     virtual ~ELogFilter() {}
 
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
     virtual bool filterLogRecord(const ELogRecord& logRecord) = 0;
 
 protected:
     ELogFilter() {}
 };
 
+/** @brief A log filter that negates the result of another log filter. */
 class ELogNegateFilter : public ELogFilter {
 public:
     ELogNegateFilter(ELogFilter* filter) : m_filter(filter) {}
@@ -28,6 +36,11 @@ private:
     ELogFilter* m_filter;
 };
 
+/**
+ * @brief A composite log filter that combines the result of two other log filters by either
+ * applying AND operator on the result or applying OR operator on the result of the underlying two
+ * filters.
+ */
 class ELogCompositeLogFilter : public ELogFilter {
 public:
     enum class OpType { OT_AND, OT_OR };
@@ -56,6 +69,9 @@ private:
     OpType m_opType;
 };
 
+/**
+ * @brief An AND log filter that checks both underlying filters allow the record to be processed.
+ */
 class ELogAndLogFilter : public ELogCompositeLogFilter {
 public:
     ELogAndLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)
@@ -63,6 +79,10 @@ public:
     ~ELogAndLogFilter() final {}
 };
 
+/**
+ * @brief An OR log filter that checks if either one of the underlying filters allows the record to
+ * be processed.
+ */
 class ELogOrLogFilter : public ELogCompositeLogFilter {
 public:
     ELogOrLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)

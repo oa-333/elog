@@ -13,9 +13,13 @@
 
 namespace elog {
 
+/** @typedef Log target identifier type. */
 typedef uint32_t ELogTargetId;
+
+/** @def Invalid log target identifier value. */
 #define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
 
+/** @brief The elog module facade. */
 class ELogSystem {
 public:
     /** @brief Initializes the ELog system with defaults (log to standard error stream). */
@@ -58,10 +62,14 @@ public:
     /** @brief Releases all resources allocated for the ELogSystem. */
     static void terminate();
 
-    // log targets (API is not thread safe)
+    /**
+     * Log Target Management Interface
+     */
 
     /**
      * @brief Replaces all currently configured log targets with the given log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param target The log target.
      * @param printBanner Optionally specifies whether to print a banner (if not specified none is
      * printed).
@@ -73,6 +81,8 @@ public:
     /**
      * @brief Utility method for replacing all currently configured log targets with a file log
      * target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param logFilePath The path to the log file.
      * @param flushPolicy Optional flush policy (if not specified then flush after each log
      * message).
@@ -87,6 +97,8 @@ public:
     /**
      * @brief Utility method for replacing all currently configured log targets with a file log
      * target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param fileHandle An open file handle. Standard output or error stream handles can be
      * specified here. The caller is responsible for closing the handle when done if needed.
      * @param flushPolicy Optional flush policy (if not specified then flush after each log
@@ -102,6 +114,8 @@ public:
     /**
      * @brief Utility method for replacing all currently configured log targets with a segmented
      * file log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param logPath The directory for log file segments.
      * @param logName The base name for log file segments.
      * @param flushPolicy Optional flush policy (if not specified then flush after each log
@@ -117,6 +131,8 @@ public:
 
     /**
      * @brief Adds a log target to existing log targets.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param target The target to add
      * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
      * failed.
@@ -125,6 +141,8 @@ public:
 
     /**
      * @brief Utility method for adding a file log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param logFilePath The path to the log file.
      * @param flushPolicy Optional flush policy (if not specified then flush after each log
      * message).
@@ -136,6 +154,8 @@ public:
 
     /**
      * @brief Utility method for adding a file log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param fileHandle An open file handle. Standard output or error stream handles can be
      * specified here. The caller is responsible for closing the handle when done if needed.
      * @param flushPolicy Optional flush policy (if not specified then flush after each log
@@ -147,6 +167,8 @@ public:
 
     /**
      * @brief Adds a segmented file log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
      * @param logPath The directory for log file segments.
      * @param logName The base name for log file segments.
      * @param flushPolicy Optional flush policy (if not specified then flush after each log
@@ -160,6 +182,8 @@ public:
 
     /**
      * @brief Removes an existing log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * termination phase.
      * @param target The log target to remove.
      * @note It is preferable to use to other @ref removeLogTarget() method, as it runs faster.
      */
@@ -167,43 +191,121 @@ public:
 
     /**
      * @brief Removes an existing log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * termination phase.
      * @param targetId The identifier of the log target to removed as obtained when adding or
      * setting the log target.
      */
     static void removeLogTarget(ELogTargetId targetId);
 
-    // log sources
-    static ELogSourceId defineLogSource(const char* qualifiedName);
-    static ELogSource* getLogSource(const char* qualifiedName);
-    static ELogSource* getLogSource(ELogSourceId logSourceId);
-    static ELogSource* getRootLogSource();
-    // static void configureLogSourceLevel(const char* qualifiedName, ELogLevel logLevel);
+    /**
+     * Log Source Management Interface
+     */
 
-    // logger interface
+    // log sources
+    /**
+     * @brief Defines a new log source by a qualified name.
+     * @note The qualified name of a log source is a name path from root to the log source,
+     * separated with dots. The root source has no name and no following dot.
+     * @param qualifiedName The qualified name of the log source. (path from root with dots, root
+     * source has no name and no following dot) log source
+     * @return ELogSourceId The resulting log source id or @ref ELOG_INVALID_SOURCE_ID if failed.
+     */
+    static ELogSourceId defineLogSource(const char* qualifiedName);
+
+    /** @brief Retrieves a log source by its qualified name. Returns null if not found. */
+    static ELogSource* getLogSource(const char* qualifiedName);
+
+    /** @brief Retrieves a log source by its id. Returns null if not found. */
+    static ELogSource* getLogSource(ELogSourceId logSourceId);
+
+    /** @brief Retrieves the root log source. */
+    static ELogSource* getRootLogSource();
+
+    /**
+     * Logger Utility Interface
+     */
+
+    /**
+     * @brief Retrieves the default logger of the elog system.
+     * @note This logger is not valid before @ref  ELogSystem::initialize() is called, and not after
+     * @ref ELogSystem::terminate() is called.
+     * @return ELogLogger* The default logger, or null if none is defined.
+     */
     static ELogLogger* getDefaultLogger();
-    static ELogLogger* getLogger(const char* sourceName);
+
+    /** @brief Retrieves a logger from a lgo source by its qualified name. */
+    static ELogLogger* getLogger(const char* qualifiedSourceName);
     // static ELogLogger* getMultiThreadedLogger(const char* sourceName);
     // static ELogLogger* getSingleThreadedLogger(const char* sourceName);
 
-    // log formatting
+    /**
+     * Log Formatting Interface
+     */
+
+    /**
+     * @brief Configures the format of log lines.
+     * @note The log line format specification is a string with normal text and white space, that
+     * may contain special token references. The following special tokens are in use:
+     * ${rid} - the log record id.
+     * ${time} - the loging time.
+     * @{host} - the host name.
+     * ${user} - the logged in user.
+     * ${pid} - the process id.
+     * ${tid} - the logging thread id.
+     * ${src} - the log source of the logger (qualified name).
+     * ${mod} - the alternative module name associated with the source.
+     * ${msg} - the log message.
+     * This list is extendible. For further details refer to documentation of @ref ELogFormatter.
+     * @param logFormat The log line format specification.
+     * @return true If the formate specification was parsed successfully and applied, otherwise
+     * false.
+     */
     static bool configureLogFormat(const char* logFormat);
+
+    /** @brief Installs a custom log formatter. */
     static void setLogFormatter(ELogFormatter* logFormatter);
-    // static void setLogFormatter(ELogFormatter* formatter);
+
+    /**
+     * @brief Formats a log message, using the installed log formatter.
+     * @param logRecord The log record to format.
+     * @param[out] logMsg The resulting formatted log message.
+     */
     static void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
 
-    // global log filtering
+    /**
+     * Log Filtering Interface
+     */
+
+    /** @brief Installs a custom log filter. */
     static void setLogFilter(ELogFilter* logFilter);
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be processed.
+     * @return false If the log record is to be discarded.
+     */
     static bool filterLogMsg(const ELogRecord& logRecord);
 
-    // note: each log target controls its own log format
+    /**
+     * Logging Interface
+     */
 
+    /**
+     * @brief Logs a log record. In essence to log record is sent to all registered log targets.
+     * @param logRecord The lgo record to process.
+     */
     static void log(const ELogRecord& logRecord);
 
     /** @brief Converts system error code to string. */
     static char* sysErrorToStr(int sysErrorCode);
 
 #ifdef __WIN32__
+    /** @brief Converts Windows system error code to string. */
     static char* win32SysErrorToStr(unsigned long sysErrorCode);
+
+    /** @brief Deallocates Windows system error string. */
     static void win32FreeErrorStr(char* errStr);
 #endif
 
@@ -212,9 +314,8 @@ private:
     static void termGlobals();
 };
 
-inline bool isLogLevelEnabled(ELogLevel logLevel) {
-    return ELogSystem::getDefaultLogger()->canLog(logLevel);
-}
+/** @brief Queries whether the default logger can log a record with a given log level. */
+inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->canLog(logLevel); }
 
 }  // namespace elog
 
@@ -535,6 +636,7 @@ inline bool isLogLevelEnabled(ELogLevel logLevel) {
 
 #endif  // __WIN32__
 
+/** @brief Utility macro for importing frequent names. */
 #define ELOG_USING()           \
     using elog::ELEVEL_DEBUG;  \
     using elog::ELEVEL_DIAG;   \
@@ -545,23 +647,5 @@ inline bool isLogLevelEnabled(ELogLevel logLevel) {
     using elog::ELEVEL_TRACE;  \
     using elog::ELEVEL_WARN;   \
     using elog::ELogLevel;
-
-#if 0
-/**
- * @brief Logs libuv error message to the server log.
- * @param logger The logger used for message formatting.
- * @param uvcall The libuv call that failed.
- * @param res The libuv call result.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_UV_ERROR(logger, uvcall, res, fmt, ...)                        \
-    {                                                                       \
-        char buf[32];                                                       \
-        ELOG_ERROR(logger, "libuv call " #uvcall "() failed: %d (%s)", res, \
-                   uv_strerror_r(res, buf, 32));                            \
-        ELOG_ERROR(logger, fmt, ##__VA_ARGS__);                             \
-    }
-#endif
 
 #endif  // __ELOG_SYSTEM_H__

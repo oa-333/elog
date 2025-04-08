@@ -19,6 +19,12 @@ namespace elog {
 class ELogFlushPolicy {
 public:
     virtual ~ELogFlushPolicy() {}
+
+    /**
+     * @brief Queries whether the log target should be flushed.
+     * @param msgSizeBytes The current logged message size.
+     * @return true If the log target should be flushed.
+     */
     virtual bool shouldFlush(uint32_t msgSizeBytes) = 0;
 
 protected:
@@ -77,7 +83,7 @@ public:
 };
 
 /**
- * @class A flush policy the enforces log target flush whenever the number of un-flushed log
+ * @class A flush policy that enforces log target flush whenever the number of un-flushed log
  * messages exceeds a configured limit.
  */
 class ELogCountFlushPolicy : public ELogFlushPolicy {

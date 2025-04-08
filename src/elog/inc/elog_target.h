@@ -14,7 +14,7 @@ class ELogFlushPolicy;
  * @interface Parent interface for all log targets. Used to decouple log formatting from logging.
  * Possible log targets could be:
  * - Log file (possibly segmented)
- * - External logging system (adapter)
+ * - External logging system (adapter to containing application)
  * - Message Queue of some message broker system
  */
 class ELogTarget {

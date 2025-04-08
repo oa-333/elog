@@ -37,8 +37,6 @@ public:
     /** @brief Retrieves the current capacity of the buffer. */
     inline uint32_t size() const { return m_bufferSize; }
 
-    /** @brief Increases the current capacity of the buffer. */
-
     /**
      * @brief Increases the current capacity of the buffer. If the buffer's size is already
      * greater than the required size then no action takes place.

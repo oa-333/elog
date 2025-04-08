@@ -38,6 +38,7 @@ public:
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stop() final;
 
+    /** @brief Orders a buffered log target to flush it log messages. */
     void flush() final;
 
 protected:

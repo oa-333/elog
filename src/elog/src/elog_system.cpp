@@ -436,9 +436,10 @@ ELogSource* ELogSystem::getRootLogSource() { return sRootLogSource; }
 
 // logger interface
 ELogLogger* ELogSystem::getDefaultLogger() { return sDefaultLogger; }
-ELogLogger* ELogSystem::getLogger(const char* sourceName) {
+
+ELogLogger* ELogSystem::getLogger(const char* qualifiedSourceName) {
     ELogLogger* logger = nullptr;
-    ELogSource* source = getLogSource(sourceName);
+    ELogSource* source = getLogSource(qualifiedSourceName);
     if (source != nullptr) {
         logger = source->createLogger();
     }

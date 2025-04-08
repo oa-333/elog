@@ -9,26 +9,7 @@
 
 namespace elog {
 
-/** @def Flag specifying to include log record id. */
-#define ELOG_FORMAT_RID
-
-/** @def Flag specifying to include log time stamp. */
-#define ELOG_FORMAT_TIME
-/** @def Flag specifying to include log time stamp milliseconds fraction. */
-#define ELOG_FORMAT_MSEC
-
-/** @def Flag specifying to include host name/address. */
-#define ELOG_FORMAT_HOST
-
-/** @def Flag specifying to include process id. */
-#define ELOG_FORMAT_PID
-
-/** @def Flag specifying to include thread id. */
-#define ELOG_FORMAT_TID
-/** @def Flag specifying to include module name. */
-#define ELOG_FORMAT_MODULE
-
-// following special tokens can be sued in configuration:
+// the following special tokens can be sued in configuration:
 // ${rid} ${time} ${host} ${user} ${pid} ${tid} ${src} ${msg}
 
 // TODO: consider having a parent interface with no ctor params
@@ -42,9 +23,12 @@ public:
     /**
      * @brief Initializes the log formatter.
      * @param logLineFormatSpec The log line format specification. The following special tokens are
-     * interpreted as log record field references: ${rid} ${time} ${host} ${user} ${pid} ${tid}
-     * ${src} ${msg}.
-     * @return true If log line format specification was parsed successfully, otherwise false.
+     * interpreted as log record field references: ${rid} ${time} ${tid} ${src} ${msg}. The
+     * following additional tokens are understood: ${host} for host name,
+     * ${user} for logged in user, ${pid} for current process id, and ${mod} for module name. More
+     * custom tokens can be added by deriving from @ref ELogFormatter and overriding the virtual
+     * method @ref createFieldSelector().
+     * @return true If the log line format specification was parsed successfully, otherwise false.
      */
     inline bool initialize(const char* logLineFormatSpec = "${time} ${level:6} [${tid}] ${msg}") {
         return parseFormatSpec(logLineFormatSpec);

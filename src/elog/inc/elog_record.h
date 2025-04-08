@@ -42,20 +42,9 @@ struct ELogRecord {
     ELogRecord(const ELogRecord&) = default;
 
     /** @brief Destructor. */
-
     ~ELogRecord() {}
 
     inline ELogRecord& operator=(const ELogRecord& logRecord) = default;
-
-    /*inline ELogRecord& operator=(const ELogRecord& logRecord) {
-        m_logRecordId = logRecord.m_logRecordId;
-        m_logTime = logRecord.m_logTime;
-        m_threadId = logRecord.m_threadId;
-        m_sourceId = logRecord.m_sourceId;
-        m_logLevel = logRecord.m_logLevel;
-        m_logMsg = (char*)logRecord.m_logMsg;
-        return *this;
-    }*/
 };
 
 }  // namespace elog

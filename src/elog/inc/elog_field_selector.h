@@ -9,10 +9,21 @@ namespace elog {
 
 extern void initFieldSelectors();
 
+/**
+ * @brief Parent interface for all field selectors. Custom selectors may be added by deriving from
+ * this interface and deriving from @ref ELogFormatter, so that the field can be parsed by
+ * overriding the virtual function @ref createFieldSelector().
+ */
 class ELogFieldSelector {
 public:
     virtual ~ELogFieldSelector() {}
 
+    /**
+     * @brief Selects a field from the log record (or from external source) and appends it to the
+     * message stream.
+     * @param record The log record from which a field is to be selected.
+     * @param msgStream The message stream receiveing the log record in string form.
+     */
     virtual void selectField(const ELogRecord& record, std::stringstream& msgStream) = 0;
 
 protected:
@@ -24,6 +35,10 @@ private:
     int m_justify;
 };
 
+/**
+ * @brief Static text field selector, used for placing the strings between the fields in the log
+ * format line specification string.
+ */
 class ELogStaticTextSelector : public ELogFieldSelector {
 public:
     ELogStaticTextSelector(const char* text) : m_text(text) {}
