@@ -109,6 +109,14 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
+class ELogModuleSelector : public ELogFieldSelector {
+public:
+    ELogModuleSelector(int justify) : ELogFieldSelector(justify) {}
+    ~ELogModuleSelector() final {}
+
+    void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
+};
+
 class ELogLevelSelector : public ELogFieldSelector {
 public:
     ELogLevelSelector(int justify) : ELogFieldSelector(justify) {}

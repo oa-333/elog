@@ -118,6 +118,16 @@ void ELogSourceSelector::selectField(const ELogRecord& record, std::stringstream
     }
 }
 
+void ELogModuleSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
+    ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
+    if (logSource != nullptr) {
+        msgStream << logSource->getModuleName();
+    } else {
+        msgStream << "<N/A>";
+    }
+}
+
 void ELogLevelSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
     applyJustify(msgStream);
     msgStream << elogLevelToStr(record.m_logLevel);

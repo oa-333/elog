@@ -253,10 +253,14 @@ public:
      * ${user} - the logged in user.
      * ${pid} - the process id.
      * ${tid} - the logging thread id.
+     * ${level} - the log level
      * ${src} - the log source of the logger (qualified name).
      * ${mod} - the alternative module name associated with the source.
      * ${msg} - the log message.
-     * This list is extendible. For further details refer to documentation of @ref ELogFormatter.
+     * Tokens may contain justification number, where positive means justify to the left, and
+     * negative number means justify to the right. For instance: ${level:6}.
+     * The list above is extendible. For further details refer to the documentation of the @ref
+     * ELogFormatter class.
      * @param logFormat The log line format specification.
      * @return true If the formate specification was parsed successfully and applied, otherwise
      * false.

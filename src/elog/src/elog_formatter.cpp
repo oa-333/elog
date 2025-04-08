@@ -81,6 +81,8 @@ ELogFieldSelector* ELogFormatter::createFieldSelector(const char* fieldName, int
         selector = new (std::nothrow) ELogLevelSelector(justify);
     } else if (strcmp(fieldName, "src") == 0) {
         selector = new (std::nothrow) ELogSourceSelector(justify);
+    } else if (strcmp(fieldName, "src") == 0) {
+        selector = new (std::nothrow) ELogModuleSelector(justify);
     } else if (strcmp(fieldName, "msg") == 0) {
         selector = new (std::nothrow) ELogMsgSelector(justify);
     } else {
