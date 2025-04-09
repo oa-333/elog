@@ -159,6 +159,49 @@ void ELogSystem::terminate() {
     termGlobals();
 }
 
+bool ELogSystem::configureFromProperties(const ELogProps& props) {
+    // configure for log_format
+    ELogProps::const_iterator itr = props.find("log_format");
+    if (itr != props.end()) {
+        if (!configureLogFormat(itr->second.c_str())) {
+            ELOG_ERROR("Invalid log format in properties: %s", itr->second.c_str());
+            return false;
+        }
+    }
+
+    // configure log levels
+    ELogLevel logLevel = ELEVEL_INFO;
+    for (const auto& entry : props) {
+        if (entry.first.find("log_level") != std::string::npos) {
+            const std::string& key = entry.first;
+            if (key.compare("log_level") == 0) {
+                if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
+                    ELOG_ERROR("Invalid global log level: %s", entry.second.c_str());
+                    return false;
+                }
+                getRootLogSource()->setLogLevel(logLevel);
+            } else {
+                if (key.ends_with("log_level") == 0) {
+                    std::string sourceName = key.substr(0, key.size() - strlen("log_level"));
+                    ELogSource* logSource = getLogSource(sourceName.c_str());
+                    if (logSource == nullptr) {
+                        ELOG_ERROR("Invalid log source name: %s", sourceName.c_str());
+                        return false;
+                    }
+                    if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
+                        ELOG_ERROR("Invalid source &s log level: %s", sourceName.c_str(),
+                                   entry.second.c_str());
+                        return false;
+                    }
+                    logSource->setLogLevel(logLevel);
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
 ELogTargetId ELogSystem::setLogTarget(ELogTarget* logTarget, bool printBanner /* = false */) {
     // first start the log target
     if (!logTarget->start()) {

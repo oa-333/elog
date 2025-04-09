@@ -11,11 +11,11 @@
                 "-where",
                 "${workspaceFolder}",
                 "-c",
-                "make -j -f Makefile MINGW=1 all"
+                "make -j -f Makefile all"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
-                "env": { "INSTALL_DIR": "/c/oren/swe/install" }
+                "env": { "INSTALL_DIR": "/c/install" }
             },
             "problemMatcher": [
                 "$gcc"
@@ -36,11 +36,11 @@
                 "-where",
                 "${workspaceFolder}",
                 "-c",
-                "make -j -f Makefile MINGW=1 clean"
+                "make -j -f Makefile clean"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
-                "env": { "INSTALL_DIR": "/c/oren/swe/install" }
+                "env": { "INSTALL_DIR": "/c/install" }
             },
             "problemMatcher": [
                 "$gcc"
@@ -61,11 +61,11 @@
                 "-where",
                 "${workspaceFolder}",
                 "-c",
-                "make -j -f Makefile MINGW=1 install"
+                "make -j -f Makefile install"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
-                "env": { "INSTALL_DIR": "/c/oren/swe/install" }
+                "env": { "INSTALL_DIR": "/c/install" }
             },
             "problemMatcher": [
                 "$gcc"

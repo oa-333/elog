@@ -82,6 +82,7 @@
         "elog",
         "lbacktrace",
         "ldbghelp",
+        "lelog",
         "libcsi",
         "libelog",
         "libuv",

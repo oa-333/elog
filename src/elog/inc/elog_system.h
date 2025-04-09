@@ -3,6 +3,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <unordered_map>
 
 #include "elog_filter.h"
 #include "elog_formatter.h"
@@ -18,6 +19,9 @@ typedef uint32_t ELogTargetId;
 
 /** @def Invalid log target identifier value. */
 #define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
+
+/** @typedef Property map. */
+typedef std::unordered_map<std::string, std::string> ELogProps;
 
 /** @brief The elog module facade. */
 class ELogSystem {
@@ -61,6 +65,18 @@ public:
 
     /** @brief Releases all resources allocated for the ELogSystem. */
     static void terminate();
+
+    /**
+     * @brief Configures the ELog System from a properties map.
+     * The following properties are recognized:
+     * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
+     *   Determines the global (root source) log level.
+     * - <qualified-source-name>.log_level: Log level of a log source.
+     * @param props The properties map.
+     * @return true If configuration succeeded, otherwise false.
+     */
+    static bool configureFromProperties(const ELogProps& props);
 
     /**
      * Log Target Management Interface
@@ -331,7 +347,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param ... Log message format string parameters.
  */
 #define ELOG_EX(logger, level, fmt, ...)              \
-    if (logger->canLog(level)) {                      \
+    if (logger != nullptr && logger->canLog(level)) { \
         logger->logFormat(level, fmt, ##__VA_ARGS__); \
     }
 
@@ -406,9 +422,9 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BEGIN_EX(logger, level, fmt, ...)       \
-    if (logger->canLog(level)) {                     \
-        logger->startLog(level, fmt, ##__VA_ARGS__); \
+#define ELOG_BEGIN_EX(logger, level, fmt, ...)        \
+    if (logger != nullptr && logger->canLog(level)) { \
+        logger->startLog(level, fmt, ##__VA_ARGS__);  \
     }
 
 /**
@@ -417,20 +433,29 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The message format.
  * @param ... The message arguments.
  */
-#define ELOG_APPEND_EX(logger, fmt, ...) logger->appendLog(fmt, ##__VA_ARGS__)
+#define ELOG_APPEND_EX(logger, fmt, ...)       \
+    if (logger != nullptr) {                   \
+        logger->appendLog(fmt, ##__VA_ARGS__); \
+    }
 
 /**
  * @brief Appends unformatted message to a multi-part log message.
  * @param logger The logger used for message formatting.
  * @param msg The log message.
  */
-#define ELOG_APPEND_NF_EX(logger, msg) logger->appendLogNoFormat(msg)
+#define ELOG_APPEND_NF_EX(logger, msg)  \
+    if (logger != nullptr) {            \
+        logger->appendLogNoFormat(msg); \
+    }
 
 /**
  * @brief Terminates a multi-part log message and writes it to the server log.
  * @param logger The logger used for message formatting.
  */
-#define ELOG_END_EX(logger) logger->finishLog()
+#define ELOG_END_EX(logger)  \
+    if (logger != nullptr) { \
+        logger->finishLog(); \
+    }
 
 /**
  * @brief Logs a system error message to the server log.
@@ -441,7 +466,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param ... Log message format string parameters.
  */
 #define ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                    \
-    {                                                                               \
+    if (logger != nullptr) {                                                        \
         ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
                       elog::ELogSystem::sysErrorToStr(sysErr));                     \
         ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                  \
@@ -469,7 +494,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param ... Log message format string parameters.
  */
 #define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                          \
-    {                                                                                       \
+    if (logger != nullptr) {                                                                \
         char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                        \
         ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
                       errStr);                                                              \

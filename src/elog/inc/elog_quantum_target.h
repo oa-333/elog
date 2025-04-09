@@ -1,0 +1,73 @@
+#ifndef __ELOG_QUANTUM_TARGET_H__
+#define __ELOG_QUANTUM_TARGET_H__
+
+#include <atomic>
+#include <thread>
+
+#include "elog_target.h"
+
+namespace elog {
+
+/**
+ * @brief The quantum logger was designed to solve log flooding use case scenario that is usually
+ * required when trying to pinpoint some very elusive bugs. In these situations, enabling many log
+ * messages causes log flooding, and the incurred overhead may result in the bug not being
+ * reproduced, due to varying timing. For this purpose a special log target was devised, to minimize
+ * logging latency (such that timing would be almost not affected), while enable logging large
+ * volumes of messages. In simpler words, it is an attempt to enable observing a system without
+ * affecting the system behavior (at least not to an extent that would be useless), hence the log
+ * target name. In order to achieve this a large lock-free ring buffer is used as a temporary log
+ * message buffer. It should be noted that the trade-off here is that there is a designated logging
+ * thread that takes 100% of a CPU core, just for logging. Also, the ring buffer is limited in size,
+ * and if the log target cannot keep up with the pace, log messages will be dropped. In case of log
+ * flooding, it is advise to couple this log target with segmented log target. For extreme cases,
+ * consider logging to several log files, which can be analyzed and reordered offline. This can be
+ * done by coupling this log target with a combined log target that is in turn connected to several
+ * segmented log targets.
+ */
+class ELogQuantumTarget : public ELogTarget {
+public:
+    ELogQuantumTarget(ELogTarget* logTarget, uint32_t bufferSize);
+    ~ELogQuantumTarget() final {}
+
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool start() final;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stop() final;
+
+    /** @brief Sends a log record to a log target. */
+    void log(const ELogRecord& logRecord) final;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flush() final;
+
+private:
+    enum EntryState : uint32_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };
+    struct ELogRecordData {
+        ELogRecord m_logRecord;
+        std::string m_logMsg;
+        std::atomic<EntryState> m_entryState;
+
+        ELogRecordData() : m_entryState(ES_VACANT) {}
+        ELogRecordData(const ELogRecordData& recordData)
+            : m_logRecord(recordData.m_logRecord),
+              m_logMsg(recordData.m_logMsg),
+              m_entryState(recordData.m_entryState.load(std::memory_order_relaxed)) {}
+    };
+
+    typedef std::vector<ELogRecordData> LogRingBuffer;
+    LogRingBuffer m_ringBuffer;
+    std::atomic<uint64_t> m_writePos;
+    std::atomic<uint64_t> m_readPos;
+
+    ELogTarget* m_logTarget;
+    std::thread m_logThread;
+    bool m_stop;
+
+    void logThread();
+};
+
+}  // namespace elog
+
+#endif  // __ELOG_QUANTUM_TARGET_H__

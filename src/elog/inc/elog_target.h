@@ -32,6 +32,9 @@ public:
 
     /** @brief Orders a buffered log target to flush it log messages. */
     virtual void flush() = 0;
+
+protected:
+    ELogTarget() {}
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */
