@@ -250,10 +250,17 @@ public:
      */
     static ELogLogger* getDefaultLogger();
 
-    /** @brief Retrieves a logger from a lgo source by its qualified name. */
-    static ELogLogger* getLogger(const char* qualifiedSourceName);
-    // static ELogLogger* getMultiThreadedLogger(const char* sourceName);
-    // static ELogLogger* getSingleThreadedLogger(const char* sourceName);
+    /**
+     * @brief Retrieves a private (can be used by only one thread) logger from a log source by its
+     * qualified name. The logger is managed and should not be deleted by the caller.
+     */
+    static ELogLogger* getPrivateLogger(const char* qualifiedSourceName);
+
+    /**
+     * @brief Retrieves a shared (can be used by more than one thread) logger from a log source by
+     * its qualified name. The logger is managed and should not be deleted by the caller.
+     */
+    static ELogLogger* getSharedLogger(const char* qualifiedSourceName);
 
     /**
      * Log Formatting Interface

@@ -42,7 +42,7 @@ bool ELogSystem::initGlobals() {
         fprintf(stderr, "Failed to create root log source, out of memory\n");
         return false;
     }
-    sDefaultLogger = sRootLogSource->createLogger();
+    sDefaultLogger = sRootLogSource->createSharedLogger();
     if (sDefaultLogger == nullptr) {
         fprintf(stderr, "Failed to create default logger, out of memory\n");
         termGlobals();
@@ -480,11 +480,20 @@ ELogSource* ELogSystem::getRootLogSource() { return sRootLogSource; }
 // logger interface
 ELogLogger* ELogSystem::getDefaultLogger() { return sDefaultLogger; }
 
-ELogLogger* ELogSystem::getLogger(const char* qualifiedSourceName) {
+ELogLogger* ELogSystem::getSharedLogger(const char* qualifiedSourceName) {
     ELogLogger* logger = nullptr;
     ELogSource* source = getLogSource(qualifiedSourceName);
     if (source != nullptr) {
-        logger = source->createLogger();
+        logger = source->createSharedLogger();
+    }
+    return logger;
+}
+
+ELogLogger* ELogSystem::getPrivateLogger(const char* qualifiedSourceName) {
+    ELogLogger* logger = nullptr;
+    ELogSource* source = getLogSource(qualifiedSourceName);
+    if (source != nullptr) {
+        logger = source->createPrivateLogger();
     }
     return logger;
 }

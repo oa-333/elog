@@ -3,16 +3,16 @@
 
 #include <atomic>
 
-#include "elog_buffer.h"
 #include "elog_level.h"
-#include "elog_record.h"
+#include "elog_record_builder.h"
 #include "elog_source.h"
 
 namespace elog {
 
 class ELogLogger {
 public:
-    ELogLogger(ELogSource* logSource) : m_logSource(logSource) {}
+    /** @ref Destructor. */
+    virtual ~ELogLogger() {}
 
     /**
      * @brief Formats a log message and sends it to all log target.
@@ -66,7 +66,21 @@ public:
     /** @brief Queries whether the logger can issue log message with the given level. */
     inline bool canLog(ELogLevel logLevel) const { return m_logSource->canLog(logLevel); }
 
+protected:
+    /**
+     * @brief Constructor
+     * @param logSource The originating log source.
+     */
+    ELogLogger(ELogSource* logSource) : m_logSource(logSource) {}
+
+    /** @brief Retrieves the underlying log record builder. */
+    virtual ELogRecordBuilder& getRecordBuilder() = 0;
+
+    /** @brief Retrieves the underlying log record builder. */
+    virtual const ELogRecordBuilder& getRecordBuilder() const = 0;
+
 private:
+    /** @var The originating log source. */
     ELogSource* m_logSource;
 
     /**
@@ -78,8 +92,6 @@ private:
     void appendMsgV(const char* fmt, va_list ap);
 
     void appendMsg(const char* msg);
-
-    bool ensureBufferLength(uint32_t requiredBytes);
 };
 
 }  // namespace elog
