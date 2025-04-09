@@ -1,8 +1,12 @@
 #include "elog_segmented_file_target.h"
 
+#include "elog_def.h"
+
+#ifndef ELOG_MSVC
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#endif
 
 #include <filesystem>
 #include <thread>
@@ -11,7 +15,98 @@
 
 namespace elog {
 
-thread_local FILE* ELogSegmentedFileTarget::m_usedSegment;
+static thread_local FILE* m_usedSegment;
+
+#ifdef ELOG_MSVC
+bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
+    // prepare search pattern
+    std::string searchPattern = dirPath;
+    searchPattern += "\\*";
+
+    // begin search for files
+    WIN32_FIND_DATA findFileData = {};
+    HANDLE hFind = FindFirstFile(dirPath, &findFileData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        ELOG_WIN32_ERROR(FindFirstFile, "Failed to search for files in directory: %s", dirPath);
+        return false;
+    }
+
+    // collect all files
+    do {
+        if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE ||
+            findFileData.dwFileAttributes & FILE_ATTRIBUTE_NORMAL) {
+            fileNames.push_back(findFileData.cFileName);
+        }
+    } while (FindNextFile(hFind, &findFileData));
+
+    // check for error
+    DWORD errCode = GetLastError();
+    if (errCode != ERROR_NO_MORE_FILES) {
+        ELOG_SYS_ERROR_NUM(FindNextFile, errCode, "Failed to search for next file in directory: %s",
+                           dirPath);
+        return false;
+    }
+
+    return true;
+}
+#endif
+
+#ifdef ELOG_MINGW
+inline bool isRegularFile(const char* path, bool& res) {
+    struct stat pathStat;
+    if (stat(path, &pathStat) == -1) {
+        int errCode = errno;
+        ELOG_SYS_ERROR(stat, "Failed to check file %s status: %d", path, errCode);
+        return false;
+    }
+    res = S_ISREG(pathStat.st_mode);
+    return true;
+}
+#endif
+
+#ifdef ELOG_GCC
+bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileNames) {
+    DIR* dirp = opendir(dirPath);
+    if (dirp == nullptr) {
+        int errCode = errno;
+        ELOG_SYS_ERROR(opendir, "Failed to open directory %s for reading: %d", dirPath, errCode);
+        return false;
+    }
+
+    struct dirent* dir = nullptr;
+#ifdef ELOG_MINGW
+    std::string basePath = dirPath;
+    while ((dir = readdir(dirp)) != nullptr) {
+        bool isRegular = false;
+        if (!isRegularFile((basePath + "/" + dir->d_name).c_str(), isRegular)) {
+            closedir(dirp);
+            return false;
+        }
+        if (isRegular) {
+            fileNames.push_back(dir->d_name);
+        }
+    }
+#else
+    while ((dir = readdir(dirp)) != nullptr) {
+        if (dir->d_type == DT_REG) {
+            fileNames.push_back(dir->d_name);
+        }
+    }
+#endif
+    int errCode = errno;
+    if (errCode != 0) {
+        ELOG_SYS_ERROR(readdir, "Failed to list files in directory %s: %d", dirPath, errCode);
+        closedir(dirp);
+        return false;
+    }
+    if (closedir(dirp) < 0) {
+        ELOG_SYS_ERROR(closedir, "Failed to terminate listing files in directory %s: %d", dirPath,
+                       errCode);
+        return false;
+    }
+    return true;
+}
+#endif
 
 ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char* logName,
                                                  uint32_t segmentLimitMB,
@@ -63,8 +158,8 @@ void ELogSegmentedFileTarget::log(const std::string& formattedLogMsg) {
         ELOG_SYS_ERROR(fputs, "Failed to write to log file");
     }
 
-    // we must remember the segment we used for logging, so that we can tell during flush it is the
-    // same segment (so that if it changed, no flush will take place)
+    // we must remember the segment we used for logging, so that we can tell during flush it is
+    // the same segment (so that if it changed, no flush will take place)
     m_usedSegment = currentSegment;
 
     // mark log finish
@@ -143,60 +238,13 @@ bool ELogSegmentedFileTarget::getSegmentCount(uint32_t& segmentCount,
     return true;
 }
 
-#if defined(__MINGW32__) || defined(__MINGW64__)
-inline bool isRegularFile(const char* path, bool& res) {
-    struct stat pathStat;
-    if (stat(path, &pathStat) == -1) {
-        int errCode = errno;
-        ELOG_SYS_ERROR(stat, "Failed to check file %s status: %d", path, errCode);
-        return false;
-    }
-    res = S_ISREG(pathStat.st_mode);
-    return true;
-}
-#endif
-
 bool ELogSegmentedFileTarget::scanDirFiles(const char* dirPath,
                                            std::vector<std::string>& fileNames) {
-    DIR* dirp = opendir(dirPath);
-    if (dirp == nullptr) {
-        int errCode = errno;
-        ELOG_SYS_ERROR(opendir, "Failed to open directory %s for reading: %d", dirPath, errCode);
-        return false;
-    }
-
-    struct dirent* dir = nullptr;
-#if defined(__MINGW32__) || defined(__MINGW64__)
-    std::string basePath = dirPath;
-    while ((dir = readdir(dirp)) != nullptr) {
-        bool isRegular = false;
-        if (!isRegularFile((basePath + "/" + dir->d_name).c_str(), isRegular)) {
-            closedir(dirp);
-            return false;
-        }
-        if (isRegular) {
-            fileNames.push_back(dir->d_name);
-        }
-    }
+#ifdef ELOG_MSVC
+    return scanDirFilesMsvc(dirPath, fileNames);
 #else
-    while ((dir = readdir(dirp)) != nullptr) {
-        if (dir->d_type == DT_REG) {
-            fileNames.push_back(dir->d_name);
-        }
-    }
+    return scanDirFilesGcc(dirPath, fileNames);
 #endif
-    int errCode = errno;
-    if (errCode != 0) {
-        ELOG_SYS_ERROR(readdir, "Failed to list files in directory %s: %d", dirPath, errCode);
-        closedir(dirp);
-        return false;
-    }
-    if (closedir(dirp) < 0) {
-        ELOG_SYS_ERROR(closedir, "Failed to terminate listing files in directory %s: %d", dirPath,
-                       errCode);
-        return false;
-    }
-    return true;
 }
 
 bool ELogSegmentedFileTarget::getSegmentIndex(const std::string& fileName, int32_t& segmentIndex) {
@@ -271,8 +319,8 @@ bool ELogSegmentedFileTarget::advanceSegment() {
     }
 
     // it is theoretically possible that during log flooding we will not have time to close one
-    // segment, when another segment already needs to be opened. this is ok, as several threads will
-    // get "stuck" for a short while, each trying to close its segment
+    // segment, when another segment already needs to be opened. this is ok, as several threads
+    // will get "stuck" for a short while, each trying to close its segment
 
     // switch segments
     if (!m_currentSegment.compare_exchange_strong(prevSegment, nextSegment,

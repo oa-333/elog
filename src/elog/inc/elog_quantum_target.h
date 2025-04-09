@@ -4,6 +4,7 @@
 #include <atomic>
 #include <thread>
 
+#include "elog_def.h"
 #include "elog_target.h"
 
 namespace elog {
@@ -25,7 +26,7 @@ namespace elog {
  * done by coupling this log target with a combined log target that is in turn connected to several
  * segmented log targets.
  */
-class ELogQuantumTarget : public ELogTarget {
+class DLL_EXPORT ELogQuantumTarget : public ELogTarget {
 public:
     ELogQuantumTarget(ELogTarget* logTarget, uint32_t bufferSize);
     ~ELogQuantumTarget() final {}

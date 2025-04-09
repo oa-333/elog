@@ -1,11 +1,12 @@
 #ifndef __ELOG_PRIVATE_LOGGER_H__
 #define __ELOG_PRIVATE_LOGGER_H__
 
+#include "elog_def.h"
 #include "elog_logger.h"
 
 namespace elog {
 
-class ELogPrivateLogger : public ELogLogger {
+class DLL_EXPORT ELogPrivateLogger : public ELogLogger {
 public:
     ELogPrivateLogger(ELogSource* logSource) : ELogLogger(logSource) {}
     ~ELogPrivateLogger() final {}

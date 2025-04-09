@@ -4,12 +4,13 @@
 #include <cstdio>
 
 #include "elog_buffer.h"
+#include "elog_def.h"
 #include "elog_record.h"
 
 namespace elog {
 
 /** @brief Helper class for the ELogLogger. */
-class ELogRecordBuilder {
+class DLL_EXPORT ELogRecordBuilder {
 public:
     ELogRecordBuilder() : m_offset(0), m_bufferFull(false) {}
     ~ELogRecordBuilder() {}

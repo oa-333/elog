@@ -1,17 +1,22 @@
 #include "elog_logger.h"
 
+#include "elog_def.h"
+
+#ifndef ELOG_MSVC
 #include <sys/time.h>
 #include <unistd.h>
+#endif  // not defined ELOG_MSVC
 
 #include <cstdarg>
 #include <cstring>
 
 #include "elog_system.h"
 
-#ifdef __WIN32__
+#ifdef ELOG_MINGW
+// we need windows headers for MinGW
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#else
+#elif !defined(ELOG_WINDOWS)
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -19,7 +24,7 @@
 #ifdef SYS_gettid
 #define gettid() syscall(SYS_gettid)
 #else
-#error "SYS_gettid unavailable on this system"
+#error "SYS_gettid unavailable on this platform"
 #endif
 #endif
 
@@ -28,11 +33,11 @@ namespace elog {
 static std::atomic<uint64_t> sNextRecordId = 0;
 
 static uint64_t getCurrentThreadId() {
-#ifdef __WIN32__
+#ifdef ELOG_WINDOWS
     return GetCurrentThreadId();
 #else
     return gettid();
-#endif
+#endif  // ELOG_WINDOWS
 }
 
 void ELogLogger::logFormat(ELogLevel logLevel, const char* fmt, ...) {
@@ -147,7 +152,11 @@ void ELogLogger::startLogRecord(ELogLevel logLevel) {
     ELogRecord& logRecord = getRecordBuilder().getLogRecord();
     logRecord.m_logRecordId = sNextRecordId.fetch_add(1, std::memory_order_relaxed);
     logRecord.m_logLevel = logLevel;
+#ifdef ELOG_MSVC
+    ::GetSystemTime(&logRecord.m_logTime);
+#else
     gettimeofday(&logRecord.m_logTime, NULL);
+#endif
     logRecord.m_threadId = getCurrentThreadId();
     logRecord.m_sourceId = m_logSource->getId();
 }

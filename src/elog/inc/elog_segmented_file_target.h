@@ -4,6 +4,7 @@
 #include <atomic>
 #include <string>
 
+#include "elog_def.h"
 #include "elog_target.h"
 
 // TODO: allow combining segmented file log target with deferred log target
@@ -23,7 +24,7 @@ namespace elog {
  * segment switch overhead (open new segment, switch segments, log message, busy wait until previous
  * segment loggers are finished).
  */
-class ELogSegmentedFileTarget : public ELogAbstractTarget {
+class DLL_EXPORT ELogSegmentedFileTarget : public ELogAbstractTarget {
 public:
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
                             ELogFlushPolicy* flushPolicy);
@@ -54,7 +55,6 @@ private:
     std::atomic<FILE*> m_currentSegment;
     std::atomic<uint64_t> m_entered;
     std::atomic<uint64_t> m_left;
-    static thread_local FILE* m_usedSegment;
 
     bool openSegment();
     bool getSegmentCount(uint32_t& segmentCount, uint32_t& lastSegmentSizeBytes);

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "elog_def.h"
 #include "elog_field_selector.h"
 #include "elog_record.h"
 
@@ -15,7 +16,7 @@ namespace elog {
 // TODO: consider having a parent interface with no ctor params
 
 /** @class Utility class for formatting log messages. */
-class ELogFormatter {
+class DLL_EXPORT ELogFormatter {
 public:
     ELogFormatter() {}
     virtual ~ELogFormatter();

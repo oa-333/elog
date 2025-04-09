@@ -3,11 +3,12 @@
 
 #include <cstdio>
 
+#include "elog_def.h"
 #include "elog_target.h"
 
 namespace elog {
 
-class ELogFileTarget : public ELogAbstractTarget {
+class DLL_EXPORT ELogFileTarget : public ELogAbstractTarget {
 public:
     ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy);
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy)

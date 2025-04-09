@@ -6,6 +6,7 @@
 #include <mutex>
 #include <thread>
 
+#include "elog_def.h"
 #include "elog_target.h"
 
 namespace elog {
@@ -22,7 +23,7 @@ namespace elog {
  * still takes places at the caller's context. For an even shorter deferring latency consider using
  * the @ref ELogQueuedTarget @ref ELogQuantumTarget.
  */
-class ELogDeferredTarget : public ELogTarget {
+class DLL_EXPORT ELogDeferredTarget : public ELogTarget {
 public:
     /**
      * @brief Construct a new ELogDeferredTarget object.

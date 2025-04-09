@@ -1,10 +1,12 @@
 #ifndef __ELOG_SHARED_LOGGER_H__
 #define __ELOG_SHARED_LOGGER_H__
 
+#include "elog_def.h"
 #include "elog_logger.h"
 
 namespace elog {
-class ELogSharedLogger : public ELogLogger {
+
+class DLL_EXPORT ELogSharedLogger : public ELogLogger {
 public:
     ELogSharedLogger(ELogSource* logSource) : ELogLogger(logSource) {}
     ~ELogSharedLogger() final {}

@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "elog_def.h"
 #include "elog_level.h"
 
 namespace elog {
@@ -24,7 +25,7 @@ typedef uint32_t ELogSourceId;
  * system pre-defines a root log source, from which a default logger stems. When setting the log
  * level of a log source, all managed loggers are affected immediately.
  */
-class ELogSource {
+class DLL_EXPORT ELogSource {
 public:
     ELogSource(const ELogSource&) = delete;
     ELogSource(ELogSource&&) = delete;

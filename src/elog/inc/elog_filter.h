@@ -1,12 +1,13 @@
 #ifndef __ELOG_FILTER_H__
 #define __ELOG_FILTER_H__
 
+#include "elog_def.h"
 #include "elog_record.h"
 
 namespace elog {
 
 /** @brief Parent interface for all log filters. */
-class ELogFilter {
+class DLL_EXPORT ELogFilter {
 public:
     virtual ~ELogFilter() {}
 
@@ -23,7 +24,7 @@ protected:
 };
 
 /** @brief A log filter that negates the result of another log filter. */
-class ELogNegateFilter : public ELogFilter {
+class DLL_EXPORT ELogNegateFilter : public ELogFilter {
 public:
     ELogNegateFilter(ELogFilter* filter) : m_filter(filter) {}
     ~ELogNegateFilter() final {}
@@ -41,7 +42,7 @@ private:
  * applying AND operator on the result or applying OR operator on the result of the underlying two
  * filters.
  */
-class ELogCompositeLogFilter : public ELogFilter {
+class DLL_EXPORT ELogCompositeLogFilter : public ELogFilter {
 public:
     enum class OpType { OT_AND, OT_OR };
 
@@ -72,7 +73,7 @@ private:
 /**
  * @brief An AND log filter that checks both underlying filters allow the record to be processed.
  */
-class ELogAndLogFilter : public ELogCompositeLogFilter {
+class DLL_EXPORT ELogAndLogFilter : public ELogCompositeLogFilter {
 public:
     ELogAndLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)
         : ELogCompositeLogFilter(lhsFilter, rhsFilter, ELogCompositeLogFilter::OpType::OT_AND) {}
@@ -83,7 +84,7 @@ public:
  * @brief An OR log filter that checks if either one of the underlying filters allows the record to
  * be processed.
  */
-class ELogOrLogFilter : public ELogCompositeLogFilter {
+class DLL_EXPORT ELogOrLogFilter : public ELogCompositeLogFilter {
 public:
     ELogOrLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)
         : ELogCompositeLogFilter(lhsFilter, rhsFilter, ELogCompositeLogFilter::OpType::OT_OR) {}

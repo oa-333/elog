@@ -1,6 +1,8 @@
 #include "elog_field_selector.h"
 
-#ifdef __WIN32__
+#include "elog_def.h"
+
+#ifdef ELOG_WINDOWS
 #include <winsock2.h>
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 256
@@ -22,7 +24,8 @@ namespace elog {
 
 static char hostName[HOST_NAME_MAX];
 static char userName[LOGIN_NAME_MAX];
-#ifdef __WIN32__
+
+#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_MSC_VER)
 static DWORD pid = 0;
 #else
 static pid_t pid = 0;
@@ -35,23 +38,23 @@ extern void initFieldSelectors() {
     }
 
     // initialize user name
-#ifdef __WIN32__
+#ifdef ELOG_WINDOWS
     DWORD len = 256;
     if (!GetUserNameA(userName, &len)) {
         strcpy(userName, "<N/A>");
     }
-#else
+#else  // ELOG_WINDOWS
     if (getlogin_r(userName, LOGIN_NAME_MAX) != 0) {
         strcpy(userName, "<N/A>");
     }
 #endif
 
     // initialize pid
-#ifdef __WIN32__
+#ifdef ELOG_WINDOWS
     pid = GetCurrentProcessId();
 #else
     pid = getpid();
-#endif
+#endif  // ELOG_WINDOWS
 }
 
 void ELogFieldSelector::applyJustify(std::stringstream& msgStream) {
@@ -78,11 +81,20 @@ void ELogRecordIdSelector::selectField(const ELogRecord& record, std::stringstre
 }
 
 void ELogTimeSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    const uint32_t bufSize = 64;
+    char buffer[bufSize];
+#ifdef ELOG_MSVC
+    size_t offset = snprintf(buffer, bufSize, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u",
+                             record.m_logTime.wYear, record.m_logTime.wMonth, record.m_logTime.wDay,
+                             record.m_logTime.wHour, record.m_logTime.wMinute,
+                             record.m_logTime.wSecond, record.m_logTime.wMilliseconds);
+#else
     time_t timer = record.m_logTime.tv_sec;
     struct tm* tm_info = localtime(&timer);
-    char buffer[64];
     size_t offset = strftime(buffer, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
-    offset += sprintf(buffer + offset, "%.3u", (unsigned)(record.m_logTime.tv_usec / 1000));
+    offset += snprintf(buffer + offset, bufSize - offset, "%.3u",
+                       (unsigned)(record.m_logTime.tv_usec / 1000));
+#endif
 
     applyJustify(msgStream);
     msgStream << buffer;

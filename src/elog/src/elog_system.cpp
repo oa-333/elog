@@ -10,7 +10,7 @@
 #include "elog_formatter.h"
 #include "elog_segmented_file_target.h"
 
-#ifdef __WIN32__
+#ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
@@ -93,7 +93,7 @@ bool ELogSystem::initializeLogFile(const char* logFilePath,
     if (logTarget == nullptr) {
         ELOG_ERROR("Failed to create log file target, out of memory");
         termGlobals();
-        return ELOG_INVALID_TARGET_ID;
+        return false;
     }
 
     if (setLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
@@ -126,7 +126,7 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
     if (logTarget == nullptr) {
         ELOG_ERROR("Failed to create segmented log file target, out of memory");
         termGlobals();
-        return ELOG_INVALID_TARGET_ID;
+        return false;
     }
 
     if (setLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
@@ -539,17 +539,14 @@ bool ELogSystem::filterLogMsg(const ELogRecord& logRecord) {
     return res;
 }
 
-// note: each log target controls its own log format
-
 void ELogSystem::log(const ELogRecord& logRecord) {
     for (ELogTarget* logTarget : sLogTargets) {
         logTarget->log(logRecord);
     }
 }
 
-/** @brief Converts system error code to string. */
 char* ELogSystem::sysErrorToStr(int sysErrorCode) {
-#if defined(__MINGW32__) || defined(__MINGW64__)
+#ifdef ELOG_WINDOWS
     return strerror(sysErrorCode);
 #else
     static thread_local char buf[256];
@@ -557,17 +554,17 @@ char* ELogSystem::sysErrorToStr(int sysErrorCode) {
 #endif
 }
 
-#ifdef __WIN32__
+#ifdef ELOG_WINDOWS
 char* ELogSystem::win32SysErrorToStr(unsigned long sysErrorCode) {
     LPSTR messageBuffer = nullptr;
-    size_t size = ::FormatMessageA(
+    size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, sysErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0,
         NULL);
     return messageBuffer;
 }
 
-void ELogSystem::win32FreeErrorStr(char* errStr) { ::LocalFree(errStr); }
+void ELogSystem::win32FreeErrorStr(char* errStr) { LocalFree(errStr); }
 #endif
 
 }  // namespace elog

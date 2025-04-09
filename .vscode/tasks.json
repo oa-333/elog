@@ -2,7 +2,7 @@
     "tasks": [
         {
             "type": "cppbuild",
-            "label": "Build all",
+            "label": "Build all (MinGW)",
             "command": "c:\\msys64\\msys2_shell.cmd",
             "args": [
                 "-defterm",
@@ -11,7 +11,7 @@
                 "-where",
                 "${workspaceFolder}",
                 "-c",
-                "make -j -f Makefile all"
+                "make -j -f Makefile install"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
@@ -27,7 +27,7 @@
         },
         {
             "type": "cppbuild",
-            "label": "Clean",
+            "label": "Clean (MinGW)",
             "command": "c:\\msys64\\msys2_shell.cmd",
             "args": [
                 "-defterm",
@@ -52,27 +52,34 @@
         },
         {
             "type": "cppbuild",
-            "label": "Install",
-            "command": "c:\\msys64\\msys2_shell.cmd",
-            "args": [
-                "-defterm",
-                "-no-start",
-                "-ucrt64",
-                "-where",
-                "${workspaceFolder}",
-                "-c",
-                "make -j -f Makefile install"
-            ],
+            "label": "Build all (MSVC)",
+            "command": "vcbuild.bat",
+            "args": [],
             "options": {
-                "cwd": "${workspaceFolder}",
-                "env": { "INSTALL_DIR": "/c/install" }
+                "cwd": "${workspaceFolder}"
             },
             "problemMatcher": [
-                "$gcc"
+                "$msCompile"
             ],
             "group": {
                 "kind": "build",
-                "isDefault": false
+                "isDefault": true
+            }
+        },
+        {
+            "type": "cppbuild",
+            "label": "Clean (MSVC)",
+            "command": "vcclean.bat",
+            "args": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
             }
         }
     ],

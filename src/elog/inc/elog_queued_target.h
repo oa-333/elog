@@ -5,6 +5,7 @@
 #include <list>
 #include <thread>
 
+#include "elog_def.h"
 #include "elog_deferred_target.h"
 
 namespace elog {
@@ -21,7 +22,7 @@ namespace elog {
  * messages. This can be done by deriving from ELogTarget and implementing this logic. (Check out
  * the @ref ELogSharedMemTarget for a sample implementation).
  */
-class ELogQueuedTarget : public ELogDeferredTarget {
+class DLL_EXPORT ELogQueuedTarget : public ELogDeferredTarget {
 public:
     /**
      * @brief Construct a new ELogQueuedTarget object.

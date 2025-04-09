@@ -4,6 +4,8 @@
 #include <cassert>
 #include <cstdint>
 
+#include "elog_def.h"
+
 namespace elog {
 
 /** @def The fixed buffer size used for logging. */
@@ -18,7 +20,7 @@ namespace elog {
  * fixed buffer is used, but if more space is needed by some long log message, it transitions to a
  * dynamic buffer, and the logger is required to release it as soon as it finished logging.
  */
-class ELogBuffer {
+class DLL_EXPORT ELogBuffer {
 public:
     /** @brief Constructor. */
     ELogBuffer() : m_dynamicBuffer(nullptr), m_bufferSize(ELOG_BUFFER_SIZE) {}

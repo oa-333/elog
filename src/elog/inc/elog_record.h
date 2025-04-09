@@ -4,16 +4,21 @@
 #include <cstdint>
 #include <ctime>
 
+#include "elog_def.h"
 #include "elog_level.h"
 
 namespace elog {
 
-struct ELogRecord {
+struct DLL_EXPORT ELogRecord {
     /** @var Log record id. */
     uint64_t m_logRecordId;
 
     /** @var Log time. */
+#ifdef ELOG_MSVC
+    SYSTEMTIME m_logTime;
+#else
     struct timeval m_logTime;
+#endif
 
     // NOTE: host name, user name and process id do not require a field
 

@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#include "elog_def.h"
+
 namespace elog {
 
 /** @enum Log level constants. */
@@ -43,10 +45,10 @@ enum ELogLevel : uint32_t {
 };
 
 /** @brief Converts log level constant to string. */
-extern const char* elogLevelToStr(ELogLevel logLevel);
+extern DLL_EXPORT const char* elogLevelToStr(ELogLevel logLevel);
 
 /** @brief Converts log level string to log level constant. */
-extern bool elogLevelFromStr(const char* logLevelStr, ELogLevel& logLevel);
+extern DLL_EXPORT bool elogLevelFromStr(const char* logLevelStr, ELogLevel& logLevel);
 
 }  // namespace elog
 

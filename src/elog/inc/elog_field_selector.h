@@ -3,18 +3,19 @@
 
 #include <sstream>
 
+#include "elog_def.h"
 #include "elog_record.h"
 
 namespace elog {
 
-extern void initFieldSelectors();
+extern DLL_EXPORT void initFieldSelectors();
 
 /**
  * @brief Parent interface for all field selectors. Custom selectors may be added by deriving from
  * this interface and deriving from @ref ELogFormatter, so that the field can be parsed by
  * overriding the virtual function @ref createFieldSelector().
  */
-class ELogFieldSelector {
+class DLL_EXPORT ELogFieldSelector {
 public:
     virtual ~ELogFieldSelector() {}
 
@@ -39,7 +40,7 @@ private:
  * @brief Static text field selector, used for placing the strings between the fields in the log
  * format line specification string.
  */
-class ELogStaticTextSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogStaticTextSelector : public ELogFieldSelector {
 public:
     ELogStaticTextSelector(const char* text) : m_text(text) {}
     ~ELogStaticTextSelector() final {}
@@ -50,7 +51,7 @@ private:
     std::string m_text;
 };
 
-class ELogRecordIdSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogRecordIdSelector : public ELogFieldSelector {
 public:
     ELogRecordIdSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogRecordIdSelector() final {}
@@ -61,7 +62,7 @@ private:
     int m_justify;
 };
 
-class ELogTimeSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogTimeSelector : public ELogFieldSelector {
 public:
     ELogTimeSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogTimeSelector() final {}
@@ -69,7 +70,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogHostNameSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogHostNameSelector : public ELogFieldSelector {
 public:
     ELogHostNameSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogHostNameSelector() final {}
@@ -77,7 +78,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogUserNameSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogUserNameSelector : public ELogFieldSelector {
 public:
     ELogUserNameSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogUserNameSelector() final {}
@@ -85,7 +86,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogProcessIdSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogProcessIdSelector : public ELogFieldSelector {
 public:
     ELogProcessIdSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogProcessIdSelector() final {}
@@ -93,7 +94,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogThreadIdSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogThreadIdSelector : public ELogFieldSelector {
 public:
     ELogThreadIdSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogThreadIdSelector() final {}
@@ -101,7 +102,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogSourceSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogSourceSelector : public ELogFieldSelector {
 public:
     ELogSourceSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogSourceSelector() final {}
@@ -109,7 +110,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogModuleSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogModuleSelector : public ELogFieldSelector {
 public:
     ELogModuleSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogModuleSelector() final {}
@@ -117,7 +118,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogLevelSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogLevelSelector : public ELogFieldSelector {
 public:
     ELogLevelSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogLevelSelector() final {}
@@ -125,7 +126,7 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
-class ELogMsgSelector : public ELogFieldSelector {
+class DLL_EXPORT ELogMsgSelector : public ELogFieldSelector {
 public:
     ELogMsgSelector(int justify) : ELogFieldSelector(justify) {}
     ~ELogMsgSelector() final {}

@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <unordered_map>
 
+#include "elog_def.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
 #include "elog_level.h"
@@ -24,7 +25,7 @@ typedef uint32_t ELogTargetId;
 typedef std::unordered_map<std::string, std::string> ELogProps;
 
 /** @brief The elog module facade. */
-class ELogSystem {
+class DLL_EXPORT ELogSystem {
 public:
     /** @brief Initializes the ELog system with defaults (log to standard error stream). */
     static bool initialize();
@@ -328,7 +329,7 @@ public:
     /** @brief Converts system error code to string. */
     static char* sysErrorToStr(int sysErrorCode);
 
-#ifdef __WIN32__
+#ifdef ELOG_WINDOWS
     /** @brief Converts Windows system error code to string. */
     static char* win32SysErrorToStr(unsigned long sysErrorCode);
 
@@ -491,7 +492,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
 #define ELOG_SYS_ERROR_EX(logger, syscall, fmt, ...) \
     ELOG_SYS_ERROR_NUM_EX(logger, syscall, errno, fmt, ##__VA_ARGS__)
 
-#ifdef __WIN32__
+#ifdef ELOG_WINDOWS
 /**
  * @brief Logs a system error message to the server log.
  * @param logger The logger used for message formatting.
@@ -521,7 +522,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
 #define ELOG_WIN32_ERROR_EX(logger, syscall, fmt, ...) \
     ELOG_WIN32_ERROR_NUM_EX(logger, syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
 
-#endif  // __WIN32__
+#endif  // ELOG_WINDOWS
 
 /**
  * @brief Logs a formatted message to the server log (using default logger).
@@ -645,7 +646,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_SYS_ERROR(syscall, fmt, ...) ELOG_SYS_ERROR_NUM(syscall, errno, fmt, ##__VA_ARGS__)
 
-#ifdef __WIN32__
+#ifdef ELOG_WINDOWS
 /**
  * @brief Logs a system error message to the server log.
  * @param syscall The system call that failed.
@@ -670,7 +671,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
 #define ELOG_WIN32_ERROR(syscall, fmt, ...) \
     ELOG_WIN32_ERROR_NUM(syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
 
-#endif  // __WIN32__
+#endif  // ELOG_WINDOWS
 
 /** @brief Utility macro for importing frequent names. */
 #define ELOG_USING()           \

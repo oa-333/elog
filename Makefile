@@ -127,34 +127,17 @@ endif
 ELOG_LIB := $(LIB_DIR)/$(ELOG_LIB_NAME)
 ELOG_DLL := $(BIN_DIR)/$(ELOG_DLL_NAME)
 
-# pdbs
-ifeq ($(MINGW), 1)
-ELOG_DLL_PDB := $(BIN_DIR)/libelog_pdb.dll
-ELOG_PDB := $(BIN_DIR)/libelog.pdb
-endif
-
 # build targets
-all: elog_dll elog_lib pdbs
+all: elog_dll elog_lib
 
 elog_dll: dirs $(ELOG_DLL)
 
 elog_lib: dirs $(ELOG_LIB)
 
-ifeq ($(MINGW), 1)
-pdbs: elog_dll $(ELOG_PDB)
-else
-pdbs:
-endif
-
 # install targets
 INSTALL_ELOG_LIB := $(INSTALL_LIB)/$(ELOG_LIB_NAME)
 INSTALL_ELOG_DLL := $(INSTALL_BIN)/$(ELOG_DLL_NAME)
 INSTALL_TARGETS := $(INSTALL_ELOG_LIB) $(INSTALL_ELOG_DLL)
-
-ifeq ($(MINGW), 1)
-INSTALL_ELOG_PDB := $(INSTALL_BIN)/libelog.pdb
-INSTALL_TARGETS += $(INSTALL_ELOG_PDB)
-endif
 
 dirs: $(LIB_DIR) $(BIN_DIR) $(OBJ_DIR) $(OBJ_DIRS) $(DEP_DIRS) $(INSTALL_DIRS)
 
@@ -190,11 +173,11 @@ endif
 #DEP_FLAGS := -MT $@ -MMD -MP -MF $(patsubst $(OBJ_DIR)/%.o,$(DEP_DIR)/%.tmp.dep,$@)
 LDFLAGS := -L$(BIN_DIR)
 ifeq ($(MINGW), 1)
-	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32 -ldbghelp -lbacktrace -lpsapi
+	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32
 else
-	LDFLAGS := $(LDFLAGS) -rdynamic -lunwind
+	LDFLAGS := $(LDFLAGS) -rdynamic
 endif
-LDFLAGS := $(LDFLAGS) -luv
+LDFLAGS := $(LDFLAGS)
 #POST_COMPILE = mv -f $(DEP_DIR)/$*.tmp.dep $(DEP_DIR)/$*.dep && touch $@
 
 # directory targets
@@ -217,12 +200,6 @@ $(ELOG_LIB): $(OBJS_STATIC)
 
 $(ELOG_DLL): $(OBJS_DYNAMIC)
 	$(CPP) $(OBJS_DYNAMIC) $(LDFLAGS) -shared -o $@
-
-# symbol targets for mingw
-ifeq ($(MINGW), 1)
-$(ELOG_PDB): $(ELOG_DLL)
-	cv2pdb.exe -C $(ELOG_DLL) $(ELOG_DLL_PDB) $(ELOG_PDB)
-endif
 
 # make sure all object files depend on dependency files like this:
 # %.o: %.cpp %.dep
@@ -255,11 +232,6 @@ $(INSTALL_ELOG_DLL): $(ELOG_DLL)
 
 $(INSTALL_ELOG_LIB): $(ELOG_LIB)
 	cp $< $@
-
-ifeq ($(MINGW), 1)
-$(INSTALL_ELOG_PDB): $(ELOG_PDB)
-	cp $< $@
-endif
 
 # add empty target for all dependency files
 $(DEPS):
