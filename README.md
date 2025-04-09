@@ -17,6 +17,8 @@ Another common use case is log file segmentation (i.e. breaking log file to segm
 
 The ELog system also allows directing log messages to several destinations, so tapping to external log analysis tools, for instance, in addition to doing regular logging to file, is also rather straightforward.
 
+For more information, soo examples below
+
 ## Getting Started
 
 In order to use the package, include "elog_system.h", which is the package facade.  
@@ -29,7 +31,7 @@ The ELog system has no special dependencies.
 
 ### Installing
 
-The package can be build by running:
+The package can be built and installed by running:
 
     make -j INSTALL_DIR=<install-path> install
 
@@ -43,7 +45,7 @@ Add to linker flags:
 
 ## Help
 
-See documentation in header files for more information.
+See examples section below, and documentation in header files for more information.
 
 ## Authors
 
@@ -52,3 +54,74 @@ Oren Amor (oren.amor@gmail.com)
 ## License
 
 This project is licensed under the Apache 2.0 License - see the LICENSE file for details
+
+## Examples
+
+### Initialization and Termination
+
+Following is a simple example of initializing and terminating the elog system:
+
+    #include "elog_system.h"
+    ...
+    // import common elog definition into global name space without name space pollution
+    ELOG_USING()
+
+    int main(int argc, char* argv[]) {
+        // initialize the elog system to log into file
+        if (!elog::ELogSystem::initializeLogFile("./test.log")) {
+            fprintf(stderr, "Failed to initialize elog\n);
+            return 1;
+        }
+
+        // do application stuff
+        ...
+
+        // terminate the elog system
+        elog::ELogSystem::terminate();
+        return 0;
+    }
+
+In this example a segmented log file is used, with 4MB segment size:
+
+    #include "elog_system.h"
+    ...
+    // import common elog definition into global name space without name space pollution
+    ELOG_USING()
+
+    #define MB (1024 * 1024)
+
+    int main(int argc, char* argv[]) {
+        // initialize the elog system to log into segmented file
+        if (!elog::ELogSystem::initializeSegmentedLogFile(
+                ".",        // log dir
+                "test.log", // segment base name
+                4 * MB)) {  // segment size
+            fprintf(stderr, "Failed to initialize elog\n);
+            return 1;
+        }
+
+        // do application stuff
+        ELOG_INFO("App starting);
+        ...
+
+        // terminate the elog system
+        elog::ELogSystem::terminate();
+        return 0;
+    }
+
+### Logging Macros
+
+The ELog system defines utility macros for logging.
+One group of macros requires a logger, and another group of macros does not.
+This is the easiest form of logging, without any logger defined:
+
+    ELOG_INFO("Sample message with string parameter: %s", someStr);
+
+
+
+### Defining Log Sources and Loggers
+
+One of the main entities in the ELog system is the Log Source.  
+It serves as a semantic module entity.  
+From one Log Source many loggers can be obtained, one for each logging class/file.
+A logger is the logging client's end point, with which log messages are partially formatted, before being sent to log targets for actual logging.
