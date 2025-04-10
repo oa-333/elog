@@ -226,9 +226,9 @@ public:
      * separated with dots. The root source has no name and no following dot.
      * @param qualifiedName The qualified name of the log source. (path from root with dots, root
      * source has no name and no following dot) log source
-     * @return ELogSourceId The resulting log source id or @ref ELOG_INVALID_SOURCE_ID if failed.
+     * @return ELogSource The resulting log source or null if failed.
      */
-    static ELogSourceId defineLogSource(const char* qualifiedName);
+    static ELogSource* defineLogSource(const char* qualifiedName);
 
     /** @brief Retrieves a log source by its qualified name. Returns null if not found. */
     static ELogSource* getLogSource(const char* qualifiedName);

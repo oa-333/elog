@@ -408,7 +408,7 @@ static void parseSourceName(const std::string& qualifiedName, std::vector<std::s
 }
 
 // log sources
-ELogSourceId ELogSystem::defineLogSource(const char* qualifiedName) {
+ELogSource* ELogSystem::defineLogSource(const char* qualifiedName) {
     std::unique_lock<std::mutex> lock(sSourceTreeLock);
     // parse name to components and start traveling up to last component
     std::vector<std::string> namePath;
@@ -419,23 +419,24 @@ ELogSourceId ELogSystem::defineLogSource(const char* qualifiedName) {
     for (uint32_t i = 0; i < namecount - 1; ++i) {
         currSource = currSource->getChild(namePath[i].c_str());
         if (currSource == nullptr) {
-            return ELOG_INVALID_SOURCE_ID;
+            return nullptr;
         }
     }
 
     // make sure name does not exist already
     if (currSource->getChild(namePath.back().c_str()) != nullptr) {
-        return ELOG_INVALID_SOURCE_ID;
+        return nullptr;
     }
 
     ELogSource* logSource =
         new (std::nothrow) ELogSource(allocLogSourceId(), namePath.back().c_str(), currSource);
     if (!currSource->addChild(logSource)) {
         // impossible
-        // TODO: we need an error listener to get all errors and deal with them, default is to
-        // dump to stderr (no sense in defining error code, convert to string, etc.)
+        // TODO: consider having an error listener to pass to user all errors and let the user deal
+        // with them, dumping to stderr is not acceptable in an infrastructure library, but there is
+        // also no sense in defining error codes, convert to string, etc.
         delete logSource;
-        return ELOG_INVALID_SOURCE_ID;
+        return nullptr;
     }
 
     bool res =
@@ -444,8 +445,9 @@ ELogSourceId ELogSystem::defineLogSource(const char* qualifiedName) {
         // internal error, roll back
         currSource->removeChild(logSource->getName());
         delete logSource;
+        return nullptr;
     }
-    return logSource->getId();
+    return logSource;
 }
 
 ELogSource* ELogSystem::getLogSource(const char* qualifiedName) {

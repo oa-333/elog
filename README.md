@@ -17,6 +17,12 @@ Another common use case is log file segmentation (i.e. breaking log file to segm
 
 The ELog system also allows directing log messages to several destinations, so tapping to external log analysis tools, for instance, in addition to doing regular logging to file, is also rather straightforward.
 
+One more use case is when developing infrastructure library which requires logging, but the actual logging system
+that will be used by the enclosing application is not known (and cannot be known).
+In this case, the ELog can be used to log messages inside the library, and the using application may configure
+the ELog system to redirect and adapt library log message to its own logging system.
+This can be done actually quite easily and with much flexibility.
+
 For more information, soo examples below
 
 ## Getting Started
@@ -117,13 +123,163 @@ This is the easiest form of logging, without any logger defined:
 
     ELOG_INFO("Sample message with string parameter: %s", someStr);
 
+In order to specify a logger, use the ELOG_xxx_EX() macro set, as follows:
 
+    ELOG_INFO_EX(logger, "Sample message with string parameter: %s", someStr);
 
 ### Defining Log Sources and Loggers
 
 One of the main entities in the ELog system is the Log Source.  
 It serves as a semantic module entity.  
 From one Log Source many loggers can be obtained, one for each logging class/file.
-A logger is the logging client's end point, with which log messages are partially formatted, before being sent to log targets for actual logging.
+A logger is the logging client's end point, with which log messages are partially formatted,  
+before being sent to log targets for actual logging.
 
 Here is a simple example of defining a log source and obtaining a logger.
+
+    using namespace elog;
+    ELogSource* logSource = ELogSystem::defineLogSource("core");
+    if (logSource == nullptr) {
+        // NOTE: we use here the default logger
+        ELOG_ERROR("Failed to define log source with name core");
+    } else {
+        ELogLogger* logger = logSource->createSharedLogger();
+        ELOG_INFO_EX(logger, "Obtained a logger from source %s with id %u",
+            logSource->getQualifiedName(), 
+            logSource->getId());
+    }
+
+Log sources form a tree hierarchy according to their qualified name, which is separated by dots.
+The root log source has empty name, and does not have a dor following its name, so that second level
+log sources have a qualified name equal to their bare name.
+
+The log level of each log source may be controlled individually.
+The log level of a log source affects all log sources underneath it, unless they specify a log level separately.
+For instance, suppose the following log source hierarchy is defined:
+
+    core
+    core.files
+    core.thread
+    core.net
+
+The core log source may define log level of NOTICE, but the core.thread log level may define log level TRACE.
+The core.files, and core.net log sources will inherit the NOTICE level from the core parent log source.
+
+### Configuring Log Line Format
+
+The ELog system allows configuring log line format using a format specification string that supports special tokens.
+For instance, the default log line format specification that is use dby ELog is:
+
+    ${time} ${level:6} [${tid}] ${msg}
+
+This format in reality gets expands to something like this:
+
+    2025-04-08 11:40:58.807 INFO   [49108] Thread pool of 1 workers started
+
+We see here all 4 components expanded:
+
+- logging time
+- log level (aligned to the left with width of 6 characters)
+- logging thread id, enclosed with brackets
+- formatted log message
+
+The following special tokens are understood by the ELog system:
+
+- ${rid} - the log record id.
+- ${time} - the logging time.
+- ${host} - the host name.
+- ${user} - the logged in user.
+- ${pid} - the process id.
+- ${tid} - the logging thread id.
+- ${level} - the log level
+- ${src} - the log source of the logger (qualified name).
+- ${mod} - the alternative module name associated with the source.
+- ${msg} - the log message.
+
+Tokens may contain justification number, where positive means justify to the left,  
+and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
+
+In order to use some other formatting, the ELogFormatter may be derived.  
+In addition, the list of special tokens understood by ELog may be extended by deriving from ELogFormatter  
+and overriding the createFieldSelector() virtual method.  
+A specialized field selector will be needed as well.
+
+### Filtering Log Messages
+
+By default, all messages are logged, but in some use cases, it is required to filter out some log messages.
+In general, the log level may be used to control which messages are logged, and this may be controlled at
+each log source. There are some occasions that more fine-grained filtering is required.
+In this case ELogFilter may be derived to provide more specialized control.
+
+Pay attention that log filtering may be applied at a global level, by calling:
+
+    ELogSystem::setLogFilter(logFilter);
+
+
+### Log Targets
+
+Log targets are where log records are sent to after being partially formatted (and filtered).
+The log target usually performs final formatting and writes the formatted log message to a file.
+But, as mentioned above, much more can be done.
+
+So, first the ELogFileTarget is defined for simple logging to file, in the logger's context.
+In addition, the ELogSegmentedFileTarget is defined for segmented logging, where the segment size
+can be specified.
+
+If it is required to avoid logging (and possibly flushing, see below), on the logger's context, 
+it is possible to defer that to another context by using the ELogDeferredTarget.
+This log target takes another target as the final destination:
+
+    // define a segmented log target with 4K segment size
+    ELogSegmentedFileTarget fileTarget("logs", "app.log", 4096, nullptr);
+
+    // combine it with a deferred log target
+    ELogDeferredTarget deferredTarget(&fileTarget);
+
+    // now set it as the system log target
+    ELogSystem::setLogTarget(&deferredTarget);
+
+The ELogDeferredTarget is quite simplistic, and simple wakes up the logging thread for each log message.
+The ELogQueuedTarget provides more control over this, by allowing to specify batch size and timeout,
+so the logging thread wakes up either when the queued number of messages exceeds some limit, or that 
+a specified timeout has passed since last time it woke up.
+In the example above we can change it like this:
+
+    // define a segmented log target with 4K segment size
+    ELogSegmentedFileTarget fileTarget("logs", "app.log", 4096, nullptr);
+
+    // combine it with a queued log target with batch size 64, and 500 milliseconds timeout
+    ELogQueuedTarget queuedTarget(&fileTarget, 64, 500);
+
+    // now set it as the system log target
+    ELogSystem::setLogTarget(&queuedTarget);
+
+The ELogQuantumTarget mentioned above can be use das follows:
+
+    // define a segmented log target with 4K segment size
+    ELogSegmentedFileTarget fileTarget("logs", "app.log", 4096, nullptr);
+
+    // combine it with a quantum log target that can handle a burst of 1 million log messages
+    ELogQuantumTarget quantumTarget(&fileTarget, 1024 * 1024);
+
+    // now set it as the system log target
+    ELogSystem::setLogTarget(&quantumTarget);
+
+### Flush Policy
+
+As some log targets may require flushing (as in file, or any buffered channel), a policy can be defined.
+By default, all log targets flush after each message logging.
+This strategy is implemented by the ELogImmediateFlushPolicy class.
+
+It may be preferred to flush every X messages.
+For this case the ELogCountFlushPolicy can be used.
+
+Another strategy is to flush whenever the amount of logged data exceeds some size limit.
+For this case the ELogSizeFlushPolicy can be used.
+
+If a timeout is required (without using a deferred log target), the ELogTimedFlushPolicy can be used.
+This is an active policy, which launches a designated thread for this purpose.
+
+In case a combination of strategies is needed, either ELogAndFlushPolicy or ELogOrFlushPolicy can be used.
+
+For any other specialized flush policy, derive from ELogFlushPolicy and override the shouldFlush() virtual method.
