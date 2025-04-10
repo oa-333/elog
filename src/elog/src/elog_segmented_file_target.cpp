@@ -18,7 +18,7 @@ namespace elog {
 static thread_local FILE* m_usedSegment;
 
 #ifdef ELOG_MSVC
-bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
+static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
     // prepare search pattern
     std::string searchPattern = dirPath;
     searchPattern += "\\*";
@@ -65,7 +65,7 @@ inline bool isRegularFile(const char* path, bool& res) {
 #endif
 
 #ifdef ELOG_GCC
-bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileNames) {
+static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileNames) {
     DIR* dirp = opendir(dirPath);
     if (dirp == nullptr) {
         int errCode = errno;

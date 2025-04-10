@@ -17,7 +17,7 @@ move vc140.pdb build\vc\
 
 REM link
 cd build\vc
-cl.exe /Zi /EHsc /MP /MDd /LDd /Fe:elog.dll *.obj Advapi32.lib Ws2_32.lib
+cl.exe /Zi /EHsc /MP /MDd /LDd /Fe:elog.dll *.obj Advapi32.lib Ws2_32.lib /link
 if errorlevel 1 goto LINK_ERROR
 cd ..\..
 
@@ -26,12 +26,26 @@ copy build\vc\elog.dll bin\
 copy build\vc\elog.pdb bin\
 copy build\vc\vc140.pdb bin\
 copy build\vc\elog.lib lib\
+
+set INSTALL_DIR=C:\install
+mkdir %INSTALL_DIR%\elog\include\elog
+copy src\elog\inc\*.h %INSTALL_DIR%\elog\include\elog
+if errorlevel 1 goto INSTALL_ERROR
+mkdir %INSTALL_DIR%\bin
+copy bin\* %INSTALL_DIR%\bin
+if errorlevel 1 goto INSTALL_ERROR
+mkdir %INSTALL_DIR%\lib
+copy lib\* %INSTALL_DIR%\lib
+if errorlevel 1 goto INSTALL_ERROR
 exit /b 0
 
-COMPILE_ERROR:
+:COMPILE_ERROR
 echo "Compilation failed, aborting"
 exit /b 1
 
-LINK_ERROR:
+:LINK_ERROR
 echo "Link failed, aborting"
 exit /b 2
+
+:INSTALL_ERROR
+echo "Install failed, aborting"

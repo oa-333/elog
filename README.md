@@ -125,3 +125,5 @@ One of the main entities in the ELog system is the Log Source.
 It serves as a semantic module entity.  
 From one Log Source many loggers can be obtained, one for each logging class/file.
 A logger is the logging client's end point, with which log messages are partially formatted, before being sent to log targets for actual logging.
+
+Here is a simple example of defining a log source and obtaining a logger.

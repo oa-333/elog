@@ -25,7 +25,7 @@ namespace elog {
 static char hostName[HOST_NAME_MAX];
 static char userName[LOGIN_NAME_MAX];
 
-#if defined(__MINGW32__) || defined(__MINGW64__) || defined(_MSC_VER)
+#ifdef ELOG_WINDOWS
 static DWORD pid = 0;
 #else
 static pid_t pid = 0;
