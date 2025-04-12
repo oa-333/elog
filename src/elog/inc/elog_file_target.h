@@ -8,7 +8,7 @@
 
 namespace elog {
 
-class DLL_EXPORT ELogFileTarget : public ELogAbstractTarget {
+class ELOG_API ELogFileTarget : public ELogAbstractTarget {
 public:
     ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy);
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy)

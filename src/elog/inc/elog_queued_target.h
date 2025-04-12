@@ -22,7 +22,7 @@ namespace elog {
  * messages. This can be done by deriving from ELogTarget and implementing this logic. (Check out
  * the @ref ELogSharedMemTarget for a sample implementation).
  */
-class DLL_EXPORT ELogQueuedTarget : public ELogDeferredTarget {
+class ELOG_API ELogQueuedTarget : public ELogDeferredTarget {
 public:
     /**
      * @brief Construct a new ELogQueuedTarget object.

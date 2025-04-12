@@ -7,7 +7,7 @@
 namespace elog {
 
 /** @brief Parent interface for all log filters. */
-class DLL_EXPORT ELogFilter {
+class ELOG_API ELogFilter {
 public:
     virtual ~ELogFilter() {}
 
@@ -24,7 +24,7 @@ protected:
 };
 
 /** @brief A log filter that negates the result of another log filter. */
-class DLL_EXPORT ELogNegateFilter : public ELogFilter {
+class ELOG_API ELogNegateFilter : public ELogFilter {
 public:
     ELogNegateFilter(ELogFilter* filter) : m_filter(filter) {}
     ~ELogNegateFilter() final {}
@@ -42,7 +42,7 @@ private:
  * applying AND operator on the result or applying OR operator on the result of the underlying two
  * filters.
  */
-class DLL_EXPORT ELogCompositeLogFilter : public ELogFilter {
+class ELOG_API ELogCompositeLogFilter : public ELogFilter {
 public:
     enum class OpType { OT_AND, OT_OR };
 
@@ -73,7 +73,7 @@ private:
 /**
  * @brief An AND log filter that checks both underlying filters allow the record to be processed.
  */
-class DLL_EXPORT ELogAndLogFilter : public ELogCompositeLogFilter {
+class ELOG_API ELogAndLogFilter : public ELogCompositeLogFilter {
 public:
     ELogAndLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)
         : ELogCompositeLogFilter(lhsFilter, rhsFilter, ELogCompositeLogFilter::OpType::OT_AND) {}
@@ -84,7 +84,7 @@ public:
  * @brief An OR log filter that checks if either one of the underlying filters allows the record to
  * be processed.
  */
-class DLL_EXPORT ELogOrLogFilter : public ELogCompositeLogFilter {
+class ELOG_API ELogOrLogFilter : public ELogCompositeLogFilter {
 public:
     ELogOrLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)
         : ELogCompositeLogFilter(lhsFilter, rhsFilter, ELogCompositeLogFilter::OpType::OT_OR) {}

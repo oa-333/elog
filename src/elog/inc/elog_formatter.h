@@ -16,7 +16,7 @@ namespace elog {
 // TODO: consider having a parent interface with no ctor params
 
 /** @class Utility class for formatting log messages. */
-class DLL_EXPORT ELogFormatter {
+class ELOG_API ELogFormatter {
 public:
     ELogFormatter() {}
     virtual ~ELogFormatter();

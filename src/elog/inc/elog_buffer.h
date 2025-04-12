@@ -20,7 +20,7 @@ namespace elog {
  * fixed buffer is used, but if more space is needed by some long log message, it transitions to a
  * dynamic buffer, and the logger is required to release it as soon as it finished logging.
  */
-class DLL_EXPORT ELogBuffer {
+class ELOG_API ELogBuffer {
 public:
     /** @brief Constructor. */
     ELogBuffer() : m_dynamicBuffer(nullptr), m_bufferSize(ELOG_BUFFER_SIZE) {}

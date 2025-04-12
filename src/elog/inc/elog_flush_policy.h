@@ -17,7 +17,7 @@ namespace elog {
  * the occasions on which the log target should be flushed so that log messages reach their
  * designated destination.
  */
-class DLL_EXPORT ELogFlushPolicy {
+class ELOG_API ELogFlushPolicy {
 public:
     virtual ~ELogFlushPolicy() {}
 
@@ -35,7 +35,7 @@ protected:
 };
 
 /** @class A combined flush policy, for enforcing several flush policies. */
-class DLL_EXPORT ELogCombinedFlushPolicy : public ELogFlushPolicy {
+class ELOG_API ELogCombinedFlushPolicy : public ELogFlushPolicy {
 public:
     ELogCombinedFlushPolicy() {}
     ELogCombinedFlushPolicy(const ELogCombinedFlushPolicy&) = delete;
@@ -51,7 +51,7 @@ protected:
 };
 
 /** @class A combined flush policy, for enforcing all specified flush policies. */
-class DLL_EXPORT ELogAndFlushPolicy : public ELogCombinedFlushPolicy {
+class ELOG_API ELogAndFlushPolicy : public ELogCombinedFlushPolicy {
 public:
     ELogAndFlushPolicy() {}
     ELogAndFlushPolicy(const ELogAndFlushPolicy&) = delete;
@@ -62,7 +62,7 @@ public:
 };
 
 /** @class A combined flush policy, for enforcing one of many flush policies. */
-class DLL_EXPORT ELogOrFlushPolicy : public ELogCombinedFlushPolicy {
+class ELOG_API ELogOrFlushPolicy : public ELogCombinedFlushPolicy {
 public:
     ELogOrFlushPolicy() {}
     ELogOrFlushPolicy(const ELogOrFlushPolicy&) = delete;
@@ -73,7 +73,7 @@ public:
 };
 
 /** @class A immediate flush policy, for enforcing log target flush after every log message.  */
-class DLL_EXPORT ELogImmediateFlushPolicy : public ELogFlushPolicy {
+class ELOG_API ELogImmediateFlushPolicy : public ELogFlushPolicy {
 public:
     ELogImmediateFlushPolicy() {}
     ELogImmediateFlushPolicy(const ELogImmediateFlushPolicy&) = delete;
@@ -87,7 +87,7 @@ public:
  * @class A flush policy that enforces log target flush whenever the number of un-flushed log
  * messages exceeds a configured limit.
  */
-class DLL_EXPORT ELogCountFlushPolicy : public ELogFlushPolicy {
+class ELOG_API ELogCountFlushPolicy : public ELogFlushPolicy {
 public:
     ELogCountFlushPolicy(uint64_t logCountLimit)
         : m_logCountLimit(logCountLimit), m_currentLogCount(0) {}
@@ -106,7 +106,7 @@ private:
  * @class A flush policy the enforces log target flush whenever the total size of un-flushed log
  * messages exceeds a configured limit.
  */
-class DLL_EXPORT ELogSizeFlushPolicy : public ELogFlushPolicy {
+class ELOG_API ELogSizeFlushPolicy : public ELogFlushPolicy {
 public:
     ELogSizeFlushPolicy(uint64_t logSizeLimitBytes)
         : m_logSizeLimitBytes(logSizeLimitBytes), m_currentLogSizeBytes(0) {}
@@ -126,7 +126,7 @@ private:
  * log message flush exceeds a configured time limit. This is an active policy, and it should be
  * combined with a log target, such that when flush time arrives, the log target will get flushed.
  */
-class DLL_EXPORT ELogTimedFlushPolicy : public ELogFlushPolicy {
+class ELOG_API ELogTimedFlushPolicy : public ELogFlushPolicy {
 public:
     ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarget* logTarget);
     ELogTimedFlushPolicy(const ELogTimedFlushPolicy&) = delete;

@@ -159,8 +159,9 @@ void ELogSystem::terminate() {
     termGlobals();
 }
 
-bool ELogSystem::configureFromProperties(const ELogProps& props) {
-    // configure for log_format
+bool ELogSystem::configureFromProperties(const ELogProps& props,
+                                         bool defineLogSources /* = false */) {
+    // configure log format
     ELogProps::const_iterator itr = props.find("log_format");
     if (itr != props.end()) {
         if (!configureLogFormat(itr->second.c_str())) {
@@ -169,32 +170,35 @@ bool ELogSystem::configureFromProperties(const ELogProps& props) {
         }
     }
 
-    // configure log levels
+    // configure root log level
     ELogLevel logLevel = ELEVEL_INFO;
+    itr = props.find("log_level");
+    if (itr != props.end()) {
+        if (!elogLevelFromStr(itr->second.c_str(), logLevel)) {
+            ELOG_ERROR("Invalid global log level: %s", itr->second.c_str());
+            return false;
+        }
+        getRootLogSource()->setLogLevel(logLevel);
+    }
+
+    // configure log levels of log sources
     for (const auto& entry : props) {
         if (entry.first.find("log_level") != std::string::npos) {
             const std::string& key = entry.first;
-            if (key.compare("log_level") == 0) {
-                if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
-                    ELOG_ERROR("Invalid global log level: %s", entry.second.c_str());
+            if (key.ends_with("log_level") == 0) {
+                std::string sourceName = key.substr(0, key.size() - strlen("log_level"));
+                ELogSource* logSource = defineLogSources ? defineLogSource(sourceName.c_str())
+                                                         : getLogSource(sourceName.c_str());
+                if (logSource == nullptr) {
+                    ELOG_ERROR("Invalid log source name: %s", sourceName.c_str());
                     return false;
                 }
-                getRootLogSource()->setLogLevel(logLevel);
-            } else {
-                if (key.ends_with("log_level") == 0) {
-                    std::string sourceName = key.substr(0, key.size() - strlen("log_level"));
-                    ELogSource* logSource = getLogSource(sourceName.c_str());
-                    if (logSource == nullptr) {
-                        ELOG_ERROR("Invalid log source name: %s", sourceName.c_str());
-                        return false;
-                    }
-                    if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
-                        ELOG_ERROR("Invalid source &s log level: %s", sourceName.c_str(),
-                                   entry.second.c_str());
-                        return false;
-                    }
-                    logSource->setLogLevel(logLevel);
+                if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
+                    ELOG_ERROR("Invalid source &s log level: %s", sourceName.c_str(),
+                               entry.second.c_str());
+                    return false;
                 }
+                logSource->setLogLevel(logLevel);
             }
         }
     }
@@ -424,11 +428,13 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName) {
     }
 
     // make sure name does not exist already
-    if (currSource->getChild(namePath.back().c_str()) != nullptr) {
-        return nullptr;
+    ELogSource* logSource = currSource->getChild(namePath.back().c_str());
+    if (logSource != nullptr) {
+        return logSource;
     }
 
-    ELogSource* logSource =
+    // otherwise create it and add it
+    logSource =
         new (std::nothrow) ELogSource(allocLogSourceId(), namePath.back().c_str(), currSource);
     if (!currSource->addChild(logSource)) {
         // impossible

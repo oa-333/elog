@@ -24,7 +24,7 @@ namespace elog {
  * segment switch overhead (open new segment, switch segments, log message, busy wait until previous
  * segment loggers are finished).
  */
-class DLL_EXPORT ELogSegmentedFileTarget : public ELogAbstractTarget {
+class ELOG_API ELogSegmentedFileTarget : public ELogAbstractTarget {
 public:
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
                             ELogFlushPolicy* flushPolicy);

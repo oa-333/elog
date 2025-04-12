@@ -6,7 +6,7 @@
 
 namespace elog {
 
-class DLL_EXPORT ELogSharedLogger : public ELogLogger {
+class ELOG_API ELogSharedLogger : public ELogLogger {
 public:
     ELogSharedLogger(ELogSource* logSource) : ELogLogger(logSource) {}
     ~ELogSharedLogger() final {}

@@ -25,7 +25,7 @@ typedef uint32_t ELogSourceId;
  * system pre-defines a root log source, from which a default logger stems. When setting the log
  * level of a log source, all managed loggers are affected immediately.
  */
-class DLL_EXPORT ELogSource {
+class ELOG_API ELogSource {
 public:
     ELogSource(const ELogSource&) = delete;
     ELogSource(ELogSource&&) = delete;
@@ -75,6 +75,9 @@ public:
         }
         return logSource;
     }
+
+    /** @brief Queries for existence of a child by name. */
+    inline bool containsChild(const char* name) { return getChild(name) != nullptr; }
 
     /** @brief Removes a child log source by name. Silently ignored if child not found. */
     inline void removeChild(const char* name) {

@@ -10,7 +10,7 @@
 namespace elog {
 
 /** @brief Helper class for the ELogLogger. */
-class DLL_EXPORT ELogRecordBuilder {
+class ELOG_API ELogRecordBuilder {
 public:
     ELogRecordBuilder() : m_offset(0), m_bufferFull(false) {}
     ~ELogRecordBuilder() {}

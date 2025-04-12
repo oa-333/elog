@@ -26,7 +26,7 @@ namespace elog {
  * done by coupling this log target with a combined log target that is in turn connected to several
  * segmented log targets.
  */
-class DLL_EXPORT ELogQuantumTarget : public ELogTarget {
+class ELOG_API ELogQuantumTarget : public ELogTarget {
 public:
     ELogQuantumTarget(ELogTarget* logTarget, uint32_t bufferSize);
     ~ELogQuantumTarget() final {}

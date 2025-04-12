@@ -9,7 +9,7 @@
 
 namespace elog {
 
-struct DLL_EXPORT ELogRecord {
+struct ELOG_API ELogRecord {
     /** @var Log record id. */
     uint64_t m_logRecordId;
 

@@ -8,7 +8,7 @@ REM move object files back to local directory
 move build\vc\*.obj .
 
 REM compile
-cl.exe /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /c src\elog\src\*.cpp
+cl.exe /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /DELOG_DLL /c src\elog\src\*.cpp
 if errorlevel 1 goto COMPILE_ERROR
 
 REM move object files
@@ -24,6 +24,7 @@ cd ..\..
 REM install
 copy build\vc\elog.dll bin\
 copy build\vc\elog.pdb bin\
+copy build\vc\elog.pdb lib\
 copy build\vc\vc140.pdb bin\
 copy build\vc\elog.lib lib\
 

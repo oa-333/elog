@@ -25,7 +25,7 @@ typedef uint32_t ELogTargetId;
 typedef std::unordered_map<std::string, std::string> ELogProps;
 
 /** @brief The elog module facade. */
-class DLL_EXPORT ELogSystem {
+class ELOG_API ELogSystem {
 public:
     /** @brief Initializes the ELog system with defaults (log to standard error stream). */
     static bool initialize();
@@ -75,9 +75,11 @@ public:
      *   Determines the global (root source) log level.
      * - <qualified-source-name>.log_level: Log level of a log source.
      * @param props The properties map.
+     * @param defineLogSources[opt] Optional parameter specifying whether each log source
+     * configuration item triggers creating the log source.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromProperties(const ELogProps& props);
+    static bool configureFromProperties(const ELogProps& props, bool defineLogSources = false);
 
     /**
      * Log Target Management Interface
@@ -221,9 +223,10 @@ public:
 
     // log sources
     /**
-     * @brief Defines a new log source by a qualified name.
+     * @brief Defines a new log source by a qualified name if it does not already exist. If the log
+     * source is already defined then no error is reported, and the existing logger is returned.
      * @note The qualified name of a log source is a name path from root to the log source,
-     * separated with dots. The root source has no name and no following dot.
+     * separated with dots. The root source has no name nor a following dot.
      * @param qualifiedName The qualified name of the log source. (path from root with dots, root
      * source has no name and no following dot) log source
      * @return ELogSource The resulting log source or null if failed.

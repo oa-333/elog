@@ -10,7 +10,7 @@
 
 namespace elog {
 
-class DLL_EXPORT ELogLogger {
+class ELOG_API ELogLogger {
 public:
     /** @ref Destructor. */
     virtual ~ELogLogger() {}

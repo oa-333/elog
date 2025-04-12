@@ -6,7 +6,7 @@
 
 namespace elog {
 
-class DLL_EXPORT ELogPrivateLogger : public ELogLogger {
+class ELOG_API ELogPrivateLogger : public ELogLogger {
 public:
     ELogPrivateLogger(ELogSource* logSource) : ELogLogger(logSource) {}
     ~ELogPrivateLogger() final {}

@@ -18,7 +18,7 @@ class ELogFlushPolicy;
  * - External logging system (adapter to containing application)
  * - Message Queue of some message broker system
  */
-class DLL_EXPORT ELogTarget {
+class ELOG_API ELogTarget {
 public:
     virtual ~ELogTarget() {}
 
@@ -39,7 +39,7 @@ protected:
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */
-class DLL_EXPORT ELogCombinedTarget : public ELogTarget {
+class ELOG_API ELogCombinedTarget : public ELogTarget {
 public:
     ELogCombinedTarget() {}
     ~ELogCombinedTarget() final {}
@@ -66,7 +66,7 @@ private:
  * @class Abstract parent class for chained lgo target. Log targets can be chained together, so that
  * filtering/batching/grouping can take place.
  */
-class DLL_EXPORT ELogChainedTarget : public ELogTarget {
+class ELOG_API ELogChainedTarget : public ELogTarget {
 public:
     ~ELogChainedTarget() override {}
 
@@ -81,7 +81,7 @@ protected:
  * particular, it implements log filtering and formatting, as well as applying a given flush policy.
  * This might not suite all log targets, as log formatting might take place on a later occasion.
  */
-class DLL_EXPORT ELogAbstractTarget : public ELogTarget {
+class ELOG_API ELogAbstractTarget : public ELogTarget {
 public:
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord) override;

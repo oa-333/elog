@@ -23,7 +23,7 @@ namespace elog {
  * still takes places at the caller's context. For an even shorter deferring latency consider using
  * the @ref ELogQueuedTarget @ref ELogQuantumTarget.
  */
-class DLL_EXPORT ELogDeferredTarget : public ELogTarget {
+class ELOG_API ELogDeferredTarget : public ELogTarget {
 public:
     /**
      * @brief Construct a new ELogDeferredTarget object.
