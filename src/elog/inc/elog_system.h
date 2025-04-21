@@ -76,10 +76,14 @@ public:
      * - <qualified-source-name>.log_level: Log level of a log source.
      * @param props The properties map.
      * @param defineLogSources[opt] Optional parameter specifying whether each log source
-     * configuration item triggers creating the log source.
+     * configuration item triggers creation of the log source.
+     * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
+     * all missing loggers along the name path. If not specified, and a logger on the path from root
+     * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromProperties(const ELogProps& props, bool defineLogSources = false);
+    static bool configureFromProperties(const ELogProps& props, bool defineLogSources = false,
+                                        bool defineMissingPath = false);
 
     /**
      * Log Target Management Interface
@@ -227,11 +231,13 @@ public:
      * source is already defined then no error is reported, and the existing logger is returned.
      * @note The qualified name of a log source is a name path from root to the log source,
      * separated with dots. The root source has no name nor a following dot.
-     * @param qualifiedName The qualified name of the log source. (path from root with dots, root
-     * source has no name and no following dot) log source
+     * @param qualifiedName The qualified name of the log source. This is a path from root with
+     * separating dots, where root source has no name and no following dot.
+     * @param defineMissingPath Optionally define all missing loggers along the name path. If not
+     * specified, and a logger on the path from root to leaf is missing, then the call fails.
      * @return ELogSource The resulting log source or null if failed.
      */
-    static ELogSource* defineLogSource(const char* qualifiedName);
+    static ELogSource* defineLogSource(const char* qualifiedName, bool defineMissingPath = false);
 
     /** @brief Retrieves a log source by its qualified name. Returns null if not found. */
     static ELogSource* getLogSource(const char* qualifiedName);
@@ -343,6 +349,7 @@ public:
 private:
     static bool initGlobals();
     static void termGlobals();
+    static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
 };
 
 /** @brief Queries whether the default logger can log a record with a given log level. */

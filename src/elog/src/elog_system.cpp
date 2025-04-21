@@ -160,7 +160,8 @@ void ELogSystem::terminate() {
 }
 
 bool ELogSystem::configureFromProperties(const ELogProps& props,
-                                         bool defineLogSources /* = false */) {
+                                         bool defineLogSources /* = false */,
+                                         bool defineMissingPath /* = false */) {
     // configure log format
     ELogProps::const_iterator itr = props.find("log_format");
     if (itr != props.end()) {
@@ -182,24 +183,27 @@ bool ELogSystem::configureFromProperties(const ELogProps& props,
     }
 
     // configure log levels of log sources
+    // search for ".log_level" with a dot, in order to filter out global log_level key
+    const char* suffix = ".log_level";
+    uint32_t suffixLen = strlen(suffix);
     for (const auto& entry : props) {
-        if (entry.first.find("log_level") != std::string::npos) {
+        if (entry.first.ends_with(suffix)) {
             const std::string& key = entry.first;
-            if (key.ends_with("log_level") == 0) {
-                std::string sourceName = key.substr(0, key.size() - strlen("log_level"));
-                ELogSource* logSource = defineLogSources ? defineLogSource(sourceName.c_str())
-                                                         : getLogSource(sourceName.c_str());
-                if (logSource == nullptr) {
-                    ELOG_ERROR("Invalid log source name: %s", sourceName.c_str());
-                    return false;
-                }
-                if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
-                    ELOG_ERROR("Invalid source &s log level: %s", sourceName.c_str(),
-                               entry.second.c_str());
-                    return false;
-                }
-                logSource->setLogLevel(logLevel);
+            // shave off trailing ".log_level" (that includes last dot)
+            std::string sourceName = key.substr(0, key.size() - suffixLen);
+            ELogSource* logSource = defineLogSources
+                                        ? defineLogSource(sourceName.c_str(), defineMissingPath)
+                                        : getLogSource(sourceName.c_str());
+            if (logSource == nullptr) {
+                ELOG_ERROR("Invalid log source name: %s", sourceName.c_str());
+                return false;
             }
+            if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
+                ELOG_ERROR("Invalid source &s log level: %s", sourceName.c_str(),
+                           entry.second.c_str());
+                return false;
+            }
+            logSource->setLogLevel(logLevel);
         }
     }
 
@@ -411,32 +415,9 @@ static void parseSourceName(const std::string& qualifiedName, std::vector<std::s
     namePath.push_back(qualifiedName.substr(prevDotPos));
 }
 
-// log sources
-ELogSource* ELogSystem::defineLogSource(const char* qualifiedName) {
-    std::unique_lock<std::mutex> lock(sSourceTreeLock);
-    // parse name to components and start traveling up to last component
-    std::vector<std::string> namePath;
-    parseSourceName(qualifiedName, namePath);
-
-    ELogSource* currSource = sRootLogSource;
-    uint32_t namecount = namePath.size();
-    for (uint32_t i = 0; i < namecount - 1; ++i) {
-        currSource = currSource->getChild(namePath[i].c_str());
-        if (currSource == nullptr) {
-            return nullptr;
-        }
-    }
-
-    // make sure name does not exist already
-    ELogSource* logSource = currSource->getChild(namePath.back().c_str());
-    if (logSource != nullptr) {
-        return logSource;
-    }
-
-    // otherwise create it and add it
-    logSource =
-        new (std::nothrow) ELogSource(allocLogSourceId(), namePath.back().c_str(), currSource);
-    if (!currSource->addChild(logSource)) {
+ELogSource* ELogSystem::addChildSource(ELogSource* parent, const char* sourceName) {
+    ELogSource* logSource = new (std::nothrow) ELogSource(allocLogSourceId(), sourceName, parent);
+    if (!parent->addChild(logSource)) {
         // impossible
         // TODO: consider having an error listener to pass to user all errors and let the user deal
         // with them, dumping to stderr is not acceptable in an infrastructure library, but there is
@@ -449,11 +430,44 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName) {
         sLogSourceMap.insert(ELogSourceMap::value_type(logSource->getId(), logSource)).second;
     if (!res) {
         // internal error, roll back
-        currSource->removeChild(logSource->getName());
+        parent->removeChild(logSource->getName());
         delete logSource;
         return nullptr;
     }
     return logSource;
+}
+
+// log sources
+ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
+                                        bool defineMissingPath /* = false */) {
+    std::unique_lock<std::mutex> lock(sSourceTreeLock);
+    // parse name to components and start traveling up to last component
+    std::vector<std::string> namePath;
+    parseSourceName(qualifiedName, namePath);
+
+    ELogSource* currSource = sRootLogSource;
+    uint32_t namecount = namePath.size();
+    for (uint32_t i = 0; i < namecount - 1; ++i) {
+        ELogSource* childSource = currSource->getChild(namePath[i].c_str());
+        if (childSource == nullptr && defineMissingPath) {
+            childSource = addChildSource(currSource, namePath[i].c_str());
+        }
+        if (childSource == nullptr) {
+            // TODO: partial failures are left as dangling sources, is that ok?
+            return nullptr;
+        }
+        currSource = childSource;
+    }
+
+    // make sure name does not exist already
+    const char* logSourceName = namePath.back().c_str();
+    ELogSource* logSource = currSource->getChild(logSourceName);
+    if (logSource != nullptr) {
+        return logSource;
+    }
+
+    // otherwise create it and add it
+    return addChildSource(currSource, logSourceName);
 }
 
 ELogSource* ELogSystem::getLogSource(const char* qualifiedName) {
