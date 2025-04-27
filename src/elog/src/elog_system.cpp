@@ -66,6 +66,7 @@ void ELogSystem::termGlobals() {
         delete sRootLogSource;
         sRootLogSource = nullptr;
     }
+    sDefaultLogger = nullptr;
 }
 
 bool ELogSystem::initialize() {
