@@ -123,10 +123,8 @@ void ELogThreadIdSelector::selectField(const ELogRecord& record, std::stringstre
 void ELogSourceSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
     applyJustify(msgStream);
     ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
-    if (logSource != nullptr) {
-        msgStream << logSource->getQualifiedName();
-    } else {
-        msgStream << "<N/A>";
+    if (logSource != nullptr && (*logSource->getQualifiedName() != 0)) {
+        msgStream << "<" << logSource->getQualifiedName() << ">";
     }
 }
 

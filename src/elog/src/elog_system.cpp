@@ -1,5 +1,6 @@
 #include "elog_system.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <mutex>
@@ -42,6 +43,18 @@ bool ELogSystem::initGlobals() {
         fprintf(stderr, "Failed to create root log source, out of memory\n");
         return false;
     }
+
+    // add to global map
+    bool res =
+        sLogSourceMap.insert(ELogSourceMap::value_type(sRootLogSource->getId(), sRootLogSource))
+            .second;
+    if (!res) {
+        fprintf(stderr,
+                "Failed to insert root log source to global source map (duplicate found)\n");
+        termGlobals();
+        return false;
+    }
+
     sDefaultLogger = sRootLogSource->createSharedLogger();
     if (sDefaultLogger == nullptr) {
         fprintf(stderr, "Failed to create default logger, out of memory\n");
@@ -58,6 +71,14 @@ bool ELogSystem::initGlobals() {
 }
 
 void ELogSystem::termGlobals() {
+    for (ELogTarget* logTarget : sLogTargets) {
+        if (logTarget != nullptr) {
+            logTarget->stop();
+            delete logTarget;
+        }
+    }
+    sLogTargets.clear();
+
     if (sGlobalFormatter != nullptr) {
         delete sGlobalFormatter;
         sGlobalFormatter = nullptr;
@@ -67,6 +88,7 @@ void ELogSystem::termGlobals() {
         sRootLogSource = nullptr;
     }
     sDefaultLogger = nullptr;
+    sLogSourceMap.clear();
 }
 
 bool ELogSystem::initialize() {
@@ -89,17 +111,7 @@ bool ELogSystem::initializeLogFile(const char* logFilePath,
     if (!initGlobals()) {
         return false;
     }
-
-    ELogTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create log file target, out of memory");
-        termGlobals();
-        return false;
-    }
-
-    if (setLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
-        logTarget->stop();
-        delete logTarget;
+    if (setLogFileTarget(logFilePath, flushPolicy) == ELOG_INVALID_TARGET_ID) {
         termGlobals();
         return false;
     }
@@ -110,6 +122,7 @@ bool ELogSystem::initializeLogFile(const char* logFilePath,
     if (logFormatter != nullptr) {
         setLogFormatter(logFormatter);
     }
+    initFieldSelectors();
     return true;
 }
 
@@ -122,17 +135,8 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
         return false;
     }
 
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create segmented log file target, out of memory");
-        termGlobals();
-        return false;
-    }
-
-    if (setLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
-        logTarget->stop();
-        delete logTarget;
+    if (setSegmentedLogFileTarget(logPath, logName, segmentLimitMB, flushPolicy) ==
+        ELOG_INVALID_TARGET_ID) {
         termGlobals();
         return false;
     }
@@ -143,6 +147,7 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
     if (logFormatter != nullptr) {
         setLogFormatter(logFormatter);
     }
+    initFieldSelectors();
     return true;
 }
 
@@ -468,7 +473,22 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
     }
 
     // otherwise create it and add it
-    return addChildSource(currSource, logSourceName);
+    logSource = addChildSource(currSource, logSourceName);
+
+    // in case of a new log source, we check if there is an environment variable for configuring its
+    // log level. The expected format is: <qualified-log-source-name>_log_level = <elog-level>
+    // every dot in the qualified name is replaced with underscore
+    std::string envVarName = std::string(qualifiedName) + "_log_level";
+    std::replace(envVarName.begin(), envVarName.end(), '.', '_');
+    char* envVarValue = getenv(envVarName.c_str());
+    if (envVarValue != nullptr) {
+        ELogLevel logLevel = ELEVEL_INFO;
+        if (elogLevelFromStr(envVarValue, logLevel)) {
+            logSource->setLogLevel(logLevel);
+        }
+    }
+
+    return logSource;
 }
 
 ELogSource* ELogSystem::getLogSource(const char* qualifiedName) {

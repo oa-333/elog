@@ -31,7 +31,8 @@ public:
      * method @ref createFieldSelector().
      * @return true If the log line format specification was parsed successfully, otherwise false.
      */
-    inline bool initialize(const char* logLineFormatSpec = "${time} ${level:6} [${tid}] ${msg}") {
+    inline bool initialize(
+        const char* logLineFormatSpec = "${time} ${level:6} [${tid}] ${src} ${msg}") {
         return parseFormatSpec(logLineFormatSpec);
     }
 

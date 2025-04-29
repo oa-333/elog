@@ -120,14 +120,7 @@ private:
     std::unordered_set<ELogLogger*> m_loggers;
 
     ELogSource(ELogSourceId sourceId, const char* name, ELogSource* parent = nullptr,
-               ELogLevel logLevel = ELEVEL_INFO)
-        : m_sourceId(sourceId),
-          m_name(name),
-          m_moduleName(name),
-          m_parent(parent),
-          m_logLevel(logLevel) {
-        m_qname = parent ? (std::string(parent->getQualifiedName()) + "." + name) : name;
-    }
+               ELogLevel logLevel = ELEVEL_INFO);
     ~ELogSource();
 
     friend class ELogSystem;
