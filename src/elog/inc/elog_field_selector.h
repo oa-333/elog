@@ -86,6 +86,14 @@ public:
     void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
 };
 
+class ELOG_API ELogProgramNameSelector : public ELogFieldSelector {
+public:
+    ELogProgramNameSelector(int justify) : ELogFieldSelector(justify) {}
+    ~ELogProgramNameSelector() final {}
+
+    void selectField(const ELogRecord& record, std::stringstream& msgStream) final;
+};
+
 class ELOG_API ELogProcessIdSelector : public ELogFieldSelector {
 public:
     ELogProcessIdSelector(int justify) : ELogFieldSelector(justify) {}

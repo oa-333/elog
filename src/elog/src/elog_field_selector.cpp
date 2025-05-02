@@ -3,6 +3,8 @@
 #include "elog_def.h"
 
 #ifdef ELOG_WINDOWS
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <winsock2.h>
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 256
@@ -11,8 +13,11 @@
 #define LOGIN_NAME_MAX 256
 #endif
 #else
+#include <fcntl.h>
 #include <unistd.h>
 #endif
+
+#define PROG_NAME_MAX 256
 
 #include <climits>
 #include <cstring>
@@ -24,12 +29,66 @@ namespace elog {
 
 static char hostName[HOST_NAME_MAX];
 static char userName[LOGIN_NAME_MAX];
+static char progName[PROG_NAME_MAX];
 
 #ifdef ELOG_WINDOWS
 static DWORD pid = 0;
 #else
 static pid_t pid = 0;
 #endif
+
+static void getProgName() {
+    // set some default in case of error
+    strcpy(progName, "N/A");
+
+    // get executable file name
+#ifdef ELOG_WINDOWS
+    char modulePath[PROG_NAME_MAX];
+    DWORD pathLen = GetModuleFileNameA(NULL, progName, PROG_NAME_MAX);
+    if (pathLen == 0) {
+        fprintf(stderr, "WARNING: Failed to get executable file name: %u\n", GetLastError());
+        return;
+    }
+    const char slash = '\\';
+#else
+    // can get it only from /proc/self/cmdline
+    int fd = open("/proc/self/cmdline", O_RDONLY, 0);
+    if (fd == -1) {
+        fprintf(stderr, "Failed to open /proc/self/cmdline for reading: %d\n", errno);
+        return;
+    }
+
+    // read as many bytes as possible, the program name ends with a null (then program arguments
+    // follow, but we don't care about them)
+    ssize_t res = read(fd, progName, PROG_NAME_MAX);
+    if (res == ((ssize_t)-1)) {
+        fprintf(stderr, "Failed to read from /proc/self/cmdline for reading: %d\n", errno);
+        close(fd);
+        return;
+    }
+    close(fd);
+
+    // search for null and if not found then set one
+    bool nullFound = false;
+    for (uint32_t i = 0; i < PROG_NAME_MAX; ++i) {
+        if (progName[i] == 0) {
+            nullFound = true;
+            break;
+        }
+    }
+    if (!nullFound) {
+        progName[PROG_NAME_MAX - 1] = 0;
+    }
+    const char slash = '/';
+#endif
+
+    // platform-agnostic part:
+    // now search for last slash and pull string back
+    char* slashPos = strrchr(progName, slash);
+    if (slashPos != nullptr) {
+        memmove(progName, slashPos + 1, strlen(slashPos + 1) + 1);
+    }
+}
 
 extern void initFieldSelectors() {
     // initialize host name
@@ -48,6 +107,9 @@ extern void initFieldSelectors() {
         strcpy(userName, "<N/A>");
     }
 #endif
+
+    // initialize program name
+    getProgName();
 
     // initialize pid
 #ifdef ELOG_WINDOWS
@@ -108,6 +170,11 @@ void ELogHostNameSelector::selectField(const ELogRecord& record, std::stringstre
 void ELogUserNameSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
     applyJustify(msgStream);
     msgStream << userName;
+}
+
+void ELogProgramNameSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {
+    applyJustify(msgStream);
+    msgStream << progName;
 }
 
 void ELogProcessIdSelector::selectField(const ELogRecord& record, std::stringstream& msgStream) {

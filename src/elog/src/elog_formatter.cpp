@@ -73,6 +73,8 @@ ELogFieldSelector* ELogFormatter::createFieldSelector(const char* fieldName, int
         selector = new (std::nothrow) ELogHostNameSelector(justify);
     } else if (strcmp(fieldName, "user") == 0) {
         selector = new (std::nothrow) ELogUserNameSelector(justify);
+    } else if (strcmp(fieldName, "prog") == 0) {
+        selector = new (std::nothrow) ELogProgramNameSelector(justify);
     } else if (strcmp(fieldName, "pid") == 0) {
         selector = new (std::nothrow) ELogProcessIdSelector(justify);
     } else if (strcmp(fieldName, "tid") == 0) {

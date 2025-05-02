@@ -287,6 +287,7 @@ public:
      * ${time} - the loging time.
      * @{host} - the host name.
      * ${user} - the logged in user.
+     * ${prog} - the running program name.
      * ${pid} - the process id.
      * ${tid} - the logging thread id.
      * ${level} - the log level

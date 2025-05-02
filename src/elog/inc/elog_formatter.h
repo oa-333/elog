@@ -10,8 +10,8 @@
 
 namespace elog {
 
-// the following special tokens can be sued in configuration:
-// ${rid} ${time} ${host} ${user} ${pid} ${tid} ${src} ${msg}
+// the following special tokens can be used in configuration:
+// ${rid} ${time} ${host} ${user} ${prog} ${pid} ${tid} ${src} ${msg}
 
 // TODO: consider having a parent interface with no ctor params
 
@@ -26,9 +26,10 @@ public:
      * @param logLineFormatSpec The log line format specification. The following special tokens are
      * interpreted as log record field references: ${rid} ${time} ${tid} ${src} ${msg}. The
      * following additional tokens are understood: ${host} for host name,
-     * ${user} for logged in user, ${pid} for current process id, and ${mod} for module name. More
-     * custom tokens can be added by deriving from @ref ELogFormatter and overriding the virtual
-     * method @ref createFieldSelector().
+     * ${user} for logged in user, ${prog} for program name (executable image file name without
+     * extension), ${pid} for current process id, and ${mod} for module name. More custom tokens can
+     * be added by deriving from @ref ELogFormatter and overriding the virtual method @ref
+     * createFieldSelector().
      * @return true If the log line format specification was parsed successfully, otherwise false.
      */
     inline bool initialize(
