@@ -1,0 +1,73 @@
+#include "elog_syslog_target.h"
+
+#ifdef ELOG_LINUX
+
+#include <syslog.h>
+
+#include "elog_field_selector.h"
+#include "elog_system.h"
+
+namespace elog {
+
+bool ELogSysLogTarget::start() {
+    openlog(getProgramName(), LOG_PID, LOG_USER);
+    return true;
+}
+
+bool ELogSysLogTarget::stop() {
+    closelog();
+    return true;
+}
+
+void ELogSysLogTarget::log(const ELogRecord& logRecord) {
+    if (ELogSystem::filterLogMsg(logRecord)) {
+        // first translate log level
+        int sysLevel = 0;
+        if (logLevelToSysLevel(logRecord.m_logLevel, sysLevel)) {
+            std::string logMsg;
+            ELogSystem::formatLogMsg(logRecord, logMsg);
+            syslog(sysLevel | LOG_USER, "%s", logMsg.c_str());
+        }
+    }
+}
+
+void ELogSysLogTarget::flush() {}
+
+bool ELogSysLogTarget::logLevelToSysLevel(ELogLevel logLevel, int& sysLevel) {
+    switch (logLevel) {
+        case ELEVEL_FATAL:
+            sysLevel = LOG_CRIT;
+            break;
+
+        case ELEVEL_ERROR:
+            sysLevel = LOG_ERR;
+            break;
+
+        case ELEVEL_WARN:
+            sysLevel = LOG_WARNING;
+            break;
+
+        case ELEVEL_NOTICE:
+            sysLevel = LOG_NOTICE;
+            break;
+
+        case ELEVEL_INFO:
+            sysLevel = LOG_INFO;
+            break;
+
+        case ELEVEL_TRACE:
+        case ELEVEL_DEBUG:
+            sysLevel = LOG_DEBUG;
+            break;
+
+        case ELEVEL_DIAG:
+        default:
+            // NOTE: diagnostic level is not reported to avoid syslog flooding
+            return false;
+    }
+    return true;
+}
+
+}  // namespace elog
+
+#endif  // ELOG_LINUX

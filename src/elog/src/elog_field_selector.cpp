@@ -119,6 +119,8 @@ extern void initFieldSelectors() {
 #endif  // ELOG_WINDOWS
 }
 
+const char* getProgramName() { return progName; }
+
 void ELogFieldSelector::applyJustify(std::stringstream& msgStream) {
     if (m_justify > 0) {
         // left justify

@@ -8,7 +8,11 @@
 
 namespace elog {
 
+/** @brief Initialize all field selectors (for internal use only). */
 extern ELOG_API void initFieldSelectors();
+
+/** @brief Retrieves program name (for internal use only). */
+extern ELOG_API const char* getProgramName();
 
 /**
  * @brief Parent interface for all field selectors. Custom selectors may be added by deriving from
