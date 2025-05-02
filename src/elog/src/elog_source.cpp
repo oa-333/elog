@@ -31,6 +31,45 @@ ELogSource::~ELogSource() {
     m_loggers.clear();
 }
 
+void ELogSource::setLogLevel(ELogLevel logLevel, PropagateMode propagateMode) {
+    m_logLevel = logLevel;
+    if (propagateMode == PropagateMode::PM_NONE) {
+        // no propagation at all
+        return;
+    }
+
+    for (auto& entry : m_children) {
+        ELogSource* childSource = entry.second;
+        childSource->propagateLogLevel(logLevel, propagateMode);
+    }
+}
+
+void ELogSource::propagateLogLevel(ELogLevel logLevel, PropagateMode propagateMode) {
+    // adjust self log level
+    switch (propagateMode) {
+        case PropagateMode::PM_SET:
+            m_logLevel = logLevel;
+            break;
+
+        case PropagateMode::PM_RESTRICT:
+            m_logLevel = std::min(m_logLevel, logLevel);
+            break;
+
+        case PropagateMode::PM_LOOSE:
+            m_logLevel = std::max(m_logLevel, logLevel);
+            break;
+
+        default:
+            break;
+    }
+
+    // propagate to children
+    for (auto& entry : m_children) {
+        ELogSource* childSource = entry.second;
+        childSource->propagateLogLevel(logLevel, propagateMode);
+    }
+}
+
 ELogLogger* ELogSource::createSharedLogger() {
     ELogLogger* logger = new (std::nothrow) ELogSharedLogger(this);
     if (logger != nullptr) {

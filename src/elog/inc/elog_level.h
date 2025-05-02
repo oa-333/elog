@@ -48,7 +48,16 @@ enum ELogLevel : uint32_t {
 extern ELOG_API const char* elogLevelToStr(ELogLevel logLevel);
 
 /** @brief Converts log level string to log level constant. */
-extern ELOG_API bool elogLevelFromStr(const char* logLevelStr, ELogLevel& logLevel);
+
+/**
+ * @brief Converts log level string to log level constant.
+ * @param logLevelStr The input log level string.
+ * @param[out] logLevel The resulting log level.
+ * @param[out] ptr Optionally on returns points to the first char where parsing stopped.
+ * @return True if parsing succeeded, otherwise false.
+ */
+extern ELOG_API bool elogLevelFromStr(const char* logLevelStr, ELogLevel& logLevel,
+                                      const char** ptr = nullptr);
 
 }  // namespace elog
 

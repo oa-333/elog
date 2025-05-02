@@ -18,11 +18,18 @@
 
 namespace elog {
 
+/** @brief Log level configuration used for delayed log level propagation. */
+struct ELogLevelCfg {
+    ELogSource* m_logSource;
+    ELogLevel m_logLevel;
+    ELogSource::PropagateMode m_propagationMode;
+};
+
 static ELogFilter* sGlobalFilter = nullptr;
 static std::vector<ELogTarget*> sLogTargets;
 static std::atomic<ELogSourceId> sNextLogSourceId;
 
-static ELogSourceId allocLogSourceId() {
+inline ELogSourceId allocLogSourceId() {
     return sNextLogSourceId.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -165,11 +172,51 @@ void ELogSystem::terminate() {
     termGlobals();
 }
 
-bool ELogSystem::configureFromProperties(const ELogProps& props,
+bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
+                               ELogSource::PropagateMode& propagateMode) {
+    const char* ptr = nullptr;
+    if (!elogLevelFromStr(logLevelStr, logLevel, &ptr)) {
+        ELOG_ERROR("Invalid log level: %s", logLevelStr);
+        return false;
+    }
+
+    // parse optional propagation sign if there is any
+    propagateMode = ELogSource::PropagateMode::PM_NONE;
+    uint32_t parseLen = ptr - logLevelStr;
+    uint32_t len = strlen(logLevelStr);
+    if (parseLen < len) {
+        // there are more chars, only one is allowed
+        if (parseLen + 1 != len) {
+            ELOG_ERROR(
+                "Invalid excess chars at global log level: %s (only one character is allowed: '*', "
+                "'+' or '-')",
+                logLevelStr);
+            return false;
+        } else if (*ptr == '*') {
+            propagateMode = ELogSource::PropagateMode::PM_SET;
+        } else if (*ptr == '-') {
+            propagateMode = ELogSource::PropagateMode::PM_RESTRICT;
+        } else if (*ptr == '+') {
+            propagateMode = ELogSource::PropagateMode::PM_LOOSE;
+        } else {
+            ELOG_ERROR(
+                "Invalid excess chars at global log level: %s (only one character is allowed: '*', "
+                "'+' or '-')",
+                logLevelStr);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ELogSystem::configureFromProperties(const ELogPropertyMap& props,
                                          bool defineLogSources /* = false */,
                                          bool defineMissingPath /* = false */) {
-    // configure log format
-    ELogProps::const_iterator itr = props.find("log_format");
+    // configure log format (unrelated to order of appearance)
+    ELogPropertyMap::const_iterator itr = std::find_if(
+        props.begin(), props.end(),
+        [](const ELogProperty& prop) { return prop.first.compare("log_format") == 0; });
     if (itr != props.end()) {
         if (!configureLogFormat(itr->second.c_str())) {
             ELOG_ERROR("Invalid log format in properties: %s", itr->second.c_str());
@@ -177,24 +224,31 @@ bool ELogSystem::configureFromProperties(const ELogProps& props,
         }
     }
 
-    // configure root log level
+    std::vector<ELogLevelCfg> logLevelCfg;
     ELogLevel logLevel = ELEVEL_INFO;
-    itr = props.find("log_level");
-    if (itr != props.end()) {
-        if (!elogLevelFromStr(itr->second.c_str(), logLevel)) {
-            ELOG_ERROR("Invalid global log level: %s", itr->second.c_str());
-            return false;
-        }
-        getRootLogSource()->setLogLevel(logLevel);
-    }
+    ELogSource::PropagateMode propagateMode = ELogSource::PropagateMode::PM_NONE;
 
-    // configure log levels of log sources
-    // search for ".log_level" with a dot, in order to filter out global log_level key
     const char* suffix = ".log_level";
     uint32_t suffixLen = strlen(suffix);
-    for (const auto& entry : props) {
-        if (entry.first.ends_with(suffix)) {
-            const std::string& key = entry.first;
+
+    for (const ELogProperty& prop : props) {
+        // check if this is root log level
+        if (prop.first.compare("log_level") == 0) {
+            // global log level
+            if (!parseLogLevel(prop.second.c_str(), logLevel, propagateMode)) {
+                ELOG_ERROR("Invalid global log level: %s", prop.second.c_str());
+                return false;
+            }
+            logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode});
+        }
+
+        // configure log levels of log sources
+        // search for ".log_level" with a dot, in order to filter out global log_level key
+        // NOTE: when definining log sources, we must first define all log sources, then set log
+        // level to configured level and apply log level propagation. If we apply propagation before
+        // child log sources are defined, then propagation is lost.
+        if (prop.first.ends_with(suffix)) {
+            const std::string& key = prop.first;
             // shave off trailing ".log_level" (that includes last dot)
             std::string sourceName = key.substr(0, key.size() - suffixLen);
             ELogSource* logSource = defineLogSources
@@ -204,13 +258,22 @@ bool ELogSystem::configureFromProperties(const ELogProps& props,
                 ELOG_ERROR("Invalid log source name: %s", sourceName.c_str());
                 return false;
             }
-            if (!elogLevelFromStr(entry.second.c_str(), logLevel)) {
+            ELogSource::PropagateMode propagateMode = ELogSource::PropagateMode::PM_NONE;
+            if (!parseLogLevel(prop.second.c_str(), logLevel, propagateMode)) {
                 ELOG_ERROR("Invalid source &s log level: %s", sourceName.c_str(),
-                           entry.second.c_str());
+                           prop.second.c_str());
                 return false;
             }
-            logSource->setLogLevel(logLevel);
+            logLevelCfg.push_back({logSource, logLevel, propagateMode});
         }
+    }
+
+    // now we can apply log level propagation
+    for (const ELogLevelCfg& cfg : logLevelCfg) {
+        ELOG_DEBUG("Setting %s log level to %s (propagate - %u)",
+                   cfg.m_logSource->getQualifiedName(), elogLevelToStr(cfg.m_logLevel),
+                   (uint32_t)cfg.m_propagationMode);
+        cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
     }
 
     return true;
@@ -484,7 +547,7 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
     if (envVarValue != nullptr) {
         ELogLevel logLevel = ELEVEL_INFO;
         if (elogLevelFromStr(envVarValue, logLevel)) {
-            logSource->setLogLevel(logLevel);
+            logSource->setLogLevel(logLevel, ELogSource::PropagateMode::PM_NONE);
         }
     }
 

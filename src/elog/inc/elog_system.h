@@ -3,7 +3,7 @@
 
 #include <cstdarg>
 #include <cstdio>
-#include <unordered_map>
+#include <vector>
 
 #include "elog_def.h"
 #include "elog_filter.h"
@@ -21,8 +21,11 @@ typedef uint32_t ELogTargetId;
 /** @def Invalid log target identifier value. */
 #define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
 
+/** @brief A single property (key-value pair). */
+typedef std::pair<std::string, std::string> ELogProperty;
+
 /** @typedef Property map. */
-typedef std::unordered_map<std::string, std::string> ELogProps;
+typedef std::vector<ELogProperty> ELogPropertyMap;
 
 /** @brief The elog module facade. */
 class ELOG_API ELogSystem {
@@ -82,7 +85,7 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromProperties(const ELogProps& props, bool defineLogSources = false,
+    static bool configureFromProperties(const ELogPropertyMap& props, bool defineLogSources = false,
                                         bool defineMissingPath = false);
 
     /**
@@ -350,6 +353,8 @@ private:
     static bool initGlobals();
     static void termGlobals();
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
+    static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
+                              ELogSource::PropagateMode& propagateMode);
 };
 
 /** @brief Queries whether the default logger can log a record with a given log level. */
