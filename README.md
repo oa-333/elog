@@ -1,6 +1,6 @@
 # ELog Logging Package
 
-This is simple package for application message logging in C++.  
+The ELog (stands for Error Log) is simple, lightweight, yet robust and high-performant package for application message logging in C++.  
 The package was designed such that it can be extended for a broad range of use cases.
 
 ## Description
