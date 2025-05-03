@@ -30,7 +30,10 @@ typedef std::vector<ELogProperty> ELogPropertyMap;
 /** @brief The elog module facade. */
 class ELOG_API ELogSystem {
 public:
-    /** @brief Initializes the ELog system with defaults (log to standard error stream). */
+    /**
+     * @brief Initializes the ELog system with defaults (log to standard error stream).
+     * @return true If succeeded, otherwise false.
+     */
     static bool initialize();
 
     /**

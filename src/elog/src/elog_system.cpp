@@ -495,8 +495,21 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
 
     ELogTarget* logTarget = nullptr;
     if (segmentSizeMB > 0) {
-        logTarget = new (std::nothrow)
-            ELogSegmentedFileTarget(logTargetSpec.m_path.c_str(), "", segmentSizeMB, nullptr);
+#ifdef ELOG_WINDOWS
+        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of('\\');
+#else
+        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of('/');
+#endif
+        /// assuming segmented log is to be created in current folder, and path is the file name
+        if (lastSlashPos == std::string::npos) {
+            logTarget = new (std::nothrow)
+                ELogSegmentedFileTarget("", logTargetSpec.m_path.c_str(), segmentSizeMB, nullptr);
+        } else {
+            std::string logPath = logTargetSpec.m_path.substr(0, lastSlashPos);
+            std::string logName = logTargetSpec.m_path.substr(lastSlashPos + 1);
+            logTarget = new (std::nothrow)
+                ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB, nullptr);
+        }
     }
 
     if (deferred) {
