@@ -70,7 +70,7 @@ public:
     static void terminate();
 
     /** @brief Registers a schema handler by name. */
-    bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler);
+    static bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler);
 
     /**
      * @brief Configures the ELog System from a properties map.

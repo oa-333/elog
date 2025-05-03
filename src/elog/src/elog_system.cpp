@@ -12,6 +12,7 @@
 #include "elog_formatter.h"
 #include "elog_quantum_target.h"
 #include "elog_queued_target.h"
+#include "elog_schema_db_handler.h"
 #include "elog_segmented_file_target.h"
 #include "elog_syslog_target.h"
 
@@ -88,6 +89,21 @@ bool ELogSystem::initGlobals() {
         termGlobals();
         return false;
     }
+
+#ifdef ELOG_ENABLE_DB_CONNECTOR
+    ELogSchemaDbHandler* handler = new (std::nothrow) ELogSchemaDbHandler();
+    if (handler == nullptr) {
+        fprintf(stderr, "Failed to create db schema handler, out of memory\n");
+        termGlobals();
+        return false;
+    }
+    if (!registerSchemaHandler("db", handler)) {
+        fprintf(stderr, "Failed to add db schema handler\n");
+        delete handler;
+        termGlobals();
+        return false;
+    }
+#endif
     return true;
 }
 
@@ -100,6 +116,9 @@ void ELogSystem::termGlobals() {
     }
     sLogTargets.clear();
 
+    for (auto& entry : sSchemaHandlerMap) {
+        delete entry.second;
+    }
     if (sDefaultLogTarget != nullptr) {
         delete sDefaultLogTarget;
         sDefaultLogTarget = nullptr;
@@ -187,7 +206,7 @@ void ELogSystem::terminate() {
     termGlobals();
 }
 
-bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
+bool ELogSystem::registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
     return sSchemaHandlerMap.insert(ELogSchemaHandlerMap::value_type(schemaName, schemaHandler))
         .second;
 }
@@ -268,7 +287,7 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
     ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(logTargetSpec.m_scheme);
     if (itr != sSchemaHandlerMap.end()) {
         ELogSchemaHandler* schemaHandler = itr->second;
-        ELogTarget* logTarget = schemaHandler->loadTarget(logTargetSpec);
+        ELogTarget* logTarget = schemaHandler->loadTarget(logTargetCfg, logTargetSpec);
         if (logTarget == nullptr) {
             ELOG_ERROR("Failed to load target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
                        logTargetCfg.c_str());

@@ -17,10 +17,12 @@ public:
 
     /**
      * @brief Loads a log target by a specification.
+     * @param logTargetCfg The log target string specification.
      * @param targetSpec The log target specification.
      * @return ELogTarget* The resulting log target or null if failed.
      */
-    virtual ELogTarget* loadTarget(const ELogTargetSpec& targetSpec) = 0;
+    virtual ELogTarget* loadTarget(const std::string& logTargetCfg,
+                                   const ELogTargetSpec& targetSpec) = 0;
 
 protected:
     ELogSchemaHandler() {}
