@@ -5,11 +5,13 @@
 #include <cstdio>
 #include <vector>
 
+#include "elog_common.h"
 #include "elog_def.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
 #include "elog_level.h"
 #include "elog_logger.h"
+#include "elog_schema_handler.h"
 #include "elog_source.h"
 #include "elog_target.h"
 
@@ -20,12 +22,6 @@ typedef uint32_t ELogTargetId;
 
 /** @def Invalid log target identifier value. */
 #define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
-
-/** @brief A single property (key-value pair). */
-typedef std::pair<std::string, std::string> ELogProperty;
-
-/** @typedef Property map. */
-typedef std::vector<ELogProperty> ELogPropertyMap;
 
 /** @brief The elog module facade. */
 class ELOG_API ELogSystem {
@@ -72,6 +68,9 @@ public:
 
     /** @brief Releases all resources allocated for the ELogSystem. */
     static void terminate();
+
+    /** @brief Registers a schema handler by name. */
+    bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler);
 
     /**
      * @brief Configures the ELog System from a properties map.
@@ -375,14 +374,6 @@ private:
     static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                               ELogSource::PropagateMode& propagateMode);
     static bool configureLogTarget(const std::string& logTargetCfg);
-
-    struct ELogTargetSpec {
-        std::string m_scheme;
-        std::string m_host;
-        uint32_t m_port;
-        std::string m_path;
-        ELogPropertyMap m_props;
-    };
 
     static bool parseLogTargetSpec(const std::string& logTargetCfg, ELogTargetSpec& logTargetSpec);
     static bool processSysTargetSchema(const std::string& logTargetCfg,

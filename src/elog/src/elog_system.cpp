@@ -47,6 +47,9 @@ static ELogImmediateFlushPolicy sDefaultPolicy;
 static ELogFormatter* sGlobalFormatter = nullptr;
 static ELogFlushPolicy* sFlushPolicy = nullptr;
 
+typedef std::unordered_map<std::string, ELogSchemaHandler*> ELogSchemaHandlerMap;
+ELogSchemaHandlerMap sSchemaHandlerMap;
+
 bool ELogSystem::initGlobals() {
     // root logger has no name
     // NOTE: this is the only place where we cannot use logging macros
@@ -184,6 +187,11 @@ void ELogSystem::terminate() {
     termGlobals();
 }
 
+bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
+    return sSchemaHandlerMap.insert(ELogSchemaHandlerMap::value_type(schemaName, schemaHandler))
+        .second;
+}
+
 bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                                ELogSource::PropagateMode& propagateMode) {
     const char* ptr = nullptr;
@@ -248,11 +256,31 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
         return false;
     }
 
+    // check predefined schemas
     if (logTargetSpec.m_scheme.compare("sys") == 0) {
         return processSysTargetSchema(logTargetCfg, logTargetSpec);
     }
     if (logTargetSpec.m_scheme.compare("file") == 0) {
         return processFileTargetSchema(logTargetCfg, logTargetSpec);
+    }
+
+    // check externally registered schemas
+    ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(logTargetSpec.m_scheme);
+    if (itr != sSchemaHandlerMap.end()) {
+        ELogSchemaHandler* schemaHandler = itr->second;
+        ELogTarget* logTarget = schemaHandler->loadTarget(logTargetSpec);
+        if (logTarget == nullptr) {
+            ELOG_ERROR("Failed to load target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
+                       logTargetCfg.c_str());
+            return false;
+        }
+        if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
+            ELOG_ERROR("Failed to add log target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
+                       logTargetCfg.c_str());
+            delete logTarget;
+            return false;
+        }
+        return true;
     }
 
     ELOG_ERROR("Invalid log target specification, unrecognized schema %s: %s",
