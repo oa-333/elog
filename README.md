@@ -59,7 +59,7 @@ Oren Amor (oren.amor@gmail.com)
 
 ## License
 
-This project is licensed under the Apache 2.0 License - see the LICENSE file for details
+This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
 
 ## Examples
 
@@ -117,8 +117,8 @@ In this example a segmented log file is used, with 4MB segment size:
 
 ### Logging Macros
 
-The ELog system defines utility macros for logging.
-One group of macros requires a logger, and another group of macros does not.
+The ELog system defines utility macros for logging.  
+One group of macros requires a logger, and another group of macros does not.  
 This is the easiest form of logging, without any logger defined:
 
     ELOG_INFO("Sample message with string parameter: %s", someStr);
@@ -149,12 +149,12 @@ Here is a simple example of defining a log source and obtaining a logger.
             logSource->getId());
     }
 
-Log sources form a tree hierarchy according to their qualified name, which is separated by dots.
-The root log source has empty name, and does not have a dor following its name, so that second level
+Log sources form a tree hierarchy according to their qualified name, which is separated by dots.  
+The root log source has empty name, and does not have a dor following its name, so that second level  
 log sources have a qualified name equal to their bare name.
 
-The log level of each log source may be controlled individually.
-The log level of a log source affects all log sources underneath it, unless they specify a log level separately.
+The log level of each log source may be controlled individually.  
+The log level of a log source affects all log sources underneath it, unless they specify a log level separately.  
 For instance, suppose the following log source hierarchy is defined:
 
     core
@@ -162,8 +162,22 @@ For instance, suppose the following log source hierarchy is defined:
     core.thread
     core.net
 
-The core log source may define log level of NOTICE, but the core.thread log level may define log level TRACE.
+The core log source may define log level of NOTICE, but the core.thread log level may define log level TRACE.  
 The core.files, and core.net log sources will inherit the NOTICE level from the core parent log source.
+
+In order to enable better level of control over the log level of the log source hierarchy, the log source  
+provides the setLogLevel() method, which allows specifying how to propagate the log level to child log sources:
+
+    void setLogLevel(ELogLevel logLevel, PropagateMode propagateMode);
+
+In particular there are 4 propagation modes:
+
+- none: No log level propagation takes place at all.
+- set: Each descendant log source inherits the log source ancestor
+- restrict: Each descendent log source cannot have less restrictive log level than the log source ancestor
+- loose: Each descendent log source cannot have more restrictive log level than the log source ancestor
+
+This allows for more flexibility in configuring the log source tree.
 
 ### Configuring Log Line Format
 
@@ -189,6 +203,7 @@ The following special tokens are understood by the ELog system:
 - ${time} - the logging time.
 - ${host} - the host name.
 - ${user} - the logged in user.
+- ${prog} - the program name.
 - ${pid} - the process id.
 - ${tid} - the logging thread id.
 - ${level} - the log level
@@ -283,3 +298,93 @@ This is an active policy, which launches a designated thread for this purpose.
 In case a combination of strategies is needed, either ELogAndFlushPolicy or ELogOrFlushPolicy can be used.
 
 For any other specialized flush policy, derive from ELogFlushPolicy and override the shouldFlush() virtual method.
+
+### Configuring from properties
+
+The ELogSystem facade provides a utility function to load configuration from properties map:
+
+    static bool configureFromProperties(const ELogPropertyMap& props,
+                                        bool defineLogSources = false,
+                                        bool defineMissingPath = false);
+
+The properties map is actually a vector of pairs, since order of configuring log sources' log levels matter.  
+The following properties are recognized (the rest are ignored):
+
+- log_format: configures log line format specification
+- log_level: configures global log level of the root log source, allows specifying propagation (see below)
+- <source-name>.log_level: configures log level of a specific log source
+- log_target: configures a log target (may be repeated several times)
+
+#### Configuring log level
+
+The log level configuration items follow the following syntax:
+
+    <log-level-string><propagation-spec>
+
+The log level string is any one of the following:
+
+    FATAL
+    ERROR
+    WARN
+    NOTICE
+    INFO
+    TRACE
+    DEBUG
+    DIAG
+
+The propagation specification could be empty, or any one of the following:
+
+    * (asterisk sign): specifies to propagate the log level as is to all descendant log sources
+    + (plus sign): specifies permissive (loose) log level propagation
+    - (minus sign): specifies restrictive log level propagation
+
+So, continuing the example above, we can define that the entire core package has INFO log level,  
+but the files sub-package will have TRACE log level:
+
+    core.log_level = INFO*
+    core.files.log_level = TRACE*
+
+Now suppose that for a short while we would like to investigate some bug in the core package,  
+but we would like to avoid setting the files sub-package level to DIAG, since it is really noisy,  
+and it is not related to the bug we are investigating. The simplest way to do this is as follows:
+
+    core.log_level = DEBUG+
+    core.files.log_level = TRACE-
+
+The above configuration ensures all core log sources have at least DEBUG log level (if any log source  
+had a more permissive log level, then its log level is kept intact), but after that the cores.files  
+package log level is restricted to TRACE, including all sub-packages.  
+Pay attention the order matters here.
+
+
+#### Configuring Log Targets
+
+As mentioned above, log targets can be configured using properties.  
+The following syntax is supported:
+
+    sys://stdout - add log target to standard output stream
+    sys://stderr - add log target to standard error stream
+    sys://syslog - add log target to syslog (or Windows event log, when running on Windows)
+    file://path - add regular log target
+    file://path?segment-size=<segment-size> - add segmented log target
+
+The following optional parameters are supported for compound log targets:
+
+    defer (no value associated)
+    queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
+    quantum-buffer-size=<buffer-size>
+
+These optional parameters can be used to specify a compound deferred or queued log target.  
+The defer option specifies a deferred log target.  
+The queue options specify a queued log target.  
+The quantum option specifies a quantum log target.  
+All options should be separated by an ampersand (&).
+
+Log targets may be assigned a name for identification, if further special configuration is required.  
+Target name may be specified by the 'name' parameter, as follows:
+
+    file://path?name=file-logger
+
+Next, the log target may be located as follows:
+
+    ELogTarget* logTarget = ELogSystem::getLogTarget("file-logger");

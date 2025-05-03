@@ -93,5 +93,8 @@
         "rdynamic",
         "ucrt",
         "uvcall"
+    ],
+    "cSpell.words": [
+        "millis"
     ]
 }
