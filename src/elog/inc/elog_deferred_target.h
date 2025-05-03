@@ -21,7 +21,7 @@ namespace elog {
 /**
  * @brief A utility log target for deferring logging to another context. Log formatting through
  * still takes places at the caller's context. For an even shorter deferring latency consider using
- * the @ref ELogQueuedTarget @ref ELogQuantumTarget.
+ * the @ref ELogQueuedTarget, or the @ref ELogQuantumTarget.
  */
 class ELOG_API ELogDeferredTarget : public ELogTarget {
 public:

@@ -6,10 +6,14 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "elog_deferred_target.h"
 #include "elog_file_target.h"
 #include "elog_flush_policy.h"
 #include "elog_formatter.h"
+#include "elog_quantum_target.h"
+#include "elog_queued_target.h"
 #include "elog_segmented_file_target.h"
+#include "elog_syslog_target.h"
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
@@ -210,10 +214,336 @@ bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
     return true;
 }
 
+bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
+    // the following formats are currently supported as a URL-like string
+    //
+    // sys://stdout
+    // sys://stderr
+    // sys://syslog
+    //
+    // file://path
+    // file://path?segment-size-mb=<segment-size-mb>
+    //
+    // optional parameters (each set is mutually exclusive with other sets)
+    // defer (no value associated)
+    // queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
+    // quantum-buffer-size=<buffer-size>
+    //
+    // future provision:
+    // tcp://host:port
+    // udp://host:port
+    // db://db-name?conn-string=<conn-string>&insert-statement=<insert-statement>
+    // msgq://message-broker-name?conn-string=<conn-string>&queue=<queue-name>&topic=<topic-name>
+    ELogTargetSpec logTargetSpec;
+    if (!parseLogTargetSpec(logTargetCfg, logTargetSpec)) {
+        ELOG_ERROR("Invalid log target specification: %s", logTargetCfg.c_str());
+        return false;
+    }
+
+    if (logTargetSpec.m_scheme.compare("sys") == 0) {
+        return processSysTargetSchema(logTargetCfg, logTargetSpec);
+    }
+    if (logTargetSpec.m_scheme.compare("file") == 0) {
+        return processFileTargetSchema(logTargetCfg, logTargetSpec);
+    }
+
+    ELOG_ERROR("Invalid log target specification, unrecognized schema %s: %s",
+               logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
+    return false;
+}
+
+bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
+                                    ELogTargetSpec& logTargetSpec) {
+    // find scheme separator
+    std::string::size_type schemeSepPos = logTargetCfg.find("://");
+    if (schemeSepPos == std::string::npos) {
+        ELOG_ERROR("Invalid log target specification, missing scheme separator \'://\': %s",
+                   logTargetCfg.c_str());
+        return false;
+    }
+
+    logTargetSpec.m_scheme = logTargetCfg.substr(0, schemeSepPos);
+
+    // parse until first '?'
+    std::string::size_type qmarkPos = logTargetCfg.find(schemeSepPos + 3, '?');
+    if (qmarkPos == std::string::npos) {
+        logTargetSpec.m_path = logTargetCfg.substr(schemeSepPos + 3);
+        logTargetSpec.m_port = 0;
+        tryParsePathAsHostPort(logTargetCfg, logTargetSpec);
+        return true;
+    }
+
+    logTargetSpec.m_path = logTargetCfg.substr(schemeSepPos + 3, qmarkPos);
+    tryParsePathAsHostPort(logTargetCfg, logTargetSpec);
+
+    // parse properties, separated by ampersand
+    std::string::size_type prevPos = qmarkPos + 1;
+    std::string::size_type sepPos = logTargetCfg.find(prevPos, '&');
+    do {
+        // get property
+        std::string prop = (sepPos == std::string::npos)
+                               ? logTargetCfg.substr(prevPos)
+                               : logTargetCfg.substr(prevPos, sepPos - prevPos);
+
+        // parse to key=value and add to props map (could be there is no value specified)
+        std::string::size_type equalPos = prop.find('=');
+        if (equalPos != std::string::npos) {
+            std::string key = prop.substr(0, equalPos);
+            std::string value = prop.substr(equalPos + 1);
+            logTargetSpec.m_props.push_back(std::make_pair(key, value));
+        } else {
+            logTargetSpec.m_props.push_back(std::make_pair(prop, ""));
+        }
+
+        // find next token separator
+        if (sepPos != std::string::npos) {
+            prevPos = sepPos + 1;
+            sepPos = logTargetCfg.find(prevPos, '&');
+        } else {
+            prevPos = sepPos;
+        }
+    } while (prevPos != std::string::npos);
+    return true;
+}
+
+bool ELogSystem::processSysTargetSchema(const std::string& logTargetCfg,
+                                        const ELogTargetSpec& logTargetSpec) {
+    std::string name;
+    if (logTargetSpec.m_props.size() > 1) {
+        ELOG_ERROR(
+            "Invalid log target specification, \'sys\' schema can have at most one property: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    if (logTargetSpec.m_props.size() == 1) {
+        if (logTargetSpec.m_props[0].first.compare("name") != 0) {
+            ELOG_ERROR(
+                "Invalid log target specification, \'sys\' schema can specify only name property: "
+                "%s",
+                logTargetCfg.c_str());
+            return false;
+        }
+        name = logTargetSpec.m_props[0].second;
+        if (name.empty()) {
+            ELOG_ERROR("Invalid log target specification, name property missing value: %s",
+                       logTargetCfg.c_str());
+            return false;
+        }
+    }
+
+    ELogTargetId targetId = ELOG_INVALID_TARGET_ID;
+    if (logTargetSpec.m_path.compare("stderr") == 0) {
+        targetId = addStdErrLogTarget();
+    }
+    if (logTargetSpec.m_path.compare("stdout") == 0) {
+        targetId = addStdOutLogTarget();
+    }
+    if (logTargetSpec.m_path.compare("syslog") == 0) {
+        targetId = addSysLogTarget();
+    }
+
+    if (targetId == ELOG_INVALID_TARGET_ID) {
+        return false;
+    }
+    if (!name.empty()) {
+        ELogTarget* target = getLogTarget(targetId);
+        if (target == nullptr) {
+            return false;
+        }
+        target->setName(name.c_str());
+    }
+    return true;
+}
+
+bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
+                                         const ELogTargetSpec& logTargetSpec) {
+    // path should be already parsed
+    if (logTargetSpec.m_path.empty()) {
+        ELOG_ERROR("Invalid log target specification, scheme 'file' requires a path: %s",
+                   logTargetCfg.c_str());
+        return false;
+    }
+
+    // there could be optional poperties: segment-size-mb, deferred,
+    // queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
+    // quantum-buffer-size=<buffer-size>
+    std::string name;
+    uint32_t segmentSizeMB = 0;
+    bool deferred = false;
+    uint32_t queueBatchSize = 0;
+    uint32_t queueTimeoutMillis = 0;
+    uint32_t quantumBufferSize = 0;
+    for (const ELogProperty& prop : logTargetSpec.m_props) {
+        // parse name property
+        if (prop.first.compare("name") == 0) {
+            name = prop.second;
+            if (name.empty()) {
+                ELOG_ERROR("name property missing value: %s", logTargetCfg.c_str());
+                return false;
+            }
+        }
+
+        // parse segment size property
+        else if (prop.first.compare("segment-size-mb") == 0) {
+            if (segmentSizeMB > 0) {
+                ELOG_ERROR("Segment size can be specified only once: %s", logTargetCfg.c_str());
+                return false;
+            }
+            if (!parseIntProp("segment-size-mb", logTargetCfg, prop.second, segmentSizeMB)) {
+                return false;
+            }
+        }
+
+        // parse deferred property
+        else if (prop.first.compare("deferred") == 0) {
+            if (queueBatchSize > 0 || queueTimeoutMillis > 0 || quantumBufferSize > 0) {
+                ELOG_ERROR(
+                    "Deferred log target cannot be specified with queued or quantum target: %s",
+                    logTargetCfg.c_str());
+                return false;
+            }
+            if (deferred) {
+                ELOG_ERROR("Deferred log target can be specified only once: %s",
+                           logTargetCfg.c_str());
+                return false;
+            }
+            deferred = true;
+        }
+
+        // parse queue batch size property
+        else if (prop.first.compare("queue-batch-size") == 0) {
+            if (deferred || quantumBufferSize > 0) {
+                ELOG_ERROR(
+                    "Queued log target cannot be specified with deferred or quantum target: %s",
+                    logTargetCfg.c_str());
+                return false;
+            }
+            if (queueBatchSize > 0) {
+                ELOG_ERROR("Queue batch size can be specified only once: %s", logTargetCfg.c_str());
+                return false;
+            }
+            if (!parseIntProp("queue-batch-size", logTargetCfg, prop.second, queueBatchSize)) {
+                return false;
+            }
+        }
+
+        // parse queue timeout millis property
+        else if (prop.first.compare("queue-timeout-millis") == 0) {
+            if (deferred || quantumBufferSize > 0) {
+                ELOG_ERROR(
+                    "Queued log target cannot be specified with deferred or quantum target: %s",
+                    logTargetCfg.c_str());
+                return false;
+            }
+            if (queueTimeoutMillis > 0) {
+                ELOG_ERROR("Queue timeout millis can be specified only once: %s",
+                           logTargetCfg.c_str());
+                return false;
+            }
+            if (!parseIntProp("queue-timeout-millis", logTargetCfg, prop.second,
+                              queueTimeoutMillis)) {
+                return false;
+            }
+        }
+
+        // parse quantum buffer size
+        else if (prop.first.compare("quantum-buffer-size") == 0) {
+            if (deferred || queueBatchSize > 0 || queueTimeoutMillis > 0) {
+                ELOG_ERROR(
+                    "Quantum log target cannot be specified with deferred or queued target: %s",
+                    logTargetCfg.c_str());
+                return false;
+            }
+            if (quantumBufferSize > 0) {
+                ELOG_ERROR("Quantum buffer size can be specified only once: %s",
+                           logTargetCfg.c_str());
+                return false;
+            }
+            if (!parseIntProp("quantum-buffer-size", logTargetCfg, prop.second,
+                              quantumBufferSize)) {
+                return false;
+            }
+        }
+
+        // no other option is allowed
+        else {
+            ELOG_ERROR("Unrecognized option %s in file log target specification: %s",
+                       prop.first.c_str(), logTargetCfg.c_str());
+            return false;
+        }
+    }
+
+    if (queueBatchSize > 0 && queueTimeoutMillis == 0) {
+        ELOG_ERROR("Missing queue-timeout-millis parameter in log target specification: %s",
+                   logTargetCfg.c_str());
+        return false;
+    }
+
+    if (queueBatchSize == 0 && queueTimeoutMillis > 0) {
+        ELOG_ERROR("Missing queue-batch-size parameter in log target specification: %s",
+                   logTargetCfg.c_str());
+        return false;
+    }
+
+    ELogTarget* logTarget = nullptr;
+    if (segmentSizeMB > 0) {
+        logTarget = new (std::nothrow)
+            ELogSegmentedFileTarget(logTargetSpec.m_path.c_str(), "", segmentSizeMB, nullptr);
+    }
+
+    if (deferred) {
+        logTarget = new (std::nothrow) ELogDeferredTarget(logTarget);
+    } else if (queueBatchSize > 0) {
+        logTarget =
+            new (std::nothrow) ELogQueuedTarget(logTarget, queueBatchSize, queueTimeoutMillis);
+    } else if (quantumBufferSize > 0) {
+        logTarget = new (std::nothrow) ELogQuantumTarget(logTarget, quantumBufferSize);
+    }
+    if (!name.empty()) {
+        logTarget->setName(name.c_str());
+    }
+    if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+        return false;
+    }
+    return true;
+}
+
+bool ELogSystem::parseIntProp(const char* propName, const std::string& logTargetCfg,
+                              const std::string& prop, uint32_t& value) {
+    std::size_t pos = 0;
+    try {
+        value = std::stoul(prop, &pos);
+    } catch (std::exception& e) {
+        ELOG_ERROR("Invalid %s value %s: %s (%s)", propName, prop.c_str(), logTargetCfg.c_str(),
+                   e.what());
+        return false;
+    }
+    if (pos != prop.length()) {
+        ELOG_ERROR("Excess characters at %s value %s: %s", propName, prop.c_str(),
+                   logTargetCfg.c_str());
+        return false;
+    }
+    return true;
+}
+
+void ELogSystem::tryParsePathAsHostPort(const std::string& logTargetCfg,
+                                        ELogTargetSpec& logTargetSpec) {
+    std::string::size_type colonPos = logTargetSpec.m_path.find(':');
+    if (colonPos != std::string::npos) {
+        if (!parseIntProp("port", logTargetCfg, logTargetSpec.m_path.substr(colonPos + 1),
+                          logTargetSpec.m_port)) {
+            return;
+        }
+        logTargetSpec.m_host = logTargetSpec.m_path.substr(0, colonPos);
+    }
+}
+
 bool ELogSystem::configureFromProperties(const ELogPropertyMap& props,
                                          bool defineLogSources /* = false */,
                                          bool defineMissingPath /* = false */) {
     // configure log format (unrelated to order of appearance)
+    // NOTE: only one such item is expected
     ELogPropertyMap::const_iterator itr = std::find_if(
         props.begin(), props.end(),
         [](const ELogProperty& prop) { return prop.first.compare("log_format") == 0; });
@@ -242,11 +572,19 @@ bool ELogSystem::configureFromProperties(const ELogPropertyMap& props,
             logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode});
         }
 
+        // check for log target
+        if (prop.first.compare("log_target") == 0) {
+            // configure log target
+            if (!configureLogTarget(prop.second)) {
+                return false;
+            }
+        }
+
         // configure log levels of log sources
         // search for ".log_level" with a dot, in order to filter out global log_level key
         // NOTE: when definining log sources, we must first define all log sources, then set log
-        // level to configured level and apply log level propagation. If we apply propagation before
-        // child log sources are defined, then propagation is lost.
+        // level to configured level and apply log level propagation. If we apply propagation
+        // before child log sources are defined, then propagation is lost.
         if (prop.first.ends_with(suffix)) {
             const std::string& key = prop.first;
             // shave off trailing ".log_level" (that includes last dot)
@@ -429,6 +767,35 @@ ELogTargetId ELogSystem::addSegmentedLogFileTarget(const char* logPath, const ch
         delete logTarget;
     }
     return logTargetId;
+}
+
+ELogTargetId ELogSystem::addStdErrLogTarget() { return addLogFileTarget(stderr); }
+
+ELogTargetId ELogSystem::addStdOutLogTarget() { return addLogFileTarget(stdout); }
+
+ELogTargetId ELogSystem::addSysLogTarget() {
+#ifdef ELOG_LINUX
+    ELogSysLogTarget* logTarget = new (std::nothrow) ELogSysLogTarget();
+    return addLogTarget(logTarget);
+#else
+    return ELOG_INVALID_TARGET_ID;
+#endif
+}
+
+ELogTarget* ELogSystem::getLogTarget(ELogTargetId targetId) {
+    if (targetId >= sLogTargets.size()) {
+        return nullptr;
+    }
+    return sLogTargets[targetId];
+}
+
+ELogTarget* ELogSystem::getLogTarget(const char* logTargetName) {
+    for (ELogTarget* logTarget : sLogTargets) {
+        if (strcmp(logTarget->getName(), logTargetName) == 0) {
+            return logTarget;
+        }
+    }
+    return nullptr;
 }
 
 void ELogSystem::removeLogTarget(ELogTargetId targetId) {

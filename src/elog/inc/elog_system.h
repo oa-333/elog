@@ -206,6 +206,21 @@ public:
                                                   uint32_t segmentLimitMB,
                                                   ELogFlushPolicy* flushPolicy = nullptr);
 
+    /** @brief Adds standard error stream log target. */
+    static ELogTargetId addStdErrLogTarget();
+
+    /** @brief Adds standard output stream log target. */
+    static ELogTargetId addStdOutLogTarget();
+
+    /** @brief Adds syslog (or Windows Event Log) target. */
+    static ELogTargetId addSysLogTarget();
+
+    /** @brief Retrieves a log target by id. Returns null if not found. */
+    static ELogTarget* getLogTarget(ELogTargetId targetId);
+
+    /** @brief Retrieves a log target by name. Returns null if not found. */
+    static ELogTarget* getLogTarget(const char* logTargetName);
+
     /**
      * @brief Removes an existing log target.
      * @note This API call is not thread-safe, and is recommended to take place during application
@@ -356,6 +371,25 @@ private:
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
     static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                               ELogSource::PropagateMode& propagateMode);
+    static bool configureLogTarget(const std::string& logTargetCfg);
+
+    struct ELogTargetSpec {
+        std::string m_scheme;
+        std::string m_host;
+        uint32_t m_port;
+        std::string m_path;
+        ELogPropertyMap m_props;
+    };
+
+    static bool parseLogTargetSpec(const std::string& logTargetCfg, ELogTargetSpec& logTargetSpec);
+    static bool processSysTargetSchema(const std::string& logTargetCfg,
+                                       const ELogTargetSpec& logTargetSpec);
+    static bool processFileTargetSchema(const std::string& logTargetCfg,
+                                        const ELogTargetSpec& logTargetSpec);
+    static bool parseIntProp(const char* propName, const std::string& logTargetCfg,
+                             const std::string& prop, uint32_t& value);
+    static void tryParsePathAsHostPort(const std::string& logTargetCfg,
+                                       ELogTargetSpec& logTargetSpec);
 };
 
 /** @brief Queries whether the default logger can log a record with a given log level. */

@@ -34,8 +34,17 @@ public:
     /** @brief Orders a buffered log target to flush it log messages. */
     virtual void flush() = 0;
 
+    /** @brief Sets optional log target name. */
+    inline void setName(const char* name) { m_name = name; }
+
+    /** @brief Retrieves optional log target name. */
+    inline const char* getName() const { return m_name.c_str(); }
+
 protected:
     ELogTarget() {}
+
+private:
+    std::string m_name;
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */
