@@ -42,6 +42,7 @@ static ELogSource* sRootLogSource = nullptr;
 typedef std::unordered_map<ELogSourceId, ELogSource*> ELogSourceMap;
 static ELogSourceMap sLogSourceMap;
 static ELogLogger* sDefaultLogger = nullptr;
+static ELogTarget* sDefaultLogTarget = nullptr;
 static ELogImmediateFlushPolicy sDefaultPolicy;
 static ELogFormatter* sGlobalFormatter = nullptr;
 static ELogFlushPolicy* sFlushPolicy = nullptr;
@@ -78,6 +79,12 @@ bool ELogSystem::initGlobals() {
         termGlobals();
         return false;
     }
+    sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr, &sDefaultPolicy);
+    if (sDefaultLogTarget == nullptr) {
+        fprintf(stderr, "Failed to create default log target, out of memory\n");
+        termGlobals();
+        return false;
+    }
     return true;
 }
 
@@ -90,6 +97,10 @@ void ELogSystem::termGlobals() {
     }
     sLogTargets.clear();
 
+    if (sDefaultLogTarget != nullptr) {
+        delete sDefaultLogTarget;
+        sDefaultLogTarget = nullptr;
+    }
     if (sGlobalFormatter != nullptr) {
         delete sGlobalFormatter;
         sGlobalFormatter = nullptr;
@@ -106,10 +117,7 @@ bool ELogSystem::initialize() {
     if (!initGlobals()) {
         return false;
     }
-    if (setLogFileTarget(stderr) == ELOG_INVALID_TARGET_ID) {
-        termGlobals();
-        return false;
-    }
+
     initFieldSelectors();
     return true;
 }
@@ -1013,8 +1021,15 @@ bool ELogSystem::filterLogMsg(const ELogRecord& logRecord) {
 }
 
 void ELogSystem::log(const ELogRecord& logRecord) {
+    bool logged = false;
     for (ELogTarget* logTarget : sLogTargets) {
         logTarget->log(logRecord);
+        logged = true;
+    }
+
+    // by default, if no log target is defined yet, log is redirected to stderr
+    if (!logged) {
+        sDefaultLogTarget->log(logRecord);
     }
 }
 
