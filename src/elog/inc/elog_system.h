@@ -9,11 +9,11 @@
 #include "elog_def.h"
 #include "elog_error_handler.h"
 #include "elog_filter.h"
+#include "elog_formatter.h"
 #include "elog_level.h"
 #include "elog_logger.h"
 #include "elog_schema_handler.h"
 #include "elog_source.h"
-#include "elog_string_formatter.h"
 #include "elog_target.h"
 
 namespace elog {

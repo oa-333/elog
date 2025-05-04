@@ -1,5 +1,5 @@
-#ifndef __ELOG_STRING_FORMATTER_H__
-#define __ELOG_STRING_FORMATTER_H__
+#ifndef __ELOG_FORMATTER_H__
+#define __ELOG_FORMATTER_H__
 
 #include "elog_base_formatter.h"
 
@@ -15,4 +15,4 @@ public:
 
 }  // namespace elog
 
-#endif  // __ELOG_STRING_FORMATTER_H__
+#endif  // __ELOG_FORMATTER_H__
