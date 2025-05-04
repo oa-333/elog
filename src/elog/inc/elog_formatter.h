@@ -10,7 +10,7 @@ public:
     ELogFormatter() {}
     ~ELogFormatter() final {}
 
-    void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
+    virtual void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
 };
 
 }  // namespace elog

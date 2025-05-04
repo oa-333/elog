@@ -1,6 +1,6 @@
 # ELog Logging Package
 
-The ELog (stands for Error Log) is simple, lightweight, yet robust and high-performant package for application message logging in C++.  
+The ELog (Error Log) is a simple, lightweight, yet robust and high-performant package for application message logging in C++.  
 The package was designed such that it can be extended for a broad range of use cases.
 
 ## Description
@@ -9,8 +9,8 @@ The most common use case is a utility logging library, in order to write log mes
 For instance, it can be rather easily extended to be hooked to an external message queue, while applying complex message filtering and transformations.  
 This could be useful for DevOps use cases.
 
-One more use case is when chasing a bug that requires log flooding.  
-In this case, sending messages to log files may affect timing and prevents from the bug being reproduced during heavy logging.  
+One more use case is a bug investigation that requires log flooding.  
+In this case, sending messages to a log file may affect application timing and hinder bug reproduction during heavy logging.  
 For such a situation there is a specialized log target (ELogQuantumTarget), which is designed to minimize the logging latency, by using a lock-free ring buffer and a designated background thread that logs batches of log messages.
 
 Another common use case is log file segmentation (i.e. breaking log file to segments of some size).
@@ -23,11 +23,11 @@ In this case, the ELog can be used to log messages inside the library, and the u
 the ELog system to redirect and adapt library log message to its own logging system.
 This can be done actually quite easily and with much flexibility.
 
-For more information, soo examples below
+For more information, see examples below
 
 ## Getting Started
 
-In order to use the package, include "elog_system.h", which is the package facade.  
+In order to use the package, include the main header "elog_system.h", which is the package facade.  
 In the application code, make sure to call one of the elog::ElogSystem::initializeXXX() functions before using any of the logging macros. After this, you can use ELOG_INFO() and the rest of the macros.  
 At application exit make sure to call elog::ELogSystem::terminate().
 
@@ -75,7 +75,7 @@ Following is a simple example of initializing and terminating the elog system:
     int main(int argc, char* argv[]) {
         // initialize the elog system to log into file
         if (!elog::ELogSystem::initializeLogFile("./test.log")) {
-            fprintf(stderr, "Failed to initialize elog\n);
+            fprintf(stderr, "Failed to initialize elog\n");
             return 1;
         }
 
@@ -107,7 +107,7 @@ In this example a segmented log file is used, with 4MB segment size:
         }
 
         // do application stuff
-        ELOG_INFO("App starting);
+        ELOG_INFO("App starting");
         ...
 
         // terminate the elog system
@@ -150,8 +150,8 @@ Here is a simple example of defining a log source and obtaining a logger.
     }
 
 Log sources form a tree hierarchy according to their qualified name, which is separated by dots.  
-The root log source has empty name, and does not have a dor following its name, so that second level  
-log sources have a qualified name equal to their bare name.
+The root log source has an empty name, and does not have a dot following its name, so that second level  
+log sources have a qualified name that is equal to their bare name.
 
 The log level of each log source may be controlled individually.  
 The log level of a log source affects all log sources underneath it, unless they specify a log level separately.  
@@ -173,7 +173,7 @@ provides the setLogLevel() method, which allows specifying how to propagate the 
 In particular there are 4 propagation modes:
 
 - none: No log level propagation takes place at all.
-- set: Each descendant log source inherits the log source ancestor
+- set: Each descendant log source inherits the log level of the log source ancestor
 - restrict: Each descendent log source cannot have less restrictive log level than the log source ancestor
 - loose: Each descendent log source cannot have more restrictive log level than the log source ancestor
 
@@ -214,19 +214,19 @@ The following special log field reference tokens are understood by the ELog syst
 Tokens may contain justification number, where positive means justify to the left,  
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
 
-In order to use some other formatting, the ELogFormatter may be derived.  
+In order to use some other formatting scheme, the ELogFormatter may be derived, and the virtual method formatLogMsg() should be overridden.  
 In addition, the list of special log field reference tokens understood by ELog may be extended by deriving from ELogFormatter  
 and overriding the createFieldSelector() virtual method.  
 A specialized field selector will be needed as well (see elog_field_selector.h).
 
 ### Filtering Log Messages
 
-By default, all messages are logged, but in some use cases, it is required to filter out some log messages.
+By default, all messages are logged, but in some use cases, it may be required to filter out some log messages.
 In general, the log level may be used to control which messages are logged, and this may be controlled at
 each log source. There are some occasions that more fine-grained filtering is required.
 In this case ELogFilter may be derived to provide more specialized control.
 
-Pay attention that log filtering may be applied at a global level, by calling:
+Pay attention that log filtering is usually applied at the global level, by the call:
 
     ELogSystem::setLogFilter(logFilter);
 
@@ -246,39 +246,39 @@ it is possible to defer that to another context by using the ELogDeferredTarget.
 This log target takes another target as the final destination:
 
     // define a segmented log target with 4K segment size
-    ELogSegmentedFileTarget fileTarget("logs", "app.log", 4096, nullptr);
+    ELogTarget* fileTarget = new ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
 
     // combine it with a deferred log target
-    ELogDeferredTarget deferredTarget(&fileTarget);
+    ELogTarget* deferredTarget = new ELogDeferredTarget(fileTarget);
 
     // now set it as the system log target
-    ELogSystem::setLogTarget(&deferredTarget);
+    ELogSystem::setLogTarget(deferredTarget);
 
-The ELogDeferredTarget is quite simplistic, and simple wakes up the logging thread for each log message.
-The ELogQueuedTarget provides more control over this, by allowing to specify batch size and timeout,
-so the logging thread wakes up either when the queued number of messages exceeds some limit, or that 
+The ELogDeferredTarget is quite simplistic. It wakes up the logging thread for each log message.
+The ELogQueuedTarget provides more control, by allowing to specify a batch size and a timeout,
+so the logging thread wakes up either when the queued number of log messages exceeds some limit, or that 
 a specified timeout has passed since last time it woke up.
 In the example above we can change it like this:
 
     // define a segmented log target with 4K segment size
-    ELogSegmentedFileTarget fileTarget("logs", "app.log", 4096, nullptr);
+    ELogTarget* fileTarget = new ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
 
     // combine it with a queued log target with batch size 64, and 500 milliseconds timeout
-    ELogQueuedTarget queuedTarget(&fileTarget, 64, 500);
+    ELogTarget* queuedTarget = new ELogQueuedTarget(fileTarget, 64, 500);
 
     // now set it as the system log target
-    ELogSystem::setLogTarget(&queuedTarget);
+    ELogSystem::setLogTarget(queuedTarget);
 
 The ELogQuantumTarget mentioned above can be use das follows:
 
     // define a segmented log target with 4K segment size
-    ELogSegmentedFileTarget fileTarget("logs", "app.log", 4096, nullptr);
+    ELogTarget* fileTarget = new ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
 
     // combine it with a quantum log target that can handle a burst of 1 million log messages
-    ELogQuantumTarget quantumTarget(&fileTarget, 1024 * 1024);
+    ELogTarget* quantumTarget = new ELogQuantumTarget(&fileTarget, 1024 * 1024);
 
     // now set it as the system log target
-    ELogSystem::setLogTarget(&quantumTarget);
+    ELogSystem::setLogTarget(quantumTarget);
 
 ### Flush Policy
 
@@ -312,7 +312,7 @@ The following properties are recognized (the rest are ignored):
 
 - log_format: configures log line format specification
 - log_level: configures global log level of the root log source, allows specifying propagation (see below)
-- <source-name>.log_level: configures log level of a specific log source
+- {source-name}.log_level: configures log level of a specific log source
 - log_target: configures a log target (may be repeated several times)
 
 #### Configuring log level
@@ -345,7 +345,7 @@ but the files sub-package will have TRACE log level:
     core.files.log_level = TRACE*
 
 Now suppose that for a short while we would like to investigate some bug in the core package,  
-but we would like to avoid setting the files sub-package level to DIAG, since it is really noisy,  
+but we would like to avoid setting the files sub-package level to DEBUG, since it is really noisy,  
 and it is not related to the bug we are investigating. The simplest way to do this is as follows:
 
     core.log_level = DEBUG+
@@ -354,7 +354,7 @@ and it is not related to the bug we are investigating. The simplest way to do th
 The above configuration ensures all core log sources have at least DEBUG log level (if any log source  
 had a more permissive log level, then its log level is kept intact), but after that the cores.files  
 package log level is restricted to TRACE, including all sub-packages.  
-Pay attention the order matters here.
+Pay attention that order matters here.
 
 
 #### Configuring Log Targets
@@ -366,7 +366,8 @@ The following syntax is supported:
     sys://stderr - add log target to standard error stream
     sys://syslog - add log target to syslog (or Windows event log, when running on Windows)
     file://path - add regular log target
-    file://path?segment-size=<segment-size> - add segmented log target
+    file://path?segment-size-mb=<segment-size-mb> - add segmented log target
+    db://provider?conn-string=<url>&insert-query=<insert-query>
 
 The following optional parameters are supported for compound log targets:
 
@@ -388,3 +389,26 @@ Target name may be specified by the 'name' parameter, as follows:
 Next, the log target may be located as follows:
 
     ELogTarget* logTarget = ELogSystem::getLogTarget("file-logger");
+
+Here is an example for a deferred log target that uses segmented file log target:
+
+    log_target = file://logs/app.log?segment-size-mb=4&deferred
+
+Here is another example for connecting to a MySQL database behind a queued log target:
+
+    log_target = db://mysql?conn-string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert-query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&queue-batch-size=1024&queue-timeout-millis=100
+
+Pay attention to the last log target example components:
+
+- schema: db
+- path: mysql (designates the database type, currently only MySQL experimental log target is supported)
+- conn-string: The connection string (url in MySQL terminology)
+- db: The MySQL db (schema) being connected to
+- user: The user name used to connect to the database
+- passwd: The password used to connect to the database (for security put the configuration file in a directory with restricted access)
+- insert-query: The query used to insert a log record into the database
+- queue-batch-size: When this is present a queued log target is used
+- queue-timeout-millis: Specifies the timeout used by the queued log target
+
+When using the db schema, the conn-string and insert-query components are mandatory.
+Additional required components may differ from one database to another.
