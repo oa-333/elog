@@ -3,7 +3,8 @@
         {
             "name": "Win32-gcc",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3\\include\\**"
             ],
             "defines": [
                 "_DEBUG",

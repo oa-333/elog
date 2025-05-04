@@ -7,8 +7,12 @@ mkdir build\vc > nul
 REM move object files back to local directory
 move build\vc\*.obj .
 
+REM include paths
+set MYSQL_INC_PATH="C:\Program Files\MySQL\MySQL Connector C++ 9.3\include"
+set MYSQL_LIB_PATH="C:\Program Files\MySQL\MySQL Connector C++ 9.3\lib64\vs14"
+
 REM compile
-cl.exe /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /DELOG_DLL /c src\elog\src\*.cpp
+cl.exe /I %MYSQL_INC_PATH% /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /DELOG_DLL /c src\elog\src\*.cpp
 if errorlevel 1 goto COMPILE_ERROR
 
 REM move object files
@@ -17,7 +21,7 @@ move vc140.pdb build\vc\
 
 REM link
 cd build\vc
-cl.exe /Zi /EHsc /MP /MDd /LDd /Fe:elog.dll *.obj Advapi32.lib Ws2_32.lib /link
+cl.exe /Zi /EHsc /MP /MDd /LDd /Fe:elog.dll *.obj Advapi32.lib Ws2_32.lib mysqlcppconn.lib /link /LIBPATH:%MYSQL_LIB_PATH%
 if errorlevel 1 goto LINK_ERROR
 cd ..\..
 

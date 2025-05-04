@@ -181,14 +181,14 @@ This allows for more flexibility in configuring the log source tree.
 
 ### Configuring Log Line Format
 
-The ELog system allows configuring log line format using a format specification string that supports special tokens.
-For instance, the default log line format specification that is use dby ELog is:
+The ELog system allows configuring log line format using a format specification string that supports special log field reference tokens.  
+For instance, the default log line format specification that is used by ELog is:
 
     ${time} ${level:6} [${tid}] ${msg}
 
-This format in reality gets expands to something like this:
+This format in reality gets expanded to something like this:
 
-    2025-04-08 11:40:58.807 INFO   [49108] Thread pool of 1 workers started
+    2025-04-08 11:40:58.807 INFO   [49108] Thread pool of 10 workers started
 
 We see here all 4 components expanded:
 
@@ -197,7 +197,7 @@ We see here all 4 components expanded:
 - logging thread id, enclosed with brackets
 - formatted log message
 
-The following special tokens are understood by the ELog system:
+The following special log field reference tokens are understood by the ELog system:
 
 - ${rid} - the log record id.
 - ${time} - the logging time.
@@ -215,9 +215,9 @@ Tokens may contain justification number, where positive means justify to the lef
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
 
 In order to use some other formatting, the ELogFormatter may be derived.  
-In addition, the list of special tokens understood by ELog may be extended by deriving from ELogFormatter  
+In addition, the list of special log field reference tokens understood by ELog may be extended by deriving from ELogFormatter  
 and overriding the createFieldSelector() virtual method.  
-A specialized field selector will be needed as well.
+A specialized field selector will be needed as well (see elog_field_selector.h).
 
 ### Filtering Log Messages
 

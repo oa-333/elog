@@ -1,9 +1,6 @@
 #ifndef __ELOG_SCHEMA_DB_HANDLER_H__
 #define __ELOG_SCHEMA_DB_HANDLER_H__
 
-#define ELOG_ENABLE_DB_CONNECTOR
-#ifdef ELOG_ENABLE_DB_CONNECTOR
-
 #include "elog_schema_handler.h"
 
 namespace elog {
@@ -26,7 +23,5 @@ public:
 };
 
 }  // namespace elog
-
-#endif  // ELOG_ENABLE_DB_CONNECTOR
 
 #endif  // __ELOG_SCHEMA_DB_HANDLER_H__

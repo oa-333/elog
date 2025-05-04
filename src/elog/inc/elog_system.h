@@ -7,12 +7,13 @@
 
 #include "elog_common.h"
 #include "elog_def.h"
+#include "elog_error_handler.h"
 #include "elog_filter.h"
-#include "elog_formatter.h"
 #include "elog_level.h"
 #include "elog_logger.h"
 #include "elog_schema_handler.h"
 #include "elog_source.h"
+#include "elog_string_formatter.h"
 #include "elog_target.h"
 
 namespace elog {
@@ -28,13 +29,17 @@ class ELOG_API ELogSystem {
 public:
     /**
      * @brief Initializes the ELog system with defaults (log to standard error stream).
+     * @param errorHandler Optional error handler. If none specified, then all internal errors are
+     * sent to the standard output stream.
      * @return true If succeeded, otherwise false.
      */
-    static bool initialize();
+    static bool initialize(ELogErrorHandler* errorHandler = nullptr);
 
     /**
      * @brief Initializes the ELog system for logging to a log file.
      * @param logFilePath The log file path (including lgo file name).
+     * @param errorHandler Optional error handler. If none specified, then all internal errors are
+     * sent to the standard output stream.
      * @param flushPolicy Optional flush policy. If not specified default is used (which
      * flushes after event log message).
      * @param logFilter Optional log filter. If none specified, all messages are written to
@@ -43,12 +48,15 @@ public:
      * used.
      * @return true If succeeded, otherwise false.
      */
-    static bool initializeLogFile(const char* logFilePath, ELogFlushPolicy* flushPolicy = nullptr,
+    static bool initializeLogFile(const char* logFilePath, ELogErrorHandler* errorHandler = nullptr,
+                                  ELogFlushPolicy* flushPolicy = nullptr,
                                   ELogFilter* logFilter = nullptr,
                                   ELogFormatter* logFormatter = nullptr);
 
     /**
      * @brief Initializes the ELog system for logging to a segmented log file.
+     * @param errorHandler Optional error handler. If none specified, then all internal errors are
+     * sent to the standard output stream.
      * @param logPath The log path (path to directory for log segments).
      * @param logName The base segment name (including file extension if desired).
      * @param segmentLimitMB The size limit of each log segment.
@@ -62,12 +70,22 @@ public:
      */
     static bool initializeSegmentedLogFile(const char* logPath, const char* logName,
                                            uint32_t segmentLimitMB,
+                                           ELogErrorHandler* errorHandler = nullptr,
                                            ELogFlushPolicy* flushPolicy = nullptr,
                                            ELogFilter* logFilter = nullptr,
                                            ELogFormatter* logFormatter = nullptr);
 
     /** @brief Releases all resources allocated for the ELogSystem. */
     static void terminate();
+
+    /** @brief Installs an error handler. */
+    static void setErrorHandler(ELogErrorHandler* errorHandler);
+
+    /** @brief Reports an error (for internal use only). */
+    static void reportError(const char* errorMsgFmt, ...);
+
+    /** @brief Reports an error (for internal use only). */
+    static void reportError(const char* errorMsgFmt, va_list ap);
 
     /** @brief Registers a schema handler by name. */
     static bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler);
@@ -87,7 +105,8 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromProperties(const ELogPropertyMap& props, bool defineLogSources = false,
+    static bool configureFromProperties(const ELogPropertySequence& props,
+                                        bool defineLogSources = false,
                                         bool defineMissingPath = false);
 
     /**

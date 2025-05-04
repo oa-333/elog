@@ -262,8 +262,9 @@ bool ELogSegmentedFileTarget::getSegmentIndex(const std::string& fileName, int32
                 segmentIndex = std::stoi(fileName.substr(logPrefix.length()), &pos);
                 if (logPrefix.length() + pos != fileName.length()) {
                     // something is wrong, we have excess chars, so we ignore this segment
-                    ELOG_ERROR("Invalid segment file name, excess chars after segment index: %s",
-                               fileName.c_str());
+                    ELogSystem::reportError(
+                        "Invalid segment file name, excess chars after segment index: %s",
+                        fileName.c_str());
                     segmentIndex = -1;
                     return false;
                 }
@@ -325,7 +326,7 @@ bool ELogSegmentedFileTarget::advanceSegment() {
     // switch segments
     if (!m_currentSegment.compare_exchange_strong(prevSegment, nextSegment,
                                                   std::memory_order_relaxed)) {
-        ELOG_ERROR("Failed to switch log segment files, suspected log flooding");
+        ELogSystem::reportError("Failed to switch log segment files, suspected log flooding");
         return false;
     }
 

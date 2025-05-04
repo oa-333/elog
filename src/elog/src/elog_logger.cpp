@@ -142,7 +142,8 @@ void ELogLogger::finishLog() {
         // reset log record data
         recordBuilder.reset();
     } else {
-        fprintf(stderr, "attempt to end log message without start-log being issued first\n");
+        ELogSystem::reportError(
+            "attempt to end log message without start-log being issued first\n");
     }
 }
 

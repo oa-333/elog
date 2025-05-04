@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdarg>
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
@@ -30,6 +31,20 @@ struct ELogLevelCfg {
     ELogSource::PropagateMode m_propagationMode;
 };
 
+class ELogDefaultErrorHandler : public ELogErrorHandler {
+public:
+    ELogDefaultErrorHandler() {}
+    ~ELogDefaultErrorHandler() final {}
+
+    void onError(const char* msg) final {
+        fputs(msg, stderr);
+        fputs("\n", stderr);
+        fflush(stderr);
+    }
+};
+
+static ELogDefaultErrorHandler sDefaultErrorHandler;
+static ELogErrorHandler* sErrorHandler = nullptr;
 static ELogFilter* sGlobalFilter = nullptr;
 static std::vector<ELogTarget*> sLogTargets;
 static std::atomic<ELogSourceId> sNextLogSourceId;
@@ -52,11 +67,16 @@ typedef std::unordered_map<std::string, ELogSchemaHandler*> ELogSchemaHandlerMap
 ELogSchemaHandlerMap sSchemaHandlerMap;
 
 bool ELogSystem::initGlobals() {
+    if (!initFieldSelectors()) {
+        reportError("Failed to initialize field selectors");
+        return false;
+    }
+
     // root logger has no name
     // NOTE: this is the only place where we cannot use logging macros
     sRootLogSource = new (std::nothrow) ELogSource(allocLogSourceId(), "");
     if (sRootLogSource == nullptr) {
-        fprintf(stderr, "Failed to create root log source, out of memory\n");
+        reportError("Failed to create root log source, out of memory");
         return false;
     }
 
@@ -65,27 +85,26 @@ bool ELogSystem::initGlobals() {
         sLogSourceMap.insert(ELogSourceMap::value_type(sRootLogSource->getId(), sRootLogSource))
             .second;
     if (!res) {
-        fprintf(stderr,
-                "Failed to insert root log source to global source map (duplicate found)\n");
+        reportError("Failed to insert root log source to global source map (duplicate found)");
         termGlobals();
         return false;
     }
 
     sDefaultLogger = sRootLogSource->createSharedLogger();
     if (sDefaultLogger == nullptr) {
-        fprintf(stderr, "Failed to create default logger, out of memory\n");
-        termGlobals();
-        return false;
-    }
-    sGlobalFormatter = new (std::nothrow) ELogFormatter();
-    if (!sGlobalFormatter->initialize()) {
-        fprintf(stderr, "Failed to create default logger, out of memory\n");
+        reportError("Failed to create default logger, out of memory");
         termGlobals();
         return false;
     }
     sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr, &sDefaultPolicy);
     if (sDefaultLogTarget == nullptr) {
-        fprintf(stderr, "Failed to create default log target, out of memory\n");
+        reportError("Failed to create default log target, out of memory");
+        termGlobals();
+        return false;
+    }
+    sGlobalFormatter = new (std::nothrow) ELogFormatter();
+    if (!sGlobalFormatter->initialize()) {
+        reportError("Failed to initialize log formatter");
         termGlobals();
         return false;
     }
@@ -93,12 +112,12 @@ bool ELogSystem::initGlobals() {
 #ifdef ELOG_ENABLE_DB_CONNECTOR
     ELogSchemaDbHandler* handler = new (std::nothrow) ELogSchemaDbHandler();
     if (handler == nullptr) {
-        fprintf(stderr, "Failed to create db schema handler, out of memory\n");
+        reportError("Failed to create db schema handler, out of memory");
         termGlobals();
         return false;
     }
     if (!registerSchemaHandler("db", handler)) {
-        fprintf(stderr, "Failed to add db schema handler\n");
+        reportError("Failed to add db schema handler");
         delete handler;
         termGlobals();
         return false;
@@ -135,20 +154,18 @@ void ELogSystem::termGlobals() {
     sLogSourceMap.clear();
 }
 
-bool ELogSystem::initialize() {
-    if (!initGlobals()) {
-        return false;
-    }
-
-    initFieldSelectors();
-    return true;
+bool ELogSystem::initialize(ELogErrorHandler* errorHandler /* = nullptr */) {
+    setErrorHandler(errorHandler);
+    return initGlobals();
 }
 
 // TODO: refactor init code
 bool ELogSystem::initializeLogFile(const char* logFilePath,
+                                   ELogErrorHandler* errorHandler /* = nullptr */,
                                    ELogFlushPolicy* flushPolicy /* = nullptr */,
                                    ELogFilter* logFilter /* = nullptr */,
                                    ELogFormatter* logFormatter /* = nullptr */) {
+    setErrorHandler(errorHandler);
     if (!initGlobals()) {
         return false;
     }
@@ -163,19 +180,19 @@ bool ELogSystem::initializeLogFile(const char* logFilePath,
     if (logFormatter != nullptr) {
         setLogFormatter(logFormatter);
     }
-    initFieldSelectors();
     return true;
 }
 
 bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* logName,
                                             uint32_t segmentLimitMB,
+                                            ELogErrorHandler* errorHandler /* = nullptr */,
                                             ELogFlushPolicy* flushPolicy /* = nullptr */,
                                             ELogFilter* logFilter /* = nullptr */,
                                             ELogFormatter* logFormatter /* = nullptr */) {
+    setErrorHandler(errorHandler);
     if (!initGlobals()) {
         return false;
     }
-
     if (setSegmentedLogFileTarget(logPath, logName, segmentLimitMB, flushPolicy) ==
         ELOG_INVALID_TARGET_ID) {
         termGlobals();
@@ -188,7 +205,6 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
     if (logFormatter != nullptr) {
         setLogFormatter(logFormatter);
     }
-    initFieldSelectors();
     return true;
 }
 
@@ -206,6 +222,31 @@ void ELogSystem::terminate() {
     termGlobals();
 }
 
+void ELogSystem::setErrorHandler(ELogErrorHandler* errorHandler) { sErrorHandler = errorHandler; }
+
+void ELogSystem::reportError(const char* errorMsgFmt, ...) {
+    va_list ap;
+    va_start(ap, errorMsgFmt);
+    reportError(errorMsgFmt, ap);
+    va_end(ap);
+}
+
+void ELogSystem::reportError(const char* errorMsgFmt, va_list ap) {
+    // compute error message length, this requires copying variadic argument pointer
+    va_list apCopy;
+    va_copy(apCopy, ap);
+    uint32_t requiredBytes = (vsnprintf(nullptr, 0, errorMsgFmt, apCopy) + 1);
+
+    // format error message
+    char* errorMsg = (char*)malloc(requiredBytes);
+    vsnprintf(errorMsg, requiredBytes, errorMsgFmt, ap);
+
+    // report error
+    ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
+    errorHandler->onError(errorMsg);
+    va_end(apCopy);
+}
+
 bool ELogSystem::registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
     return sSchemaHandlerMap.insert(ELogSchemaHandlerMap::value_type(schemaName, schemaHandler))
         .second;
@@ -215,7 +256,7 @@ bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                                ELogSource::PropagateMode& propagateMode) {
     const char* ptr = nullptr;
     if (!elogLevelFromStr(logLevelStr, logLevel, &ptr)) {
-        ELOG_ERROR("Invalid log level: %s", logLevelStr);
+        reportError("Invalid log level: %s", logLevelStr);
         return false;
     }
 
@@ -226,7 +267,7 @@ bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
     if (parseLen < len) {
         // there are more chars, only one is allowed
         if (parseLen + 1 != len) {
-            ELOG_ERROR(
+            reportError(
                 "Invalid excess chars at global log level: %s (only one character is allowed: '*', "
                 "'+' or '-')",
                 logLevelStr);
@@ -238,7 +279,7 @@ bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
         } else if (*ptr == '+') {
             propagateMode = ELogSource::PropagateMode::PM_LOOSE;
         } else {
-            ELOG_ERROR(
+            reportError(
                 "Invalid excess chars at global log level: %s (only one character is allowed: '*', "
                 "'+' or '-')",
                 logLevelStr);
@@ -271,7 +312,7 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
     // msgq://message-broker-name?conn-string=<conn-string>&queue=<queue-name>&topic=<topic-name>
     ELogTargetSpec logTargetSpec;
     if (!parseLogTargetSpec(logTargetCfg, logTargetSpec)) {
-        ELOG_ERROR("Invalid log target specification: %s", logTargetCfg.c_str());
+        reportError("Invalid log target specification: %s", logTargetCfg.c_str());
         return false;
     }
 
@@ -289,21 +330,21 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
         ELogSchemaHandler* schemaHandler = itr->second;
         ELogTarget* logTarget = schemaHandler->loadTarget(logTargetCfg, logTargetSpec);
         if (logTarget == nullptr) {
-            ELOG_ERROR("Failed to load target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
-                       logTargetCfg.c_str());
+            reportError("Failed to load target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
+                        logTargetCfg.c_str());
             return false;
         }
         if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
-            ELOG_ERROR("Failed to add log target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
-                       logTargetCfg.c_str());
+            reportError("Failed to add log target for schema %s: %s",
+                        logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
             delete logTarget;
             return false;
         }
         return true;
     }
 
-    ELOG_ERROR("Invalid log target specification, unrecognized schema %s: %s",
-               logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
+    reportError("Invalid log target specification, unrecognized schema %s: %s",
+                logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
     return false;
 }
 
@@ -312,8 +353,8 @@ bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
     // find scheme separator
     std::string::size_type schemeSepPos = logTargetCfg.find("://");
     if (schemeSepPos == std::string::npos) {
-        ELOG_ERROR("Invalid log target specification, missing scheme separator \'://\': %s",
-                   logTargetCfg.c_str());
+        reportError("Invalid log target specification, missing scheme separator \'://\': %s",
+                    logTargetCfg.c_str());
         return false;
     }
 
@@ -345,9 +386,9 @@ bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
         if (equalPos != std::string::npos) {
             std::string key = prop.substr(0, equalPos);
             std::string value = prop.substr(equalPos + 1);
-            logTargetSpec.m_props.push_back(std::make_pair(key, value));
+            insertPropOverride(logTargetSpec.m_props, key, value);
         } else {
-            logTargetSpec.m_props.push_back(std::make_pair(prop, ""));
+            insertPropOverride(logTargetSpec.m_props, prop, "");
         }
 
         // find next token separator
@@ -365,23 +406,23 @@ bool ELogSystem::processSysTargetSchema(const std::string& logTargetCfg,
                                         const ELogTargetSpec& logTargetSpec) {
     std::string name;
     if (logTargetSpec.m_props.size() > 1) {
-        ELOG_ERROR(
+        reportError(
             "Invalid log target specification, \'sys\' schema can have at most one property: %s",
             logTargetCfg.c_str());
         return false;
     }
     if (logTargetSpec.m_props.size() == 1) {
-        if (logTargetSpec.m_props[0].first.compare("name") != 0) {
-            ELOG_ERROR(
+        if (logTargetSpec.m_props.begin()->first.compare("name") != 0) {
+            reportError(
                 "Invalid log target specification, \'sys\' schema can specify only name property: "
                 "%s",
                 logTargetCfg.c_str());
             return false;
         }
-        name = logTargetSpec.m_props[0].second;
+        name = logTargetSpec.m_props.begin()->second;
         if (name.empty()) {
-            ELOG_ERROR("Invalid log target specification, name property missing value: %s",
-                       logTargetCfg.c_str());
+            reportError("Invalid log target specification, name property missing value: %s",
+                        logTargetCfg.c_str());
             return false;
         }
     }
@@ -414,8 +455,8 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
                                          const ELogTargetSpec& logTargetSpec) {
     // path should be already parsed
     if (logTargetSpec.m_path.empty()) {
-        ELOG_ERROR("Invalid log target specification, scheme 'file' requires a path: %s",
-                   logTargetCfg.c_str());
+        reportError("Invalid log target specification, scheme 'file' requires a path: %s",
+                    logTargetCfg.c_str());
         return false;
     }
 
@@ -433,7 +474,7 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
         if (prop.first.compare("name") == 0) {
             name = prop.second;
             if (name.empty()) {
-                ELOG_ERROR("name property missing value: %s", logTargetCfg.c_str());
+                reportError("name property missing value: %s", logTargetCfg.c_str());
                 return false;
             }
         }
@@ -441,7 +482,7 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
         // parse segment size property
         else if (prop.first.compare("segment-size-mb") == 0) {
             if (segmentSizeMB > 0) {
-                ELOG_ERROR("Segment size can be specified only once: %s", logTargetCfg.c_str());
+                reportError("Segment size can be specified only once: %s", logTargetCfg.c_str());
                 return false;
             }
             if (!parseIntProp("segment-size-mb", logTargetCfg, prop.second, segmentSizeMB)) {
@@ -452,14 +493,14 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
         // parse deferred property
         else if (prop.first.compare("deferred") == 0) {
             if (queueBatchSize > 0 || queueTimeoutMillis > 0 || quantumBufferSize > 0) {
-                ELOG_ERROR(
+                reportError(
                     "Deferred log target cannot be specified with queued or quantum target: %s",
                     logTargetCfg.c_str());
                 return false;
             }
             if (deferred) {
-                ELOG_ERROR("Deferred log target can be specified only once: %s",
-                           logTargetCfg.c_str());
+                reportError("Deferred log target can be specified only once: %s",
+                            logTargetCfg.c_str());
                 return false;
             }
             deferred = true;
@@ -468,13 +509,14 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
         // parse queue batch size property
         else if (prop.first.compare("queue-batch-size") == 0) {
             if (deferred || quantumBufferSize > 0) {
-                ELOG_ERROR(
+                reportError(
                     "Queued log target cannot be specified with deferred or quantum target: %s",
                     logTargetCfg.c_str());
                 return false;
             }
             if (queueBatchSize > 0) {
-                ELOG_ERROR("Queue batch size can be specified only once: %s", logTargetCfg.c_str());
+                reportError("Queue batch size can be specified only once: %s",
+                            logTargetCfg.c_str());
                 return false;
             }
             if (!parseIntProp("queue-batch-size", logTargetCfg, prop.second, queueBatchSize)) {
@@ -485,14 +527,14 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
         // parse queue timeout millis property
         else if (prop.first.compare("queue-timeout-millis") == 0) {
             if (deferred || quantumBufferSize > 0) {
-                ELOG_ERROR(
+                reportError(
                     "Queued log target cannot be specified with deferred or quantum target: %s",
                     logTargetCfg.c_str());
                 return false;
             }
             if (queueTimeoutMillis > 0) {
-                ELOG_ERROR("Queue timeout millis can be specified only once: %s",
-                           logTargetCfg.c_str());
+                reportError("Queue timeout millis can be specified only once: %s",
+                            logTargetCfg.c_str());
                 return false;
             }
             if (!parseIntProp("queue-timeout-millis", logTargetCfg, prop.second,
@@ -504,14 +546,14 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
         // parse quantum buffer size
         else if (prop.first.compare("quantum-buffer-size") == 0) {
             if (deferred || queueBatchSize > 0 || queueTimeoutMillis > 0) {
-                ELOG_ERROR(
+                reportError(
                     "Quantum log target cannot be specified with deferred or queued target: %s",
                     logTargetCfg.c_str());
                 return false;
             }
             if (quantumBufferSize > 0) {
-                ELOG_ERROR("Quantum buffer size can be specified only once: %s",
-                           logTargetCfg.c_str());
+                reportError("Quantum buffer size can be specified only once: %s",
+                            logTargetCfg.c_str());
                 return false;
             }
             if (!parseIntProp("quantum-buffer-size", logTargetCfg, prop.second,
@@ -522,21 +564,21 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
 
         // no other option is allowed
         else {
-            ELOG_ERROR("Unrecognized option %s in file log target specification: %s",
-                       prop.first.c_str(), logTargetCfg.c_str());
+            reportError("Unrecognized option %s in file log target specification: %s",
+                        prop.first.c_str(), logTargetCfg.c_str());
             return false;
         }
     }
 
     if (queueBatchSize > 0 && queueTimeoutMillis == 0) {
-        ELOG_ERROR("Missing queue-timeout-millis parameter in log target specification: %s",
-                   logTargetCfg.c_str());
+        reportError("Missing queue-timeout-millis parameter in log target specification: %s",
+                    logTargetCfg.c_str());
         return false;
     }
 
     if (queueBatchSize == 0 && queueTimeoutMillis > 0) {
-        ELOG_ERROR("Missing queue-batch-size parameter in log target specification: %s",
-                   logTargetCfg.c_str());
+        reportError("Missing queue-batch-size parameter in log target specification: %s",
+                    logTargetCfg.c_str());
         return false;
     }
 
@@ -583,13 +625,13 @@ bool ELogSystem::parseIntProp(const char* propName, const std::string& logTarget
     try {
         value = std::stoul(prop, &pos);
     } catch (std::exception& e) {
-        ELOG_ERROR("Invalid %s value %s: %s (%s)", propName, prop.c_str(), logTargetCfg.c_str(),
-                   e.what());
+        reportError("Invalid %s value %s: %s (%s)", propName, prop.c_str(), logTargetCfg.c_str(),
+                    e.what());
         return false;
     }
     if (pos != prop.length()) {
-        ELOG_ERROR("Excess characters at %s value %s: %s", propName, prop.c_str(),
-                   logTargetCfg.c_str());
+        reportError("Excess characters at %s value %s: %s", propName, prop.c_str(),
+                    logTargetCfg.c_str());
         return false;
     }
     return true;
@@ -607,17 +649,17 @@ void ELogSystem::tryParsePathAsHostPort(const std::string& logTargetCfg,
     }
 }
 
-bool ELogSystem::configureFromProperties(const ELogPropertyMap& props,
+bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
                                          bool defineLogSources /* = false */,
                                          bool defineMissingPath /* = false */) {
     // configure log format (unrelated to order of appearance)
     // NOTE: only one such item is expected
-    ELogPropertyMap::const_iterator itr = std::find_if(
+    ELogPropertySequence::const_iterator itr = std::find_if(
         props.begin(), props.end(),
         [](const ELogProperty& prop) { return prop.first.compare("log_format") == 0; });
     if (itr != props.end()) {
         if (!configureLogFormat(itr->second.c_str())) {
-            ELOG_ERROR("Invalid log format in properties: %s", itr->second.c_str());
+            reportError("Invalid log format in properties: %s", itr->second.c_str());
             return false;
         }
     }
@@ -634,7 +676,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertyMap& props,
         if (prop.first.compare("log_level") == 0) {
             // global log level
             if (!parseLogLevel(prop.second.c_str(), logLevel, propagateMode)) {
-                ELOG_ERROR("Invalid global log level: %s", prop.second.c_str());
+                reportError("Invalid global log level: %s", prop.second.c_str());
                 return false;
             }
             logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode});
@@ -661,13 +703,13 @@ bool ELogSystem::configureFromProperties(const ELogPropertyMap& props,
                                         ? defineLogSource(sourceName.c_str(), defineMissingPath)
                                         : getLogSource(sourceName.c_str());
             if (logSource == nullptr) {
-                ELOG_ERROR("Invalid log source name: %s", sourceName.c_str());
+                reportError("Invalid log source name: %s", sourceName.c_str());
                 return false;
             }
             ELogSource::PropagateMode propagateMode = ELogSource::PropagateMode::PM_NONE;
             if (!parseLogLevel(prop.second.c_str(), logLevel, propagateMode)) {
-                ELOG_ERROR("Invalid source &s log level: %s", sourceName.c_str(),
-                           prop.second.c_str());
+                reportError("Invalid source &s log level: %s", sourceName.c_str(),
+                            prop.second.c_str());
                 return false;
             }
             logLevelCfg.push_back({logSource, logLevel, propagateMode});
@@ -688,7 +730,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertyMap& props,
 ELogTargetId ELogSystem::setLogTarget(ELogTarget* logTarget, bool printBanner /* = false */) {
     // first start the log target
     if (!logTarget->start()) {
-        ELOG_ERROR("Failed to start log target");
+        reportError("Failed to start log target");
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -718,7 +760,7 @@ ELogTargetId ELogSystem::setLogFileTarget(const char* logFilePath,
     }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create log file target, out of memory");
+        reportError("Failed to create log file target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -738,7 +780,7 @@ ELogTargetId ELogSystem::setLogFileTarget(FILE* fileHandle,
     }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create log target, out of memory");
+        reportError("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -760,7 +802,7 @@ ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const ch
     ELogTarget* logTarget =
         new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create segmented log file target, out of memory");
+        reportError("Failed to create segmented log file target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -787,7 +829,7 @@ ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath,
     }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create log target, out of memory");
+        reportError("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -805,7 +847,7 @@ ELogTargetId ELogSystem::addLogFileTarget(FILE* fileHandle,
     }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create log target, out of memory");
+        reportError("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -826,7 +868,7 @@ ELogTargetId ELogSystem::addSegmentedLogFileTarget(const char* logPath, const ch
     ELogTarget* logTarget =
         new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
     if (logTarget == nullptr) {
-        ELOG_ERROR("Failed to create segmented log file target, out of memory");
+        reportError("Failed to create segmented log file target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -1059,7 +1101,7 @@ void ELogSystem::setLogFormatter(ELogFormatter* logFormatter) {
     }
     sGlobalFormatter = logFormatter;
 }
-//  void setLogFormatter(ELogFormatter* formatter);
+
 void ELogSystem::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
     sGlobalFormatter->formatLogMsg(logRecord, logMsg);
 }

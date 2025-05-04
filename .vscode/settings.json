@@ -71,7 +71,8 @@
         "variant": "cpp",
         "codecvt": "cpp",
         "climits": "cpp",
-        "*.rh": "cpp"
+        "*.rh": "cpp",
+        "strstream": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",
