@@ -1,5 +1,5 @@
-#ifndef __ELOG_FORMATTER_H__
-#define __ELOG_FORMATTER_H__
+#ifndef __ELOG_BASE_FORMATTER_H__
+#define __ELOG_BASE_FORMATTER_H__
 
 #include <string>
 #include <vector>
@@ -63,4 +63,4 @@ protected:
 
 }  // namespace elog
 
-#endif  // __ELOG_FORMATTER_H__
+#endif  // __ELOG_BASE_FORMATTER_H__

@@ -1,4 +1,4 @@
-#include "elog_formatter.h"
+#include "elog_base_formatter.h"
 
 #include <cstring>
 

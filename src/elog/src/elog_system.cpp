@@ -11,7 +11,6 @@
 #include "elog_file_schema_handler.h"
 #include "elog_file_target.h"
 #include "elog_flush_policy.h"
-#include "elog_formatter.h"
 #include "elog_quantum_target.h"
 #include "elog_queued_target.h"
 #include "elog_schema_db_handler.h"
