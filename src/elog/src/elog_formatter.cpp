@@ -55,6 +55,9 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
         prevPos = closePos + 1;
         pos = formatSpec.find("${", prevPos);
     }
+    if (prevPos != std::string::npos) {
+        handleText(formatSpec.substr(prevPos).c_str());
+    }
     return true;
 }
 

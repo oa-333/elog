@@ -1,19 +1,19 @@
-#ifndef __ELOG_SCHEMA_DB_HANDLER_H__
-#define __ELOG_SCHEMA_DB_HANDLER_H__
+#ifndef __ELOG_FILE_SCHEMA_HANDLER_H__
+#define __ELOG_FILE_SCHEMA_HANDLER_H__
 
 #include "elog_schema_handler.h"
 
 namespace elog {
 
-/** @brief Handler for loading DB log target from configuration. */
-class ELogSchemaDbHandler : public ELogSchemaHandler {
+/** @brief Handler for loading internally supported log target from configuration. */
+class ELogFileSchemaHandler : public ELogSchemaHandler {
 public:
-    ELogSchemaDbHandler() {}
-    ELogSchemaDbHandler(const ELogSchemaDbHandler&) = default;
-    ELogSchemaDbHandler(ELogSchemaDbHandler&&) = default;
+    ELogFileSchemaHandler() {}
+    ELogFileSchemaHandler(const ELogFileSchemaHandler&) = default;
+    ELogFileSchemaHandler(ELogFileSchemaHandler&&) = default;
 
     /** @brief Destructor. */
-    ~ELogSchemaDbHandler() final {}
+    ~ELogFileSchemaHandler() final {}
 
     /**
      * @brief Loads a log target by a specification.
@@ -26,4 +26,4 @@ public:
 
 }  // namespace elog
 
-#endif  // __ELOG_SCHEMA_DB_HANDLER_H__
+#endif  // __ELOG_FILE_SCHEMA_HANDLER_H__

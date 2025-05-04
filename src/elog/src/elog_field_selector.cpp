@@ -190,6 +190,8 @@ extern bool initFieldSelectors() {
     return true;
 }
 
+void termFieldSelectors() { sFieldSelectorConstructorMap.clear(); }
+
 const char* getProgramName() { return progName; }
 
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {

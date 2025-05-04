@@ -25,8 +25,8 @@ public:
 
     inline const std::string& getProcessedStatement() const { return m_processedStatement; }
 
-    inline void formatInsertStatement(const ELogRecord& logRecord,
-                                      elog::ELogFieldReceptor* receptor) {
+    inline void fillInsertStatement(const ELogRecord& logRecord,
+                                    elog::ELogFieldReceptor* receptor) {
         applyFieldSelectors(logRecord, receptor);
     }
 

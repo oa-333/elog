@@ -22,9 +22,9 @@ protected:
         return m_formatter.getProcessedStatement();
     }
 
-    inline void formatInsertStatement(const elog::ELogRecord& logRecord,
-                                      elog::ELogFieldReceptor* receptor) {
-        m_formatter.formatInsertStatement(logRecord, receptor);
+    inline void fillInsertStatement(const elog::ELogRecord& logRecord,
+                                    elog::ELogFieldReceptor* receptor) {
+        m_formatter.fillInsertStatement(logRecord, receptor);
     }
 
 private:

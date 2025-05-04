@@ -35,6 +35,12 @@ void ELogCombinedTarget::flush() {
     }
 }
 
+ELogAbstractTarget::~ELogAbstractTarget() {
+    if (m_flushPolicy != nullptr) {
+        delete m_flushPolicy;
+    }
+}
+
 void ELogAbstractTarget::log(const ELogRecord& logRecord) {
     // partially implement logging - filter and format message
     // this might not suite all targets, as formatting might take place on a later phase
@@ -42,7 +48,7 @@ void ELogAbstractTarget::log(const ELogRecord& logRecord) {
         std::string logMsg;
         ELogSystem::formatLogMsg(logRecord, logMsg);
         log(logMsg.c_str());
-        if (m_flushPolicy->shouldFlush(logMsg.length())) {
+        if (m_flushPolicy == nullptr || m_flushPolicy->shouldFlush(logMsg.length())) {
             flush();
         }
     }

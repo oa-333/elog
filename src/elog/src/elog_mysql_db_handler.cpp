@@ -11,16 +11,8 @@ namespace elog {
 
 class ELogMySqlDbFieldReceptor : public ELogFieldReceptor {
 public:
-    ELogMySqlDbFieldReceptor() : m_fieldNum(0) {}
+    ELogMySqlDbFieldReceptor(sql::PreparedStatement* stmt) : m_stmt(stmt), m_fieldNum(0) {}
     ~ELogMySqlDbFieldReceptor() final {}
-
-    inline void setPreparedStmt(sql::PreparedStatement* stmt) {
-        m_stmt.reset(stmt);
-        m_fieldNum = 0;  //  TODO: is this 1 or 0?
-    }
-
-    /** @brief Resets the internal state of the receptor. */
-    void reset() final { m_stmt->clearParameters(); }
 
     /** @brief Receives a string log record field. */
     void receiveStringField(const std::string& field, int justify) {
@@ -87,7 +79,6 @@ private:
 
     std::unique_ptr<sql::Connection> m_connection;
     std::unique_ptr<sql::PreparedStatement> m_insertStmt;
-    ELogMySqlDbFieldReceptor m_mySqlFieldReceptor;
 };
 
 ELogTarget* ELogMySqlDbHandler::loadTarget(const std::string& logTargetCfg,
@@ -121,30 +112,34 @@ ELogTarget* ELogMySqlDbHandler::loadTarget(const std::string& logTargetCfg,
         return nullptr;
     }
     const std::string& passwd = itr->second;
-    return new (std::nothrow) ELogMySqlDbTarget(targetSpec.m_path, db, user, passwd, insertQuery);
+    return new (std::nothrow) ELogMySqlDbTarget(connString, db, user, passwd, insertQuery);
 }
 
 bool ELogMySqlDbTarget::start() {
+    // parse the statement with log record field selector tokens
+    // this builds a processed statement text with questions marks instead of log record field
+    // references, and also prepares the field selector array
+    if (!parseInsertStatement(m_insertStmtText)) {
+        return false;
+    }
+    std::string processedInsertStmt = getProcessedInsertStatement();
+    fprintf(stderr, "Processed insert statement: %s\n", processedInsertStmt.c_str());
+
     try {
         sql::Driver* driver = sql::mysql::get_driver_instance();
+        fprintf(stderr, "Connecting to url %s with user/pass %s/%s\n", m_url.c_str(),
+                m_user.c_str(), m_passwd.c_str());
         m_connection.reset(driver->connect(m_url, m_user, m_passwd));
+        m_connection->setSchema(m_db);
 
-        // parse the statement with log record field selector tokens
-        // this builds a processed statement text with questions marks instead of log record field
-        // references, and also prepares the field selector array
-        if (!parseInsertStatement(m_insertStmtText)) {
-            return false;
-        }
         // we need to replace every log field reference with a question mark and then prepare a
         // field selector
-        m_insertStmt.reset(m_connection->prepareStatement(getProcessedInsertStatement().c_str()));
-
-        // hand over the MySql field receptor
-        m_mySqlFieldReceptor.setPreparedStmt(m_insertStmt.get());
-        setFieldReceptor(&m_mySqlFieldReceptor);
+        m_insertStmt.reset(m_connection->prepareStatement(processedInsertStmt.c_str()));
         return true;
     } catch (sql::SQLException& e) {
-        ELogSystem::reportError("Failed to start MySQL log target: %s", e.what());
+        ELogSystem::reportError(
+            "Failed to start MySQL log target. SQL State: %p. Vendor Code: %d. Reason: %p",
+            e.getSQLStateCStr(), e.getErrorCode(), e.what());
         return false;
     }
 }
@@ -164,7 +159,9 @@ void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
     // we need something like field selectors here
     try {
         // this puts each log record field into the correct place in the prepared statement
-        formatLogMsg(logRecord);
+        ELogMySqlDbFieldReceptor mySqlFieldReceptor(m_insertStmt.get());
+        m_insertStmt->clearParameters();
+        fillInsertStatement(logRecord, &mySqlFieldReceptor);
         if (!m_insertStmt->execute()) {
             ELogSystem::reportError("Failed to send log message to MySQL log target");
         }

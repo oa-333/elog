@@ -10,8 +10,8 @@ namespace elog {
 
 class ELOG_API ELogFileTarget : public ELogAbstractTarget {
 public:
-    ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy);
-    ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy)
+    ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy = nullptr);
+    ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr)
         : ELogAbstractTarget(flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {}
     ELogFileTarget(const ELogFileTarget&) = delete;
     ELogFileTarget(ELogFileTarget&&) = delete;

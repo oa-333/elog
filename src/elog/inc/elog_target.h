@@ -96,8 +96,8 @@ public:
     void log(const ELogRecord& logRecord) override;
 
 protected:
-    ELogAbstractTarget(ELogFlushPolicy* flushPolicy) : m_flushPolicy(flushPolicy) {}
-    ~ELogAbstractTarget() override {}
+    ELogAbstractTarget(ELogFlushPolicy* flushPolicy = nullptr) : m_flushPolicy(flushPolicy) {}
+    ~ELogAbstractTarget() override;
 
     /** @brief Log a formatted message. */
     virtual void log(const std::string& formattedLogMsg) = 0;

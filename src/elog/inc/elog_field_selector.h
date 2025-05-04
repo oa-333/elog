@@ -12,6 +12,9 @@ namespace elog {
 /** @brief Initialize all field selectors (for internal use only). */
 extern ELOG_API bool initFieldSelectors();
 
+/** @brief Destroys all field selectors (for internal use only). */
+extern ELOG_API void termFieldSelectors();
+
 /** @brief Retrieves program name (for internal use only). */
 extern ELOG_API const char* getProgramName();
 

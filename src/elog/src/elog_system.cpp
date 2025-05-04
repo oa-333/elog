@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "elog_deferred_target.h"
+#include "elog_file_schema_handler.h"
 #include "elog_file_target.h"
 #include "elog_flush_policy.h"
 #include "elog_formatter.h"
@@ -15,6 +16,7 @@
 #include "elog_queued_target.h"
 #include "elog_schema_db_handler.h"
 #include "elog_segmented_file_target.h"
+#include "elog_sys_schema_handler.h"
 #include "elog_syslog_target.h"
 
 #ifdef ELOG_MINGW
@@ -37,11 +39,16 @@ public:
     ~ELogDefaultErrorHandler() final {}
 
     void onError(const char* msg) final {
+        fputs("<ELOG> ERROR: ", stderr);
         fputs(msg, stderr);
         fputs("\n", stderr);
         fflush(stderr);
     }
 };
+
+static const char* ELOG_SCHEMA_MARKER = "://";
+static const uint32_t ELOG_SCHEMA_LEN = 3;
+static const uint32_t ELOG_MAX_SCHEMA = 20;
 
 static ELogDefaultErrorHandler sDefaultErrorHandler;
 static ELogErrorHandler* sErrorHandler = nullptr;
@@ -59,16 +66,55 @@ typedef std::unordered_map<ELogSourceId, ELogSource*> ELogSourceMap;
 static ELogSourceMap sLogSourceMap;
 static ELogLogger* sDefaultLogger = nullptr;
 static ELogTarget* sDefaultLogTarget = nullptr;
-static ELogImmediateFlushPolicy sDefaultPolicy;
 static ELogFormatter* sGlobalFormatter = nullptr;
 static ELogFlushPolicy* sFlushPolicy = nullptr;
 
-typedef std::unordered_map<std::string, ELogSchemaHandler*> ELogSchemaHandlerMap;
-ELogSchemaHandlerMap sSchemaHandlerMap;
+static ELogSchemaHandler* sSchemaHandlers[ELOG_MAX_SCHEMA] = {};
+static uint32_t sSchemaHandlerCount = 0;
+typedef std::unordered_map<std::string, int> ELogSchemaHandlerMap;
+static ELogSchemaHandlerMap sSchemaHandlerMap;
+
+template <typename T>
+static bool initSchemaHandler(const char* name) {
+    T* handler = new (std::nothrow) T();
+    if (handler == nullptr) {
+        ELogSystem::reportError("Failed to create %s schema handler, out of memory", name);
+        return false;
+    }
+    if (!ELogSystem::registerSchemaHandler(name, handler)) {
+        ELogSystem::reportError("Failed to add %s schema handler", name);
+        delete handler;
+        return false;
+    }
+    return true;
+}
+
+bool ELogSystem::initSchemaHandlers() {
+    if (!initSchemaHandler<ELogSysSchemaHandler>("sys") ||
+        !initSchemaHandler<ELogFileSchemaHandler>("file") ||
+        !initSchemaHandler<ELogSchemaDbHandler>("db")) {
+        termGlobals();
+        return false;
+    }
+    return true;
+}
+
+void ELogSystem::termSchemaHandlers() {
+    for (uint32_t i = 0; i < sSchemaHandlerCount; ++i) {
+        delete sSchemaHandlers[i];
+        sSchemaHandlers[i] = nullptr;
+    }
+    sSchemaHandlerCount = 0;
+    sSchemaHandlerMap.clear();
+}
 
 bool ELogSystem::initGlobals() {
     if (!initFieldSelectors()) {
         reportError("Failed to initialize field selectors");
+        return false;
+    }
+    if (!initSchemaHandlers()) {
+        reportError("Failed to initialize predefined schema handlers");
         return false;
     }
 
@@ -96,7 +142,7 @@ bool ELogSystem::initGlobals() {
         termGlobals();
         return false;
     }
-    sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr, &sDefaultPolicy);
+    sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr);
     if (sDefaultLogTarget == nullptr) {
         reportError("Failed to create default log target, out of memory");
         termGlobals();
@@ -109,20 +155,6 @@ bool ELogSystem::initGlobals() {
         return false;
     }
 
-#ifdef ELOG_ENABLE_DB_CONNECTOR
-    ELogSchemaDbHandler* handler = new (std::nothrow) ELogSchemaDbHandler();
-    if (handler == nullptr) {
-        reportError("Failed to create db schema handler, out of memory");
-        termGlobals();
-        return false;
-    }
-    if (!registerSchemaHandler("db", handler)) {
-        reportError("Failed to add db schema handler");
-        delete handler;
-        termGlobals();
-        return false;
-    }
-#endif
     return true;
 }
 
@@ -135,9 +167,6 @@ void ELogSystem::termGlobals() {
     }
     sLogTargets.clear();
 
-    for (auto& entry : sSchemaHandlerMap) {
-        delete entry.second;
-    }
     if (sDefaultLogTarget != nullptr) {
         delete sDefaultLogTarget;
         sDefaultLogTarget = nullptr;
@@ -152,6 +181,9 @@ void ELogSystem::termGlobals() {
     }
     sDefaultLogger = nullptr;
     sLogSourceMap.clear();
+
+    termSchemaHandlers();
+    termFieldSelectors();
 }
 
 bool ELogSystem::initialize(ELogErrorHandler* errorHandler /* = nullptr */) {
@@ -209,14 +241,6 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
 }
 
 void ELogSystem::terminate() {
-    for (ELogTarget* logTarget : sLogTargets) {
-        if (logTarget != nullptr) {
-            logTarget->stop();
-            delete logTarget;
-        }
-    }
-    sLogTargets.clear();
-
     setLogFormatter(nullptr);
     setLogFilter(nullptr);
     termGlobals();
@@ -248,8 +272,17 @@ void ELogSystem::reportError(const char* errorMsgFmt, va_list ap) {
 }
 
 bool ELogSystem::registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
-    return sSchemaHandlerMap.insert(ELogSchemaHandlerMap::value_type(schemaName, schemaHandler))
-        .second;
+    if (sSchemaHandlerCount == ELOG_MAX_SCHEMA) {
+        ELogSystem::reportError("Cannot initialize %s schema handler, out of space", schemaName);
+        return false;
+    }
+    uint32_t id = sSchemaHandlerCount;
+    if (!sSchemaHandlerMap.insert(ELogSchemaHandlerMap::value_type(schemaName, id)).second) {
+        ELogSystem::reportError("Cannot initialize %s schema handler, duplicate name", schemaName);
+        return false;
+    }
+    sSchemaHandlers[sSchemaHandlerCount++] = schemaHandler;
+    return true;
 }
 
 bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
@@ -316,24 +349,33 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
         return false;
     }
 
-    // check predefined schemas
-    if (logTargetSpec.m_scheme.compare("sys") == 0) {
-        return processSysTargetSchema(logTargetCfg, logTargetSpec);
-    }
-    if (logTargetSpec.m_scheme.compare("file") == 0) {
-        return processFileTargetSchema(logTargetCfg, logTargetSpec);
-    }
-
-    // check externally registered schemas
+    // check for registered schemas
     ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(logTargetSpec.m_scheme);
     if (itr != sSchemaHandlerMap.end()) {
-        ELogSchemaHandler* schemaHandler = itr->second;
+        ELogSchemaHandler* schemaHandler = sSchemaHandlers[itr->second];
         ELogTarget* logTarget = schemaHandler->loadTarget(logTargetCfg, logTargetSpec);
         if (logTarget == nullptr) {
             reportError("Failed to load target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
                         logTargetCfg.c_str());
             return false;
         }
+
+        // apply target name if any
+        applyTargetName(logTarget, logTargetSpec);
+
+        // apply compound target
+        bool errorOccurred = false;
+        ELogTarget* compoundTarget =
+            applyCompoundTarget(logTarget, logTargetCfg, logTargetSpec, errorOccurred);
+        if (errorOccurred) {
+            reportError("Failed to apply compound log target specification");
+            delete logTarget;
+            return false;
+        }
+        if (compoundTarget != nullptr) {
+            logTarget = compoundTarget;
+        }
+
         if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
             reportError("Failed to add log target for schema %s: %s",
                         logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
@@ -351,30 +393,31 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
 bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
                                     ELogTargetSpec& logTargetSpec) {
     // find scheme separator
-    std::string::size_type schemeSepPos = logTargetCfg.find("://");
+    std::string::size_type schemeSepPos = logTargetCfg.find(ELOG_SCHEMA_MARKER);
     if (schemeSepPos == std::string::npos) {
-        reportError("Invalid log target specification, missing scheme separator \'://\': %s",
-                    logTargetCfg.c_str());
+        reportError("Invalid log target specification, missing scheme separator \'%s\': %s",
+                    ELOG_SCHEMA_MARKER, logTargetCfg.c_str());
         return false;
     }
 
     logTargetSpec.m_scheme = logTargetCfg.substr(0, schemeSepPos);
 
     // parse until first '?'
-    std::string::size_type qmarkPos = logTargetCfg.find(schemeSepPos + 3, '?');
+    std::string::size_type qmarkPos = logTargetCfg.find('?', schemeSepPos + ELOG_SCHEMA_LEN);
     if (qmarkPos == std::string::npos) {
-        logTargetSpec.m_path = logTargetCfg.substr(schemeSepPos + 3);
+        logTargetSpec.m_path = logTargetCfg.substr(schemeSepPos + ELOG_SCHEMA_LEN);
         logTargetSpec.m_port = 0;
         tryParsePathAsHostPort(logTargetCfg, logTargetSpec);
         return true;
     }
 
-    logTargetSpec.m_path = logTargetCfg.substr(schemeSepPos + 3, qmarkPos);
+    logTargetSpec.m_path = logTargetCfg.substr(schemeSepPos + ELOG_SCHEMA_LEN,
+                                               qmarkPos - schemeSepPos - ELOG_SCHEMA_LEN);
     tryParsePathAsHostPort(logTargetCfg, logTargetSpec);
 
     // parse properties, separated by ampersand
     std::string::size_type prevPos = qmarkPos + 1;
-    std::string::size_type sepPos = logTargetCfg.find(prevPos, '&');
+    std::string::size_type sepPos = logTargetCfg.find('&', prevPos);
     do {
         // get property
         std::string prop = (sepPos == std::string::npos)
@@ -394,7 +437,7 @@ bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
         // find next token separator
         if (sepPos != std::string::npos) {
             prevPos = sepPos + 1;
-            sepPos = logTargetCfg.find(prevPos, '&');
+            sepPos = logTargetCfg.find('&', prevPos);
         } else {
             prevPos = sepPos;
         }
@@ -402,106 +445,46 @@ bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
     return true;
 }
 
-bool ELogSystem::processSysTargetSchema(const std::string& logTargetCfg,
-                                        const ELogTargetSpec& logTargetSpec) {
-    std::string name;
-    if (logTargetSpec.m_props.size() > 1) {
-        reportError(
-            "Invalid log target specification, \'sys\' schema can have at most one property: %s",
-            logTargetCfg.c_str());
-        return false;
+void ELogSystem::insertPropOverride(ELogPropertyMap& props, const std::string& key,
+                                    const std::string& value) {
+    std::pair<ELogPropertyMap::iterator, bool> itrRes =
+        props.insert(ELogPropertyMap::value_type(key, value));
+    if (!itrRes.second) {
+        itrRes.first->second = value;
     }
-    if (logTargetSpec.m_props.size() == 1) {
-        if (logTargetSpec.m_props.begin()->first.compare("name") != 0) {
-            reportError(
-                "Invalid log target specification, \'sys\' schema can specify only name property: "
-                "%s",
-                logTargetCfg.c_str());
-            return false;
-        }
-        name = logTargetSpec.m_props.begin()->second;
-        if (name.empty()) {
-            reportError("Invalid log target specification, name property missing value: %s",
-                        logTargetCfg.c_str());
-            return false;
-        }
-    }
-
-    ELogTargetId targetId = ELOG_INVALID_TARGET_ID;
-    if (logTargetSpec.m_path.compare("stderr") == 0) {
-        targetId = addStdErrLogTarget();
-    }
-    if (logTargetSpec.m_path.compare("stdout") == 0) {
-        targetId = addStdOutLogTarget();
-    }
-    if (logTargetSpec.m_path.compare("syslog") == 0) {
-        targetId = addSysLogTarget();
-    }
-
-    if (targetId == ELOG_INVALID_TARGET_ID) {
-        return false;
-    }
-    if (!name.empty()) {
-        ELogTarget* target = getLogTarget(targetId);
-        if (target == nullptr) {
-            return false;
-        }
-        target->setName(name.c_str());
-    }
-    return true;
 }
 
-bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
-                                         const ELogTargetSpec& logTargetSpec) {
-    // path should be already parsed
-    if (logTargetSpec.m_path.empty()) {
-        reportError("Invalid log target specification, scheme 'file' requires a path: %s",
-                    logTargetCfg.c_str());
-        return false;
+void ELogSystem::applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec) {
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("name");
+    if (itr != logTargetSpec.m_props.end()) {
+        logTarget->setName(itr->second.c_str());
     }
+}
 
-    // there could be optional poperties: segment-size-mb, deferred,
+ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                            const ELogTargetSpec& logTargetSpec,
+                                            bool& errorOccurred) {
+    // there could be optional poperties: deferred,
     // queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
     // quantum-buffer-size=<buffer-size>
-    std::string name;
-    uint32_t segmentSizeMB = 0;
+    errorOccurred = true;
     bool deferred = false;
     uint32_t queueBatchSize = 0;
     uint32_t queueTimeoutMillis = 0;
     uint32_t quantumBufferSize = 0;
     for (const ELogProperty& prop : logTargetSpec.m_props) {
-        // parse name property
-        if (prop.first.compare("name") == 0) {
-            name = prop.second;
-            if (name.empty()) {
-                reportError("name property missing value: %s", logTargetCfg.c_str());
-                return false;
-            }
-        }
-
-        // parse segment size property
-        else if (prop.first.compare("segment-size-mb") == 0) {
-            if (segmentSizeMB > 0) {
-                reportError("Segment size can be specified only once: %s", logTargetCfg.c_str());
-                return false;
-            }
-            if (!parseIntProp("segment-size-mb", logTargetCfg, prop.second, segmentSizeMB)) {
-                return false;
-            }
-        }
-
         // parse deferred property
-        else if (prop.first.compare("deferred") == 0) {
+        if (prop.first.compare("deferred") == 0) {
             if (queueBatchSize > 0 || queueTimeoutMillis > 0 || quantumBufferSize > 0) {
                 reportError(
                     "Deferred log target cannot be specified with queued or quantum target: %s",
                     logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             if (deferred) {
                 reportError("Deferred log target can be specified only once: %s",
                             logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             deferred = true;
         }
@@ -512,15 +495,15 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
                 reportError(
                     "Queued log target cannot be specified with deferred or quantum target: %s",
                     logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             if (queueBatchSize > 0) {
                 reportError("Queue batch size can be specified only once: %s",
                             logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             if (!parseIntProp("queue-batch-size", logTargetCfg, prop.second, queueBatchSize)) {
-                return false;
+                return nullptr;
             }
         }
 
@@ -530,16 +513,16 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
                 reportError(
                     "Queued log target cannot be specified with deferred or quantum target: %s",
                     logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             if (queueTimeoutMillis > 0) {
                 reportError("Queue timeout millis can be specified only once: %s",
                             logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             if (!parseIntProp("queue-timeout-millis", logTargetCfg, prop.second,
                               queueTimeoutMillis)) {
-                return false;
+                return nullptr;
             }
         }
 
@@ -549,92 +532,44 @@ bool ELogSystem::processFileTargetSchema(const std::string& logTargetCfg,
                 reportError(
                     "Quantum log target cannot be specified with deferred or queued target: %s",
                     logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             if (quantumBufferSize > 0) {
                 reportError("Quantum buffer size can be specified only once: %s",
                             logTargetCfg.c_str());
-                return false;
+                return nullptr;
             }
             if (!parseIntProp("quantum-buffer-size", logTargetCfg, prop.second,
                               quantumBufferSize)) {
-                return false;
+                return nullptr;
             }
-        }
-
-        // no other option is allowed
-        else {
-            reportError("Unrecognized option %s in file log target specification: %s",
-                        prop.first.c_str(), logTargetCfg.c_str());
-            return false;
         }
     }
 
     if (queueBatchSize > 0 && queueTimeoutMillis == 0) {
         reportError("Missing queue-timeout-millis parameter in log target specification: %s",
                     logTargetCfg.c_str());
-        return false;
+        return nullptr;
     }
 
     if (queueBatchSize == 0 && queueTimeoutMillis > 0) {
         reportError("Missing queue-batch-size parameter in log target specification: %s",
                     logTargetCfg.c_str());
-        return false;
+        return nullptr;
     }
 
-    ELogTarget* logTarget = nullptr;
-    if (segmentSizeMB > 0) {
-#ifdef ELOG_WINDOWS
-        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of('\\');
-#else
-        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of('/');
-#endif
-        /// assuming segmented log is to be created in current folder, and path is the file name
-        if (lastSlashPos == std::string::npos) {
-            logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget("", logTargetSpec.m_path.c_str(), segmentSizeMB, nullptr);
-        } else {
-            std::string logPath = logTargetSpec.m_path.substr(0, lastSlashPos);
-            std::string logName = logTargetSpec.m_path.substr(lastSlashPos + 1);
-            logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB, nullptr);
-        }
-    }
-
+    ELogTarget* compoundLogTarget = nullptr;
     if (deferred) {
-        logTarget = new (std::nothrow) ELogDeferredTarget(logTarget);
+        compoundLogTarget = new (std::nothrow) ELogDeferredTarget(logTarget);
     } else if (queueBatchSize > 0) {
-        logTarget =
+        compoundLogTarget =
             new (std::nothrow) ELogQueuedTarget(logTarget, queueBatchSize, queueTimeoutMillis);
     } else if (quantumBufferSize > 0) {
-        logTarget = new (std::nothrow) ELogQuantumTarget(logTarget, quantumBufferSize);
+        compoundLogTarget = new (std::nothrow) ELogQuantumTarget(logTarget, quantumBufferSize);
     }
-    if (!name.empty()) {
-        logTarget->setName(name.c_str());
-    }
-    if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-        return false;
-    }
-    return true;
-}
 
-bool ELogSystem::parseIntProp(const char* propName, const std::string& logTargetCfg,
-                              const std::string& prop, uint32_t& value) {
-    std::size_t pos = 0;
-    try {
-        value = std::stoul(prop, &pos);
-    } catch (std::exception& e) {
-        reportError("Invalid %s value %s: %s (%s)", propName, prop.c_str(), logTargetCfg.c_str(),
-                    e.what());
-        return false;
-    }
-    if (pos != prop.length()) {
-        reportError("Excess characters at %s value %s: %s", propName, prop.c_str(),
-                    logTargetCfg.c_str());
-        return false;
-    }
-    return true;
+    errorOccurred = false;
+    return compoundLogTarget;
 }
 
 void ELogSystem::tryParsePathAsHostPort(const std::string& logTargetCfg,
@@ -642,7 +577,7 @@ void ELogSystem::tryParsePathAsHostPort(const std::string& logTargetCfg,
     std::string::size_type colonPos = logTargetSpec.m_path.find(':');
     if (colonPos != std::string::npos) {
         if (!parseIntProp("port", logTargetCfg, logTargetSpec.m_path.substr(colonPos + 1),
-                          logTargetSpec.m_port)) {
+                          logTargetSpec.m_port, false)) {
             return;
         }
         logTargetSpec.m_host = logTargetSpec.m_path.substr(0, colonPos);
@@ -755,9 +690,6 @@ ELogTargetId ELogSystem::setLogFileTarget(const char* logFilePath,
                                           ELogFlushPolicy* flushPolicy /* = nullptr */,
                                           bool printBanner /* = true */) {
     // create new log target
-    if (flushPolicy == nullptr) {
-        flushPolicy = &sDefaultPolicy;
-    }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
     if (logTarget == nullptr) {
         reportError("Failed to create log file target, out of memory");
@@ -775,9 +707,6 @@ ELogTargetId ELogSystem::setLogFileTarget(FILE* fileHandle,
                                           ELogFlushPolicy* flushPolicy /* = nullptr */,
                                           bool printBanner /* = false */) {
     // create new log target
-    if (flushPolicy == nullptr) {
-        flushPolicy = &sDefaultPolicy;
-    }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
     if (logTarget == nullptr) {
         reportError("Failed to create log target, out of memory");
@@ -796,9 +725,6 @@ ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const ch
                                                    ELogFlushPolicy* flushPolicy /* = nullptr */,
                                                    bool printBanner /* = true */) {
     // create new log target
-    if (flushPolicy == nullptr) {
-        flushPolicy = &sDefaultPolicy;
-    }
     ELogTarget* logTarget =
         new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
     if (logTarget == nullptr) {
@@ -814,9 +740,19 @@ ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const ch
 }
 
 ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
-    if (!sLogTargets[0]->start()) {
+    if (!logTarget->start()) {
         return ELOG_INVALID_TARGET_ID;
     }
+
+    // find vacant slot ro add a new one
+    for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
+        if (sLogTargets[i] == nullptr) {
+            sLogTargets[i] = logTarget;
+            return i;
+        }
+    }
+
+    // otherwise add a new slot
     sLogTargets.push_back(logTarget);
     return (ELogTargetId)(sLogTargets.size() - 1);
 }
@@ -824,9 +760,6 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
 ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath,
                                           ELogFlushPolicy* flushPolicy /* = nullptr */) {
     // create new log target
-    if (flushPolicy == nullptr) {
-        flushPolicy = &sDefaultPolicy;
-    }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
     if (logTarget == nullptr) {
         reportError("Failed to create log target, out of memory");
@@ -842,9 +775,6 @@ ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath,
 
 ELogTargetId ELogSystem::addLogFileTarget(FILE* fileHandle,
                                           ELogFlushPolicy* flushPolicy /* = nullptr */) {
-    if (flushPolicy == nullptr) {
-        flushPolicy = &sDefaultPolicy;
-    }
     ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
     if (logTarget == nullptr) {
         reportError("Failed to create log target, out of memory");
@@ -862,9 +792,6 @@ ELogTargetId ELogSystem::addSegmentedLogFileTarget(const char* logPath, const ch
                                                    uint32_t segmentLimitMB,
                                                    ELogFlushPolicy* flushPolicy /* = nullptr */) {
     // create new log target
-    if (flushPolicy == nullptr) {
-        flushPolicy = &sDefaultPolicy;
-    }
     ELogTarget* logTarget =
         new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
     if (logTarget == nullptr) {
@@ -926,17 +853,18 @@ void ELogSystem::removeLogTarget(ELogTargetId targetId) {
     delete sLogTargets[targetId];
     sLogTargets[targetId] = nullptr;
 
-    // now check if all log sinks are removed
-    for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
+    // find largest suffix of removed log targets
+    int lastLogTarget = -1;
+    for (int i = sLogTargets.size() - 1; i >= 0; --i) {
         if (sLogTargets[targetId] != nullptr) {
             // at least one log target active, so we can return
-            return;
+            lastLogTarget = i;
+            break;
         }
     }
 
-    // no log sinks left, so put back stderr
-    sLogTargets.clear();
-    addLogFileTarget(stderr);
+    // remove unused suffix
+    sLogTargets.resize(lastLogTarget + 1);
 }
 
 void ELogSystem::removeLogTarget(ELogTarget* target) {

@@ -18,9 +18,9 @@ typedef std::vector<ELogProperty> ELogPropertySequence;
 /** @typedef Property map. */
 typedef std::unordered_map<std::string, std::string> ELogPropertyMap;
 
-/** @brief Helper function for retrieving a  */
-inline bool elogGetProp(const ELogPropertySequence& props, const char* propName,
-                        std::string& propValue) {
+/** @brief Helper function for retrieving a property from a sequence */
+inline bool getProp(const ELogPropertySequence& props, const char* propName,
+                    std::string& propValue) {
     ELogPropertySequence::const_iterator itr = std::find_if(
         props.begin(), props.end(),
         [propName](const ELogProperty& prop) { return prop.second.compare(propName) == 0; });
@@ -31,14 +31,9 @@ inline bool elogGetProp(const ELogPropertySequence& props, const char* propName,
     return false;
 }
 
-inline void insertPropOverride(ELogPropertyMap& props, const std::string& key,
-                               const std::string& value) {
-    std::pair<ELogPropertyMap::iterator, bool> itrRes =
-        props.insert(ELogPropertyMap::value_type(key, value));
-    if (!itrRes.second) {
-        itrRes.first->second = value;
-    }
-}
+/** @brief Helper function for parsing an integer property */
+extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
+                         const std::string& prop, uint32_t& value, bool issueError = true);
 
 /** @struct Log Target specification (used for loading from configuration). */
 struct ELogTargetSpec {

@@ -389,18 +389,20 @@ public:
 private:
     static bool initGlobals();
     static void termGlobals();
+    static bool initSchemaHandlers();
+    static void termSchemaHandlers();
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
     static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                               ELogSource::PropagateMode& propagateMode);
     static bool configureLogTarget(const std::string& logTargetCfg);
 
     static bool parseLogTargetSpec(const std::string& logTargetCfg, ELogTargetSpec& logTargetSpec);
-    static bool processSysTargetSchema(const std::string& logTargetCfg,
-                                       const ELogTargetSpec& logTargetSpec);
-    static bool processFileTargetSchema(const std::string& logTargetCfg,
-                                        const ELogTargetSpec& logTargetSpec);
-    static bool parseIntProp(const char* propName, const std::string& logTargetCfg,
-                             const std::string& prop, uint32_t& value);
+    static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
+                                   const std::string& value);
+    static void applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec);
+    static ELogTarget* applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                           const ELogTargetSpec& logTargetSpec,
+                                           bool& errorOccurred);
     static void tryParsePathAsHostPort(const std::string& logTargetCfg,
                                        ELogTargetSpec& logTargetSpec);
 };
