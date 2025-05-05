@@ -154,6 +154,13 @@ static void getProgName() {
     if (slashPos != nullptr) {
         memmove(progName, slashPos + 1, strlen(slashPos + 1) + 1);
     }
+
+    // finally remove extension
+    char* dotPtr = strrchr(progName, '.');
+    if (dotPtr != nullptr) {
+        uint32_t dotPos = dotPtr - progName;
+        progName[dotPos] = 0;
+    }
 }
 
 extern bool initFieldSelectors() {
@@ -161,14 +168,21 @@ extern bool initFieldSelectors() {
         return false;
     }
 
-    // initialize host name
+// initialize host name
+#ifdef ELOG_WINDOWS
+    DWORD len = HOST_NAME_MAX;
+    if (!GetComputerNameA(hostName, &len)) {
+        strcpy(hostName, "<N/A>");
+    }
+#else
     if (gethostname(hostName, HOST_NAME_MAX) != 0) {
         strcpy(hostName, "<N/A>");
     }
+#endif
 
     // initialize user name
 #ifdef ELOG_WINDOWS
-    DWORD len = 256;
+    len = LOGIN_NAME_MAX;
     if (!GetUserNameA(userName, &len)) {
         strcpy(userName, "<N/A>");
     }
@@ -245,18 +259,18 @@ void ELogSourceSelector::selectField(const ELogRecord& record, ELogFieldReceptor
     ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
     if (logSource != nullptr && (*logSource->getQualifiedName() != 0)) {
         receptor->receiveStringField(logSource->getQualifiedName(), m_justify);
-    } /* else {
-         receptor->receiveStringField("N/A", m_justify);
-     }*/
+    } else {
+        receptor->receiveStringField("N/A", m_justify);
+    }
 }
 
 void ELogModuleSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
-    if (logSource != nullptr) {
+    if (logSource != nullptr && (*logSource->getModuleName() != 0)) {
         receptor->receiveStringField(logSource->getModuleName(), m_justify);
-    } /* else {
-         receptor->receiveStringField("N/A", m_justify);
-     }*/
+    } else {
+        receptor->receiveStringField("N/A", m_justify);
+    }
 }
 
 void ELogLevelSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {

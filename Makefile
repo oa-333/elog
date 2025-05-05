@@ -173,7 +173,7 @@ endif
 #DEP_FLAGS := -MT $@ -MMD -MP -MF $(patsubst $(OBJ_DIR)/%.o,$(DEP_DIR)/%.tmp.dep,$@)
 LDFLAGS := -L$(BIN_DIR)
 ifeq ($(MINGW), 1)
-	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32
+	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32 -lsqlite3
 else
 	LDFLAGS := $(LDFLAGS) -rdynamic
 endif

@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "elog_mysql_db_target_provider.h"
+#include "elog_sqlite_db_target_provider.h"
 #include "elog_system.h"
 
 namespace elog {
