@@ -10,14 +10,19 @@
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
 #include "elog_common.h"
-#include "elog_target.h"
+#include "elog_db_target_provider.h"
 
 namespace elog {
 
-class ELogMySqlDbHandler {
+class ELogMySqlDbTargetProvider : public ELogDbTargetProvider {
 public:
-    static ELogTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
-                                  const std::string& connString, const std::string& insertQuery);
+    ELogMySqlDbTargetProvider() {}
+    ELogMySqlDbTargetProvider(const ELogMySqlDbTargetProvider&) = delete;
+    ELogMySqlDbTargetProvider(ELogMySqlDbTargetProvider&&) = delete;
+    ~ELogMySqlDbTargetProvider() final {}
+
+    ELogDbTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
+                             const std::string& connString, const std::string& insertQuery) final;
 };
 
 }  // namespace elog

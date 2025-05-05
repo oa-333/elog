@@ -1,6 +1,9 @@
 #ifndef __ELOG_DB_SCHEMA_HANDLER_H__
 #define __ELOG_DB_SCHEMA_HANDLER_H__
 
+#include <unordered_map>
+
+#include "elog_db_target_provider.h"
 #include "elog_schema_handler.h"
 
 namespace elog {
@@ -8,12 +11,14 @@ namespace elog {
 /** @brief Handler for loading DB log target from configuration. */
 class ELogDbSchemaHandler : public ELogSchemaHandler {
 public:
-    ELogDbSchemaHandler() {}
+    ELogDbSchemaHandler();
     ELogDbSchemaHandler(const ELogDbSchemaHandler&) = default;
     ELogDbSchemaHandler(ELogDbSchemaHandler&&) = default;
 
     /** @brief Destructor. */
-    ~ELogDbSchemaHandler() final {}
+    ~ELogDbSchemaHandler() final;
+
+    bool registerDbTargetProvider(const char* dbName, ELogDbTargetProvider* provider);
 
     /**
      * @brief Loads a log target by a specification.
@@ -22,6 +27,10 @@ public:
      * @return ELogTarget* The resulting log target or null if failed.
      */
     ELogTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec) final;
+
+private:
+    typedef std::unordered_map<std::string, ELogDbTargetProvider*> ProviderMap;
+    ProviderMap m_providerMap;
 };
 
 }  // namespace elog

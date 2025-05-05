@@ -1,11 +1,64 @@
 #include "elog_db_schema_handler.h"
 
-#include <algorithm>
+#include <cassert>
 
 #include "elog_mysql_db_handler.h"
 #include "elog_system.h"
 
 namespace elog {
+
+template <typename T>
+static bool initDbTargetProvider(ELogDbSchemaHandler* schemaHandler, const char* name) {
+    T* provider = new (std::nothrow) T();
+    if (provider == nullptr) {
+        ELogSystem::reportError("Failed to create %s db target provider, out of memory", name);
+        return false;
+    }
+    if (!schemaHandler->registerDbTargetProvider(name, provider)) {
+        ELogSystem::reportError("Failed to register %s db schema handler, duplicate name", name);
+        delete provider;
+        return false;
+    }
+    return true;
+}
+
+ELogDbSchemaHandler::ELogDbSchemaHandler() {
+    // register predefined providers
+#ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
+    if (!initDbTargetProvider<ELogMySqlDbTargetProvider>(this, "mysql")) {
+        assert(false);
+    }
+#endif
+#ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
+    if (!initDbTargetProvider<ELogSQLiteDbTargetProvider>(this, "sqlite")) {
+        assert(false);
+    }
+#endif
+#ifdef ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR
+    if (!initDbTargetProvider<ELogPostgreSQLDbTargetProvider>(this, "postgresql")) {
+        assert(false);
+    }
+#endif
+#ifdef ELOG_ENABLE_ORACLE_DB_CONNECTOR
+    if (!initDbTargetProvider<ELogOracleDbTargetProvider>(this, "oracle")) {
+        assert(false);
+    }
+#endif
+#ifdef ELOG_ENABLE_SQLSERVER_DB_CONNECTOR
+    if (!initDbTargetProvider<ELogSqlServerDbTargetProvider>(this, "sqlserver")) {
+        assert(false);
+    }
+#endif
+}
+
+ELogDbSchemaHandler::~ELogDbSchemaHandler() {
+    // cleanup provider map
+}
+
+bool ELogDbSchemaHandler::registerDbTargetProvider(const char* dbName,
+                                                   ELogDbTargetProvider* provider) {
+    return m_providerMap.insert(ProviderMap::value_type(dbName, provider)).second;
+}
 
 ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                             const ELogTargetSpec& targetSpec) {
@@ -44,33 +97,11 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
     }
     const std::string& insertQuery = itr->second;
 
-#ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
-    if (dbType.compare("mysql") == 0) {
-        return ELogMySqlDbHandler::loadTarget(logTargetCfg, targetSpec, connString, insertQuery);
+    ProviderMap::iterator providerItr = m_providerMap.find(dbType);
+    if (providerItr != m_providerMap.end()) {
+        ELogDbTargetProvider* provider = providerItr->second;
+        return provider->loadTarget(logTargetCfg, targetSpec, connString, insertQuery);
     }
-#endif
-#ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
-    if (dbType.compare("sqlite") == 0) {
-        return ELogSQLiteDbHandler::loadTarget(logTargetCfg, targetSpec, connString, insertQuery);
-    }
-#endif
-#ifdef ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR
-    if (dbType.compare("postgresql") == 0) {
-        return ELogPostgreSqlDblHandler::loadTarget(logTargetCfg, targetSpec, connString,
-                                                    insertQuery);
-    }
-#endif
-#ifdef ELOG_ENABLE_ORACLE_DB_CONNECTOR
-    if (dbType.compare("oracle") == 0) {
-        return ELogOracleDbHandler::loadTarget(logTargetCfg, targetSpec, connString, insertQuery);
-    }
-#endif
-#ifdef ELOG_ENABLE_SQLSERVER_DB_CONNECTOR
-    if (dbType.compare("sqlserver") == 0) {
-        return ELogSqlServerDbHandler::loadTarget(logTargetCfg, targetSpec, connString,
-                                                  insertQuery);
-    }
-#endif
 
     ELogSystem::reportError("Invalid database log target specification, unsupported db type %s: %s",
                             dbType.c_str(), logTargetCfg.c_str());
