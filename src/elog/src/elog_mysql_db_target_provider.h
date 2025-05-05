@@ -1,5 +1,5 @@
-#ifndef __ELOG_MYSQL_DB_HANDLER_H__
-#define __ELOG_MYSQL_DB_HANDLER_H__
+#ifndef __ELOG_MYSQL_DB_TARGET_PROVIDER_H__
+#define __ELOG_MYSQL_DB_TARGET_PROVIDER_H__
 
 #include "elog_def.h"
 
@@ -29,4 +29,4 @@ public:
 
 #endif  // ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
-#endif  // __ELOG_MYSQL_DB_HANDLER_H__
+#endif  // __ELOG_MYSQL_DB_TARGET_PROVIDER_H__
