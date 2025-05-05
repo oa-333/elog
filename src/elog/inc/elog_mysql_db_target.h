@@ -3,10 +3,6 @@
 
 #include "elog_def.h"
 
-#ifdef ELOG_MSVC
-#define ELOG_ENABLE_MYSQL_DB_CONNECTOR
-#endif
-
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
 #include <mysql/jdbc.h>

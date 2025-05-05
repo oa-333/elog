@@ -3,10 +3,6 @@
 
 #include "elog_def.h"
 
-// #ifdef ELOG_WINDOWS
-#define ELOG_ENABLE_SQLITE_DB_CONNECTOR
-// #endif
-
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
 
 #include "elog_common.h"

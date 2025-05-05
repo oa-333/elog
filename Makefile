@@ -166,18 +166,22 @@ CPPFLAGS += -I. -I$(ELOG_INC_DIR)
 
 # special MinGW include dirs
 ifeq ($(MINGW), 1)
-CPPFLAGS += -I/ucrt64/include
+	CPPFLAGS += -I/ucrt64/include
 endif
 
 # link flags
 #DEP_FLAGS := -MT $@ -MMD -MP -MF $(patsubst $(OBJ_DIR)/%.o,$(DEP_DIR)/%.tmp.dep,$@)
-LDFLAGS := -L$(BIN_DIR)
+#LDFLAGS := -L$(BIN_DIR)
 ifeq ($(MINGW), 1)
-	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32 -lsqlite3
+	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32
 else
-	LDFLAGS := $(LDFLAGS) -rdynamic -lsqlite3
+	LDFLAGS := $(LDFLAGS) -rdynamic
 endif
-LDFLAGS := $(LDFLAGS)
+
+# add sqlite 3 link flags
+ifeq ($(ELOG_ENABLE_SQLITE_CONNECTOR), 1)
+	LDFLAGS += -lsqlite3
+endif
 #POST_COMPILE = mv -f $(DEP_DIR)/$*.tmp.dep $(DEP_DIR)/$*.dep && touch $@
 
 # directory targets
