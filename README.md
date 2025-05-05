@@ -316,7 +316,7 @@ The ELogSQLiteDbTarget can be used as follows:
     ELogTarget* sqliteTarget = new ELogSQLiteDbTarget("test.db", "INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})");
 
     // add it as an additional log target
-    ELogSystem::setLogTarget(sqliteTarget);
+    ELogSystem::addLogTarget(sqliteTarget);
 
 ### Flush Policy
 
