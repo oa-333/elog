@@ -284,6 +284,15 @@ bool ELogSystem::registerSchemaHandler(const char* schemaName, ELogSchemaHandler
     return true;
 }
 
+ELogSchemaHandler* ELogSystem::getSchemaHandler(const char* schemaName) {
+    ELogSchemaHandler* schemaHandler = nullptr;
+    ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(schemaName);
+    if (itr != sSchemaHandlerMap.end()) {
+        schemaHandler = sSchemaHandlers[itr->second];
+    }
+    return schemaHandler;
+}
+
 bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                                ELogSource::PropagateMode& propagateMode) {
     const char* ptr = nullptr;

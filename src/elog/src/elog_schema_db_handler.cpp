@@ -12,6 +12,7 @@ ELogTarget* ELogSchemaDbHandler::loadTarget(const std::string& logTargetCfg,
     // the path represents the db-type
     // current predefined types are supported:
     // mysql
+    // sqlite
     // postgresql
     // oracle
     // sqlserver
@@ -46,6 +47,11 @@ ELogTarget* ELogSchemaDbHandler::loadTarget(const std::string& logTargetCfg,
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
     if (dbType.compare("mysql") == 0) {
         return ELogMySqlDbHandler::loadTarget(logTargetCfg, targetSpec, connString, insertQuery);
+    }
+#endif
+#ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
+    if (dbType.compare("sqlite") == 0) {
+        return ELogSQLiteDbHandler::loadTarget(logTargetCfg, targetSpec, connString, insertQuery);
     }
 #endif
 #ifdef ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR

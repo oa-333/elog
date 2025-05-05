@@ -90,6 +90,9 @@ public:
     /** @brief Registers a schema handler by name. */
     static bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler);
 
+    /** @brief Retrieves a schema handler by name. */
+    static ELogSchemaHandler* getSchemaHandler(const char* schemaName);
+
     /**
      * @brief Configures the ELog System from a properties map.
      * The following properties are recognized:
