@@ -7,13 +7,13 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "elog_db_schema_handler.h"
 #include "elog_deferred_target.h"
 #include "elog_file_schema_handler.h"
 #include "elog_file_target.h"
 #include "elog_flush_policy.h"
 #include "elog_quantum_target.h"
 #include "elog_queued_target.h"
-#include "elog_schema_db_handler.h"
 #include "elog_segmented_file_target.h"
 #include "elog_sys_schema_handler.h"
 #include "elog_syslog_target.h"
@@ -91,7 +91,7 @@ static bool initSchemaHandler(const char* name) {
 bool ELogSystem::initSchemaHandlers() {
     if (!initSchemaHandler<ELogSysSchemaHandler>("sys") ||
         !initSchemaHandler<ELogFileSchemaHandler>("file") ||
-        !initSchemaHandler<ELogSchemaDbHandler>("db")) {
+        !initSchemaHandler<ELogDbSchemaHandler>("db")) {
         termGlobals();
         return false;
     }

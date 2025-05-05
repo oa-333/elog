@@ -1,4 +1,4 @@
-#include "elog_schema_db_handler.h"
+#include "elog_db_schema_handler.h"
 
 #include <algorithm>
 
@@ -7,7 +7,7 @@
 
 namespace elog {
 
-ELogTarget* ELogSchemaDbHandler::loadTarget(const std::string& logTargetCfg,
+ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                             const ELogTargetSpec& targetSpec) {
     // the path represents the db-type
     // current predefined types are supported:
