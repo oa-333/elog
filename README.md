@@ -3,6 +3,30 @@
 The ELog (Error Log) is a simple, lightweight, yet robust and high-performant package for application message logging in C++.  
 The package was designed such that it can be extended for a broad range of use cases.
 
+The ELog package provides the following notable features:
+
+- Logging to file, optionally with file segmentation
+- Logging to syslog, stderr, and/or stdout
+- Connectivity to external databases (currently SQLite, experimental MySQL)
+
+Additional features:
+
+- Logging to multiple destinations at once
+- Logger hierarchy with per-logger log level control
+- Various asynchronous logging schemes (low log writer impact)
+- Configurable log line format and log level on a per-target basis
+    - For instance, log lines sent to syslog can be formatted differently than regular log file
+    - In addition, it can be configured such that only FATAL messages are sent to syslog
+- Optional rate limiting (global and/or per log target)
+- Configurable flush policy (global and/or per log target)
+- Designed to be externally extendible
+
+Planned Features:
+
+- Connectivity to Windows Event Log
+- Connectivity to PostgreSQL
+- Connectivity to Kafka
+
 ## Description
 
 The most common use case is a utility logging library, in order to write log messages to file, but much more can be done with it.  
@@ -230,6 +254,13 @@ Pay attention that log filtering is usually applied at the global level, by the 
 
     ELogSystem::setLogFilter(logFilter);
 
+### Rate Limiter
+
+A special instance of a log filter is the rate limiter, which may be applied globally or per log-target:
+
+    ELogRateLimiter* rateLimiter = new ELogRateLimiter(500);  // no more than 500 messages per second
+    ELogSystem::setLogFilter(rateLimiter);
+
 
 ### Log Targets
 
@@ -279,6 +310,13 @@ The ELogQuantumTarget mentioned above can be use das follows:
 
     // now set it as the system log target
     ELogSystem::setLogTarget(quantumTarget);
+
+The ELogSQLiteDbTarget can be used as follows:
+
+    ELogTarget* sqliteTarget new ELogSQLiteDbTarget("test.db", "INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})");
+
+    // add it as an additional log target
+    ELogSystem::setLogTarget(sqliteTarget);
 
 ### Flush Policy
 
@@ -412,3 +450,10 @@ Pay attention to the last log target example components:
 
 When using the db schema, the conn-string and insert-query components are mandatory.
 Additional required components may differ from one database to another.
+
+In addition, the log line format and the log level of each target can be configured separately. For instance:
+
+    log_target = sys://syslog?log_level=FATAL&log_format=${level:6} ${prog} ${pid} [${tid}] <${src}> ${msg}
+    log_target = sys://stderr?log_level=ERROR&log_format=***ERROR*** ${time} ${level:6} ${msg}
+
+Pay attention that the rest of the log targets will use the global log level and line format configuration.
