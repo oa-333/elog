@@ -368,9 +368,6 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
             return false;
         }
 
-        // apply target name if any
-        applyTargetName(logTarget, logTargetSpec);
-
         // apply compound target
         bool errorOccurred = false;
         ELogTarget* compoundTarget =
@@ -382,6 +379,21 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
         }
         if (compoundTarget != nullptr) {
             logTarget = compoundTarget;
+        }
+
+        // apply target name if any
+        applyTargetName(logTarget, logTargetSpec);
+
+        // apply target log level if any
+        if (!applyTargetLogLevel(logTarget, logTargetCfg, logTargetSpec)) {
+            delete logTarget;
+            return false;
+        }
+
+        // apply log format if any
+        if (!applyTargetLogFormat(logTarget, logTargetCfg, logTargetSpec)) {
+            delete logTarget;
+            return false;
         }
 
         if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
@@ -467,6 +479,37 @@ void ELogSystem::applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& lo
     if (itr != logTargetSpec.m_props.end()) {
         logTarget->setName(itr->second.c_str());
     }
+}
+
+bool ELogSystem::applyTargetLogLevel(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                     const ELogTargetSpec& logTargetSpec) {
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("log_level");
+    if (itr != logTargetSpec.m_props.end()) {
+        ELogLevel logLevel = ELEVEL_INFO;
+        if (!elogLevelFromStr(itr->second.c_str(), logLevel)) {
+            reportError("Invalid log level '%s' specified in log target: %s", itr->second.c_str(),
+                        logTargetCfg.c_str());
+            return false;
+        }
+        logTarget->setLogLevel(logLevel);
+    }
+    return true;
+}
+
+bool ELogSystem::applyTargetLogFormat(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                      const ELogTargetSpec& logTargetSpec) {
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("log_format");
+    if (itr != logTargetSpec.m_props.end()) {
+        ELogFormatter* logFormatter = new (std::nothrow) ELogFormatter();
+        if (!logFormatter->initialize(itr->second.c_str())) {
+            reportError("Invalid log format '%s' specified in log target: %s", itr->second.c_str(),
+                        logTargetCfg.c_str());
+            delete logFormatter;
+            return false;
+        }
+        logTarget->setLogFormatter(logFormatter);
+    }
+    return true;
 }
 
 ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,

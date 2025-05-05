@@ -175,7 +175,7 @@ LDFLAGS := -L$(BIN_DIR)
 ifeq ($(MINGW), 1)
 	LDFLAGS := $(LDFLAGS) -L/ucrt64/lib -lws2_32 -lsqlite3
 else
-	LDFLAGS := $(LDFLAGS) -rdynamic
+	LDFLAGS := $(LDFLAGS) -rdynamic -lsqlite3
 endif
 LDFLAGS := $(LDFLAGS)
 #POST_COMPILE = mv -f $(DEP_DIR)/$*.tmp.dep $(DEP_DIR)/$*.dep && touch $@

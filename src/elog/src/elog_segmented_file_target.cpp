@@ -111,7 +111,7 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char* logName,
                                                  uint32_t segmentLimitMB,
                                                  ELogFlushPolicy* flushPolicy)
-    : ELogAbstractTarget(flushPolicy),
+    : ELogTarget(flushPolicy),
       m_logPath(logPath),
       m_logName(logName),
       m_segmentLimitBytes(segmentLimitMB * 1024 * 1024),
@@ -139,7 +139,7 @@ bool ELogSegmentedFileTarget::stop() {
     return true;
 }
 
-void ELogSegmentedFileTarget::log(const std::string& formattedLogMsg) {
+void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
     // check if segment switch is required
     uint32_t msgSizeBytes = formattedLogMsg.length();
     uint32_t segmentSizeBytes = m_segmentSizeBytes.fetch_add(msgSizeBytes);

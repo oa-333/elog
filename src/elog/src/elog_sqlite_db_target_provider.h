@@ -3,9 +3,9 @@
 
 #include "elog_def.h"
 
-#ifdef ELOG_WINDOWS
+// #ifdef ELOG_WINDOWS
 #define ELOG_ENABLE_SQLITE_DB_CONNECTOR
-#endif
+// #endif
 
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
 

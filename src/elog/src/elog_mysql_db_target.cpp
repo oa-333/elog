@@ -85,16 +85,18 @@ bool ELogMySqlDbTarget::stop() {
 
 void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
     // we need something like field selectors here
-    try {
-        // this puts each log record field into the correct place in the prepared statement
-        ELogMySqlDbFieldReceptor mySqlFieldReceptor(m_insertStmt.get());
-        m_insertStmt->clearParameters();
-        fillInsertStatement(logRecord, &mySqlFieldReceptor);
-        if (!m_insertStmt->execute()) {
-            ELogSystem::reportError("Failed to send log message to MySQL log target");
+    if (shouldLog(logRecord)) {
+        try {
+            // this puts each log record field into the correct place in the prepared statement
+            ELogMySqlDbFieldReceptor mySqlFieldReceptor(m_insertStmt.get());
+            m_insertStmt->clearParameters();
+            fillInsertStatement(logRecord, &mySqlFieldReceptor);
+            if (!m_insertStmt->execute()) {
+                ELogSystem::reportError("Failed to send log message to MySQL log target");
+            }
+        } catch (sql::SQLException& e) {
+            ELogSystem::reportError("Failed to send log message to MySQL log target: %s", e.what());
         }
-    } catch (sql::SQLException& e) {
-        ELogSystem::reportError("Failed to send log message to MySQL log target: %s", e.what());
     }
 }
 

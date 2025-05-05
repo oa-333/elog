@@ -131,6 +131,10 @@ bool ELogSQLiteDbTarget::stop() {
 }
 
 void ELogSQLiteDbTarget::log(const ELogRecord& logRecord) {
+    if (!shouldLog(logRecord)) {
+        return;
+    }
+
     // reset statement parameters
     int res = sqlite3_reset(m_insertStmt);
     if (res != SQLITE_OK) {

@@ -17,7 +17,7 @@ bool ELogDeferredTarget::stop() {
 }
 
 void ELogDeferredTarget::log(const ELogRecord& logRecord) {
-    if (ELogSystem::filterLogMsg(logRecord)) {
+    if (shouldLog(logRecord)) {
         std::unique_lock<std::mutex> lock(m_lock);
         m_logQueue.push_back(std::make_pair(logRecord, logRecord.m_logMsg));
         m_cv.notify_one();

@@ -28,7 +28,7 @@ bool ELogQuantumTarget::stop() {
 }
 
 void ELogQuantumTarget::log(const ELogRecord& logRecord) {
-    if (!ELogSystem::filterLogMsg(logRecord)) {
+    if (!shouldLog(logRecord)) {
         return;
     }
 

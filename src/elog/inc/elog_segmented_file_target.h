@@ -24,7 +24,7 @@ namespace elog {
  * segment switch overhead (open new segment, switch segments, log message, busy wait until previous
  * segment loggers are finished).
  */
-class ELOG_API ELogSegmentedFileTarget : public ELogAbstractTarget {
+class ELOG_API ELogSegmentedFileTarget : public ELogTarget {
 public:
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
                             ELogFlushPolicy* flushPolicy);
@@ -44,7 +44,7 @@ public:
 
 protected:
     /** @brief Log a formatted message. */
-    void log(const std::string& formattedLogMsg) final;
+    void logFormattedMsg(const std::string& formattedLogMsg) final;
 
 private:
     std::string m_logPath;

@@ -20,12 +20,12 @@ bool ELogSysLogTarget::stop() {
 }
 
 void ELogSysLogTarget::log(const ELogRecord& logRecord) {
-    if (ELogSystem::filterLogMsg(logRecord)) {
+    if (shouldLog(logRecord)) {
         // first translate log level
         int sysLevel = 0;
         if (logLevelToSysLevel(logRecord.m_logLevel, sysLevel)) {
             std::string logMsg;
-            ELogSystem::formatLogMsg(logRecord, logMsg);
+            formatLogMsg(logRecord, logMsg);
             syslog(sysLevel | LOG_USER, "%s", logMsg.c_str());
         }
     }

@@ -8,11 +8,11 @@
 
 namespace elog {
 
-class ELOG_API ELogFileTarget : public ELogAbstractTarget {
+class ELOG_API ELogFileTarget : public ELogTarget {
 public:
     ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy = nullptr);
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr)
-        : ELogAbstractTarget(flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {}
+        : ELogTarget(flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {}
     ELogFileTarget(const ELogFileTarget&) = delete;
     ELogFileTarget(ELogFileTarget&&) = delete;
 
@@ -29,7 +29,7 @@ public:
 
 protected:
     /** @brief Log a formatted message. */
-    void log(const std::string& formattedLogMsg) final;
+    void logFormattedMsg(const std::string& formattedLogMsg) final;
 
 private:
     std::string m_filePath;

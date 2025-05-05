@@ -403,6 +403,10 @@ private:
     static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                    const std::string& value);
     static void applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec);
+    static bool applyTargetLogLevel(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                    const ELogTargetSpec& logTargetSpec);
+    static bool applyTargetLogFormat(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                     const ELogTargetSpec& logTargetSpec);
     static ELogTarget* applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
                                            const ELogTargetSpec& logTargetSpec,
                                            bool& errorOccurred);

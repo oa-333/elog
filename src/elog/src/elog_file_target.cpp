@@ -5,10 +5,7 @@
 namespace elog {
 
 ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy /* = nullptr */)
-    : ELogAbstractTarget(flushPolicy),
-      m_filePath(filePath),
-      m_fileHandle(nullptr),
-      m_shouldClose(false) {}
+    : ELogTarget(flushPolicy), m_filePath(filePath), m_fileHandle(nullptr), m_shouldClose(false) {}
 
 ELogFileTarget::~ELogFileTarget() {}
 
@@ -34,7 +31,7 @@ bool ELogFileTarget::stop() {
     return true;
 }
 
-void ELogFileTarget::log(const std::string& formattedLogMsg) {
+void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
     fputs(formattedLogMsg.c_str(), m_fileHandle);
 }
 

@@ -16,21 +16,12 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
         return nullptr;
     }
 
-    // there could be optional poperties: segment-size-mb, deferred,
-    // queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
-    // quantum-buffer-size=<buffer-size>
+    // there could be optional property segment-size-mb
     uint32_t segmentSizeMB = 0;
-    for (const ELogProperty& prop : logTargetSpec.m_props) {
-        // parse segment size property
-        if (prop.first.compare("segment-size-mb") == 0) {
-            if (segmentSizeMB > 0) {
-                ELogSystem::reportError("Segment size can be specified only once: %s",
-                                        logTargetCfg.c_str());
-                return nullptr;
-            }
-            if (!parseIntProp("segment-size-mb", logTargetCfg, prop.second, segmentSizeMB)) {
-                return nullptr;
-            }
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("segment-size-mb");
+    if (itr != logTargetSpec.m_props.end()) {
+        if (!parseIntProp("segment-size-mb", logTargetCfg, itr->second, segmentSizeMB)) {
+            return nullptr;
         }
     }
 
