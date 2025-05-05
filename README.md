@@ -47,7 +47,7 @@ In this case, the ELog can be used to log messages inside the library, and the u
 the ELog system to redirect and adapt library log message to its own logging system.
 This can be done actually quite easily and with much flexibility.
 
-For more information, see examples below
+For more information, see examples below.
 
 ## Getting Started
 
@@ -313,7 +313,7 @@ The ELogQuantumTarget mentioned above can be use das follows:
 
 The ELogSQLiteDbTarget can be used as follows:
 
-    ELogTarget* sqliteTarget new ELogSQLiteDbTarget("test.db", "INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})");
+    ELogTarget* sqliteTarget = new ELogSQLiteDbTarget("test.db", "INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})");
 
     // add it as an additional log target
     ELogSystem::setLogTarget(sqliteTarget);
