@@ -7,13 +7,14 @@ The ELog package provides the following notable features:
 
 - Logging to file, optionally with file segmentation
 - Logging to syslog, stderr, and/or stdout
-- Connectivity to external databases (currently PostgreSQL, SQLite, experimental MySQL)
+- Asynchronous logging
+- Connectivity to Kafka, PostgreSQL, SQLite (experimental MySQL)
 
 Additional features:
 
 - Logging to multiple destinations at once
 - Logger hierarchy with per-logger log level control
-- Various asynchronous logging schemes (low log writer impact)
+- Various asynchronous logging schemes (low logger latency)
 - Configurable log line format and log level on a per-target basis
     - For instance, log lines sent to syslog can be formatted differently than regular log file
     - In addition, it can be configured such that only FATAL messages are sent to syslog
@@ -24,7 +25,6 @@ Additional features:
 Planned Features:
 
 - Connectivity to Windows Event Log
-- Connectivity to Kafka
 
 ## Description
 
@@ -405,6 +405,7 @@ The following syntax is supported:
     file://path - add regular log target
     file://path?segment-size-mb=<segment-size-mb> - add segmented log target
     db://provider?conn-string=<url>&insert-query=<insert-query>
+    msgq://provider?... (see example below for more details)
 
 The following optional parameters are supported for compound log targets:
 
@@ -456,3 +457,13 @@ In addition, the log line format and the log level of each target can be configu
     log_target = sys://stderr?log_level=ERROR&log_format=***ERROR*** ${time} ${level:6} ${msg}
 
 Pay attention that the rest of the log targets will use the global log level and line format configuration.
+
+The following example shows how to connect to a Kafka topic:
+
+    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=my-events
+
+The kafka log target uses the 'msgq' schema, and 'kafka' provider.  
+Two parameters are expected: 'bootstrap-servers' and 'topic'.  
+Pay attention that in this example the global log format is used as the message payload.
+Optionally, a partition id may be passed as well with the syntax 'partition={id}.
+Future version will support passing log record fields in message headers.
