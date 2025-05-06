@@ -183,6 +183,15 @@ ifeq ($(ELOG_ENABLE_SQLITE_DB_CONNECTOR), 1)
 	CPPFLAGS += -DELOG_ENABLE_SQLITE_DB_CONNECTOR
 	LDFLAGS += -lsqlite3
 endif
+
+# add PostgreSQL flags
+ifeq ($(ELOG_ENABLE_PGSQL_DB_CONNECTOR), 1)
+	CPPFLAGS += -DELOG_ENABLE_PGSQL_DB_CONNECTOR
+	LDFLAGS += -lpq
+#ifeq (($PLATFORM), Linux)
+	CPPFLAGS += -I/usr/include/postgresql
+#endif
+endif
 #POST_COMPILE = mv -f $(DEP_DIR)/$*.tmp.dep $(DEP_DIR)/$*.dep && touch $@
 
 # directory targets

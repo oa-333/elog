@@ -18,6 +18,18 @@ extern ELOG_API void termFieldSelectors();
 /** @brief Retrieves program name (for internal use only). */
 extern ELOG_API const char* getProgramName();
 
+/** @enum Constants for field types (generic). */
+enum class ELogFieldType : uint32_t {
+    /** @var Field type is string (text). */
+    FT_TEXT,
+
+    /** @var Field type is integer (64 bit). */
+    FT_INT,
+
+    /** @var Field type is date-time (can be stored as string though). */
+    FT_DATETIME
+};
+
 /**
  * @brief Parent interface for all field selectors. Custom selectors may be added by deriving from
  * this interface and deriving from @ref ELogFormatter, so that the field can be parsed by
@@ -35,9 +47,14 @@ public:
      */
     virtual void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) = 0;
 
-protected:
-    ELogFieldSelector(int justify = 0) : m_justify(justify) {}
+    /** @brief Retrieves the type of the selected field. */
+    inline ELogFieldType getFieldType() const { return m_fieldType; }
 
+protected:
+    ELogFieldSelector(ELogFieldType fieldType, int justify = 0)
+        : m_fieldType(fieldType), m_justify(justify) {}
+
+    ELogFieldType m_fieldType;
     int m_justify;
 };
 
@@ -96,7 +113,8 @@ protected:
  */
 class ELOG_API ELogStaticTextSelector : public ELogFieldSelector {
 public:
-    ELogStaticTextSelector(const char* text) : m_text(text) {}
+    ELogStaticTextSelector(const char* text)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT), m_text(text) {}
     ~ELogStaticTextSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -107,7 +125,7 @@ private:
 
 class ELOG_API ELogRecordIdSelector : public ELogFieldSelector {
 public:
-    ELogRecordIdSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogRecordIdSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_INT, justify) {}
     ~ELogRecordIdSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -118,7 +136,7 @@ private:
 
 class ELOG_API ELogTimeSelector : public ELogFieldSelector {
 public:
-    ELogTimeSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogTimeSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_DATETIME, justify) {}
     ~ELogTimeSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -129,7 +147,7 @@ private:
 
 class ELOG_API ELogHostNameSelector : public ELogFieldSelector {
 public:
-    ELogHostNameSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogHostNameSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
     ~ELogHostNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -140,7 +158,7 @@ private:
 
 class ELOG_API ELogUserNameSelector : public ELogFieldSelector {
 public:
-    ELogUserNameSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogUserNameSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
     ~ELogUserNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -151,7 +169,7 @@ private:
 
 class ELOG_API ELogProgramNameSelector : public ELogFieldSelector {
 public:
-    ELogProgramNameSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogProgramNameSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
     ~ELogProgramNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -162,7 +180,7 @@ private:
 
 class ELOG_API ELogProcessIdSelector : public ELogFieldSelector {
 public:
-    ELogProcessIdSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogProcessIdSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_INT, justify) {}
     ~ELogProcessIdSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -173,7 +191,7 @@ private:
 
 class ELOG_API ELogThreadIdSelector : public ELogFieldSelector {
 public:
-    ELogThreadIdSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogThreadIdSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_INT, justify) {}
     ~ELogThreadIdSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -184,7 +202,7 @@ private:
 
 class ELOG_API ELogSourceSelector : public ELogFieldSelector {
 public:
-    ELogSourceSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogSourceSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
     ~ELogSourceSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -195,7 +213,7 @@ private:
 
 class ELOG_API ELogModuleSelector : public ELogFieldSelector {
 public:
-    ELogModuleSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogModuleSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
     ~ELogModuleSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -206,7 +224,7 @@ private:
 
 class ELOG_API ELogLevelSelector : public ELogFieldSelector {
 public:
-    ELogLevelSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogLevelSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
     ~ELogLevelSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -217,7 +235,7 @@ private:
 
 class ELOG_API ELogMsgSelector : public ELogFieldSelector {
 public:
-    ELogMsgSelector(int justify) : ELogFieldSelector(justify) {}
+    ELogMsgSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
     ~ELogMsgSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;

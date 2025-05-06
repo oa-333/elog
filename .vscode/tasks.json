@@ -11,7 +11,7 @@
                 "-where",
                 "${workspaceFolder}",
                 "-c",
-                "make -j -f Makefile ELOG_ENABLE_SQLITE_DB_CONNECTOR=1 install"
+                "make -j -f Makefile ELOG_ENABLE_SQLITE_DB_CONNECTOR=1 ELOG_ENABLE_PGSQL_DB_CONNECTOR=1 install"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",

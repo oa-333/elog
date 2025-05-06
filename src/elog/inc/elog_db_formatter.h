@@ -17,6 +17,18 @@ public:
         QS_DOLLAR_ORDINAL
     };
 
+    /** @enum Constants for prepared query parameter types (generic). */
+    enum class ParamType : uint32_t {
+        /** @var Parameter type is string (text). */
+        PT_TEXT,
+
+        /** @var Parameter type is integer (64 bit). */
+        PT_INT,
+
+        /** @var Parameter type is date-time (can be stored as string though). */
+        PT_DATETIME
+    };
+
     ELogDbFormatter(QueryStyle queryStyle) : m_queryStyle(queryStyle), m_fieldNum(1) {}
 
     ELogDbFormatter(const ELogDbFormatter&) = delete;
@@ -29,6 +41,8 @@ public:
                                     elog::ELogFieldReceptor* receptor) {
         applyFieldSelectors(logRecord, receptor);
     }
+
+    void getParamTypes(std::vector<ParamType>& paramTypes) const;
 
 protected:
     void handleText(const std::string& text) override;

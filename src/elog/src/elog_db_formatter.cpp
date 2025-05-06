@@ -1,5 +1,7 @@
 #include "elog_db_formatter.h"
 
+#include <cassert>
+
 namespace elog {
 
 void ELogDbFormatter::handleText(const std::string& text) { m_processedStatement += text; }
@@ -12,6 +14,27 @@ bool ELogDbFormatter::handleField(const char* fieldName, int justify) {
         m_processedStatement += std::to_string(m_fieldNum++);
     }
     return ELogBaseFormatter::handleField(fieldName, justify);
+}
+
+void ELogDbFormatter::getParamTypes(std::vector<ParamType>& paramTypes) const {
+    for (ELogFieldSelector* fieldSelector : m_fieldSelectors) {
+        switch (fieldSelector->getFieldType()) {
+            case ELogFieldType::FT_TEXT:
+                paramTypes.push_back(ParamType::PT_TEXT);
+                break;
+
+            case ELogFieldType::FT_INT:
+                paramTypes.push_back(ParamType::PT_INT);
+                break;
+
+            case ELogFieldType::FT_DATETIME:
+                paramTypes.push_back(ParamType::PT_DATETIME);
+                break;
+
+            default:
+                assert(false);
+        }
+    }
 }
 
 }  // namespace elog

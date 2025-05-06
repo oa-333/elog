@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "elog_mysql_db_target_provider.h"
+#include "elog_pgsql_db_target_provider.h"
 #include "elog_sqlite_db_target_provider.h"
 #include "elog_system.h"
 
@@ -35,8 +36,8 @@ ELogDbSchemaHandler::ELogDbSchemaHandler() {
         assert(false);
     }
 #endif
-#ifdef ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR
-    if (!initDbTargetProvider<ELogPostgreSQLDbTargetProvider>(this, "postgresql")) {
+#ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
+    if (!initDbTargetProvider<ELogPGSQLDbTargetProvider>(this, "postgresql")) {
         assert(false);
     }
 #endif

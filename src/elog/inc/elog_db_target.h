@@ -34,11 +34,20 @@ protected:
     }
 
     /**
+     * @brief Retrieves the parameter type list of the processed insert statement resulting from the
+     * call to @ref parseInsertStatement().
+     */
+    inline void getInsertStatementParamTypes(
+        std::vector<ELogDbFormatter::ParamType>& paramTypes) const {
+        return m_formatter.getParamTypes(paramTypes);
+    }
+
+    /**
      * @brief Applies all field selectors to the given log record, so that all prepared statement
      * parameters are filled.
      * @param logRecord The log record to process.
      * @param receptor The receptor that receives log record fields and transfers them to the
-     * prepared statement parameters. The receptor 
+     * prepared statement parameters. The receptor
      */
     inline void fillInsertStatement(const elog::ELogRecord& logRecord,
                                     elog::ELogFieldReceptor* receptor) {
