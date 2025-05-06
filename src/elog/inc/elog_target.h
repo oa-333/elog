@@ -76,6 +76,13 @@ public:
     inline ELogFormatter* getLogFormatter() { return m_logFormatter; }
 
     /**
+     * @brief Configures whether to add a new line character at the end of the formatted message.
+     * Typically file log targets will add a new line, while others, such as db log targets, will
+     * not need an additional new line at the end of the formatted message.
+     */
+    void setAddNewLine(bool addNewLine) { m_addNewLine = addNewLine; }
+
+    /**
      * @brief Sets the flush policy for the log target. Derived classes should take into
      * consideration the configured flush policy and override global policy configuration.
      */
@@ -88,7 +95,8 @@ protected:
         : m_logLevel(ELEVEL_DIAG),
           m_logFilter(nullptr),
           m_logFormatter(nullptr),
-          m_flushPolicy(flushPolicy) {}
+          m_flushPolicy(flushPolicy),
+          m_addNewLine(false) {}
 
     bool shouldLog(const ELogRecord& logRecord);
 
@@ -104,6 +112,7 @@ private:
     ELogFilter* m_logFilter;
     ELogFormatter* m_logFormatter;
     ELogFlushPolicy* m_flushPolicy;
+    bool m_addNewLine;
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */

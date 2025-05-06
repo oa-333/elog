@@ -51,6 +51,9 @@ void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) 
     } else {
         ELogSystem::formatLogMsg(logRecord, logMsg);
     }
+    if (m_addNewLine) {
+        logMsg += "\n";
+    }
 }
 
 bool ELogTarget::shouldFlush(const std::string& logMsg) {

@@ -179,7 +179,8 @@ else
 endif
 
 # add sqlite 3 link flags
-ifeq ($(ELOG_ENABLE_SQLITE_CONNECTOR), 1)
+ifeq ($(ELOG_ENABLE_SQLITE_DB_CONNECTOR), 1)
+	CPPFLAGS += -DELOG_ENABLE_SQLITE_DB_CONNECTOR
 	LDFLAGS += -lsqlite3
 endif
 #POST_COMPILE = mv -f $(DEP_DIR)/$*.tmp.dep $(DEP_DIR)/$*.dep && touch $@

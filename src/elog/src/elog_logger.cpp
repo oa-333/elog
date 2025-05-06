@@ -131,8 +131,8 @@ void ELogLogger::appendLogNoFormat(const char* msg) {
 
 void ELogLogger::finishLog() {
     if (isLogging()) {
+        // NOTE: new line character at the end of the line is added by each log target individually
         // add terminating null and transfer to log record
-        appendMsg("\n");
         ELogRecordBuilder& recordBuilder = getRecordBuilder();
         recordBuilder.finalize();
 

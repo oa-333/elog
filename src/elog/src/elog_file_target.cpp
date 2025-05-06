@@ -5,7 +5,9 @@
 namespace elog {
 
 ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy /* = nullptr */)
-    : ELogTarget(flushPolicy), m_filePath(filePath), m_fileHandle(nullptr), m_shouldClose(false) {}
+    : ELogTarget(flushPolicy), m_filePath(filePath), m_fileHandle(nullptr), m_shouldClose(false) {
+    setAddNewLine(true);
+}
 
 ELogFileTarget::~ELogFileTarget() {}
 
