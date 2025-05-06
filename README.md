@@ -7,7 +7,7 @@ The ELog package provides the following notable features:
 
 - Logging to file, optionally with file segmentation
 - Logging to syslog, stderr, and/or stdout
-- Connectivity to external databases (currently SQLite, experimental MySQL)
+- Connectivity to external databases (currently PostgreSQL, SQLite, experimental MySQL)
 
 Additional features:
 
@@ -24,7 +24,6 @@ Additional features:
 Planned Features:
 
 - Connectivity to Windows Event Log
-- Connectivity to PostgreSQL
 - Connectivity to Kafka
 
 ## Description

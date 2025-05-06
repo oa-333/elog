@@ -51,28 +51,36 @@ bool ELogMySqlDbTarget::start() {
         return false;
     }
     std::string processedInsertStmt = getProcessedInsertStatement();
-    fprintf(stderr, "Processed insert statement: %s\n", processedInsertStmt.c_str());
+    // fprintf(stderr, "Processed insert statement: %s\n", processedInsertStmt.c_str());
 
     try {
         sql::Driver* driver = sql::mysql::get_driver_instance();
-        fprintf(stderr, "Connecting to url %s with user/pass %s/%s\n", m_url.c_str(),
-                m_user.c_str(), m_passwd.c_str());
+        /*fprintf(stderr, "Connecting to url %s with user/pass %s/%s\n", m_url.c_str(),
+                m_user.c_str(), m_passwd.c_str());*/
         m_connection.reset(driver->connect(m_url, m_user, m_passwd));
         m_connection->setSchema(m_db);
 
         // we need to replace every log field reference with a question mark and then prepare a
         // field selector
         m_insertStmt.reset(m_connection->prepareStatement(processedInsertStmt.c_str()));
-        return true;
     } catch (sql::SQLException& e) {
         ELogSystem::reportError(
             "Failed to start MySQL log target. SQL State: %p. Vendor Code: %d. Reason: %p",
             e.getSQLStateCStr(), e.getErrorCode(), e.what());
+        m_insertStmt.reset();
+        m_connection.reset();
         return false;
     }
+
+    // notify parent class about connection state
+    setConnected();
+    return true;
 }
 
 bool ELogMySqlDbTarget::stop() {
+    // stop any reconnect background task
+    stopReconnect();
+
     try {
         m_insertStmt.reset();
         m_connection.reset();
@@ -84,20 +92,30 @@ bool ELogMySqlDbTarget::stop() {
 }
 
 void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
-    // we need something like field selectors here
-    if (shouldLog(logRecord)) {
-        try {
-            // this puts each log record field into the correct place in the prepared statement
-            ELogMySqlDbFieldReceptor mySqlFieldReceptor(m_insertStmt.get());
-            m_insertStmt->clearParameters();
-            fillInsertStatement(logRecord, &mySqlFieldReceptor);
-            if (!m_insertStmt->execute()) {
-                ELogSystem::reportError("Failed to send log message to MySQL log target");
-            }
-        } catch (sql::SQLException& e) {
-            ELogSystem::reportError("Failed to send log message to MySQL log target: %s", e.what());
-        }
+    if (!shouldLog(logRecord)) {
+        return;
     }
+
+    // check if connected to database, otherwise discard log record
+    if (!isConnected()) {
+        return;
+    }
+
+    try {
+        // this puts each log record field into the correct place in the prepared statement
+        ELogMySqlDbFieldReceptor mySqlFieldReceptor(m_insertStmt.get());
+        m_insertStmt->clearParameters();
+        fillInsertStatement(logRecord, &mySqlFieldReceptor);
+        if (m_insertStmt->execute()) {
+            return;
+        }
+        ELogSystem::reportError("Failed to send log message to MySQL log target");
+    } catch (sql::SQLException& e) {
+        ELogSystem::reportError("Failed to send log message to MySQL log target: %s", e.what());
+    }
+
+    // failure to send a record, so order parent class to start reconnect background task
+    startReconnect();
 }
 
 }  // namespace elog

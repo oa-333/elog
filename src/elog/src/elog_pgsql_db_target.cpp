@@ -104,10 +104,16 @@ bool ELogPGSQLDbTarget::start() {
         return false;
     }
     PQclear(res);
+
+    // notify parent class about connection state
+    setConnected();
     return true;
 }
 
 bool ELogPGSQLDbTarget::stop() {
+    // stop any reconnect background task
+    stopReconnect();
+
     if (m_connection != nullptr) {
         if (!m_stmtName.empty()) {
 #ifdef ELOG_MINGW
@@ -132,6 +138,11 @@ void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
         return;
     }
 
+    // check if connected to database, otherwise discard log record
+    if (!isConnected()) {
+        return;
+    }
+
     // this puts each log record field into the correct place in the prepared statement
     ELogPGSQLDbFieldReceptor pgsqlFieldReceptor;
     fillInsertStatement(logRecord, &pgsqlFieldReceptor);
@@ -146,6 +157,9 @@ void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
         ELogSystem::reportError("Failed to execute prepared PostgreSQL statement: %s",
                                 PQresultErrorMessage(res));
         PQclear(res);
+
+        // failure to send a record, so order parent class to start reconnect background task
+        startReconnect();
         return;
     }
     PQclear(res);

@@ -1,6 +1,10 @@
 #ifndef __ELOG_DB_TARGET_H__
 #define __ELOG_DB_TARGET_H__
 
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 #include "elog_db_formatter.h"
 #include "elog_target.h"
 
@@ -13,7 +17,11 @@ public:
     void flush() final {}
 
 protected:
-    ELogDbTarget(ELogDbFormatter::QueryStyle queryStyle) : m_formatter(queryStyle) {}
+    ELogDbTarget(ELogDbFormatter::QueryStyle queryStyle)
+        : m_formatter(queryStyle),
+          m_isConnected(false),
+          m_isReconnecting(false),
+          m_shouldStop(false) {}
     ~ELogDbTarget() override {}
 
     /**
@@ -54,9 +62,39 @@ protected:
         m_formatter.fillInsertStatement(logRecord, receptor);
     }
 
+protected:
+    /** @brief Helper method for derived classes to reconnect to database. */
+    void startReconnect(uint32_t reconnectTimeoutMillis = 1000);
+
+    /** @brief Helper method to stop the reconnect thread. */
+    void stopReconnect();
+
+    /** @brief Queries whether that database connection has been restored. */
+    inline bool isConnected() {
+        bool res = m_isConnected.load(std::memory_order_relaxed);
+        if (res && m_reconnectDbThread.joinable()) {
+            m_reconnectDbThread.join();
+        }
+        return res;
+    }
+
+    /** @brief Sets the database connection as connected. */
+    inline void setConnected() { m_isConnected.store(true, std::memory_order_relaxed); }
+
 private:
     ELogDbFormatter m_formatter;
     std::string m_processedInsertQuery;
+
+    std::thread m_reconnectDbThread;
+    std::atomic<bool> m_isConnected;
+    std::atomic<bool> m_isReconnecting;
+    std::mutex m_lock;
+    std::condition_variable m_cv;
+    bool m_shouldStop;
+
+    void reconnectTask(uint32_t reconnectTimeoutMillis);
+
+    bool shouldStop();
 };
 
 }  // namespace elog

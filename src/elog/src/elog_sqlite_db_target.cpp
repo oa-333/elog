@@ -104,12 +104,20 @@ bool ELogSQLiteDbTarget::start() {
     if (res != SQLITE_OK) {
         ELogSystem::reportError("Failed to prepare sqlite statement '%s': %s",
                                 processedInsertStmt.c_str(), sqlite3_errstr(res));
+        sqlite3_close_v2(m_connection);
+        m_connection = nullptr;
         return false;
     }
+
+    // notify parent class about connection state
+    setConnected();
     return true;
 }
 
 bool ELogSQLiteDbTarget::stop() {
+    // stop any reconnect background task
+    stopReconnect();
+
     if (m_insertStmt != nullptr) {
         int res = sqlite3_finalize(m_insertStmt);
         if (res != SQLITE_OK) {
@@ -135,10 +143,18 @@ void ELogSQLiteDbTarget::log(const ELogRecord& logRecord) {
         return;
     }
 
+    // check if connected to database, otherwise discard log record
+    if (!isConnected()) {
+        return;
+    }
+
     // reset statement parameters
     int res = sqlite3_reset(m_insertStmt);
     if (res != SQLITE_OK) {
         ELogSystem::reportError("Failed to reset sqlite statement: %s", sqlite3_errstr(res));
+
+        // failure to send a record, so order parent class to start reconnect background task
+        startReconnect();
         return;
     }
 
@@ -149,6 +165,9 @@ void ELogSQLiteDbTarget::log(const ELogRecord& logRecord) {
     if (res != SQLITE_OK) {
         ELogSystem::reportError("Failed to bind sqlite statement parameters: %s",
                                 sqlite3_errstr(res));
+
+        // failure to send a record, so order parent class to start reconnect background task
+        startReconnect();
         return;
     }
 
@@ -165,6 +184,9 @@ void ELogSQLiteDbTarget::log(const ELogRecord& logRecord) {
     }
     ELogSystem::reportError("Failed to execute sqlite statement parameters: %s",
                             sqlite3_errstr(res));
+
+    // failure to send a record, so order parent class to start reconnect background task
+    startReconnect();
 }
 
 }  // namespace elog
