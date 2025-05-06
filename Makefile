@@ -192,6 +192,15 @@ ifeq ($(ELOG_ENABLE_PGSQL_DB_CONNECTOR), 1)
 	CPPFLAGS += -I/usr/include/postgresql
 #endif
 endif
+
+# add Kafka flags
+ifeq ($(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR), 1)
+	CPPFLAGS += -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+	LDFLAGS += -lrdkafka
+#ifeq (($PLATFORM), Linux)
+	CPPFLAGS += -I/usr/include/postgresql
+#endif
+endif
 #POST_COMPILE = mv -f $(DEP_DIR)/$*.tmp.dep $(DEP_DIR)/$*.dep && touch $@
 
 # directory targets

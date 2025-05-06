@@ -1,0 +1,33 @@
+#ifndef __ELOG_MSGQ_TARGET_PROVIDER_H__
+#define __ELOG_MSGQ_TARGET_PROVIDER_H__
+
+#include "elog_common.h"
+#include "elog_msgq_target.h"
+
+namespace elog {
+
+/** @brief Parent interface for all DB log targets. */
+class ELogMsgQTargetProvider {
+public:
+    ELogMsgQTargetProvider(const ELogMsgQTargetProvider&) = delete;
+    ELogMsgQTargetProvider(ELogMsgQTargetProvider&&) = delete;
+    virtual ~ELogMsgQTargetProvider() {}
+
+    /**
+     * @brief Loads a target from configuration.
+     * @param logTargetCfg The configuration string.
+     * @param targetSpec The parsed configuration string.
+     * @param topic The target topic name.
+     * @return ELogMsgQTarget* The resulting DB log target, or null of failed.
+     */
+    virtual ELogMsgQTarget* loadTarget(const std::string& logTargetCfg,
+                                       const ELogTargetSpec& targetSpec,
+                                       const std::string& topic) = 0;
+
+protected:
+    ELogMsgQTargetProvider() {}
+};
+
+}  // namespace elog
+
+#endif  // __ELOG_MSGQ_TARGET_PROVIDER_H__

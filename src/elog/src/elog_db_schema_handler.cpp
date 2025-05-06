@@ -17,7 +17,7 @@ static bool initDbTargetProvider(ELogDbSchemaHandler* schemaHandler, const char*
         return false;
     }
     if (!schemaHandler->registerDbTargetProvider(name, provider)) {
-        ELogSystem::reportError("Failed to register %s db schema handler, duplicate name", name);
+        ELogSystem::reportError("Failed to register %s db target provider, duplicate name", name);
         delete provider;
         return false;
     }

@@ -12,6 +12,7 @@
 #include "elog_file_schema_handler.h"
 #include "elog_file_target.h"
 #include "elog_flush_policy.h"
+#include "elog_msgq_schema_handler.h"
 #include "elog_quantum_target.h"
 #include "elog_queued_target.h"
 #include "elog_segmented_file_target.h"
@@ -91,7 +92,8 @@ static bool initSchemaHandler(const char* name) {
 bool ELogSystem::initSchemaHandlers() {
     if (!initSchemaHandler<ELogSysSchemaHandler>("sys") ||
         !initSchemaHandler<ELogFileSchemaHandler>("file") ||
-        !initSchemaHandler<ELogDbSchemaHandler>("db")) {
+        !initSchemaHandler<ELogDbSchemaHandler>("db") ||
+        !initSchemaHandler<ELogMsgQSchemaHandler>("msgq")) {
         termGlobals();
         return false;
     }

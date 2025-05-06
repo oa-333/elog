@@ -15,6 +15,12 @@ extern ELOG_API bool initFieldSelectors();
 /** @brief Destroys all field selectors (for internal use only). */
 extern ELOG_API void termFieldSelectors();
 
+/** @brief Retrieves host name (for internal use only). */
+extern ELOG_API const char* getHostName();
+
+/** @brief Retrieves user name (for internal use only). */
+extern ELOG_API const char* getUserName();
+
 /** @brief Retrieves program name (for internal use only). */
 extern ELOG_API const char* getProgramName();
 

@@ -206,6 +206,10 @@ extern bool initFieldSelectors() {
 
 void termFieldSelectors() { sFieldSelectorConstructorMap.clear(); }
 
+const char* getHostName() { return hostName; }
+
+const char* getUserName() { return userName; }
+
 const char* getProgramName() { return progName; }
 
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
