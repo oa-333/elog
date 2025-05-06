@@ -228,6 +228,39 @@ private:
     ELOG_DECLARE_FIELD_SELECTOR(ELogModuleSelector, mod);
 };
 
+class ELOG_API ELogFileSelector : public ELogFieldSelector {
+public:
+    ELogFileSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
+    ~ELogFileSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFileSelector, file);
+};
+
+class ELOG_API ELogLineSelector : public ELogFieldSelector {
+public:
+    ELogLineSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_INT, justify) {}
+    ~ELogLineSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogLineSelector, line);
+};
+
+class ELOG_API ELogFunctionSelector : public ELogFieldSelector {
+public:
+    ELogFunctionSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
+    ~ELogFunctionSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFunctionSelector, func);
+};
+
 class ELOG_API ELogLevelSelector : public ELogFieldSelector {
 public:
     ELogLevelSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}

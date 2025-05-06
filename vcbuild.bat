@@ -14,7 +14,7 @@ set SQLITE_INC_PATH="C:\Program Files\SQLite\3.49.1\inc"
 set SQLITE_LIB_PATH="C:\Program Files\SQLite\3.49.1\x64"
 
 REM compile
-cl.exe /I %MYSQL_INC_PATH% /I %SQLITE_INC_PATH% /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /DELOG_DLL /c src\elog\src\*.cpp
+cl.exe /DELOG_ENABLE_SQLITE_DB_CONNECTOR /DELOG_ENABLE_MYSQL_DB_CONNECTOR /I %MYSQL_INC_PATH% /I %SQLITE_INC_PATH% /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /DELOG_DLL /c src\elog\src\*.cpp
 if errorlevel 1 goto COMPILE_ERROR
 
 REM move object files

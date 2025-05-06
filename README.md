@@ -8,7 +8,11 @@ The ELog package provides the following notable features:
 - Logging to file, optionally with file segmentation
 - Logging to syslog, stderr, and/or stdout
 - Asynchronous logging
-- Connectivity to Kafka, PostgreSQL, SQLite (experimental MySQL)
+- Almost fully configurable from configuration file (i.e. string property map)
+- Connectivity to Kafka (Linux only)
+- Connectivity to PostgreSQL (Linux, MinGW)
+- Connectivity to SQLite (Windows, Linux, MinGW)
+- Connectivity to MySQL (experimental, Windows only)
 
 Additional features:
 
@@ -229,7 +233,10 @@ The following special log field reference tokens are understood by the ELog syst
 - ${prog} - the program name.
 - ${pid} - the process id.
 - ${tid} - the logging thread id.
-- ${level} - the log level
+- ${level} - the log level.
+- ${file} - The logging file name.
+- ${line} - The logging line.
+- ${func} - The logging function.
 - ${src} - the log source of the logger (qualified name).
 - ${mod} - the alternative module name associated with the source.
 - ${msg} - the log message.
@@ -460,10 +467,10 @@ Pay attention that the rest of the log targets will use the global log level and
 
 The following example shows how to connect to a Kafka topic:
 
-    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=my-events
+    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records
 
 The kafka log target uses the 'msgq' schema, and 'kafka' provider.  
 Two parameters are expected: 'bootstrap-servers' and 'topic'.  
-Pay attention that in this example the global log format is used as the message payload.
-Optionally, a partition id may be passed as well with the syntax 'partition={id}.
+Optionally, a partition id may be passed as well with the syntax 'partition={id}.  
+Pay attention that in this example the global log format is used as the message payload.  
 Future version will support passing log record fields in message headers.

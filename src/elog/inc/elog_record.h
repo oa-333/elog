@@ -31,6 +31,15 @@ struct ELOG_API ELogRecord {
     /** @var Log level. */
     ELogLevel m_logLevel;
 
+    /** @var Issuing file. */
+    const char* m_file;
+
+    /** @var Issuing line. */
+    int m_line;
+
+    /** @var Issuing function. */
+    const char* m_function;
+
     /** @var Formatted log message. */
     const char* m_logMsg;
 

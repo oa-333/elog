@@ -46,6 +46,9 @@ ELOG_IMPLEMENT_FIELD_SELECTOR(ELogProcessIdSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogThreadIdSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogSourceSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogModuleSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogFileSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogLineSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogFunctionSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogLevelSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogMsgSelector)
 
@@ -91,7 +94,7 @@ static bool applyFieldSelectorConstructorRegistration() {
 ELogFieldSelector* constructFieldSelector(const char* name, int justify) {
     ELogFieldSelectorConstructorMap::iterator itr = sFieldSelectorConstructorMap.find(name);
     if (itr == sFieldSelectorConstructorMap.end()) {
-        ELOG_FATAL("Invalid field selector %s: not found", name);
+        ELogSystem::reportError("Invalid field selector %s: not found", name);
         return nullptr;
     }
 
@@ -275,6 +278,18 @@ void ELogModuleSelector::selectField(const ELogRecord& record, ELogFieldReceptor
     } else {
         receptor->receiveStringField("N/A", m_justify);
     }
+}
+
+void ELogFileSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    receptor->receiveStringField(record.m_file, m_justify);
+}
+
+void ELogLineSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    receptor->receiveIntField(record.m_line, m_justify);
+}
+
+void ELogFunctionSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    receptor->receiveStringField(record.m_function, m_justify);
 }
 
 void ELogLevelSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {

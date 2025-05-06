@@ -426,10 +426,22 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_EX(logger, level, fmt, ...)              \
-    if (logger != nullptr && logger->canLog(level)) { \
-        logger->logFormat(level, fmt, ##__VA_ARGS__); \
+#ifdef ELOG_GCC
+#define ELOG_EX(logger, level, fmt, ...)                                                       \
+    if (logger != nullptr && logger->canLog(level)) {                                          \
+        logger->logFormat(level, __FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__); \
     }
+#elif defined(ELOG_MSVC)
+#define ELOG_EX(logger, level, fmt, ...)                                               \
+    if (logger != nullptr && logger->canLog(level)) {                                  \
+        logger->logFormat(level, __FILE__, __LINE__, __FUNCSIG__, fmt, ##__VA_ARGS__); \
+    }
+#else
+#define ELOG_EX(logger, level, fmt, ...)                                            \
+    if (logger != nullptr && logger->canLog(level)) {                               \
+        logger->logFormat(level, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); \
+    }
+#endif
 
 /**
  * @brief Logs a fatal message to the server log.
@@ -502,10 +514,22 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BEGIN_EX(logger, level, fmt, ...)        \
-    if (logger != nullptr && logger->canLog(level)) { \
-        logger->startLog(level, fmt, ##__VA_ARGS__);  \
+#ifdef ELOG_GCC
+#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                                \
+    if (logger != nullptr && logger->canLog(level)) {                                         \
+        logger->startLog(level, __FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__); \
     }
+#elif defined(ELOG_MSVC)
+#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                        \
+    if (logger != nullptr && logger->canLog(level)) {                                 \
+        logger->startLog(level, __FILE__, __LINE__, __FUNCSIG__, fmt, ##__VA_ARGS__); \
+    }
+#else
+#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                     \
+    if (logger != nullptr && logger->canLog(level)) {                              \
+        logger->startLog(level, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); \
+    }
+#endif
 
 /**
  * @brief Appends formatted message to a multi-part log message.

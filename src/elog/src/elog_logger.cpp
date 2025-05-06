@@ -40,11 +40,12 @@ static uint64_t getCurrentThreadId() {
 #endif  // ELOG_WINDOWS
 }
 
-void ELogLogger::logFormat(ELogLevel logLevel, const char* fmt, ...) {
+void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const char* function,
+                           const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     if (!isLogging()) {
-        startLogRecord(logLevel);
+        startLogRecord(logLevel, file, line, function);
         appendMsgV(fmt, ap);
         finishLog();
     } else {
@@ -57,9 +58,10 @@ void ELogLogger::logFormat(ELogLevel logLevel, const char* fmt, ...) {
     va_end(ap);
 }
 
-void ELogLogger::logNoFormat(ELogLevel logLevel, const char* msg) {
+void ELogLogger::logNoFormat(ELogLevel logLevel, const char* file, int line, const char* function,
+                             const char* msg) {
     if (!isLogging()) {
-        startLogRecord(logLevel);
+        startLogRecord(logLevel, file, line, function);
         appendMsg(msg);
         finishLog();
     } else {
@@ -72,11 +74,12 @@ void ELogLogger::logNoFormat(ELogLevel logLevel, const char* msg) {
     }
 }
 
-void ELogLogger::startLog(ELogLevel logLevel, const char* fmt, ...) {
+void ELogLogger::startLog(ELogLevel logLevel, const char* file, int line, const char* function,
+                          const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     if (!isLogging()) {
-        startLogRecord(logLevel);
+        startLogRecord(logLevel, file, line, function);
         appendMsgV(fmt, ap);
     } else {
         fprintf(
@@ -89,9 +92,10 @@ void ELogLogger::startLog(ELogLevel logLevel, const char* fmt, ...) {
     va_end(ap);
 }
 
-void ELogLogger::startLogNoFormat(ELogLevel logLevel, const char* msg) {
+void ELogLogger::startLogNoFormat(ELogLevel logLevel, const char* file, int line,
+                                  const char* function, const char* msg) {
     if (!isLogging()) {
-        startLogRecord(logLevel);
+        startLogRecord(logLevel, file, line, function);
         appendMsg(msg);
     } else {
         fprintf(stderr,
@@ -149,10 +153,14 @@ void ELogLogger::finishLog() {
 
 bool ELogLogger::isLogging() const { return getRecordBuilder().getOffset() > 0; }
 
-void ELogLogger::startLogRecord(ELogLevel logLevel) {
+void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
+                                const char* function) {
     ELogRecord& logRecord = getRecordBuilder().getLogRecord();
     logRecord.m_logRecordId = sNextRecordId.fetch_add(1, std::memory_order_relaxed);
     logRecord.m_logLevel = logLevel;
+    logRecord.m_file = file;
+    logRecord.m_line = line;
+    logRecord.m_function = function;
 #ifdef ELOG_MSVC
     ::GetSystemTime(&logRecord.m_logTime);
 #else

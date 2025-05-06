@@ -18,32 +18,48 @@ public:
     /**
      * @brief Formats a log message and sends it to all log target.
      * @param logLevel The log level. No log level checking takes place.
+     * @param file The issuing file name.
+     * @param line The issuing line.
+     * @param function The issuing function.
      * @param fmt The message format.
      * @param ... The message arguments.
      */
-    void logFormat(ELogLevel logLevel, const char* fmt, ...);
+    void logFormat(ELogLevel logLevel, const char* file, int line, const char* function,
+                   const char* fmt, ...);
 
     /**
      * @brief Sends unformatted log message to all log targets.
      * @param logLevel The log level. No log level checking takes place.
+     * @param file The issuing file name.
+     * @param line The issuing line.
+     * @param function The issuing function.
      * @param msg The log message.
      */
-    void logNoFormat(ELogLevel logLevel, const char* msg);
+    void logNoFormat(ELogLevel logLevel, const char* file, int line, const char* function,
+                     const char* msg);
 
     /**
      * @brief Starts a multi-part log message.
      * @param logLevel The log level. No log level checking takes place.
+     * @param file The issuing file name.
+     * @param line The issuing line.
+     * @param function The issuing function.
      * @param fmt The message format.
      * @param ... The message arguments.
      */
-    void startLog(ELogLevel logLevel, const char* fmt, ...);
+    void startLog(ELogLevel logLevel, const char* file, int line, const char* function,
+                  const char* fmt, ...);
 
     /**
      * @brief Starts a multi-part log message (no formatting).
      * @param logLevel The log level. No log level checking takes place.
+     * @param file The issuing file name.
+     * @param line The issuing line.
+     * @param function The issuing function.
      * @param msg The log message.
      */
-    void startLogNoFormat(ELogLevel logLevel, const char* msg);
+    void startLogNoFormat(ELogLevel logLevel, const char* file, int line, const char* function,
+                          const char* msg);
 
     /**
      * @brief Appends formatted message to a multi-part log message.
@@ -88,7 +104,7 @@ private:
      * @brief Starts a multi-part log message.
      * @param logLevel The log level. No log level checking takes place.
      */
-    void startLogRecord(ELogLevel logLevel);
+    void startLogRecord(ELogLevel logLevel, const char* file, int line, const char* function);
 
     void appendMsgV(const char* fmt, va_list ap);
 
