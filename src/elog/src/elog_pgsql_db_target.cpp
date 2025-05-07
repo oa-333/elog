@@ -20,17 +20,13 @@ public:
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint64_t field, int justify) final {
-        // it really depends
         m_stringCache.push_back(std::to_string(field));
     }
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
     void receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr, int justify) final {
-        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, timeStr, -1, SQLITE_TRANSIENT);
-        if (m_res == 0) {
-            m_res = res;
-        }
+        m_stringCache.push_back(timeStr);
     }
 #else
     /** @brief Receives a time log record field. */

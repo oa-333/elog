@@ -13,58 +13,69 @@ static const uint32_t ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS = 100;
 
 class ELogKafkaMsgQFieldReceptor : public ELogFieldReceptor {
 public:
-    ELogKafkaMsgQFieldReceptor() {}
+    ELogKafkaMsgQFieldReceptor() : m_headers(nullptr) {}
     ~ELogKafkaMsgQFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
     void receiveStringField(const std::string& field, int justify) {
-        m_stringCache.push_back(field);
+        m_headerValues.push_back(field);
     }
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint64_t field, int justify) final {
-        // it really depends
-        m_stringCache.push_back(std::to_string(field));
+        m_headerValues.push_back(std::to_string(field));
     }
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
     void receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr, int justify) final {
-        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, timeStr, -1, SQLITE_TRANSIENT);
-        if (m_res == 0) {
-            m_res = res;
-        }
+        m_headerValues.push_back(timeStr);
     }
 #else
     /** @brief Receives a time log record field. */
     void receiveTimeField(const timeval& sysTime, const char* timeStr, int justify) final {
-        m_stringCache.push_back(timeStr);
+        m_headerValues.push_back(timeStr);
     }
 #endif
 
     /** @brief Receives a log level log record field. */
     void receiveLogLevelField(ELogLevel logLevel, int justify) final {
         const char* logLevelStr = elogLevelToStr(logLevel);
-        m_stringCache.push_back(logLevelStr);
+        m_headerValues.push_back(logLevelStr);
     }
 
-    void prepareParams() {
-        for (const std::string& str : m_stringCache) {
-            m_paramValues.push_back(str.c_str());
-            m_paramLengths.push_back(str.length());
+    bool prepareHeaders(rd_kafka_headers_t* headers, const std::vector<std::string>& headerNames) {
+        if (m_headerValues.size() != headerNames.size()) {
+            ELogSystem::reportError("Mismatching header names a values (%u names, %u values)",
+                                    headerNames.size(), m_headerValues.size());
+            return false;
         }
+        for (uint32_t i = 0; i < m_headerValues.size(); ++i) {
+            rd_kafka_resp_err_t res =
+                rd_kafka_header_add(headers, headerNames[i].c_str(), headerNames[i].length(),
+                                    (void*)m_headerValues[i].c_str(), m_headerValues[i].length());
+            if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
+                ELogSystem::reportError("Failed to add kafka message header %s=%s: %s",
+                                        headerNames[i].c_str(), m_headerValues[i].c_str(),
+                                        rd_kafka_err2name(res));
+                return false;
+            }
+        }
+        return true;
     }
-
-    inline const char* const* getParamValues() const { return &m_paramValues[0]; }
-    inline const int* getParamLengths() const { return &m_paramLengths[0]; }
 
 private:
-    std::vector<std::string> m_stringCache;
-    std::vector<const char*> m_paramValues;
-    std::vector<int> m_paramLengths;
+    std::vector<std::string> m_headerValues;
+    rd_kafka_headers_t* m_headers;
 };
 
 bool ELogKafkaMsgQTarget::start() {
+    // parse the headers with log record field selector tokens
+    // this builds a processed statement text with questions marks instead of log record field
+    // references, and also prepares the field selector array
+    if (!parseHeaders(m_headers)) {
+        return false;
+    }
     char hostname[128];
     char errstr[512];
 
@@ -73,6 +84,7 @@ bool ELogKafkaMsgQTarget::start() {
         formatClientId();
     }
 
+    fprintf(stderr, "Kafka client id is: %s\n", m_clientId.c_str());
     if (rd_kafka_conf_set(m_conf, "client.id", m_clientId.c_str(), errstr, sizeof(errstr)) !=
         RD_KAFKA_CONF_OK) {
         ELogSystem::reportError("Failed to create kafka configuration object: %s", errstr);
@@ -80,6 +92,7 @@ bool ELogKafkaMsgQTarget::start() {
         return false;
     }
 
+    fprintf(stderr, "Kafka setting bootstrap servers: %s\n", m_bootstrapServers.c_str());
     if (rd_kafka_conf_set(m_conf, "bootstrap.servers", m_bootstrapServers.c_str(), errstr,
                           sizeof(errstr)) != RD_KAFKA_CONF_OK) {
         ELogSystem::reportError("Failed to configure kafka bootstrap servers '%s': %s",
@@ -144,16 +157,70 @@ void ELogKafkaMsgQTarget::log(const ELogRecord& logRecord) {
         return;
     }
 
+    // prepare headers if any
+    // NOTE: receptor must live until message sending, because it holds value strings
+    ELogKafkaMsgQFieldReceptor receptor;
+    rd_kafka_headers_t* headers = nullptr;
+    if (!m_headers.empty()) {
+        headers = rd_kafka_headers_new(getHeaderCount());
+        if (headers == nullptr) {
+            ELogSystem::reportError("Failed to allocate kafka headers, out of memory");
+            return;
+        }
+        fillInHeaders(logRecord, &receptor);
+        if (!receptor.prepareHeaders(headers, getHeaderNames())) {
+            ELogSystem::reportError("Failed to prepare kafka message headers");
+            return;
+        }
+    }
+
+    // prepare formatter log message
     std::string logMsg;
     formatLogMsg(logRecord, logMsg);
 
     // unassigned partition, copy payload, no key specification, payload is formatted string
     // headers include specific log record fields
-    if (rd_kafka_produce(m_topic, RD_KAFKA_PARTITION_UA, RD_KAFKA_MSG_F_COPY, (void*)logMsg.c_str(),
-                         logMsg.length(), nullptr, 0, NULL) == -1) {
-        const char* errMsg = rd_kafka_err2name(rd_kafka_last_error());
-        ELogSystem::reportError("Failed to produce message on kafka topic %s: %s",
-                                m_topicName.c_str(), errMsg);
+    int32_t partition = RD_KAFKA_PARTITION_UA;
+    if (m_partition != -1) {
+        partition = m_partition;
+    }
+    int res = 0;
+    if (headers != nullptr) {
+        const uint32_t VU_COUNT = 6;
+        rd_kafka_vu_t vus[VU_COUNT];
+        vus[0].vtype = RD_KAFKA_VTYPE_PARTITION;
+        vus[0].u.i32 = partition;
+
+        vus[1].vtype = RD_KAFKA_VTYPE_MSGFLAGS;
+        vus[1].u.i = RD_KAFKA_MSG_F_COPY;
+
+        vus[2].vtype = RD_KAFKA_VTYPE_VALUE;
+        vus[2].u.mem.ptr = (void*)logMsg.c_str();
+        vus[2].u.mem.size = logMsg.length();
+
+        vus[3].vtype = RD_KAFKA_VTYPE_KEY;
+        vus[3].u.mem.ptr = nullptr;
+        vus[3].u.mem.size = 0;
+
+        vus[4].vtype = RD_KAFKA_VTYPE_HEADERS;
+        vus[4].u.headers = headers;
+
+        vus[5].vtype = RD_KAFKA_VTYPE_TOPIC;
+        vus[5].u.cstr = m_topicName.c_str();
+        rd_kafka_error_t* res = rd_kafka_produceva(m_producer, vus, VU_COUNT);
+        if (res != nullptr) {
+            const char* errMsg = rd_kafka_err2name(rd_kafka_error_code(res));
+            ELogSystem::reportError("Failed to produce message on kafka topic %s: %s",
+                                    m_topicName.c_str(), errMsg);
+            rd_kafka_error_destroy(res);
+        }
+    } else {
+        if (rd_kafka_produce(m_topic, partition, RD_KAFKA_MSG_F_COPY, (void*)logMsg.c_str(),
+                             logMsg.length(), nullptr, 0, NULL) == -1) {
+            const char* errMsg = rd_kafka_err2name(rd_kafka_last_error());
+            ELogSystem::reportError("Failed to produce message on kafka topic %s: %s",
+                                    m_topicName.c_str(), errMsg);
+        }
     }
 }
 

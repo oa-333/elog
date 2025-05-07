@@ -18,7 +18,7 @@ public:
     ~ELogKafkaMsgQTargetProvider() final {}
 
     ELogMsgQTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
-                               const std::string& topic) final;
+                               const std::string& topic, const std::string& headers) final;
 };
 
 }  // namespace elog

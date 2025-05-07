@@ -54,7 +54,7 @@ protected:
     // by default text within a format spec is transformed into static text field selector
     // but in the case of db formatter insert query this differs, so we allow this behavior to be
     // determined by derived classes
-    virtual void handleText(const std::string& text);
+    virtual bool handleText(const std::string& text);
 
     virtual bool handleField(const char* fieldName, int justify);
 

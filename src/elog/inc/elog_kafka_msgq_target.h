@@ -14,10 +14,12 @@ namespace elog {
 class ELogKafkaMsgQTarget : public ELogMsgQTarget {
 public:
     ELogKafkaMsgQTarget(const std::string& bootstrapServers, const std::string& topicName,
-                        int partition = -1, uint32_t flushTimeoutMillis = 0,
-                        uint32_t shutdownFlushTimeoutMillis = 0)
+                        const std::string& headers, int partition = -1,
+                        uint32_t flushTimeoutMillis = 0, uint32_t shutdownFlushTimeoutMillis = 0)
         : m_bootstrapServers(bootstrapServers),
           m_topicName(topicName),
+          m_headers(headers),
+          m_partition(partition),
           m_flushTimeoutMillis(flushTimeoutMillis),
           m_shutdownFlushTimeoutMillis(shutdownFlushTimeoutMillis),
           m_conf(nullptr),
@@ -44,6 +46,8 @@ public:
 private:
     std::string m_bootstrapServers;
     std::string m_topicName;
+    std::string m_headers;
+    int m_partition;
     uint32_t m_flushTimeoutMillis;
     uint32_t m_shutdownFlushTimeoutMillis;
 

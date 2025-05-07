@@ -10,8 +10,9 @@ namespace elog {
 
 ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTargetCfg,
                                                         const ELogTargetSpec& targetSpec,
-                                                        const std::string& topic) {
-    // we expect 4 properties: bootstrap-servers, and optional partition, flush-timeout-millis,
+                                                        const std::string& topic,
+                                                        const std::string& headers) {
+    // we expect 4 properties: bootstrap-servers, and optional partition,  flush-timeout-millis,
     // shutdown-flush-timeout-millis
     ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("bootstrap-servers");
     if (itr == targetSpec.m_props.end()) {
@@ -22,6 +23,7 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
         return nullptr;
     }
     const std::string& bootstrapServers = itr->second;
+    fprintf(stderr, "Using kafka bootstrap servers: %s\n", bootstrapServers.c_str());
 
     uint32_t flushTimeoutMillis = -1;
     itr = targetSpec.m_props.find("kafka-flush-timeout-millis");
@@ -59,8 +61,9 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
         partition = part;
     }
 
-    ELogMsgQTarget* target = new (std::nothrow) ELogKafkaMsgQTarget(
-        bootstrapServers, topic, partition, flushTimeoutMillis, shutdownFlushTimeoutMillis);
+    ELogMsgQTarget* target =
+        new (std::nothrow) ELogKafkaMsgQTarget(bootstrapServers, topic, headers, partition,
+                                               flushTimeoutMillis, shutdownFlushTimeoutMillis);
     if (target == nullptr) {
         ELogSystem::reportError("Failed to allocate Kafka message queue log target, out of memory");
     }

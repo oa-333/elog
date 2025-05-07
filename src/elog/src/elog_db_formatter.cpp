@@ -4,7 +4,10 @@
 
 namespace elog {
 
-void ELogDbFormatter::handleText(const std::string& text) { m_processedStatement += text; }
+bool ELogDbFormatter::handleText(const std::string& text) {
+    m_processedStatement += text;
+    return true;
+}
 
 bool ELogDbFormatter::handleField(const char* fieldName, int justify) {
     if (m_queryStyle == QueryStyle::QS_QMARK) {

@@ -27,7 +27,9 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
     std::string::size_type pos = formatSpec.find("${");
     while (pos != std::string::npos) {
         if (pos > prevPos) {
-            handleText(formatSpec.substr(prevPos, pos - prevPos).c_str());
+            if (!handleText(formatSpec.substr(prevPos, pos - prevPos).c_str())) {
+                return false;
+            }
         }
         std::string::size_type closePos = formatSpec.find("}", pos);
         if (closePos == std::string::npos) {
@@ -56,14 +58,23 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
         pos = formatSpec.find("${", prevPos);
     }
     if (prevPos != std::string::npos) {
-        handleText(formatSpec.substr(prevPos).c_str());
+        if (!handleText(formatSpec.substr(prevPos).c_str())) {
+            return false;
+        }
     }
     return true;
 }
 
-void ELogBaseFormatter::handleText(const std::string& text) {
+bool ELogBaseFormatter::handleText(const std::string& text) {
     // by default we add a static text field selector
-    m_fieldSelectors.push_back(new (std::nothrow) ELogStaticTextSelector(text.c_str()));
+    ELogFieldSelector* fieldSelector = new (std::nothrow) ELogStaticTextSelector(text.c_str());
+    if (fieldSelector == nullptr) {
+        ELogSystem::reportError(
+            "Failed to allocate field selector for static text '%s', out of memory", text.c_str());
+        return false;
+    }
+    m_fieldSelectors.push_back(fieldSelector);
+    return true;
 }
 
 bool ELogBaseFormatter::handleField(const char* fieldName, int justify) {

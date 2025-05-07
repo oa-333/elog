@@ -55,14 +55,13 @@ protected:
      * parameters are filled.
      * @param logRecord The log record to process.
      * @param receptor The receptor that receives log record fields and transfers them to the
-     * prepared statement parameters. The receptor
+     * prepared statement parameters.
      */
     inline void fillInsertStatement(const elog::ELogRecord& logRecord,
                                     elog::ELogFieldReceptor* receptor) {
         m_formatter.fillInsertStatement(logRecord, receptor);
     }
 
-protected:
     /** @brief Helper method for derived classes to reconnect to database. */
     void startReconnect(uint32_t reconnectTimeoutMillis = 1000);
 

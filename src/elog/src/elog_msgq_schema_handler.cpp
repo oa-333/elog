@@ -44,12 +44,12 @@ bool ELogMsgQSchemaHandler::registerMsgQTargetProvider(const char* brokerName,
 
 ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                               const ELogTargetSpec& targetSpec) {
-    // the path represents the msgq-type
+    // the path represents the message queue provider type name
     // current predefined types are supported:
     // kafka
     const std::string& msgQType = targetSpec.m_path;
 
-    // in addition, we expect at least one properties: topic
+    // in addition, we expect at least 'topic' property and optional 'headers'
     if (targetSpec.m_props.size() < 1) {
         ELogSystem::reportError(
             "Invalid message queue log target specification, expected at least one property: %s",
@@ -66,10 +66,16 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
     }
     const std::string& topic = itr->second;
 
+    std::string headers;
+    itr = targetSpec.m_props.find("headers");
+    if (itr != targetSpec.m_props.end()) {
+        headers = itr->second;
+    }
+
     ProviderMap::iterator providerItr = m_providerMap.find(msgQType);
     if (providerItr != m_providerMap.end()) {
         ELogMsgQTargetProvider* provider = providerItr->second;
-        return provider->loadTarget(logTargetCfg, targetSpec, topic);
+        return provider->loadTarget(logTargetCfg, targetSpec, topic, headers);
     }
 
     ELogSystem::reportError(

@@ -35,6 +35,20 @@ inline bool getProp(const ELogPropertySequence& props, const char* propName,
 extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
                          const std::string& prop, uint32_t& value, bool issueError = true);
 
+/** @brief Trims a string's prefix from the left side (in-place). */
+inline void ltrim(std::string& s) { s.erase(0, s.find_first_not_of(" \n\r\t")); }
+
+/** @brief Trims a string suffix from the right side (in-place). */
+inline void rtrim(std::string& s) { s.erase(s.find_last_not_of(" \n\r\t") + 1); }
+
+/** @brief Trims a string from both sides (in-place). */
+inline std::string trim(const std::string& s) {
+    std::string res = s;
+    ltrim(res);
+    rtrim(res);
+    return res;
+}
+
 /** @struct Log Target specification (used for loading from configuration). */
 struct ELogTargetSpec {
     /** @brief The target schema (sys, file, db, msgq, etc.) */

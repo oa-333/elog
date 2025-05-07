@@ -18,11 +18,13 @@ public:
      * @param logTargetCfg The configuration string.
      * @param targetSpec The parsed configuration string.
      * @param topic The target topic name.
+     * @param headers Optional headers specification (in property-CSV format: "header-name=${field},
+     * header-name=${field}, ...").
      * @return ELogMsgQTarget* The resulting DB log target, or null of failed.
      */
     virtual ELogMsgQTarget* loadTarget(const std::string& logTargetCfg,
-                                       const ELogTargetSpec& targetSpec,
-                                       const std::string& topic) = 0;
+                                       const ELogTargetSpec& targetSpec, const std::string& topic,
+                                       const std::string& headers) = 0;
 
 protected:
     ELogMsgQTargetProvider() {}

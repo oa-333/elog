@@ -45,7 +45,7 @@ public:
     void getParamTypes(std::vector<ParamType>& paramTypes) const;
 
 protected:
-    void handleText(const std::string& text) override;
+    bool handleText(const std::string& text) override;
 
     bool handleField(const char* fieldName, int justify) override;
 
