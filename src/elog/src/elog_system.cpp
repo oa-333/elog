@@ -1087,6 +1087,10 @@ void ELogSystem::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) 
     sGlobalFormatter->formatLogMsg(logRecord, logMsg);
 }
 
+void ELogSystem::setCurrentThreadName(const char* threadName) {
+    setCurrentThreadNameField(threadName);
+}
+
 // global log filtering
 void ELogSystem::setLogFilter(ELogFilter* logFilter) {
     if (sGlobalFilter != nullptr) {

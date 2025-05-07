@@ -30,6 +30,7 @@ namespace elog {
 static char hostName[HOST_NAME_MAX];
 static char userName[LOGIN_NAME_MAX];
 static char progName[PROG_NAME_MAX];
+static thread_local std::string sThreadName;
 
 #ifdef ELOG_WINDOWS
 static DWORD pid = 0;
@@ -44,6 +45,7 @@ ELOG_IMPLEMENT_FIELD_SELECTOR(ELogUserNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogProgramNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogProcessIdSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogThreadIdSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogThreadNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogSourceSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogModuleSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogFileSelector)
@@ -215,6 +217,8 @@ const char* getUserName() { return userName; }
 
 const char* getProgramName() { return progName; }
 
+void setCurrentThreadNameField(const char* threadName) { sThreadName = threadName; }
+
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     receptor->receiveStringField(m_text, m_justify);
 }
@@ -260,6 +264,10 @@ void ELogProcessIdSelector::selectField(const ELogRecord& record, ELogFieldRecep
 
 void ELogThreadIdSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     receptor->receiveIntField(record.m_threadId, m_justify);
+}
+
+void ELogThreadNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    receptor->receiveStringField(sThreadName.c_str(), m_justify);
 }
 
 void ELogSourceSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {

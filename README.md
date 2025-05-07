@@ -233,6 +233,7 @@ The following special log field reference tokens are understood by the ELog syst
 - ${prog} - the program name.
 - ${pid} - the process id.
 - ${tid} - the logging thread id.
+- ${tname} - the logging thread name (requires user collaboration).
 - ${level} - the log level.
 - ${file} - The logging file name.
 - ${line} - The logging line.

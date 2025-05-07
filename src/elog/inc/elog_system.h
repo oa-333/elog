@@ -329,6 +329,11 @@ public:
      * ${prog} - the running program name.
      * ${pid} - the process id.
      * ${tid} - the logging thread id.
+     * ${tname} - the logging thread name (requires user collaboration, see @ref
+     * setCurrentThreadName()).
+     * ${file} - The logging file.
+     * ${line} - The logging line.
+     * ${func} - The logging function.
      * ${level} - the log level
      * ${src} - the log source of the logger (qualified name).
      * ${mod} - the alternative module name associated with the source.
@@ -352,6 +357,9 @@ public:
      * @param[out] logMsg The resulting formatted log message.
      */
     static void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
+
+    /** @brief Sets the current thread'd name, to be referenced by token ${tname}. */
+    static void setCurrentThreadName(const char* threadName);
 
     /**
      * Log Filtering Interface

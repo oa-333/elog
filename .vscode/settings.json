@@ -99,6 +99,8 @@
     ],
     "cSpell.words": [
         "interruptible",
-        "millis"
+        "millis",
+        "msgq",
+        "tname"
     ]
 }

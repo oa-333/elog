@@ -24,6 +24,9 @@ extern ELOG_API const char* getUserName();
 /** @brief Retrieves program name (for internal use only). */
 extern ELOG_API const char* getProgramName();
 
+/** @brief Installs the current thread name (for internal use only). */
+extern ELOG_API void setCurrentThreadNameField(const char* threadName);
+
 /** @enum Constants for field types (generic). */
 enum class ELogFieldType : uint32_t {
     /** @var Field type is string (text). */
@@ -204,6 +207,17 @@ public:
 
 private:
     ELOG_DECLARE_FIELD_SELECTOR(ELogThreadIdSelector, tid);
+};
+
+class ELOG_API ELogThreadNameSelector : public ELogFieldSelector {
+public:
+    ELogThreadNameSelector(int justify) : ELogFieldSelector(ELogFieldType::FT_TEXT, justify) {}
+    ~ELogThreadNameSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadNameSelector, tname);
 };
 
 class ELOG_API ELogSourceSelector : public ELogFieldSelector {
