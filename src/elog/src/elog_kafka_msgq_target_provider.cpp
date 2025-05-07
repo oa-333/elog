@@ -23,7 +23,6 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
         return nullptr;
     }
     const std::string& bootstrapServers = itr->second;
-    fprintf(stderr, "Using kafka bootstrap servers: %s\n", bootstrapServers.c_str());
 
     uint32_t flushTimeoutMillis = -1;
     itr = targetSpec.m_props.find("kafka-flush-timeout-millis");

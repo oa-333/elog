@@ -51,12 +51,9 @@ bool ELogMySqlDbTarget::start() {
         return false;
     }
     std::string processedInsertStmt = getProcessedInsertStatement();
-    // fprintf(stderr, "Processed insert statement: %s\n", processedInsertStmt.c_str());
 
     try {
         sql::Driver* driver = sql::mysql::get_driver_instance();
-        /*fprintf(stderr, "Connecting to url %s with user/pass %s/%s\n", m_url.c_str(),
-                m_user.c_str(), m_passwd.c_str());*/
         m_connection.reset(driver->connect(m_url, m_user, m_passwd));
         m_connection->setSchema(m_db);
 

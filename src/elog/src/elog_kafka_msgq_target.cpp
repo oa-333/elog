@@ -76,7 +76,6 @@ bool ELogKafkaMsgQTarget::start() {
     if (!parseHeaders(m_headers)) {
         return false;
     }
-    char hostname[128];
     char errstr[512];
 
     m_conf = rd_kafka_conf_new();
@@ -84,7 +83,6 @@ bool ELogKafkaMsgQTarget::start() {
         formatClientId();
     }
 
-    fprintf(stderr, "Kafka client id is: %s\n", m_clientId.c_str());
     if (rd_kafka_conf_set(m_conf, "client.id", m_clientId.c_str(), errstr, sizeof(errstr)) !=
         RD_KAFKA_CONF_OK) {
         ELogSystem::reportError("Failed to create kafka configuration object: %s", errstr);
@@ -92,7 +90,6 @@ bool ELogKafkaMsgQTarget::start() {
         return false;
     }
 
-    fprintf(stderr, "Kafka setting bootstrap servers: %s\n", m_bootstrapServers.c_str());
     if (rd_kafka_conf_set(m_conf, "bootstrap.servers", m_bootstrapServers.c_str(), errstr,
                           sizeof(errstr)) != RD_KAFKA_CONF_OK) {
         ELogSystem::reportError("Failed to configure kafka bootstrap servers '%s': %s",
@@ -101,6 +98,7 @@ bool ELogKafkaMsgQTarget::start() {
         return false;
     }
 
+    // TODO: this should be configurable
     m_topicConf = rd_kafka_topic_conf_new();
     if (rd_kafka_topic_conf_set(m_topicConf, "acks", "all", errstr, sizeof(errstr)) !=
         RD_KAFKA_CONF_OK) {
