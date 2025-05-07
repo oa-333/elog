@@ -439,6 +439,27 @@ The following syntax is supported:
     db://provider?conn-string=<url>&insert-query=<insert-query>
     msgq://provider?... (see example below for more details)
 
+Log targets can be assigned a flush policy (file targets by default flush after every message).
+The flush policy can be configured as follows:
+
+    flush-policy=none|immediate|count|size|time
+
+Where each value designates a different policy:
+
+- none: no flushing should take place
+- immediate: orders to flush log target after each log message sending
+- count: Order to flush log target after a configured amount of log messages has been sent
+- size: Order to flush log target after a configured amount of bytes of log messages has been sent
+- time: Order to flush log target after a configured amount of time passed since last flush took place
+
+The last three flush policies require the following addition parameter each respectively:
+
+- flush-count
+- flush-size-bytes
+- flush-timeout-millis
+
+For more complex flush policy, assign a name to the log target and configure manually its flush policy.
+
 The following optional parameters are supported for compound log targets:
 
     defer (no value associated)
@@ -497,5 +518,19 @@ The following example shows how to connect to a Kafka topic:
 The kafka log target uses the 'msgq' schema, and 'kafka' provider.  
 Two parameters are expected: 'bootstrap-servers' and 'topic'.  
 Optionally, a partition id may be passed as well with the syntax 'partition={id}.  
-Pay attention that in this example the global log format is used as the message payload.  
-Future version will support passing log record fields in message headers.
+Pay attention that in the example above, the global log format is used as the message payload.  
+If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
+
+In case a flush policy is used, then the flush timeouts, both during regular flush, and during shutdown flush,  
+can be configured via 'kafka-flush-timeout-millis' and 'shutdown-kafka-flush-timeout-millis' respectively:
+
+    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records&kafka-flush-timeout-millis=50&flush-policy=immediate
+
+Pay attention that the flush-policy parameter enforces kafka message flush after each message is being produced.  
+Different flush policies can be applied, as explained above.
+
+In case message headers are to be passed as well, the 'headers' parameter should be used as a CSV property list:
+
+    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records&headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
+
+Since log target resource strings tend to get complex, future versions will include property trees for configuration.
