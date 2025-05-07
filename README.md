@@ -245,10 +245,33 @@ The following special log field reference tokens are understood by the ELog syst
 Tokens may contain justification number, where positive means justify to the left,  
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
 
-In order to use some other formatting scheme, the ELogFormatter may be derived, and the virtual method formatLogMsg() should be overridden.  
-In addition, the list of special log field reference tokens understood by ELog may be extended by deriving from ELogFormatter  
-and overriding the createFieldSelector() virtual method.  
-A specialized field selector will be needed as well (see elog_field_selector.h).
+In order to extend the formatting scheme with new reference tokens, ELogFieldSelector should be derived, implemented, and registered.  
+For instance:
+
+    class MyFieldSelector : public ELogFieldSelector {
+    public:
+        MyFieldSelector(int justify, ...) : ELogFieldSelector(ELogFieldType::FT_INT, justify) {...}
+        ~MyFieldSelector() override {...}
+
+        void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final {
+            // implement
+            // obtain the data and pass it to the receptor, with justify value. For instance:
+            uint64_t myIntData = ...;
+            receptor->receiveIntField(myIntData, m_justify);
+        }
+
+    private:
+        ELOG_DECLARE_FIELD_SELECTOR(MyFieldSelector, refname);
+    };
+
+Pay attention that now, in the format line configuration you may reference this new token with ${refname},  
+as specified in the ELOG_DECLARE_FIELD_SELECTOR() macro.
+
+In addition, in the source file, make sure the implement the field selector registration, as follows:
+
+    ELOG_IMPLEMENT_FIELD_SELECTOR(MyFieldSelector)
+
+For more examples see elog_field_selector.h and elog_field_selector.cpp.
 
 ### Filtering Log Messages
 
@@ -358,6 +381,7 @@ The following properties are recognized (the rest are ignored):
 - log_format: configures log line format specification
 - log_level: configures global log level of the root log source, allows specifying propagation (see below)
 - {source-name}.log_level: configures log level of a specific log source
+- log_rate_limit: configures the global log rate limit (maximum number of messages per second)
 - log_target: configures a log target (may be repeated several times)
 
 #### Configuring log level
