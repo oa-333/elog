@@ -369,6 +369,14 @@ public:
     static void setLogFilter(ELogFilter* logFilter);
 
     /**
+     * @brief Sets a global rate limit on message logging.
+     * @param maxMsgPerSecond The maximum allowed number of message logging within a 1 second
+     * window of time.
+     * @return True if the operation succeeded, otherwise false.
+     */
+    static bool setRateLimit(uint32_t maxMsgPerSecond);
+
+    /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
      * @return true If the log record is to be processed.
@@ -405,6 +413,7 @@ private:
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
     static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                               ELogSource::PropagateMode& propagateMode);
+    static bool configureRateLimit(const std::string rateLimitCfg);
     static bool configureLogTarget(const std::string& logTargetCfg);
 
     static bool parseLogTargetSpec(const std::string& logTargetCfg, ELogTargetSpec& logTargetSpec);
@@ -415,6 +424,10 @@ private:
                                     const ELogTargetSpec& logTargetSpec);
     static bool applyTargetLogFormat(ELogTarget* logTarget, const std::string& logTargetCfg,
                                      const ELogTargetSpec& logTargetSpec);
+    static bool applyTargetFlushPolicy(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                       const ELogTargetSpec& logTargetSpec);
+    static bool applyTargetRateLimiter(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                       const ELogTargetSpec& logTargetSpec);
     static ELogTarget* applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
                                            const ELogTargetSpec& logTargetSpec,
                                            bool& errorOccurred);

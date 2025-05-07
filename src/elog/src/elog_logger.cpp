@@ -141,7 +141,10 @@ void ELogLogger::finishLog() {
         recordBuilder.finalize();
 
         // send to log targets
-        ELogSystem::log(recordBuilder.getLogRecord());
+        const ELogRecord& logRecord = recordBuilder.getLogRecord();
+        if (ELogSystem::filterLogMsg(logRecord)) {
+            ELogSystem::log(logRecord);
+        }
 
         // reset log record data
         recordBuilder.reset();

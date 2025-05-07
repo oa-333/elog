@@ -14,9 +14,12 @@ namespace elog {
 class ELogKafkaMsgQTarget : public ELogMsgQTarget {
 public:
     ELogKafkaMsgQTarget(const std::string& bootstrapServers, const std::string& topicName,
-                        int partition = -1)
+                        int partition = -1, uint32_t flushTimeoutMillis = 0,
+                        uint32_t shutdownFlushTimeoutMillis = 0)
         : m_bootstrapServers(bootstrapServers),
           m_topicName(topicName),
+          m_flushTimeoutMillis(flushTimeoutMillis),
+          m_shutdownFlushTimeoutMillis(shutdownFlushTimeoutMillis),
           m_conf(nullptr),
           m_topicConf(nullptr),
           m_producer(nullptr),
@@ -35,9 +38,14 @@ public:
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord) final;
 
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flush() final;
+
 private:
     std::string m_bootstrapServers;
     std::string m_topicName;
+    uint32_t m_flushTimeoutMillis;
+    uint32_t m_shutdownFlushTimeoutMillis;
 
     std::string m_clientId;
     rd_kafka_conf_t* m_conf;

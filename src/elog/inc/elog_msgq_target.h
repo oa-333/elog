@@ -14,7 +14,7 @@ namespace elog {
 class ELogMsgQTarget : public ELogTarget {
 public:
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() final {}
+    void flush() override {}
 
 protected:
     ELogMsgQTarget() {}

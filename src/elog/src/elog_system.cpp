@@ -15,6 +15,7 @@
 #include "elog_msgq_schema_handler.h"
 #include "elog_quantum_target.h"
 #include "elog_queued_target.h"
+#include "elog_rate_limiter.h"
 #include "elog_segmented_file_target.h"
 #include "elog_sys_schema_handler.h"
 #include "elog_syslog_target.h"
@@ -333,6 +334,24 @@ bool ELogSystem::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
     return true;
 }
 
+bool ELogSystem::configureRateLimit(const std::string rateLimitCfg) {
+    uint32_t maxMsgPerSec = 0;
+    std::size_t pos = 0;
+    try {
+        maxMsgPerSec = std::stoul(rateLimitCfg, &pos);
+    } catch (std::exception& e) {
+        ELogSystem::reportError("Invalid log_rate_limit value %s: (%s)", rateLimitCfg.c_str(),
+                                e.what());
+        return false;
+    }
+    if (pos != rateLimitCfg.length()) {
+        ELogSystem::reportError("Excess characters at log_rate_limit value: %s",
+                                rateLimitCfg.c_str());
+        return false;
+    }
+    return setRateLimit(maxMsgPerSec);
+}
+
 bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
     // the following formats are currently supported as a URL-like string
     //
@@ -394,6 +413,18 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
 
         // apply log format if any
         if (!applyTargetLogFormat(logTarget, logTargetCfg, logTargetSpec)) {
+            delete logTarget;
+            return false;
+        }
+
+        // apply flush policy if any
+        if (!applyTargetFlushPolicy(logTarget, logTargetCfg, logTargetSpec)) {
+            delete logTarget;
+            return false;
+        }
+
+        // apply rate limiter if any
+        if (!applyTargetRateLimiter(logTarget, logTargetCfg, logTargetSpec)) {
             delete logTarget;
             return false;
         }
@@ -510,6 +541,101 @@ bool ELogSystem::applyTargetLogFormat(ELogTarget* logTarget, const std::string& 
             return false;
         }
         logTarget->setLogFormatter(logFormatter);
+    }
+    return true;
+}
+
+bool ELogSystem::applyTargetFlushPolicy(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                        const ELogTargetSpec& logTargetSpec) {
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("flush_policy");
+    if (itr != logTargetSpec.m_props.end()) {
+        ELogFlushPolicy* flushPolicy = nullptr;
+        const std::string& flushPolicyCfg = itr->second;
+        if (flushPolicyCfg.compare("immediate") == 0) {
+            flushPolicy = new (std::nothrow) ELogImmediateFlushPolicy();
+        } else if (flushPolicyCfg.compare("count") == 0) {
+            ELogPropertyMap::const_iterator itr2 = logTargetSpec.m_props.find("flush-count");
+            if (itr2 == logTargetSpec.m_props.end()) {
+                reportError(
+                    "Invalid flush policy configuration, missing expected flush-count property for "
+                    "flush-policy=count: %s",
+                    logTargetCfg.c_str());
+                return false;
+            }
+            uint32_t logCountLimit = 0;
+            if (!parseIntProp("flush-count", logTargetCfg, itr2->second, logCountLimit, true)) {
+                reportError(
+                    "Invalid flush policy configuration, flush-count property value '%s' is an "
+                    "ill-formed integer: %s",
+                    itr2->second.c_str(), logTargetCfg.c_str());
+                return false;
+            }
+            flushPolicy = new (std::nothrow) ELogCountFlushPolicy(logCountLimit);
+        } else if (flushPolicyCfg.compare("size") == 0) {
+            ELogPropertyMap::const_iterator itr2 = logTargetSpec.m_props.find("flush-size-bytes");
+            if (itr2 == logTargetSpec.m_props.end()) {
+                reportError(
+                    "Invalid flush policy configuration, missing expected flush-size-bytes "
+                    "property for flush-policy=size: %s",
+                    logTargetCfg.c_str());
+                return false;
+            }
+            uint32_t logSizeLimitBytes = 0;
+            if (!parseIntProp("flush-size-bytes", logTargetCfg, itr2->second, logSizeLimitBytes,
+                              true)) {
+                reportError(
+                    "Invalid flush policy configuration, flush-size-bytes property value '%s' is "
+                    "an ill-formed integer: %s",
+                    itr2->second.c_str(), logTargetCfg.c_str());
+                return false;
+            }
+            flushPolicy = new (std::nothrow) ELogSizeFlushPolicy(logSizeLimitBytes);
+        } else if (flushPolicyCfg.compare("time") == 0) {
+            ELogPropertyMap::const_iterator itr2 =
+                logTargetSpec.m_props.find("flush-timeout-millis");
+            if (itr2 == logTargetSpec.m_props.end()) {
+                reportError(
+                    "Invalid flush policy configuration, missing expected flush-timeout-millis "
+                    "property for flush-policy=time: %s",
+                    logTargetCfg.c_str());
+                return false;
+            }
+            uint32_t logTimeLimitMillis = 0;
+            if (!parseIntProp("flush-timeout-millis", logTargetCfg, itr2->second,
+                              logTimeLimitMillis, true)) {
+                reportError(
+                    "Invalid flush policy configuration, flush-timeout-millis property value '%s' "
+                    "is an ill-formed integer: %s",
+                    itr2->second.c_str(), logTargetCfg.c_str());
+                return false;
+            }
+            flushPolicy = new (std::nothrow) ELogTimedFlushPolicy(logTimeLimitMillis, logTarget);
+        } else {
+            reportError("Unrecognized flush policy configuration %s: %s", flushPolicyCfg.c_str(),
+                        logTargetCfg.c_str());
+            return false;
+        }
+        logTarget->setFlushPolicy(flushPolicy);
+    }
+    return true;
+}
+
+bool ELogSystem::applyTargetRateLimiter(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                        const ELogTargetSpec& logTargetSpec) {
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("rate-limit-msg-per-sec");
+    if (itr != logTargetSpec.m_props.end()) {
+        const std::string& rateLimitCfg = itr->second;
+        uint32_t maxMsgPerSec = 0;
+        if (!parseIntProp("rate-limit-msg-per-sec", logTargetCfg, rateLimitCfg, maxMsgPerSec,
+                          true)) {
+            reportError(
+                "Invalid rate limit configuration, property value '%s' is an ill-formed integer: "
+                "%s",
+                rateLimitCfg.c_str(), logTargetCfg.c_str());
+            return false;
+        }
+        ELogRateLimiter* rateLimiter = new (std::nothrow) ELogRateLimiter(maxMsgPerSec);
+        logTarget->setLogFilter(rateLimiter);
     }
     return true;
 }
@@ -642,12 +768,18 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
                                          bool defineMissingPath /* = false */) {
     // configure log format (unrelated to order of appearance)
     // NOTE: only one such item is expected
-    ELogPropertySequence::const_iterator itr = std::find_if(
-        props.begin(), props.end(),
-        [](const ELogProperty& prop) { return prop.first.compare("log_format") == 0; });
-    if (itr != props.end()) {
-        if (!configureLogFormat(itr->second.c_str())) {
-            reportError("Invalid log format in properties: %s", itr->second.c_str());
+    std::string logFormatCfg;
+    if (getProp(props, "log_format", logFormatCfg)) {
+        if (!configureLogFormat(logFormatCfg.c_str())) {
+            reportError("Invalid log format in properties: %s", logFormatCfg.c_str());
+            return false;
+        }
+    }
+
+    // configure global rate limit
+    std::string rateLimitCfg;
+    if (getProp(props, "log_rate_limit", rateLimitCfg)) {
+        if (!configureRateLimit(rateLimitCfg)) {
             return false;
         }
     }
@@ -668,6 +800,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
                 return false;
             }
             logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode});
+            continue;
         }
 
         // check for log target
@@ -676,6 +809,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
             if (!configureLogTarget(prop.second)) {
                 return false;
             }
+            continue;
         }
 
         // configure log levels of log sources
@@ -1097,6 +1231,16 @@ void ELogSystem::setLogFilter(ELogFilter* logFilter) {
         delete sGlobalFilter;
     }
     sGlobalFilter = logFilter;
+}
+
+bool ELogSystem::setRateLimit(uint32_t maxMsgPerSecond) {
+    ELogRateLimiter* rateLimiter = new (std::nothrow) ELogRateLimiter(maxMsgPerSecond);
+    if (rateLimiter == nullptr) {
+        reportError("Failed to set rate limit, out of memory");
+        return false;
+    }
+    setLogFilter(rateLimiter);
+    return true;
 }
 
 bool ELogSystem::filterLogMsg(const ELogRecord& logRecord) {

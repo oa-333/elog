@@ -23,7 +23,7 @@ inline bool getProp(const ELogPropertySequence& props, const char* propName,
                     std::string& propValue) {
     ELogPropertySequence::const_iterator itr = std::find_if(
         props.begin(), props.end(),
-        [propName](const ELogProperty& prop) { return prop.second.compare(propName) == 0; });
+        [propName](const ELogProperty& prop) { return prop.first.compare(propName) == 0; });
     if (itr != props.end()) {
         propValue = itr->second;
         return true;

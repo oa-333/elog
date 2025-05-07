@@ -8,6 +8,9 @@
 
 namespace elog {
 
+static const uint32_t ELOG_DEFAULT_KAFKA_SHUTDOWN_FLUSH_TIMEOUT_MILLIS = 5000;
+static const uint32_t ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS = 100;
+
 class ELogKafkaMsgQFieldReceptor : public ELogFieldReceptor {
 public:
     ELogKafkaMsgQFieldReceptor() {}
@@ -121,7 +124,15 @@ bool ELogKafkaMsgQTarget::start() {
 
 bool ELogKafkaMsgQTarget::stop() {
     // wait for 5 seconds for all produces messages to be flushed
-    rd_kafka_flush(m_producer, 5000);
+    uint32_t flushTimeoutMillis = m_shutdownFlushTimeoutMillis;
+    if (flushTimeoutMillis == 0) {
+        flushTimeoutMillis = ELOG_DEFAULT_KAFKA_SHUTDOWN_FLUSH_TIMEOUT_MILLIS;
+    }
+    rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, flushTimeoutMillis);
+    if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
+        ELogSystem::reportError("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
+        return false;
+    }
 
     // now just cleanup
     cleanup();
@@ -143,6 +154,17 @@ void ELogKafkaMsgQTarget::log(const ELogRecord& logRecord) {
         const char* errMsg = rd_kafka_err2name(rd_kafka_last_error());
         ELogSystem::reportError("Failed to produce message on kafka topic %s: %s",
                                 m_topicName.c_str(), errMsg);
+    }
+}
+
+void ELogKafkaMsgQTarget::flush() {
+    uint32_t flushTimeoutMillis = m_flushTimeoutMillis;
+    if (flushTimeoutMillis == 0) {
+        flushTimeoutMillis = ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS;
+    }
+    rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, flushTimeoutMillis);
+    if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
+        ELogSystem::reportError("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
     }
 }
 
