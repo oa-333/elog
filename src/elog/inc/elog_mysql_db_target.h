@@ -16,8 +16,12 @@ namespace elog {
 class ELogMySqlDbTarget : public ELogDbTarget {
 public:
     ELogMySqlDbTarget(const std::string& url, const std::string& db, const std::string& user,
-                      const std::string& passwd, const std::string& insertStmt)
-        : ELogDbTarget(ELogDbFormatter::QueryStyle::QS_QMARK),
+                      const std::string& passwd, const std::string& insertStmt,
+                      ELogDbTarget::ThreadModel threadModel,
+                      uint32_t maxThreads = ELOG_DB_MAX_THREADS,
+                      uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
+        : ELogDbTarget("MySQL", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_QMARK,
+                       threadModel, maxThreads, reconnectTimeoutMillis),
           m_url(url),
           m_db(db),
           m_user(user),
@@ -28,14 +32,20 @@ public:
     ELogMySqlDbTarget(ELogMySqlDbTarget&&) = delete;
     ~ELogMySqlDbTarget() final {}
 
-    /** @brief Order the log target to start (required for threaded targets). */
-    bool start() final;
+protected:
+    /** @brief Allocates database access object. */
+    void* allocDbData() final { return new (std::nothrow) MySQLDbData(); }
 
-    /** @brief Order the log target to stop (required for threaded targets). */
-    bool stop() final;
+    /** @brief Frees database access object. */
+    void freeDbData(void* dbData) final { delete ((MySQLDbData*)dbData); }
+
+    /** @brief Initializes database access object. */
+    bool connectDb(void* dbData) final;
+
+    bool disconnectDb(void* dbData) final;
 
     /** @brief Sends a log record to a log target. */
-    void log(const ELogRecord& logRecord) final;
+    bool execInsert(const ELogRecord& logRecord, void* dbData) final;
 
 private:
     std::string m_url;
@@ -44,8 +54,12 @@ private:
     std::string m_passwd;
     std::string m_insertStmtText;
 
-    std::unique_ptr<sql::Connection> m_connection;
-    std::unique_ptr<sql::PreparedStatement> m_insertStmt;
+    struct MySQLDbData {
+        std::unique_ptr<sql::Connection> m_connection;
+        std::unique_ptr<sql::PreparedStatement> m_insertStmt;
+    };
+
+    MySQLDbData* validateConnectionState(void* dbData, bool shouldBeConnected);
 };
 
 }  // namespace elog

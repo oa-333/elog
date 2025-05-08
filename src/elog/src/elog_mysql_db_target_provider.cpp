@@ -7,10 +7,10 @@
 
 namespace elog {
 
-ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(const std::string& logTargetCfg,
-                                                    const ELogTargetSpec& targetSpec,
-                                                    const std::string& connString,
-                                                    const std::string& insertQuery) {
+ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(
+    const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
+    const std::string& connString, const std::string& insertQuery,
+    ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads, uint32_t reconnectTimeoutMillis) {
     // we expect 3 properties: db, user, password (optional)
     ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("db");
     if (itr == targetSpec.m_props.end()) {
@@ -38,8 +38,8 @@ ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(const std::string& logTarget
         return nullptr;
     }
     const std::string& passwd = itr->second;
-    ELogDbTarget* target =
-        new (std::nothrow) ELogMySqlDbTarget(connString, db, user, passwd, insertQuery);
+    ELogDbTarget* target = new (std::nothrow) ELogMySqlDbTarget(
+        connString, db, user, passwd, insertQuery, threadModel, maxThreads, reconnectTimeoutMillis);
     if (target == nullptr) {
         ELogSystem::reportError("Failed to allocate MySQL log target, out of memory");
     }

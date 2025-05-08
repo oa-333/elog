@@ -520,7 +520,25 @@ Pay attention to the last log target example components:
 - queue-batch-size: When this is present a queued log target is used
 - queue-timeout-millis: Specifies the timeout used by the queued log target
 
+In the example above, queue-batch-size and queue-timeout-millis are not related to the database target specification,  
+and their presence only configures a compound log target (namely, a queued log target over a database lgo target).  
+
 When using the db schema, the conn-string and insert-query components are mandatory.
+The following parameters are optional for database target configuration:
+
+- db-thread-model: Specified how the database should be accessed by multiple threads concurrently. Possible values:
+    - none: No thread-model is in use.  
+        User code is responsible for managing multi-threaded access to database log target.
+    - lock: A single lock is used to serialize all access to db log target.  
+        This is thread-safe but will not scale well, and may be suitable for simple multi-threaded scenarios.
+    - conn-per-thread: Each thread is allocated a separate connection, and no lock is used.
+        This is a thread-safe and scalable.
+- db-max-threads: When specifying db-thread-model=conn-per-thread it is possible also to configure the maximum  
+    number of threads expected to concurrently send log messages to the database log target.  
+    If not specified, then a default value of 4096 is used.
+- db-reconnect-timeout-millis: When using database log target, a background thread is used to reconnect to the  
+    database after disconnect. This value determines the timeout in milliseconds between any two consecutive reconnect attempts.
+
 Additional required components may differ from one database to another.
 
 ### Connecting to PostgreSQL
@@ -551,7 +569,23 @@ Here are the relevant components:
 
     - schema: db
     - path: sqlite
-    - conn-string: denote the path to the DB file on disk.
+    - conn-string: denotes the path to the DB file on disk.
+    - insert-query: The query used to insert a log record into the database
+
+### Connecting to MySQL (experimental)
+
+Following is a sample configuration for SQLite connector:
+
+    db://mysql?conn-string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert-query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
+
+Here are the relevant components:
+
+    - schema: db
+    - path: mysql
+    - conn-string: denotes the server address (host and port)
+    - db: denotes the database name
+    - user: the user name used to login to the database
+    - passwd: the password used to login to the database
     - insert-query: The query used to insert a log record into the database
 
 ### Connecting to Kafka Topic

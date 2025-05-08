@@ -18,7 +18,9 @@ public:
     ~ELogMySqlDbTargetProvider() final {}
 
     ELogDbTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
-                             const std::string& connString, const std::string& insertQuery) final;
+                             const std::string& connString, const std::string& insertQuery,
+                             ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads,
+                             uint32_t reconnectTimeoutMillis) final;
 };
 
 }  // namespace elog

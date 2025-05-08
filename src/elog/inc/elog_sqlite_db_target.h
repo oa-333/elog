@@ -15,8 +15,12 @@ namespace elog {
 
 class ELogSQLiteDbTarget : public ELogDbTarget {
 public:
-    ELogSQLiteDbTarget(const std::string& filePath, const std::string& insertStmt)
-        : ELogDbTarget(ELogDbFormatter::QueryStyle::QS_QMARK),
+    ELogSQLiteDbTarget(const std::string& filePath, const std::string& insertStmt,
+                       ELogDbTarget::ThreadModel threadModel,
+                       uint32_t maxThreads = ELOG_DB_MAX_THREADS,
+                       uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
+        : ELogDbTarget("SQLite", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_QMARK,
+                       threadModel, maxThreads, reconnectTimeoutMillis),
           m_filePath(filePath),
           m_insertStmtText(insertStmt),
           m_connection(nullptr),
@@ -26,14 +30,20 @@ public:
     ELogSQLiteDbTarget(ELogSQLiteDbTarget&&) = delete;
     ~ELogSQLiteDbTarget() final {}
 
-    /** @brief Order the log target to start (required for threaded targets). */
-    bool start() final;
+protected:
+    /** @brief Allocates database access object. */
+    void* allocDbData() final { return new (std::nothrow) SQLiteDbData(); }
 
-    /** @brief Order the log target to stop (required for threaded targets). */
-    bool stop() final;
+    /** @brief Frees database access object. */
+    void freeDbData(void* dbData) final { delete ((SQLiteDbData*)dbData); }
+
+    /** @brief Initializes database access object. */
+    bool connectDb(void* dbData) final;
+
+    bool disconnectDb(void* dbData) final;
 
     /** @brief Sends a log record to a log target. */
-    void log(const ELogRecord& logRecord) final;
+    bool execInsert(const ELogRecord& logRecord, void* dbData) final;
 
 private:
     std::string m_filePath;
@@ -41,6 +51,14 @@ private:
 
     sqlite3* m_connection;
     sqlite3_stmt* m_insertStmt;
+
+    struct SQLiteDbData {
+        sqlite3* m_connection;
+        sqlite3_stmt* m_insertStmt;
+        SQLiteDbData() : m_connection(nullptr), m_insertStmt(nullptr) {}
+    };
+
+    SQLiteDbData* validateConnectionState(void* dbData, bool shouldBeConnected);
 };
 
 }  // namespace elog

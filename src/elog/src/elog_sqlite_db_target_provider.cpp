@@ -7,11 +7,12 @@
 
 namespace elog {
 
-ELogDbTarget* ELogSQLiteDbTargetProvider::loadTarget(const std::string& logTargetCfg,
-                                                     const ELogTargetSpec& targetSpec,
-                                                     const std::string& connString,
-                                                     const std::string& insertQuery) {
-    ELogDbTarget* target = new (std::nothrow) ELogSQLiteDbTarget(connString, insertQuery);
+ELogDbTarget* ELogSQLiteDbTargetProvider::loadTarget(
+    const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
+    const std::string& connString, const std::string& insertQuery,
+    ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads, uint32_t reconnectTimeoutMillis) {
+    ELogDbTarget* target = new (std::nothrow) ELogSQLiteDbTarget(
+        connString, insertQuery, threadModel, maxThreads, reconnectTimeoutMillis);
     if (target == nullptr) {
         ELogSystem::reportError("Failed to allocate SQLite log target, out of memory");
     }

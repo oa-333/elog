@@ -19,12 +19,17 @@ public:
      * @param targetSpec The parsed configuration string.
      * @param connString The extracted connection string.
      * @param insertQuery The extracted insert query.
+     * @param threadModel The threading model to use with db access.
+     * @param maxThreads The maximum number of concurrent threads sending log messages to the
+     * database at any given point in time.
+     * @param reconnectTimeoutMillis Database reconnect timeout in millisecond.
      * @return ELogDbTarget* The resulting DB log target, or null of failed.
      */
     virtual ELogDbTarget* loadTarget(const std::string& logTargetCfg,
                                      const ELogTargetSpec& targetSpec,
-                                     const std::string& connString,
-                                     const std::string& insertQuery) = 0;
+                                     const std::string& connString, const std::string& insertQuery,
+                                     ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads,
+                                     uint32_t reconnectTimeoutMillis) = 0;
 
 protected:
     ELogDbTargetProvider() {}

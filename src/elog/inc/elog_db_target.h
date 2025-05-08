@@ -10,28 +10,63 @@
 
 namespace elog {
 
+/** @def Hard limit on maximum number of threads using DB logging. */
+#define ELOG_DB_MAX_THREADS 4096
+
+/** @def Attempt reconnect every second. */
+#define ELOG_DB_RECONNECT_TIMEOUT_MILLIS 1000
+
 /** @brief Abstract parent class for DB log targets. */
 class ELogDbTarget : public ELogTarget {
 public:
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool start() override;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stop() override;
+
+    /** @brief Sends a log record to a log target. */
+    void log(const ELogRecord& logRecord) override;
+
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush() final {}
 
-protected:
-    ELogDbTarget(ELogDbFormatter::QueryStyle queryStyle)
-        : m_formatter(queryStyle),
-          m_isConnected(false),
-          m_isReconnecting(false),
-          m_shouldStop(false) {}
-    ~ELogDbTarget() override {}
+    /** @brief Threading model constants. */
+    enum class ThreadModel : uint32_t {
+        /**
+         * @brief No threading model employed by the db target. The caller is responsible for
+         * multi-threaded access to underlying database objects (connection, prepared statement,
+         * etc.).
+         */
+        TM_NONE,
 
-    /**
-     * @brief Parses the insert statement loaded from configuration, builds all log record field
-     * selectors, and transforms the insert statement into DB acceptable format (i.e. with questions
-     * marks as place-holders or dollar sign with parameter ordinal number).
-     * @param insertStatement The insert statement to parse.
-     * @return true If succeeded, otherwise false.
-     */
-    bool parseInsertStatement(const std::string& insertStatement);
+        /** @brief All access to database objects will be serialized with a single lock. */
+        TM_LOCK,
+
+        /**
+         * @brief Database objects (connection, prepared statement, etc.) will be duplicated on a
+         * per-thread basis. No lock is used.
+         */
+        TM_CONN_PER_THREAD
+    };
+
+protected:
+    ELogDbTarget(const char* name, const char* rawInsertStatement,
+                 ELogDbFormatter::QueryStyle queryStyle,
+                 ThreadModel threadModel = ThreadModel::TM_LOCK,
+                 uint32_t maxThreads = ELOG_DB_MAX_THREADS,
+                 uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
+        : m_name(name),
+          m_formatter(queryStyle),
+          m_rawInsertStatement(rawInsertStatement),
+          m_insertStatementParsed(false),
+          m_threadModel(threadModel),
+          m_maxThreads(maxThreads),
+          m_reconnectTimeoutMillis(reconnectTimeoutMillis),
+          m_shouldStop(false),
+          m_shouldWakeUp(false) {}
+
+    ~ELogDbTarget() override {}
 
     /**
      * @brief Retrieves the processed insert statement resulting from the call to @ref
@@ -45,9 +80,8 @@ protected:
      * @brief Retrieves the parameter type list of the processed insert statement resulting from the
      * call to @ref parseInsertStatement().
      */
-    inline void getInsertStatementParamTypes(
-        std::vector<ELogDbFormatter::ParamType>& paramTypes) const {
-        return m_formatter.getParamTypes(paramTypes);
+    inline const std::vector<ELogDbFormatter::ParamType>& getInsertStatementParamTypes() const {
+        return m_paramTypes;
     }
 
     /**
@@ -62,36 +96,94 @@ protected:
         m_formatter.fillInsertStatement(logRecord, receptor);
     }
 
+    /** @brief Performs target level initialization. */
+    virtual void initDbTarget() {}
+
+    /** @brief Allocates database access object. */
+    virtual void* allocDbData() = 0;
+
+    /** @brief Frees database access object. */
+    virtual void freeDbData(void* dbData) = 0;
+
+    /** @brief Initializes database access object. */
+    virtual bool connectDb(void* dbData) = 0;
+
+    virtual bool disconnectDb(void* dbData) = 0;
+
+    /** @brief Sends a log record to a log target. */
+    virtual bool execInsert(const ELogRecord& logRecord, void* dbData) = 0;
+
+private:
+    // identification
+    std::string m_name;
+
+    // insert statement parsing members
+    ELogDbFormatter m_formatter;
+    std::string m_rawInsertStatement;
+    bool m_insertStatementParsed;
+    std::vector<ELogDbFormatter::ParamType> m_paramTypes;
+
+    ThreadModel m_threadModel;
+    uint32_t m_maxThreads;
+    uint32_t m_reconnectTimeoutMillis;
+
+    // single thread slot
+    struct ThreadSlot {
+        std::atomic<bool> m_isUsed;
+        std::atomic<bool> m_isConnected;
+        void* m_dbData;
+
+        ThreadSlot() : m_isUsed(false), m_isConnected(false), m_dbData(nullptr) {}
+        ThreadSlot(const ThreadSlot& slot) {
+            m_isUsed.store(slot.m_isUsed.load(std::memory_order_relaxed));
+            m_isConnected.store(slot.m_isConnected.load(std::memory_order_relaxed));
+            m_dbData = slot.m_dbData;
+        }
+        ThreadSlot(ThreadSlot&&) = delete;
+    };
+
+    std::vector<ThreadSlot> m_threadSlots;
+
+    std::thread m_reconnectDbThread;
+    std::mutex m_lock;
+    std::condition_variable m_cv;
+    bool m_shouldStop;
+    bool m_shouldWakeUp;
+
+    /**
+     * @brief Parses the insert statement loaded from configuration, builds all log record field
+     * selectors, and transforms the insert statement into DB acceptable format (i.e. with questions
+     * marks as place-holders or dollar sign with parameter ordinal number).
+     * @param insertStatement The insert statement to parse.
+     * @return true If succeeded, otherwise false.
+     */
+    bool parseInsertStatement(const std::string& insertStatement);
+
+    int allocSlot();
+
+    void freeSlot(int slot);
+
+    bool initConnection(int& slotId);
+
+    /** @brief Queries whether that database connection has been restored. */
+    inline bool isConnected(int slotId) {
+        return m_threadSlots[slotId].m_isConnected.load(std::memory_order_relaxed);
+    }
+
+    /** @brief Sets the database connection as connected. */
+    inline void setConnected(int slotId) {
+        m_threadSlots[slotId].m_isConnected.store(true, std::memory_order_relaxed);
+    }
+
     /** @brief Helper method for derived classes to reconnect to database. */
-    void startReconnect(uint32_t reconnectTimeoutMillis = 1000);
+    void startReconnect();
 
     /** @brief Helper method to stop the reconnect thread. */
     void stopReconnect();
 
-    /** @brief Queries whether that database connection has been restored. */
-    inline bool isConnected() {
-        bool res = m_isConnected.load(std::memory_order_relaxed);
-        if (res && m_reconnectDbThread.joinable()) {
-            m_reconnectDbThread.join();
-        }
-        return res;
-    }
+    void reconnectTask();
 
-    /** @brief Sets the database connection as connected. */
-    inline void setConnected() { m_isConnected.store(true, std::memory_order_relaxed); }
-
-private:
-    ELogDbFormatter m_formatter;
-    std::string m_processedInsertQuery;
-
-    std::thread m_reconnectDbThread;
-    std::atomic<bool> m_isConnected;
-    std::atomic<bool> m_isReconnecting;
-    std::mutex m_lock;
-    std::condition_variable m_cv;
-    bool m_shouldStop;
-
-    void reconnectTask(uint32_t reconnectTimeoutMillis);
+    void wakeUpReconnect();
 
     bool shouldStop();
 };

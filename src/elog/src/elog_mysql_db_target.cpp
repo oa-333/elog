@@ -43,6 +43,73 @@ private:
     uint32_t m_fieldNum;
 };
 
+bool ELogMySqlDbTarget::connectDb(void* dbData) {
+    MySQLDbData* mysqlDbData = validateConnectionState(dbData, false);
+    if (mysqlDbData == nullptr) {
+        return false;
+    }
+
+    // connect to database
+    try {
+        sql::Driver* driver = sql::mysql::get_driver_instance();
+        mysqlDbData->m_connection.reset(driver->connect(m_url, m_user, m_passwd));
+        mysqlDbData->m_connection->setSchema(m_db);
+
+        // we need to replace every log field reference with a question mark and then prepare a
+        // field selector
+        const std::string& processedInsertStmt = getProcessedInsertStatement();
+        mysqlDbData->m_insertStmt.reset(
+            mysqlDbData->m_connection->prepareStatement(processedInsertStmt.c_str()));
+    } catch (sql::SQLException& e) {
+        ELogSystem::reportError(
+            "Failed to start MySQL log target. SQL State: %p. Vendor Code: %d. Reason: %p",
+            e.getSQLStateCStr(), e.getErrorCode(), e.what());
+        mysqlDbData->m_insertStmt.reset();
+        mysqlDbData->m_connection.reset();
+        return false;
+    }
+    return true;
+}
+
+bool ELogMySqlDbTarget::disconnectDb(void* dbData) {
+    MySQLDbData* mysqlDbData = validateConnectionState(dbData, true);
+    if (mysqlDbData == nullptr) {
+        return false;
+    }
+
+    try {
+        mysqlDbData->m_insertStmt.reset();
+        mysqlDbData->m_connection.reset();
+        return true;
+    } catch (sql::SQLException& e) {
+        ELogSystem::reportError("Failed to stop MySQL log target: %s", e.what());
+        return false;
+    }
+    return true;
+}
+
+bool ELogMySqlDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
+    MySQLDbData* mysqlDbData = validateConnectionState(dbData, true);
+    if (mysqlDbData == nullptr) {
+        return false;
+    }
+
+    try {
+        // this puts each log record field into the correct place in the prepared statement
+        ELogMySqlDbFieldReceptor mySqlFieldReceptor(mysqlDbData->m_insertStmt.get());
+        mysqlDbData->m_insertStmt->clearParameters();
+        fillInsertStatement(logRecord, &mySqlFieldReceptor);
+        if (mysqlDbData->m_insertStmt->execute()) {
+            return;
+        }
+        ELogSystem::reportError("Failed to send log message to MySQL log target");
+    } catch (sql::SQLException& e) {
+        ELogSystem::reportError("Failed to send log message to MySQL log target: %s", e.what());
+    }
+    return false;
+}
+
+#if 0
 bool ELogMySqlDbTarget::start() {
     // parse the statement with log record field selector tokens
     // this builds a processed statement text with questions marks instead of log record field
@@ -113,6 +180,39 @@ void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
 
     // failure to send a record, so order parent class to start reconnect background task
     startReconnect();
+}
+#endif
+
+ELogMySqlDbTarget::MySQLDbData* ELogMySqlDbTarget::validateConnectionState(void* dbData,
+                                                                           bool shouldBeConnected) {
+    if (dbData == nullptr) {
+        ELogSystem::reportError(
+            "Cannot connect to MySQL database, invalid connection state (internal error, database "
+            "object is null)");
+        return nullptr;
+    }
+    MySQLDbData* mysqlDbData = (MySQLDbData*)dbData;
+    if (shouldBeConnected && mysqlDbData->m_connection.get() == nullptr) {
+        ELogSystem::reportError(
+            "Cannot connect to MySQL database, invalid connection state (internal error, "
+            "connection object is null)");
+        return nullptr;
+    } else if (!shouldBeConnected && mysqlDbData->m_connection.get() != nullptr) {
+        ELogSystem::reportError(
+            "Cannot connect to MySQL database, invalid connection state (internal error, "
+            "connection object is not null)");
+        return nullptr;
+    }
+    if ((mysqlDbData->m_connection.get() == nullptr &&
+         mysqlDbData->m_insertStmt.get() != nullptr) ||
+        (mysqlDbData->m_connection.get() != nullptr &&
+         mysqlDbData->m_insertStmt.get() == nullptr)) {
+        ELogSystem::reportError(
+            "Cannot connect to MySQL database, inconsistent connection state (internal error, "
+            "connection and statement objects are neither both null nor both non-null)");
+        return nullptr;
+    }
+    return mysqlDbData;
 }
 
 }  // namespace elog

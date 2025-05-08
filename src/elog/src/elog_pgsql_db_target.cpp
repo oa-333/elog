@@ -57,6 +57,115 @@ private:
     std::vector<int> m_paramLengths;
 };
 
+void ELogPGSQLDbTarget::initDbTarget() {
+    m_stmtName = "elog_pgsql_insert_stmt";
+    m_paramFormats.resize(getInsertStatementParamTypes().size(), 0);
+}
+
+bool ELogPGSQLDbTarget::connectDb(void* dbData) {
+    PGSQLDbData* pgsqlDbData = validateConnectionState(dbData, false);
+    if (pgsqlDbData == nullptr) {
+        return false;
+    }
+
+    // connect to database
+    pgsqlDbData->m_conn = PQconnectdb(m_connString.c_str());
+    if (pgsqlDbData->m_conn == nullptr) {
+        ELogSystem::reportError(
+            "Failed to open PostgreSQL db connection with connection string: %s",
+            m_connString.c_str());
+        return false;
+    }
+
+    // check connection state
+    if (PQstatus(pgsqlDbData->m_conn) != CONNECTION_OK) {
+        ELogSystem::reportError(
+            "Failed to open PostgreSQL db connection with connection string%s: %s",
+            m_connString.c_str(), PQerrorMessage(pgsqlDbData->m_conn));
+        PQfinish(pgsqlDbData->m_conn);
+        pgsqlDbData->m_conn = nullptr;
+        return false;
+    }
+
+    // prepare statement
+    // NOTE: according to libpq documentation, PGresult can return null, so we must be cautious
+    PGresult* res =
+        PQprepare(pgsqlDbData->m_conn, m_stmtName.c_str(), getProcessedInsertStatement().c_str(),
+                  getInsertStatementParamTypes().size(), nullptr);
+    if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
+        char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
+        char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
+        ELogSystem::reportError("Failed to prepare PostgreSQL statement '%s': %s (status: %s)",
+                                getProcessedInsertStatement().c_str(), errStr, statusStr);
+        PQclear(res);
+        PQfinish(pgsqlDbData->m_conn);
+        pgsqlDbData->m_conn = nullptr;
+        return false;
+    }
+    PQclear(res);
+    return true;
+}
+
+bool ELogPGSQLDbTarget::disconnectDb(void* dbData) {
+    PGSQLDbData* pgsqlDbData = validateConnectionState(dbData, true);
+    if (pgsqlDbData == nullptr) {
+        return false;
+    }
+
+#ifdef ELOG_MINGW
+    PGresult* res = PQclosePrepared(pgsqlDbData->m_conn, m_stmtName.c_str());
+    if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
+        char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
+        char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
+        ELogSystem::reportError(
+            "Failed to close prepared PostgreSQL statement '%s': %s (status: %s)",
+            m_stmtName.c_str(), errStr, statusStr);
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+#endif
+
+    PQfinish(pgsqlDbData->m_conn);
+    pgsqlDbData->m_conn = nullptr;
+    return true;
+}
+
+bool ELogPGSQLDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
+    PGSQLDbData* pgsqlDbData = validateConnectionState(dbData, true);
+    if (pgsqlDbData == nullptr) {
+        return false;
+    }
+
+    // this puts each log record field into the correct place in the prepared statement parameters
+    ELogPGSQLDbFieldReceptor pgsqlFieldReceptor;
+    fillInsertStatement(logRecord, &pgsqlFieldReceptor);
+    pgsqlFieldReceptor.prepareParams();
+
+    // execute prepared statement
+    PGresult* res =
+        PQexecPrepared(pgsqlDbData->m_conn, m_stmtName.c_str(),
+                       getInsertStatementParamTypes().size(), pgsqlFieldReceptor.getParamValues(),
+                       pgsqlFieldReceptor.getParamLengths(), &m_paramFormats[0], 0);
+    if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
+        char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
+        char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
+        std::string logMsg;
+        ELogSystem::formatLogMsg(logRecord, logMsg);
+        ELogSystem::reportError(
+            "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
+            statusStr, logMsg.c_str());
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+    return true;
+}
+
+#if 0
 bool ELogPGSQLDbTarget::start() {
     // NOTE: this method may be called repeated by the reconnect thread, so we need to be careful we
     // perform this initialization only once
@@ -181,6 +290,7 @@ void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
     }
     PQclear(res);
 }
+#endif
 
 void ELogPGSQLDbTarget::formatConnString(const std::string& host, uint32_t port,
                                          const std::string& db, const std::string& user,
@@ -189,6 +299,29 @@ void ELogPGSQLDbTarget::formatConnString(const std::string& host, uint32_t port,
     s << "postgresql://postgres@" << host << "?port=" << port << "&dbname=" << db
       << "&user=" << user << "&password=" << passwd;
     m_connString = s.str();
+}
+
+ELogPGSQLDbTarget::PGSQLDbData* ELogPGSQLDbTarget::validateConnectionState(void* dbData,
+                                                                           bool shouldBeConnected) {
+    if (dbData == nullptr) {
+        ELogSystem::reportError(
+            "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
+            "database object is null)");
+        return nullptr;
+    }
+    PGSQLDbData* pgsqlDbData = (PGSQLDbData*)dbData;
+    if (shouldBeConnected && pgsqlDbData->m_conn == nullptr) {
+        ELogSystem::reportError(
+            "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
+            "connection object is null)");
+        return nullptr;
+    } else if (!shouldBeConnected && pgsqlDbData->m_conn != nullptr) {
+        ELogSystem::reportError(
+            "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
+            "connection object is not null)");
+        return nullptr;
+    }
+    return pgsqlDbData;
 }
 
 }  // namespace elog
