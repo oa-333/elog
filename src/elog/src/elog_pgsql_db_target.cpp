@@ -58,14 +58,27 @@ private:
 };
 
 bool ELogPGSQLDbTarget::start() {
-    // parse the statement with log record field selector tokens
-    // this builds a processed statement text with questions marks instead of log record field
-    // references, and also prepares the field selector array
-    if (!parseInsertStatement(m_insertStmtText)) {
-        return false;
-    }
-    std::string processedInsertStmt = getProcessedInsertStatement();
+    // NOTE: this method may be called repeated by the reconnect thread, so we need to be careful we
+    // perform this initialization only once
 
+    // parse the statement with log record field selector tokens
+    // this builds a processed statement text with questions dollars instead of log record field
+    // references, and also prepares the field selector array
+    if (!m_insertStatementParsed) {
+        if (!parseInsertStatement(m_insertStmtText)) {
+            return false;
+        }
+        m_processedInsertStmt = getProcessedInsertStatement();
+        getInsertStatementParamTypes(m_paramTypes);
+        m_stmtName = "elog_pgsql_insert_stmt";
+        m_insertStatementParsed = true;
+
+        // get PG parameter type array
+        m_paramFormats.resize(m_paramTypes.size(), 0);
+        // convertToPgParamTypes();
+    }
+
+    // try to connect to database server
     m_connection = PQconnectdb(m_connString.c_str());
     if (m_connection == nullptr) {
         ELogSystem::reportError(
@@ -82,18 +95,16 @@ bool ELogPGSQLDbTarget::start() {
         return false;
     }
 
-    // get PG parameter type array
-    getInsertStatementParamTypes(m_paramTypes);
-    // convertToPgParamTypes();
-
     // prepare statement
-    m_stmtName = "elog_pgsql_insert_stmt";
-    PGresult* res = PQprepare(m_connection, m_stmtName.c_str(), processedInsertStmt.c_str(),
+    // NOTE: according to libpq documentation, PGresult can return null, so we must be cautious
+    PGresult* res = PQprepare(m_connection, m_stmtName.c_str(), m_processedInsertStmt.c_str(),
                               m_paramTypes.size(), nullptr);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        ELogSystem::reportError("Failed to prepare PostgreSQL statement '%s': %s",
-                                processedInsertStmt.c_str(), PQresultErrorMessage(res));
-        m_stmtName.clear();
+    if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
+        char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
+        char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
+        ELogSystem::reportError("Failed to prepare PostgreSQL statement '%s': %s (status: %s)",
+                                m_processedInsertStmt.c_str(), errStr, statusStr);
         PQclear(res);
         PQfinish(m_connection);
         m_connection = nullptr;
@@ -111,18 +122,20 @@ bool ELogPGSQLDbTarget::stop() {
     stopReconnect();
 
     if (m_connection != nullptr) {
-        if (!m_stmtName.empty()) {
 #ifdef ELOG_MINGW
-            PGresult* res = PQclosePrepared(m_connection, m_stmtName.c_str());
-            if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-                ELogSystem::reportError("Failed to close prepared PostgreSQL statement: %s",
-                                        PQresultErrorMessage(res));
-                PQclear(res);
-                return false;
-            }
+        PGresult* res = PQclosePrepared(m_connection, m_stmtName.c_str());
+        if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
+            ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
+            char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
+            char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
+            ELogSystem::reportError(
+                "Failed to close prepared PostgreSQL statement '%s': %s (status: %s)",
+                m_stmtName.c_str(), errStr, statusStr);
             PQclear(res);
-#endif
+            return false;
         }
+        PQclear(res);
+#endif
         PQfinish(m_connection);
         m_connection = nullptr;
     }
@@ -145,13 +158,21 @@ void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
     pgsqlFieldReceptor.prepareParams();
 
     // execute statement, retry if busy, discard all returned data (there shouldn't be any, though)
-    std::vector<int> paramFormats(m_paramTypes.size(), 0);
+    // NOTE: at least under MinGW it seems that the call to PQexecPrepared has some race issues,
+    // although the documentation does not state so, so we add a lock until this is clarified
+    std::unique_lock<std::mutex> lock(m_connLock);
     PGresult* res = PQexecPrepared(m_connection, m_stmtName.c_str(), m_paramTypes.size(),
                                    pgsqlFieldReceptor.getParamValues(),
-                                   pgsqlFieldReceptor.getParamLengths(), &paramFormats[0], 0);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        ELogSystem::reportError("Failed to execute prepared PostgreSQL statement: %s",
-                                PQresultErrorMessage(res));
+                                   pgsqlFieldReceptor.getParamLengths(), &m_paramFormats[0], 0);
+    if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
+        ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
+        char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
+        char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
+        std::string logMsg;
+        ELogSystem::formatLogMsg(logRecord, logMsg);
+        ELogSystem::reportError(
+            "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
+            statusStr, logMsg.c_str());
         PQclear(res);
 
         // failure to send a record, so order parent class to start reconnect background task

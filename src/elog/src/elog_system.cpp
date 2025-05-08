@@ -40,9 +40,7 @@ public:
     ~ELogDefaultErrorHandler() final {}
 
     void onError(const char* msg) final {
-        fputs("<ELOG> ERROR: ", stderr);
-        fputs(msg, stderr);
-        fputs("\n", stderr);
+        fprintf(stderr, "<ELOG> ERROR: %s\n", msg);
         fflush(stderr);
     }
 };

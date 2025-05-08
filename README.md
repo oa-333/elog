@@ -9,10 +9,11 @@ The ELog package provides the following notable features:
 - Logging to syslog, stderr, and/or stdout
 - Asynchronous logging
 - Almost fully configurable from configuration file (i.e. string property map)
-- Connectivity to Kafka (Linux only)
+- Connectivity to Kafka (Linux, Windows, MinGW)
 - Connectivity to PostgreSQL (Linux, MinGW)
 - Connectivity to SQLite (Windows, Linux, MinGW)
 - Connectivity to MySQL (experimental, Windows only)
+- Multiple platform support: Linux, Windows, MinGW
 
 Additional features:
 
@@ -29,6 +30,7 @@ Additional features:
 Planned Features:
 
 - Connectivity to Windows Event Log
+- Support on MacOS
 
 ## Description
 
@@ -50,7 +52,7 @@ In this case, the ELog can be used to log messages inside the library, and the u
 the ELog system to redirect and adapt library log message to its own logging system.
 This can be done actually quite easily and with much flexibility.
 
-For more information, see examples below.
+For more information, see documentation below.
 
 ## Getting Started
 
@@ -88,7 +90,7 @@ Oren Amor (oren.amor@gmail.com)
 
 This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
 
-## Examples
+## Documentation
 
 ### Initialization and Termination
 
@@ -245,6 +247,8 @@ The following special log field reference tokens are understood by the ELog syst
 Tokens may contain justification number, where positive means justify to the left,  
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
 
+### Extending The Formatting Scheme
+
 In order to extend the formatting scheme with new reference tokens, ELogFieldSelector should be derived, implemented, and registered.  
 For instance:
 
@@ -367,7 +371,7 @@ In case a combination of strategies is needed, either ELogAndFlushPolicy or ELog
 
 For any other specialized flush policy, derive from ELogFlushPolicy and override the shouldFlush() virtual method.
 
-### Configuring from properties
+### Configuring from Properties
 
 The ELogSystem facade provides a utility function to load configuration from properties map:
 
@@ -384,7 +388,7 @@ The following properties are recognized (the rest are ignored):
 - log_rate_limit: configures the global log rate limit (maximum number of messages per second)
 - log_target: configures a log target (may be repeated several times)
 
-#### Configuring log level
+#### Configuring Log Level
 
 The log level configuration items follow the following syntax:
 
@@ -436,8 +440,28 @@ The following syntax is supported:
     sys://syslog - add log target to syslog (or Windows event log, when running on Windows)
     file://path - add regular log target
     file://path?segment-size-mb=<segment-size-mb> - add segmented log target
-    db://provider?conn-string=<url>&insert-query=<insert-query>
+    db://provider?conn-string=<url>&insert-query=<insert-query>...
     msgq://provider?... (see example below for more details)
+
+Log targets may be assigned a name for identification, if further special configuration is required.  
+Target name may be specified by the 'name' parameter, as follows:
+
+    file://path?name=file-logger
+
+Next, the log target may be located as follows:
+
+    ELogTarget* logTarget = ELogSystem::getLogTarget("file-logger");
+
+### Individual Log Target Configuration
+
+The log line format and the log level of each target can be configured separately. For instance:
+
+    log_target = sys://syslog?log_level=FATAL&log_format=${level:6} ${prog} ${pid} [${tid}] <${src}> ${msg}
+    log_target = sys://stderr?log_level=ERROR&log_format=***ERROR*** ${time} ${level:6} ${msg}
+
+Pay attention that the rest of the log targets will use the global log level and line format configuration.
+
+### Configuring Flush Policy
 
 Log targets can be assigned a flush policy (file targets by default flush after every message).
 The flush policy can be configured as follows:
@@ -460,6 +484,8 @@ The last three flush policies require the following addition parameter each resp
 
 For more complex flush policy, assign a name to the log target and configure manually its flush policy.
 
+### Compound Log Targets
+
 The following optional parameters are supported for compound log targets:
 
     defer (no value associated)
@@ -472,18 +498,11 @@ The queue options specify a queued log target.
 The quantum option specifies a quantum log target.  
 All options should be separated by an ampersand (&).
 
-Log targets may be assigned a name for identification, if further special configuration is required.  
-Target name may be specified by the 'name' parameter, as follows:
-
-    file://path?name=file-logger
-
-Next, the log target may be located as follows:
-
-    ELogTarget* logTarget = ELogSystem::getLogTarget("file-logger");
-
 Here is an example for a deferred log target that uses segmented file log target:
 
     log_target = file://logs/app.log?segment-size-mb=4&deferred
+
+### Configuring Database Log Targets
 
 Here is another example for connecting to a MySQL database behind a queued log target:
 
@@ -492,7 +511,7 @@ Here is another example for connecting to a MySQL database behind a queued log t
 Pay attention to the last log target example components:
 
 - schema: db
-- path: mysql (designates the database type, currently only MySQL experimental log target is supported)
+- path: mysql (designates the database type)
 - conn-string: The connection string (url in MySQL terminology)
 - db: The MySQL db (schema) being connected to
 - user: The user name used to connect to the database
@@ -504,20 +523,46 @@ Pay attention to the last log target example components:
 When using the db schema, the conn-string and insert-query components are mandatory.
 Additional required components may differ from one database to another.
 
-In addition, the log line format and the log level of each target can be configured separately. For instance:
+### Connecting to PostgreSQL
 
-    log_target = sys://syslog?log_level=FATAL&log_format=${level:6} ${prog} ${pid} [${tid}] <${src}> ${msg}
-    log_target = sys://stderr?log_level=ERROR&log_format=***ERROR*** ${time} ${level:6} ${msg}
+Here are the required parameters for connecting to PostgreSQL:
 
-Pay attention that the rest of the log targets will use the global log level and line format configuration.
+    db://postgresql?conn-string=localhost&port=5432&db=mydb&user=oren&passwd=1234&insert-query=INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
+
+Here are the relevant components:
+
+    - schema: db
+    - path: postgresql
+    - conn-string: simply denotes the host name/ip.
+    - port: the server port (note, unlike MySQL, this is passed separately, and not as part of the connection string)
+    - user: The user name used to connect to the database
+    - passwd: The password used to connect to the database (for security put the configuration file in a directory with restricted access)
+    - insert-query: The query used to insert a log record into the database
+
+In this example there is no compound log target specification.
+
+### Connecting to SQLite
+
+Following is a sample configuration for SQLite connector:
+
+    db://sqlite?conn-string=wal.db&insert-query=INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
+
+Here are the relevant components:
+
+    - schema: db
+    - path: sqlite
+    - conn-string: denote the path to the DB file on disk.
+    - insert-query: The query used to insert a log record into the database
+
+### Connecting to Kafka Topic
 
 The following example shows how to connect to a Kafka topic:
 
     log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records
 
 The kafka log target uses the 'msgq' schema, and 'kafka' provider.  
-Two parameters are expected: 'bootstrap-servers' and 'topic'.  
-Optionally, a partition id may be passed as well with the syntax 'partition={id}.  
+Two mandatory parameters are expected: 'bootstrap-servers' and 'topic'.  
+Optionally, a partition id may be passed as well with the syntax 'partition={id}, and also headers (see below).  
 Pay attention that in the example above, the global log format is used as the message payload.  
 If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
 
