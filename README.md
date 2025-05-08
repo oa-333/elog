@@ -62,7 +62,13 @@ At application exit make sure to call elog::ELogSystem::terminate().
 
 ### Dependencies
 
-The ELog system has no special dependencies.
+The ELog system has no special dependencies, unless connecting to one of the external systems listed above.
+In particular the following compile/runtime dependencies exist in each case:
+
+- Kafka connector requires librdkafka.so
+- PostgreSQL connector requires libpq.so
+- SQLite connector requires libsqlite3.so
+- MySQL connector requires mysqlcppconn.lib for compile and mysqlcppconn-10-vs14.dll for runtime (Windows only)
 
 ### Installing
 
