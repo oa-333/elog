@@ -18,6 +18,7 @@
 #endif
 
 #define PROG_NAME_MAX 256
+#define THREAD_NAME_MAX 256
 
 #include <climits>
 #include <cstring>
@@ -30,7 +31,7 @@ namespace elog {
 static char hostName[HOST_NAME_MAX];
 static char userName[LOGIN_NAME_MAX];
 static char progName[PROG_NAME_MAX];
-static thread_local std::string sThreadName;
+static thread_local char sThreadName[THREAD_NAME_MAX] = {};
 
 #ifdef ELOG_WINDOWS
 static DWORD pid = 0;
@@ -217,7 +218,9 @@ const char* getUserName() { return userName; }
 
 const char* getProgramName() { return progName; }
 
-void setCurrentThreadNameField(const char* threadName) { sThreadName = threadName; }
+void setCurrentThreadNameField(const char* threadName) {
+    strncpy(sThreadName, threadName, THREAD_NAME_MAX);
+}
 
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     receptor->receiveStringField(m_text, m_justify);
@@ -267,7 +270,7 @@ void ELogThreadIdSelector::selectField(const ELogRecord& record, ELogFieldRecept
 }
 
 void ELogThreadNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(sThreadName.c_str(), m_justify);
+    receptor->receiveStringField(sThreadName, m_justify);
 }
 
 void ELogSourceSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
