@@ -1,6 +1,7 @@
 #ifndef __ELOG_TARGET_H__
 #define __ELOG_TARGET_H__
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,8 @@ public:
         setLogFormatter(nullptr);
         setFlushPolicy(nullptr);
     }
+
+    inline const char* getTypeName() const { return m_typeName.c_str(); }
 
     /** @brief Order the log target to start (required for threaded targets). */
     virtual bool start() = 0;
@@ -88,15 +91,31 @@ public:
      */
     void setFlushPolicy(ELogFlushPolicy* flushPolicy);
 
+    /** @brief As log target may be chained as in a list, this retrieves the final log target. */
+    virtual ELogTarget* getEndLogTarget() { return this; }
+
+    /**
+     * @brief Retrieves the number of bytes written to this log target. In case of a compound log
+     * target, this call retrieves the number recorded in the last log target.
+     */
+    inline uint64_t getBytesWritten() {
+        return getEndLogTarget()->m_bytesWritten.load(std::memory_order_relaxed);
+    }
+
+    /** @brief Queries whether the log target has written all pending messages. */
+    virtual bool isCaughtUp() { return true; }
+
 protected:
     // NOTE: setting log level to DIAG by default has the effect of no log level limitation on the
     // target
-    ELogTarget(ELogFlushPolicy* flushPolicy = nullptr)
-        : m_logLevel(ELEVEL_DIAG),
+    ELogTarget(const char* typeName, ELogFlushPolicy* flushPolicy = nullptr)
+        : m_typeName(typeName),
+          m_logLevel(ELEVEL_DIAG),
           m_logFilter(nullptr),
           m_logFormatter(nullptr),
           m_flushPolicy(flushPolicy),
-          m_addNewLine(false) {}
+          m_addNewLine(false),
+          m_bytesWritten(0) {}
 
     bool shouldLog(const ELogRecord& logRecord);
 
@@ -106,19 +125,25 @@ protected:
 
     bool shouldFlush(const std::string& logMsg);
 
+    inline void addBytesWritten(uint64_t bytes) {
+        m_bytesWritten.fetch_add(bytes, std::memory_order_relaxed);
+    }
+
 private:
+    std::string m_typeName;
     std::string m_name;
     ELogLevel m_logLevel;
     ELogFilter* m_logFilter;
     ELogFormatter* m_logFormatter;
     ELogFlushPolicy* m_flushPolicy;
     bool m_addNewLine;
+    std::atomic<uint64_t> m_bytesWritten;
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */
 class ELOG_API ELogCombinedTarget : public ELogTarget {
 public:
-    ELogCombinedTarget() {}
+    ELogCombinedTarget(const char* typeName) : ELogTarget(typeName) {}
     ~ELogCombinedTarget() final {}
 
     inline void addLogTarget(ELogTarget* target) { m_logTargets.push_back(target); }

@@ -8,7 +8,7 @@ ELogQueuedTarget::ELogQueuedTarget(ELogTarget* logTarget, uint32_t batchSize,
                                    uint32_t timeoutMillis)
     : ELogDeferredTarget(logTarget), m_batchSize(batchSize), m_timeoutMillis(timeoutMillis) {}
 
-ELogQueuedTarget::~ELogQueuedTarget() { stopLogThread(); }
+ELogQueuedTarget::~ELogQueuedTarget() {}
 
 void ELogQueuedTarget::waitQueue(std::unique_lock<std::mutex>& lock) {
     m_cv.wait_for(lock, m_timeoutMillis,

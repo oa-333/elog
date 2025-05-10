@@ -17,7 +17,7 @@ public:
     void flush() override {}
 
 protected:
-    ELogMsgQTarget() {}
+    ELogMsgQTarget() : ELogTarget("msgq") {}
     ~ELogMsgQTarget() override {}
 
     /**

@@ -115,6 +115,7 @@ bool ELogSystem::initGlobals() {
     }
     if (!initSchemaHandlers()) {
         reportError("Failed to initialize predefined schema handlers");
+        termGlobals();
         return false;
     }
 
@@ -123,6 +124,7 @@ bool ELogSystem::initGlobals() {
     sRootLogSource = new (std::nothrow) ELogSource(allocLogSourceId(), "");
     if (sRootLogSource == nullptr) {
         reportError("Failed to create root log source, out of memory");
+        termGlobals();
         return false;
     }
 
@@ -167,13 +169,11 @@ void ELogSystem::termGlobals() {
     }
     sLogTargets.clear();
 
+    setLogFormatter(nullptr);
+    setLogFilter(nullptr);
     if (sDefaultLogTarget != nullptr) {
         delete sDefaultLogTarget;
         sDefaultLogTarget = nullptr;
-    }
-    if (sGlobalFormatter != nullptr) {
-        delete sGlobalFormatter;
-        sGlobalFormatter = nullptr;
     }
     if (sRootLogSource != nullptr) {
         delete sRootLogSource;
@@ -240,11 +240,7 @@ bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* log
     return true;
 }
 
-void ELogSystem::terminate() {
-    setLogFormatter(nullptr);
-    setLogFilter(nullptr);
-    termGlobals();
-}
+void ELogSystem::terminate() { termGlobals(); }
 
 void ELogSystem::setErrorHandler(ELogErrorHandler* errorHandler) { sErrorHandler = errorHandler; }
 
@@ -551,12 +547,14 @@ bool ELogSystem::applyTargetFlushPolicy(ELogTarget* logTarget, const std::string
         const std::string& flushPolicyCfg = itr->second;
         if (flushPolicyCfg.compare("immediate") == 0) {
             flushPolicy = new (std::nothrow) ELogImmediateFlushPolicy();
+        } else if (flushPolicyCfg.compare("never") == 0) {
+            flushPolicy = new (std::nothrow) ELogNeverFlushPolicy();
         } else if (flushPolicyCfg.compare("count") == 0) {
             ELogPropertyMap::const_iterator itr2 = logTargetSpec.m_props.find("flush-count");
             if (itr2 == logTargetSpec.m_props.end()) {
                 reportError(
                     "Invalid flush policy configuration, missing expected flush-count property for "
-                    "flush-policy=count: %s",
+                    "flush_policy=count: %s",
                     logTargetCfg.c_str());
                 return false;
             }
@@ -608,7 +606,7 @@ bool ELogSystem::applyTargetFlushPolicy(ELogTarget* logTarget, const std::string
                 return false;
             }
             flushPolicy = new (std::nothrow) ELogTimedFlushPolicy(logTimeLimitMillis, logTarget);
-        } else {
+        } else if (flushPolicyCfg.compare("none") != 0) {
             reportError("Unrecognized flush policy configuration %s: %s", flushPolicyCfg.c_str(),
                         logTargetCfg.c_str());
             return false;
@@ -643,12 +641,14 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
                                             bool& errorOccurred) {
     // there could be optional poperties: deferred,
     // queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
-    // quantum-buffer-size=<buffer-size>
+    // quantum-buffer-size=<buffer-size>, quantum-congestion-policy=wait/discard
     errorOccurred = true;
     bool deferred = false;
     uint32_t queueBatchSize = 0;
     uint32_t queueTimeoutMillis = 0;
     uint32_t quantumBufferSize = 0;
+    ELogQuantumTarget::CongestionPolicy congestionPolicy =
+        ELogQuantumTarget::CongestionPolicy::CP_WAIT;
     for (const ELogProperty& prop : logTargetSpec.m_props) {
         // parse deferred property
         if (prop.first.compare("deferred") == 0) {
@@ -721,6 +721,27 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
                 return nullptr;
             }
         }
+
+        // parse quantum buffer size
+        else if (prop.first.compare("quantum-congestion-policy") == 0) {
+            if (deferred || queueBatchSize > 0 || queueTimeoutMillis > 0) {
+                reportError(
+                    "Quantum log target cannot be specified with deferred or queued target: %s",
+                    logTargetCfg.c_str());
+                return nullptr;
+            }
+            if (prop.second.compare("wait") == 0) {
+                congestionPolicy = ELogQuantumTarget::CongestionPolicy::CP_WAIT;
+            } else if (prop.second.compare("discard-log") == 0) {
+                congestionPolicy = ELogQuantumTarget::CongestionPolicy::CP_DISCARD_LOG;
+            } else if (prop.second.compare("discard-all") == 0) {
+                congestionPolicy = ELogQuantumTarget::CongestionPolicy::CP_DISCARD_ALL;
+            } else {
+                reportError("Invalid quantum log target congestion policy value '%s': %s",
+                            prop.second.c_str(), logTargetCfg.c_str());
+                return nullptr;
+            }
+        }
     }
 
     if (queueBatchSize > 0 && queueTimeoutMillis == 0) {
@@ -742,7 +763,8 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
         compoundLogTarget =
             new (std::nothrow) ELogQueuedTarget(logTarget, queueBatchSize, queueTimeoutMillis);
     } else if (quantumBufferSize > 0) {
-        compoundLogTarget = new (std::nothrow) ELogQuantumTarget(logTarget, quantumBufferSize);
+        compoundLogTarget =
+            new (std::nothrow) ELogQuantumTarget(logTarget, quantumBufferSize, congestionPolicy);
     }
 
     errorOccurred = false;
@@ -1071,7 +1093,9 @@ static void parseSourceName(const std::string& qualifiedName, std::vector<std::s
         prevDotPos = dotPos + 1;
         dotPos = qualifiedName.find('.', prevDotPos);
     }
-    namePath.push_back(qualifiedName.substr(prevDotPos));
+    if (prevDotPos < qualifiedName.length()) {
+        namePath.push_back(qualifiedName.substr(prevDotPos));
+    }
 }
 
 ELogSource* ELogSystem::addChildSource(ELogSource* parent, const char* sourceName) {

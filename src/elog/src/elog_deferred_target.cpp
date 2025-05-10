@@ -7,17 +7,21 @@
 namespace elog {
 
 bool ELogDeferredTarget::start() {
+    if (!m_logTarget->start()) {
+        return false;
+    }
     m_logThread = std::thread(&ELogDeferredTarget::logThread, this);
     return true;
 }
 
 bool ELogDeferredTarget::stop() {
     stopLogThread();
-    return true;
+    return m_logTarget->stop();
 }
 
 void ELogDeferredTarget::log(const ELogRecord& logRecord) {
     if (shouldLog(logRecord)) {
+        m_writeCount.fetch_add(1, std::memory_order_relaxed);
         std::unique_lock<std::mutex> lock(m_lock);
         m_logQueue.push_back(std::make_pair(logRecord, logRecord.m_logMsg));
         m_cv.notify_one();
@@ -67,6 +71,7 @@ void ELogDeferredTarget::logThread() {
                 logRecord.m_logMsg = (*itr).second.c_str();
                 m_logTarget->log(logRecord);
             }
+            m_readCount.fetch_add(1, std::memory_order_relaxed);
             ++itr;
         }
         logQueue.clear();
@@ -81,6 +86,7 @@ void ELogDeferredTarget::logThread() {
             logRecord.m_logMsg = (*itr).second.c_str();
             m_logTarget->log(logRecord);
         }
+        m_readCount.fetch_add(1, std::memory_order_relaxed);
         ++itr;
     }
 

@@ -111,7 +111,7 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char* logName,
                                                  uint32_t segmentLimitMB,
                                                  ELogFlushPolicy* flushPolicy)
-    : ELogTarget(flushPolicy),
+    : ELogTarget("segmented-file", flushPolicy),
       m_logPath(logPath),
       m_logName(logName),
       m_segmentLimitBytes(segmentLimitMB * 1024 * 1024),

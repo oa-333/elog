@@ -56,7 +56,8 @@ protected:
                  ThreadModel threadModel = ThreadModel::TM_LOCK,
                  uint32_t maxThreads = ELOG_DB_MAX_THREADS,
                  uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
-        : m_name(name),
+        : ELogTarget("db"),
+          m_name(name),
           m_formatter(queryStyle),
           m_rawInsertStatement(rawInsertStatement),
           m_insertStatementParsed(false),

@@ -28,7 +28,33 @@ namespace elog {
  */
 class ELOG_API ELogQuantumTarget : public ELogTarget {
 public:
-    ELogQuantumTarget(ELogTarget* logTarget, uint32_t bufferSize);
+    /** @brief Quantum Target congestion policy constants. */
+    enum class CongestionPolicy {
+        /** @brief Designates to wait until there is room to post a message to the log target. */
+        CP_WAIT,
+
+        /**
+         * @brief Designates to discard log messages if there is no room in the log target, not
+         * including flush commands.
+         */
+        CP_DISCARD_LOG,
+
+        /**
+         * @brief Designates to discard log messages if there is no room in the log target,
+         * including flush commands. This does not include the final poison message to stop the
+         * quantum logging thread.
+         */
+        CP_DISCARD_ALL
+    };
+
+    /**
+     * @brief Construct a new quantum log target object.
+     * @param logTarget The receiving log target on the other end.
+     * @param bufferSize The ring buffer size used by the quantum log target.
+     * @param congestionPolicy Specifies how to handle "no space for log record" condition.
+     */
+    ELogQuantumTarget(ELogTarget* logTarget, uint32_t bufferSize,
+                      CongestionPolicy congestionPolicy = CongestionPolicy::CP_WAIT);
     ~ELogQuantumTarget() final {}
 
     /** @brief Order the log target to start (required for threaded targets). */
@@ -42,6 +68,16 @@ public:
 
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush() final;
+
+    /** @brief Queries whether the log target has written all pending messages. */
+    bool isCaughtUp() final {
+        uint32_t writePos = m_writePos.load(std::memory_order_relaxed);
+        uint32_t readPos = m_readPos.load(std::memory_order_relaxed);
+        return writePos == readPos;
+    }
+
+    /** @brief As log target may be chained as in a list, this retrieves the final log target. */
+    ELogTarget* getEndLogTarget() override { return m_logTarget; }
 
 private:
     enum EntryState : uint32_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };
@@ -61,6 +97,7 @@ private:
     LogRingBuffer m_ringBuffer;
     std::atomic<uint64_t> m_writePos;
     std::atomic<uint64_t> m_readPos;
+    CongestionPolicy m_congestionPolicy;
 
     ELogTarget* m_logTarget;
     std::thread m_logThread;

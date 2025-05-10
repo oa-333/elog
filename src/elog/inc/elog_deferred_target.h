@@ -29,7 +29,12 @@ public:
      * @brief Construct a new ELogDeferredTarget object.
      * @param logTarget The deferred log target.
      */
-    ELogDeferredTarget(ELogTarget* logTarget) : m_logTarget(logTarget), m_stop(false) {}
+    ELogDeferredTarget(ELogTarget* logTarget)
+        : ELogTarget("deferred"),
+          m_logTarget(logTarget),
+          m_stop(false),
+          m_writeCount(0),
+          m_readCount(0) {}
     ~ELogDeferredTarget() override {}
 
     /** @brief Order the log target to start (required for threaded targets). */
@@ -48,6 +53,16 @@ public:
      */
     void flush() override;
 
+    /** @brief As log target may be chained as in a list, this retrieves the final log target. */
+    ELogTarget* getEndLogTarget() override { return m_logTarget; }
+
+    /** @brief Queries whether the log target has written all pending messages. */
+    bool isCaughtUp() final {
+        uint32_t writeCount = m_writeCount.load(std::memory_order_relaxed);
+        uint32_t readCount = m_readCount.load(std::memory_order_relaxed);
+        return writeCount == readCount;
+    }
+
 protected:
     typedef std::list<std::pair<ELogRecord, std::string>> LogQueue;
 
@@ -57,6 +72,8 @@ protected:
     std::mutex m_lock;
     std::condition_variable m_cv;
     bool m_stop;
+    std::atomic<uint64_t> m_writeCount;
+    std::atomic<uint64_t> m_readCount;
 
     void logThread();
 

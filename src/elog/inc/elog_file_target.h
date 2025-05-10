@@ -12,7 +12,7 @@ class ELOG_API ELogFileTarget : public ELogTarget {
 public:
     ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy = nullptr);
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr)
-        : ELogTarget(flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
+        : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
         setAddNewLine(true);
     }
     ELogFileTarget(const ELogFileTarget&) = delete;

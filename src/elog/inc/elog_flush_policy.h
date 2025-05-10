@@ -84,6 +84,20 @@ public:
 };
 
 /**
+ * @class A never flush policy, for ensuring log target is never flushed, except for during
+ * shutdown.
+ */
+class ELOG_API ELogNeverFlushPolicy : public ELogFlushPolicy {
+public:
+    ELogNeverFlushPolicy() {}
+    ELogNeverFlushPolicy(const ELogNeverFlushPolicy&) = delete;
+    ELogNeverFlushPolicy(ELogNeverFlushPolicy&&) = delete;
+    ~ELogNeverFlushPolicy() {}
+
+    bool shouldFlush(uint32_t msgSizeBytes) final;
+};
+
+/**
  * @class A flush policy that enforces log target flush whenever the number of un-flushed log
  * messages exceeds a configured limit.
  */

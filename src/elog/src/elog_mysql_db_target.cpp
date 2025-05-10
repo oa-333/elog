@@ -100,7 +100,7 @@ bool ELogMySqlDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
         mysqlDbData->m_insertStmt->clearParameters();
         fillInsertStatement(logRecord, &mySqlFieldReceptor);
         if (mysqlDbData->m_insertStmt->execute()) {
-            return;
+            return true;
         }
         ELogSystem::reportError("Failed to send log message to MySQL log target");
     } catch (sql::SQLException& e) {
