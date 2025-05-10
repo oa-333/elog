@@ -14,7 +14,7 @@ ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolic
 
 ELogFileTarget::~ELogFileTarget() {}
 
-bool ELogFileTarget::start() {
+bool ELogFileTarget::startLogTarget() {
     if (m_fileHandle == nullptr) {
         m_fileHandle = fopen(m_filePath.c_str(), "a");
         if (m_fileHandle == nullptr) {
@@ -26,7 +26,7 @@ bool ELogFileTarget::start() {
     return true;
 }
 
-bool ELogFileTarget::stop() {
+bool ELogFileTarget::stopLogTarget() {
     if (m_fileHandle != nullptr && m_shouldClose) {
         if (fclose(m_fileHandle) == -1) {
             ELOG_SYS_ERROR(fopen, "Failed to close log file %s", m_filePath.c_str());

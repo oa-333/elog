@@ -3,7 +3,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -20,6 +22,12 @@ namespace elog {
 class ELOG_API ELogFlushPolicy {
 public:
     virtual ~ELogFlushPolicy() {}
+
+    /** @brief Orders an active flush policy to start (by default no action takes place). */
+    virtual bool start() { return true; }
+
+    /** @brief Orders an active flush policy to stop (by default no action takes place). */
+    virtual bool stop() { return true; }
 
     /**
      * @brief Queries whether the log target should be flushed.
@@ -147,6 +155,12 @@ public:
     ELogTimedFlushPolicy(ELogTimedFlushPolicy&&) = delete;
     ~ELogTimedFlushPolicy();
 
+    /** @brief Orders an active flush policy to start (by default no action takes place). */
+    bool start() final;
+
+    /** @brief Orders an active flush policy to stop (by default no action takes place). */
+    bool stop() final;
+
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
@@ -162,10 +176,14 @@ private:
     const Millis m_logTimeLimitMillis;
     ELogTarget* m_logTarget;
     std::atomic<Timestamp> m_prevFlushTime;
+    std::mutex m_lock;
+    std::condition_variable m_cv;
     bool m_stopTimer;
     std::thread m_timerThread;
 
     void onTimer();
+
+    bool shouldStop();
 };
 
 }  // namespace elog

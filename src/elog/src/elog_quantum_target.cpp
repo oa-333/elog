@@ -26,7 +26,7 @@ ELogQuantumTarget::ELogQuantumTarget(
     m_ringBuffer.resize(bufferSize);
 }
 
-bool ELogQuantumTarget::start() {
+bool ELogQuantumTarget::startLogTarget() {
     if (!m_logTarget->start()) {
         return false;
     }
@@ -34,7 +34,7 @@ bool ELogQuantumTarget::start() {
     return true;
 }
 
-bool ELogQuantumTarget::stop() {
+bool ELogQuantumTarget::stopLogTarget() {
     // send a poison pill to the log thread
     ELogRecord poison;
     poison.m_logMsg = (const char*)-1;

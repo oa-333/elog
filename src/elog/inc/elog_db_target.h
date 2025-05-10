@@ -19,12 +19,6 @@ namespace elog {
 /** @brief Abstract parent class for DB log targets. */
 class ELogDbTarget : public ELogTarget {
 public:
-    /** @brief Order the log target to start (required for threaded targets). */
-    bool start() override;
-
-    /** @brief Order the log target to stop (required for threaded targets). */
-    bool stop() override;
-
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord) override;
 
@@ -68,6 +62,12 @@ protected:
           m_shouldWakeUp(false) {}
 
     ~ELogDbTarget() override {}
+
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool startLogTarget() override;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() override;
 
     /**
      * @brief Retrieves the processed insert statement resulting from the call to @ref

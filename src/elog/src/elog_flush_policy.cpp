@@ -40,12 +40,26 @@ ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarg
     : m_prevFlushTime(getTimestamp()),
       m_logTimeLimitMillis(logTimeLimitMillis),
       m_logTarget(logTarget),
-      m_stopTimer(false) {
+      m_stopTimer(false) {}
+
+ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
+
+bool ELogTimedFlushPolicy::start() {
     m_timerThread = std::thread(&ELogTimedFlushPolicy::onTimer, this);
+    return true;
 }
-ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {
-    m_stopTimer = true;
+
+bool ELogTimedFlushPolicy::stop() {
+    // raise stop flag and wakeup timer thread
+    {
+        std::unique_lock<std::mutex> lock(m_lock);
+        m_stopTimer = true;
+        m_cv.notify_one();
+    }
+
+    // wait for timer thread to finish
     m_timerThread.join();
+    return true;
 }
 
 bool ELogTimedFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
@@ -66,13 +80,28 @@ bool ELogTimedFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
 }
 
 void ELogTimedFlushPolicy::onTimer() {
-    while (!m_stopTimer) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(m_logTimeLimitMillis));
-        // we participate with the rest as a phantom logger, to avoid duplicate flushes
+    while (!shouldStop()) {
+        // wait for timeout or for stop flag to be raised
+        {
+            std::unique_lock<std::mutex> lock(m_lock);
+            m_cv.wait_for(lock, std::chrono::milliseconds(m_logTimeLimitMillis),
+                          [this] { return m_stopTimer; });
+            if (m_stopTimer) {
+                break;
+            }
+        }
+
+        // we participate with the rest of the concurrent loggers as a phantom logger, so that we
+        // avoid duplicate flushes (others call shouldFlush() with some payload size)
         if (shouldFlush(0)) {
             m_logTarget->flush();
         }
     }
+}
+
+bool ELogTimedFlushPolicy::shouldStop() {
+    std::unique_lock<std::mutex> lock(m_lock);
+    return m_stopTimer;
 }
 
 }  // namespace elog

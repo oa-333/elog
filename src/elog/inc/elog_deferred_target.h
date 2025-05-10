@@ -37,12 +37,6 @@ public:
           m_readCount(0) {}
     ~ELogDeferredTarget() override {}
 
-    /** @brief Order the log target to start (required for threaded targets). */
-    bool start() final;
-
-    /** @brief Order the log target to stop (required for threaded targets). */
-    bool stop() final;
-
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord) override;
 
@@ -74,6 +68,12 @@ protected:
     bool m_stop;
     std::atomic<uint64_t> m_writeCount;
     std::atomic<uint64_t> m_readCount;
+
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool startLogTarget() final;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() final;
 
     void logThread();
 

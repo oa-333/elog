@@ -69,7 +69,7 @@ private:
     rd_kafka_headers_t* m_headers;
 };
 
-bool ELogKafkaMsgQTarget::start() {
+bool ELogKafkaMsgQTarget::startLogTarget() {
     // parse the headers with log record field selector tokens
     // this builds a processed statement text with questions marks instead of log record field
     // references, and also prepares the field selector array
@@ -133,7 +133,7 @@ bool ELogKafkaMsgQTarget::start() {
     return true;
 }
 
-bool ELogKafkaMsgQTarget::stop() {
+bool ELogKafkaMsgQTarget::stopLogTarget() {
     // wait for 5 seconds for all produces messages to be flushed
     uint32_t flushTimeoutMillis = m_shutdownFlushTimeoutMillis;
     if (flushTimeoutMillis == 0) {

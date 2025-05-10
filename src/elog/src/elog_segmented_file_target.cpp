@@ -126,9 +126,9 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char
 
 ELogSegmentedFileTarget::~ELogSegmentedFileTarget() {}
 
-bool ELogSegmentedFileTarget::start() { return openSegment(); }
+bool ELogSegmentedFileTarget::startLogTarget() { return openSegment(); }
 
-bool ELogSegmentedFileTarget::stop() {
+bool ELogSegmentedFileTarget::stopLogTarget() {
     if (m_currentSegment != nullptr) {
         if (fclose(m_currentSegment) == -1) {
             ELOG_SYS_ERROR(fopen, "Failed to close log segment");

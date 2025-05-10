@@ -7,6 +7,24 @@
 
 namespace elog {
 
+bool ELogTarget::start() {
+    if (m_flushPolicy != nullptr) {
+        if (!m_flushPolicy->start()) {
+            return false;
+        }
+    }
+    return startLogTarget();
+}
+
+bool ELogTarget::stop() {
+    if (m_flushPolicy != nullptr) {
+        if (!m_flushPolicy->stop()) {
+            return false;
+        }
+    }
+    return stopLogTarget();
+}
+
 void ELogTarget::log(const ELogRecord& logRecord) {
     // partially implement logging - filter, format, log and flush
     // this might not suite all targets, as formatting might take place on a later phase
@@ -60,7 +78,7 @@ bool ELogTarget::shouldFlush(const std::string& logMsg) {
     return m_flushPolicy == nullptr || m_flushPolicy->shouldFlush(logMsg.length());
 }
 
-bool ELogCombinedTarget::start() {
+bool ELogCombinedTarget::startLogTarget() {
     for (ELogTarget* target : m_logTargets) {
         if (!target->start()) {
             return false;
@@ -69,7 +87,7 @@ bool ELogCombinedTarget::start() {
     return true;
 }
 
-bool ELogCombinedTarget::stop() {
+bool ELogCombinedTarget::stopLogTarget() {
     for (ELogTarget* target : m_logTargets) {
         if (!target->stop()) {
             return false;

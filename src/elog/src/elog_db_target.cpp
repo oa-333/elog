@@ -68,7 +68,7 @@ namespace elog {
 
 static thread_local int sThreadSlotId = -1;
 
-bool ELogDbTarget::start() {
+bool ELogDbTarget::startLogTarget() {
     if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
         m_threadSlots.resize(m_maxThreads);
     } else {
@@ -101,7 +101,7 @@ bool ELogDbTarget::start() {
     return true;
 }
 
-bool ELogDbTarget::stop() {
+bool ELogDbTarget::stopLogTarget() {
     // first stop reconnect thread
     stopReconnect();
 

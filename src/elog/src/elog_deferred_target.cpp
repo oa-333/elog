@@ -6,7 +6,7 @@
 
 namespace elog {
 
-bool ELogDeferredTarget::start() {
+bool ELogDeferredTarget::startLogTarget() {
     if (!m_logTarget->start()) {
         return false;
     }
@@ -14,7 +14,7 @@ bool ELogDeferredTarget::start() {
     return true;
 }
 
-bool ELogDeferredTarget::stop() {
+bool ELogDeferredTarget::stopLogTarget() {
     stopLogThread();
     return m_logTarget->stop();
 }

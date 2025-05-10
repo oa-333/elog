@@ -9,12 +9,12 @@
 
 namespace elog {
 
-bool ELogSysLogTarget::start() {
+bool ELogSysLogTarget::startLogTarget() {
     openlog(getProgramName(), LOG_PID, LOG_USER);
     return true;
 }
 
-bool ELogSysLogTarget::stop() {
+bool ELogSysLogTarget::stopLogTarget() {
     closelog();
     return true;
 }

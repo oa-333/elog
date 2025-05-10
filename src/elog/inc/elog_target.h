@@ -33,10 +33,10 @@ public:
     inline const char* getTypeName() const { return m_typeName.c_str(); }
 
     /** @brief Order the log target to start (required for threaded targets). */
-    virtual bool start() = 0;
+    bool start();
 
     /** @brief Order the log target to stop (required for threaded targets). */
-    virtual bool stop() = 0;
+    bool stop();
 
     /** @brief Sends a log record to a log target. */
     virtual void log(const ELogRecord& logRecord);
@@ -117,6 +117,12 @@ protected:
           m_addNewLine(false),
           m_bytesWritten(0) {}
 
+    /** @brief Order the log target to start (required for threaded targets). */
+    virtual bool startLogTarget() = 0;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    virtual bool stopLogTarget() = 0;
+
     bool shouldLog(const ELogRecord& logRecord);
 
     void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
@@ -148,17 +154,18 @@ public:
 
     inline void addLogTarget(ELogTarget* target) { m_logTargets.push_back(target); }
 
-    /** @brief Order the log target to start (required for threaded targets). */
-    bool start() final;
-
-    /** @brief Order the log target to stop (required for threaded targets). */
-    bool stop() final;
-
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush() final;
+
+protected:
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool startLogTarget() final;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() final;
 
 private:
     std::vector<ELogTarget*> m_logTargets;

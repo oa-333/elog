@@ -57,12 +57,6 @@ public:
                       CongestionPolicy congestionPolicy = CongestionPolicy::CP_WAIT);
     ~ELogQuantumTarget() final {}
 
-    /** @brief Order the log target to start (required for threaded targets). */
-    bool start() final;
-
-    /** @brief Order the log target to stop (required for threaded targets). */
-    bool stop() final;
-
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord) final;
 
@@ -78,6 +72,13 @@ public:
 
     /** @brief As log target may be chained as in a list, this retrieves the final log target. */
     ELogTarget* getEndLogTarget() override { return m_logTarget; }
+
+private:
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool startLogTarget() final;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() final;
 
 private:
     enum EntryState : uint32_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };

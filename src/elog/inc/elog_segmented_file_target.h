@@ -33,18 +33,18 @@ public:
 
     ~ELogSegmentedFileTarget() final;
 
-    /** @brief Order the log target to start (required for threaded targets). */
-    bool start() final;
-
-    /** @brief Order the log target to stop (required for threaded targets). */
-    bool stop() final;
-
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush() final;
 
 protected:
     /** @brief Log a formatted message. */
     void logFormattedMsg(const std::string& formattedLogMsg) final;
+
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool startLogTarget() final;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() final;
 
 private:
     std::string m_logPath;
