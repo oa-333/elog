@@ -695,9 +695,10 @@ The following table summarizes the main KPIs of the ELog library:
 | Shared Logger Latency (no log issued) | 1.3 nano-seconds |
 | Synchronous Logging Throughput (flush each message) | 163444 Msg/Sec |
 | Synchronous Logging Throughput (delayed flush) | 2.4 Million Msg/Sec |
-| Asynchronous Logging Throughput* (single-threaded) | 5.8 Million Msg/Sec |
+| Asynchronous Logging Throughput* (single-threaded) | 6.4 Million Msg/Sec |
+| Asynchronous Logging Latency (single-threaded) | 156 nano-seconds |
 
-NOTE: Asynchronous logging throughput refers to the logger's capacity to push messages, not to the throughput of disk writing.
+NOTE: Asynchronous logging throughput refers to the logger's capacity to push messages to the end log target, not to the throughput of disk writing.
 
 ### Empty Logging Benchmark
 
@@ -763,9 +764,9 @@ In other words, this actually illustrates the logger latency when using asynchro
 
 Points to note:
 
-- The deferred log target can receive 4.1 Million messages per second, that is an average latency of 243 nano-seconds per message
-- The quantum log target can receive 5.8 Million messages per second, that is an average latency of 172 nano-seconds per message
-- The queued log target seems to have a performance problem that requires further investigation
+- The deferred log target can receive 4.2 Million messages per second, that is an average latency of 238 nano-seconds per message
+- The quantum log target can receive 6.4 Million messages per second, that is an average latency of 156 nano-seconds per message
+- The queued log target can receive 1.6 Million messages per second, and requires further investigation
 
 All asynchronous loggers were configured with generous buffer sizes for testing peak performance.  
 In reality this measures the peak performance during a log message burst.  

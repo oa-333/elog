@@ -395,7 +395,7 @@ void testPerfDeferredFile() {
 void testPerfQueuedFile() {
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_queued.log?flush_policy=count&flush-count=4096&queue-batch-size=4096&queue-"
+        "elog_bench_queued.log?flush_policy=count&flush-count=4096&queue-batch-size=10000&queue-"
         "timeout-millis=200";
     runMultiThreadTest("Queued 4096 + 200ms (Flush Count 4096)", "elog_bench_queued", cfg);
 }
@@ -511,7 +511,10 @@ void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
 
 void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
                                std::vector<double>& ioThroughput) {
-    const char* cfg = "file://./bench_data/elog_bench_queued_st.log?flush_policy=immediate";
+    const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_queued_st.log?flush_policy=count&flush-count=4096&queue-batch-size=10000&queue-"
+        "timeout-millis=500";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Queued", cfg, msgPerf, ioPerf);
