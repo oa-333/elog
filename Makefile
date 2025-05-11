@@ -140,7 +140,7 @@ elog_dll: dirs $(ELOG_DLL)
 
 elog_lib: dirs $(ELOG_LIB)
 
-elog_bench: elog_dll $(BENCH_EXE)
+elog_bench: dirs $(BENCH_EXE)
 
 # install targets
 INSTALL_ELOG_LIB := $(INSTALL_LIB)/$(ELOG_LIB_NAME)
@@ -158,8 +158,6 @@ clean:
 #	-rm -f $(TEST_OBJS)
 
 install: all $(INSTALL_FILES) $(INSTALL_TARGETS)
-
-bench: $(BENCH_EXE)
 
 
 #########################################################
@@ -209,7 +207,7 @@ ifeq ($(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR), 1)
 	CPPFLAGS += -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 	LDFLAGS += -lrdkafka
 #ifeq (($PLATFORM), Linux)
-	CPPFLAGS += -I/usr/include/postgresql
+#	CPPFLAGS += -I/usr/include/postgresql
 #endif
 endif
 #POST_COMPILE = mv -f $(DEP_DIR)/$*.tmp.dep $(DEP_DIR)/$*.dep && touch $@
@@ -236,7 +234,7 @@ $(ELOG_DLL): $(OBJS_DYNAMIC)
 	$(CPP) $(OBJS_DYNAMIC) $(LDFLAGS) -shared -o $@
 
 $(BENCH_EXE): $(ELOG_DLL)
-	$(CPP) $(CPPFLAGS) $(LDFLAGS) src/elog_bench/src/elog_bench.cpp $< -o $@
+	$(CPP) $(CPPFLAGS) $(LDFLAGS) -L$(INSTALL_BIN) -lelog src/elog_bench/src/elog_bench.cpp -o $@
 
 # make sure all object files depend on dependency files like this:
 # %.o: %.cpp %.dep

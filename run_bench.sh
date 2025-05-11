@@ -11,7 +11,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # build bench
-make -j -f Makefile ELOG_ENABLE_SQLITE_DB_CONNECTOR=1 ELOG_ENABLE_PGSQL_DB_CONNECTOR=1 ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=1 bench
+make -j -f Makefile ELOG_ENABLE_SQLITE_DB_CONNECTOR=1 ELOG_ENABLE_PGSQL_DB_CONNECTOR=1 ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=1 elog_bench
 if [ $? -ne 0 ]; then
     echo "ERROR: Build failed"
     exit 1
@@ -35,6 +35,6 @@ do
 done
 
 # copy results back
-cp ./*.png $DEV_DIR/sec/elog_bench/png/
+cp ./*.png $DEV_DIR/src/elog_bench/png/
 
 popd

@@ -2,6 +2,7 @@
 #define __ELOG_QUANTUM_TARGET_H__
 
 #include <atomic>
+#include <new>
 #include <thread>
 
 #include "elog_def.h"
@@ -96,6 +97,9 @@ private:
 
     typedef std::vector<ELogRecordData> LogRingBuffer;
     LogRingBuffer m_ringBuffer;
+    // we put the write/read pos each in its own cache line to avoid false sharing
+    // alignas(std::hardware_destructive_interference_size) std::atomic<uint64_t> m_writePos;
+    // alignas(std::hardware_destructive_interference_size) std::atomic<uint64_t> m_readPos;
     std::atomic<uint64_t> m_writePos;
     std::atomic<uint64_t> m_readPos;
     CongestionPolicy m_congestionPolicy;

@@ -364,6 +364,9 @@ As some log targets may require flushing (as in file, or any buffered channel), 
 By default, all log targets flush after each message logging.
 This strategy is implemented by the ELogImmediateFlushPolicy class.
 
+It may be preferred to avoid flushing altogether.  
+This strategy is implemented by the ELogNeverFlushPolicy class.
+
 It may be preferred to flush every X messages.
 For this case the ELogCountFlushPolicy can be used.
 
@@ -472,12 +475,13 @@ Pay attention that the rest of the log targets will use the global log level and
 Log targets can be assigned a flush policy (file targets by default flush after every message).
 The flush policy can be configured as follows:
 
-    flush-policy=none|immediate|count|size|time
+    flush-policy=none|immediate|never|count|size|time
 
 Where each value designates a different policy:
 
-- none: no flushing should take place
+- none: no flushing is specified, behavior is determined by each log target separately
 - immediate: orders to flush log target after each log message sending
+- never: orders to avoid flushing the log target altogether, except for during shutdown
 - count: Order to flush log target after a configured amount of log messages has been sent
 - size: Order to flush log target after a configured amount of bytes of log messages has been sent
 - time: Order to flush log target after a configured amount of time passed since last flush took place
@@ -619,3 +623,103 @@ In case message headers are to be passed as well, the 'headers' parameter should
     log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records&headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
 
 Since log target resource strings tend to get complex, future versions will include property trees for configuration.
+
+## Benchmarks
+
+The following unofficial benchmarks results illustrate the high performance of the ELog package.  
+
+The benchmark is divided into four parts:
+
+- Test the impact of empty logging with private and shared logger
+- Search for best configuration of each flush policy (count, size, time)
+- Single-threaded comparison of all log targets (file, async file)
+- Multi-threaded scaling of each tested configuration
+
+All multi-threaded tests were conducted with each thread hammering its own private logger.
+Shared logger multi-threaded tests are provided only for the quantum log target.
+
+All tests were performed on Windows, compiling with g++ for MinGW, running under MSYSTEM console.  
+All tests were conducted on commodity hardware.
+
+## Empty Logging Benchmark
+
+The first benchmark checked the impact of using the logging macros without logging (i.e. when log level does not match).  
+Separate tests were conducted with a shared logger and a private logger.  
+The private logger, as expected, performs slightly better (due to thread local access in shared logger).  
+The benchmark test results illustrate that:
+
+| Logger    | Throughput (Msg/Sec)  |
+|:----------|----------------------:|
+| Private   | 5000000000.000        |
+| Shared    |  769230769.231        |
+
+So although both exhibit very low impact (10000 messages took 2 and 13 microseconds respectively),  
+the private is clearly performing better (X6.5 times faster).  
+Note that the latency on the logging application is minimal: 0.2 and 1.3 nano-seconds on private and shared logger respectively. 
+
+### Synchronous File Log Target with Count Flush Policy
+
+Following are the benchmark test results for synchronous file log target with flush-policy=count, setting varying count values:
+
+![plot](./src/elog_bench/png/flush_count.png)
+
+As it can be seen, flush-count=512 yields the best results (around 2.2 Million messages per second), and setting a higher  
+number does need yield better results.  
+Most probably this has to do with underlying system file buffers.  
+NOTE: Doing direct/async I/O is not being considered at this time.
+
+### Synchronous File Log Target with Size Flush Policy
+
+Following are the benchmark test results for synchronous file log target with flush-policy=size, setting varying size values:
+
+![plot](./src/elog_bench/png/flush_size.png)
+
+The results of this test are rather illuminating.
+First, we can conclude that setting buffer size of 64KB yields the best results, peaking at around 2 Million messages per second.
+Second, increasing the buffer size does not have any notable effect.  
+Again, this is most probably related to the underlying system file buffers.
+
+### Synchronous File Log Target with Time Flush Policy
+
+Following are the benchmark test results for synchronous file log target with flush-policy=time, setting varying time values:
+
+![plot](./src/elog_bench/png/flush_time.png)
+
+The results here shows that a flush period of 200 ms yields the best results, and this again probably has to do with  
+underlying buffer size, and the right timing to flush them (not too early and not too late).
+
+### Single-threaded Synchronous File Log Target Comparison
+
+In the following bar chart, all synchronous file log target configurations are compared together:
+
+![plot](./src/elog_bench/png/log_st.png)
+
+This last comparison needs further explanation:
+
+- The 'immediate' policy flushes after each log message write, and exhibits the lowest performance
+- The 'never' policy simply never flushes, and serves as a baseline for other configurations
+- All other synchronous logging methods exhibit the same single-threaded performance (around 950,000 messages per second)
+
+The last 3 logging methods are asynchronous and mostly exhibit performance as expected, but it should be noted that  
+this does not relate to disk write performance, but rather logger throughput.  
+In other words, this actually illustrates the logger latency when using asynchronous log target.
+
+Points to note:
+
+- The deferred log target can receive 3.8 Million messages per second, that is an average latency of 255 nano-seconds per message
+- The quantum log target can receive 5.9 Million messages per second, that is an average latency of 173 nano-seconds per message
+- The queued log target seems to have a performance problem the requires further investigation
+
+All asynchronous loggers were configured with generous buffer sizes for testing peak performance.  
+In reality this measures the peak performance during log message burst.  
+So when configuring log targets to withstand the largest message burst, this is the expected performance.
+
+### Multi-threaded Asynchronous File Log Target Comparison
+
+This test checks the scalability of each log target, and the results are interesting:
+
+![plot](./src/elog_bench/png/async_log.png)
+
+As the graph depicts, the deferred and queued log targets are not scalable, since both impose a lock,  
+whereas the quantum log target employs a lock-free ring buffer.  
+The results show that the quantum logger is fully scalable, as much as free resources allow.
