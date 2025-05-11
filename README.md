@@ -641,6 +641,11 @@ Shared logger multi-threaded tests are provided only for the quantum log target.
 All tests were performed on Windows, compiling with g++ for MinGW, running under MSYSTEM console.  
 All tests were conducted on commodity hardware.
 
+Please note that all benchmarks calculate the average value and not percentiles.  
+The reason for that is that collecting each sample time affected greatly the test, reducing performance up to 20%.  
+Since there is no interaction with external system (at least in this benchmark), only averages are presented,  
+as outliers are not expected.
+
 ## Empty Logging Benchmark
 
 The first benchmark checked the impact of using the logging macros without logging (i.e. when log level does not match).  
