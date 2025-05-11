@@ -122,22 +122,31 @@ else
 ELOG_DLL_NAME := libelog.so
 endif
 
+ifeq ($(MINGW), 1)
+BENCH_EXE_NAME := elog_bench_mingw.exe
+else
+BENCH_EXE_NAME := elog_bench
+endif
 
 # targets
 ELOG_LIB := $(LIB_DIR)/$(ELOG_LIB_NAME)
 ELOG_DLL := $(BIN_DIR)/$(ELOG_DLL_NAME)
+BENCH_EXE := $(BIN_DIR)/$(BENCH_EXE_NAME)
 
 # build targets
-all: elog_dll elog_lib
+all: elog_dll elog_lib elog_bench
 
 elog_dll: dirs $(ELOG_DLL)
 
 elog_lib: dirs $(ELOG_LIB)
 
+elog_bench: elog_dll $(BENCH_EXE)
+
 # install targets
 INSTALL_ELOG_LIB := $(INSTALL_LIB)/$(ELOG_LIB_NAME)
 INSTALL_ELOG_DLL := $(INSTALL_BIN)/$(ELOG_DLL_NAME)
-INSTALL_TARGETS := $(INSTALL_ELOG_LIB) $(INSTALL_ELOG_DLL)
+INSTALL_ELOG_BENCH := $(INSTALL_BIN)/$(BENCH_EXE_NAME)
+INSTALL_TARGETS := $(INSTALL_ELOG_LIB) $(INSTALL_ELOG_DLL) $(INSTALL_ELOG_BENCH)
 
 dirs: $(LIB_DIR) $(BIN_DIR) $(OBJ_DIR) $(OBJ_DIRS) $(DEP_DIRS) $(INSTALL_DIRS)
 
@@ -150,6 +159,8 @@ clean:
 
 install: all $(INSTALL_FILES) $(INSTALL_TARGETS)
 
+bench: $(BENCH_EXE)
+
 
 #########################################################
 # 			Compile Rules								#
@@ -159,7 +170,7 @@ install: all $(INSTALL_FILES) $(INSTALL_TARGETS)
 CPP := g++
 
 # compilation flags
-CPPFLAGS := -std=c++23 -g3
+CPPFLAGS := -std=c++23 -g3 -O2 -Wno-interference-size
 
 # project include path
 CPPFLAGS += -I. -I$(ELOG_INC_DIR)
@@ -224,6 +235,9 @@ $(ELOG_LIB): $(OBJS_STATIC)
 $(ELOG_DLL): $(OBJS_DYNAMIC)
 	$(CPP) $(OBJS_DYNAMIC) $(LDFLAGS) -shared -o $@
 
+$(BENCH_EXE): $(ELOG_DLL)
+	$(CPP) $(CPPFLAGS) $(LDFLAGS) src/elog_bench/src/elog_bench.cpp $< -o $@
+
 # make sure all object files depend on dependency files like this:
 # %.o: %.cpp %.dep
 #	$(MAKE_DEPEND)
@@ -254,6 +268,9 @@ $(INSTALL_ELOG_DLL): $(ELOG_DLL)
 	cp $< $@
 
 $(INSTALL_ELOG_LIB): $(ELOG_LIB)
+	cp $< $@
+
+$(INSTALL_ELOG_BENCH): $(BENCH_EXE)
 	cp $< $@
 
 # add empty target for all dependency files
