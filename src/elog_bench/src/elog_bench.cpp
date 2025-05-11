@@ -15,17 +15,19 @@ static void testPerfPrivateLog();
 static void testPerfSharedLogger();
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                                   double& ioThroughput);
-static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg);
+static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
+                               bool privateLogger = true);
 static void printMermaidChart(const char* name, std::vector<double>& msgThroughput,
                               std::vector<double>& byteThroughput);
 static void printMarkdownTable(const char* name, std::vector<double>& msgThroughput,
                                std::vector<double>& byteThroughput);
 static void writeCsvFile(const char* fileName, std::vector<double>& msgThroughput,
-                         std::vector<double>& byteThroughput, std::vector<double>& accumThroughput);
+                         std::vector<double>& byteThroughput, std::vector<double>& accumThroughput,
+                         bool privateLogger);
 static void testPerfFileFlushPolicy();
 static void testPerfDeferredFile();
 static void testPerfQueuedFile();
-static void testPerfQuantumFile();
+static void testPerfQuantumFile(bool privateLogger);
 static void testPerfAllSingleThread();
 
 static void testPerfFileNeverFlushPolicy();
@@ -62,7 +64,8 @@ int main(int argc, char* argv[]) {
     testPerfFileFlushPolicy();
     testPerfDeferredFile();
     testPerfQueuedFile();
-    testPerfQuantumFile();
+    testPerfQuantumFile(true);
+    testPerfQuantumFile(false);
     testPerfAllSingleThread();
 }
 
@@ -195,7 +198,8 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     termELog();
 }
 
-void runMultiThreadTest(const char* title, const char* fileName, const char* cfg) {
+void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
+                        bool privateLogger /* = true */) {
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to init %s test, aborting\n", title);
@@ -206,6 +210,8 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
     std::vector<double> msgThroughput;
     std::vector<double> byteThroughput;
     std::vector<double> accumThroughput;
+    elog::ELogLogger* sharedLogger =
+        privateLogger ? nullptr : elog::ELogSystem::getSharedLogger("");
     for (uint32_t threadCount = MIN_THREAD_COUNT; threadCount <= MAX_THREAD_COUNT; ++threadCount) {
         // fprintf(stderr, "Running %u threads test\n", threadCount);
         std::vector<std::thread> threads;
@@ -213,8 +219,9 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         auto start = std::chrono::high_resolution_clock::now();
         uint64_t bytesStart = logTarget->getBytesWritten();
         for (uint32_t i = 0; i < threadCount; ++i) {
-            threads.emplace_back(std::thread([i, &resVec]() {
-                elog::ELogLogger* logger = elog::ELogSystem::getPrivateLogger("");
+            threads.emplace_back(std::thread([i, &resVec, sharedLogger]() {
+                elog::ELogLogger* logger =
+                    sharedLogger != nullptr ? sharedLogger : elog::ELogSystem::getPrivateLogger("");
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < MSG_COUNT; ++j) {
                     ELOG_INFO_EX(logger, "Thread %u Test log %u", i, j);
@@ -259,7 +266,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
 
     printMermaidChart(title, msgThroughput, byteThroughput);
     printMarkdownTable(title, msgThroughput, byteThroughput);
-    writeCsvFile(fileName, msgThroughput, byteThroughput, accumThroughput);
+    writeCsvFile(fileName, msgThroughput, byteThroughput, accumThroughput, privateLogger);
 }
 
 void printMermaidChart(const char* title, std::vector<double>& msgThroughput,
@@ -331,8 +338,11 @@ void printMarkdownTable(const char* title, std::vector<double>& msgThroughput,
 }
 
 void writeCsvFile(const char* fileName, std::vector<double>& msgThroughput,
-                  std::vector<double>& byteThroughput, std::vector<double>& accumThroughput) {
-    std::ofstream f(std::string("./bench_data/") + fileName + "_msg.csv", std::ios_base::trunc);
+                  std::vector<double>& byteThroughput, std::vector<double>& accumThroughput,
+                  bool privateLogger) {
+    std::string fname =
+        std::string("./bench_data/") + fileName + (privateLogger ? "_msg.csv" : "_shared_msg.csv");
+    std::ofstream f(fname, std::ios_base::trunc);
 
     // print in CSV format for gnuplot
     for (uint32_t i = 0; i < msgThroughput.size(); ++i) {
@@ -340,14 +350,18 @@ void writeCsvFile(const char* fileName, std::vector<double>& msgThroughput,
     }
     f.close();
 
-    f.open(std::string("./bench_data/") + fileName + "_io.csv", std::ios_base::trunc);
+    fname =
+        std::string("./bench_data/") + fileName + (privateLogger ? "_io.csv" : "_shared_io.csv");
+    f.open(fname, std::ios_base::trunc);
     for (uint32_t i = 0; i < byteThroughput.size(); ++i) {
         f << (i + 1) << ", " << std::fixed << std::setprecision(2) << byteThroughput[i]
           << std::endl;
     }
     f.close();
 
-    f.open(std::string("./bench_data/") + fileName + "_accum_msg.csv", std::ios_base::trunc);
+    fname = std::string("./bench_data/") + fileName +
+            (privateLogger ? "_accum_msg.csv" : "_shared_accum_msg.csv");
+    f.open(fname, std::ios_base::trunc);
     for (uint32_t i = 0; i < accumThroughput.size(); ++i) {
         f << (i + 1) << ", " << std::fixed << std::setprecision(2) << accumThroughput[i]
           << std::endl;
@@ -386,11 +400,12 @@ void testPerfQueuedFile() {
     runMultiThreadTest("Queued 4096 + 200ms (Flush Count 4096)", "elog_bench_queued", cfg);
 }
 
-void testPerfQuantumFile() {
+void testPerfQuantumFile(bool privateLogger) {
     const char* cfg =
         "file://./bench_data/"
         "elog_bench_quantum.log?flush_policy=count&flush-count=4096&quantum-buffer-size=2000000";
-    runMultiThreadTest("Quantum 200000 (Flush Count 4096)", "elog_bench_quantum", cfg);
+    runMultiThreadTest("Quantum 200000 (Flush Count 4096)", "elog_bench_quantum", cfg,
+                       privateLogger);
 }
 
 void testPerfAllSingleThread() {

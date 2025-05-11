@@ -1,11 +1,11 @@
-# ELog Logging Package
+# ELog Logging Library
 
-The ELog (Error Log) is a simple, lightweight, yet robust and high-performant package for application message logging in C++.  
-The package was designed such that it can be extended for a broad range of use cases.
+The ELog (Error Log) library is a simple, lightweight, yet robust and high-performant library for application message logging in C++.  
+The library was designed such that it can be extended for a broad range of use cases.
 
-The ELog package provides the following notable features:
+The ELog library provides the following notable features:
 
-- Logging to file, optionally with file segmentation
+- Logging to file, optionally with file rotation/segmentation
 - Logging to syslog, stderr, and/or stdout
 - Asynchronous logging
 - Almost fully configurable from configuration file (i.e. string property map)
@@ -14,6 +14,7 @@ The ELog package provides the following notable features:
 - Connectivity to SQLite (Windows, Linux, MinGW)
 - Connectivity to MySQL (experimental, Windows only)
 - Multiple platform support: Linux, Windows, MinGW
+- High performance (check out the [benchmarks](#Benchmarks) below)
 
 Additional features:
 
@@ -32,17 +33,18 @@ Planned Features:
 - Connectivity to Windows Event Log
 - Support on MacOS
 
-## Description
+# Common Use Cases
 
 The most common use case is a utility logging library, in order to write log messages to file, but much more can be done with it.  
-For instance, it can be rather easily extended to be hooked to an external message queue, while applying complex message filtering and transformations.  
+For instance, it can be rather easily extended to be hooked to an external message queue, while applying complex message filtering and transformations. One such extension, namely Kafka Connector, is already implemented built-in.  
 This could be useful for DevOps use cases.
 
 One more use case is a bug investigation that requires log flooding.  
 In this case, sending messages to a log file may affect application timing and hinder bug reproduction during heavy logging.  
-For such a situation there is a specialized log target (ELogQuantumTarget), which is designed to minimize the logging latency, by using a lock-free ring buffer and a designated background thread that logs batches of log messages.
+For such a situation there is a specialized log target (ELogQuantumTarget), which is designed to minimize the logging latency, by using a lock-free ring buffer and a designated background CPU-bound thread that logs batches of log messages.  
+Pay attention that simply using a queue guarded by a mutex is not scalable (check out the [benchmark](#multi-threaded-asynchronous-file-log-target-comparison) below).
 
-Another common use case is log file segmentation (i.e. breaking log file to segments of some size).
+Another common use case is log file rotation/segmentation (i.e. breaking log file to segments of some size).
 
 The ELog system also allows directing log messages to several destinations, so tapping to external log analysis tools, for instance, in addition to doing regular logging to file, is also rather straightforward.
 
@@ -54,13 +56,13 @@ This can be done actually quite easily and with much flexibility.
 
 For more information, see documentation below.
 
-## Getting Started
+# Getting Started
 
-In order to use the package, include the main header "elog_system.h", which is the package facade.  
+In order to use the library, include the main header "elog_system.h", which is the library facade.  
 In the application code, make sure to call one of the elog::ElogSystem::initializeXXX() functions before using any of the logging macros. After this, you can use ELOG_INFO() and the rest of the macros.  
 At application exit make sure to call elog::ELogSystem::terminate().
 
-### Dependencies
+## Dependencies
 
 The ELog system has no special dependencies, unless connecting to one of the external systems listed above.
 In particular the following compile/runtime dependencies exist in each case:
@@ -70,9 +72,9 @@ In particular the following compile/runtime dependencies exist in each case:
 - SQLite connector requires libsqlite3.so
 - MySQL connector requires mysqlcppconn.lib for compile and mysqlcppconn-10-vs14.dll for runtime (Windows only)
 
-### Installing
+## Installing
 
-The package can be built and installed by running:
+The library can be built and installed by running:
 
     make -j INSTALL_DIR=<install-path> install
 
@@ -84,19 +86,56 @@ Add to linker flags:
 
     -L<install-path>/bin -lelog
 
-## Help
+# Help
 
-See examples section below, and documentation in header files for more information.
+See [documentation](#Documentation) section below, and documentation in header files for more information.
 
-## Authors
+# Authors
 
 Oren Amor (oren.amor@gmail.com)
 
-## License
+# License
 
 This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
 
-## Documentation
+# Documentation
+
+Following is the documentation for the ELog library.
+
+# Contents
+- [Basic Usage](#basic-usage)
+    - [Initialization and Termination](#initialization-and-termination)
+    - [Logging Macros](#logging-macros)
+    - [Defining Log Sources and Loggers](#defining-log-sources-and-loggers)
+    - [Configuring Log Line Format](#configuring-log-line-format)
+    - [Extending The Formatting Scheme](#extending-the-formatting-scheme)
+    - [Filtering Log Messages](#filtering-log-messages)
+    - [Limiting Log Rate](#limiting-log-rate)
+    - [Log Targets](#log-targets)
+    - [Flush Policy](#flush-policy)
+- [Configuring from Properties](#configuring-from-properties)
+    - [Configuring Log Level](#configuring-log-level)
+    - [Configuring Log Targets](#configuring-log-targets)
+    - [Individual Log Target Configuration](#individual-log-target-configuration)
+    - [Configuring Flush Policy](#configuring-flush-policy)
+    - [Compound Log Targets](#compound-log-targets)
+    - [Configuring Database Log Targets](#configuring-database-log-targets)
+    - [Connecting to PostgreSQL](#connecting-to-postgresql)
+    - [Connecting to SQLite](#connecting-to-sqlite)
+    - [Connecting to MySQL (experimental)](#connecting-to-mysql-experimental)
+    - [Connecting to Kafka Topic](#connecting-to-kafka-topic)
+- [Benchmarks](#benchmarks)
+    - [Benchmark Highlights](#benchmark-highlights)
+    - [Empty Logging Benchmark](#empty-logging-benchmark)
+    - [Synchronous File Log Target with Count Flush Policy](#synchronous-file-log-target-with-count-flush-policy)
+    - [Synchronous File Log Target with Size Flush Policy](#synchronous-file-log-target-with-size-flush-policy)
+    - [Synchronous File Log Target with Time Flush Policy](#synchronous-file-log-target-with-time-flush-policy)
+    - [Single-threaded Synchronous File Log Target Comparison](#single-threaded-synchronous-file-log-target-comparison)
+    - [Multi-threaded Asynchronous File Log Target Comparison](#multi-threaded-asynchronous-file-log-target-comparison)
+
+## Basic Usage
+
+In the following sections all that is related to basic usage of the ELog library shall be covered.
 
 ### Initialization and Termination
 
@@ -104,7 +143,7 @@ Following is a simple example of initializing and terminating the elog system:
 
     #include "elog_system.h"
     ...
-    // import common elog definition into global name space without name space pollution
+    // import common elog log level and macro definitions into global name space without name space pollution
     ELOG_USING()
 
     int main(int argc, char* argv[]) {
@@ -294,7 +333,7 @@ Pay attention that log filtering is usually applied at the global level, by the 
 
     ELogSystem::setLogFilter(logFilter);
 
-### Rate Limiter
+### Limiting Log Rate
 
 A special instance of a log filter is the rate limiter, which may be applied globally or per log-target:
 
@@ -380,7 +419,7 @@ In case a combination of strategies is needed, either ELogAndFlushPolicy or ELog
 
 For any other specialized flush policy, derive from ELogFlushPolicy and override the shouldFlush() virtual method.
 
-### Configuring from Properties
+## Configuring from Properties
 
 The ELogSystem facade provides a utility function to load configuration from properties map:
 
@@ -397,7 +436,7 @@ The following properties are recognized (the rest are ignored):
 - log_rate_limit: configures the global log rate limit (maximum number of messages per second)
 - log_target: configures a log target (may be repeated several times)
 
-#### Configuring Log Level
+### Configuring Log Level
 
 The log level configuration items follow the following syntax:
 
@@ -420,14 +459,14 @@ The propagation specification could be empty, or any one of the following:
     + (plus sign): specifies permissive (loose) log level propagation
     - (minus sign): specifies restrictive log level propagation
 
-So, continuing the example above, we can define that the entire core package has INFO log level,  
-but the files sub-package will have TRACE log level:
+So, continuing the example above, we can define that the entire core module has INFO log level,  
+but the files sub-module will have TRACE log level:
 
     core.log_level = INFO*
     core.files.log_level = TRACE*
 
-Now suppose that for a short while we would like to investigate some bug in the core package,  
-but we would like to avoid setting the files sub-package level to DEBUG, since it is really noisy,  
+Now suppose that for a short while we would like to investigate some bug in the core module,  
+but we would like to avoid setting the files sub-module level to DEBUG, since it is really noisy,  
 and it is not related to the bug we are investigating. The simplest way to do this is as follows:
 
     core.log_level = DEBUG+
@@ -435,11 +474,11 @@ and it is not related to the bug we are investigating. The simplest way to do th
 
 The above configuration ensures all core log sources have at least DEBUG log level (if any log source  
 had a more permissive log level, then its log level is kept intact), but after that the cores.files  
-package log level is restricted to TRACE, including all sub-packages.  
+module log level is restricted to TRACE, including all sub-packages.  
 Pay attention that order matters here.
 
 
-#### Configuring Log Targets
+### Configuring Log Targets
 
 As mentioned above, log targets can be configured using properties.  
 The following syntax is supported:
@@ -626,7 +665,7 @@ Since log target resource strings tend to get complex, future versions will incl
 
 ## Benchmarks
 
-The following unofficial benchmarks results illustrate the high performance of the ELog package.  
+The following unofficial benchmarks results illustrate the high performance of the ELog library.  
 
 The benchmark is divided into four parts:
 
@@ -646,7 +685,21 @@ The reason for that is that collecting each sample time affected greatly the tes
 Since there is no interaction with external system (at least in this benchmark), only averages are presented,  
 as outliers are not expected.
 
-## Empty Logging Benchmark
+### Benchmark Highlights
+
+The following table summarizes the main KPIs of the ELog library:
+
+| KPI | Value |
+|:---|---:|
+| Private Logger Latency (no log issued) | 0.2 nano-seconds |
+| Shared Logger Latency (no log issued) | 1.3 nano-seconds |
+| Synchronous Logging Throughput (flush each message) | 163444 Msg/Sec |
+| Synchronous Logging Throughput (delayed flush) | 2.4 Million Msg/Sec |
+| Asynchronous Logging Throughput* (single-threaded) | 5.8 Million Msg/Sec |
+
+NOTE: Asynchronous logging throughput refers to the logger's capacity to push messages, not to the throughput of disk writing.
+
+### Empty Logging Benchmark
 
 The first benchmark checked the impact of using the logging macros without logging (i.e. when log level does not match).  
 Separate tests were conducted with a shared logger and a private logger.  
@@ -668,8 +721,7 @@ Following are the benchmark test results for synchronous file log target with fl
 
 ![plot](./src/elog_bench/png/flush_count.png)
 
-As it can be seen, flush-count=512 yields the best results (around 2.2 Million messages per second), and setting a higher  
-number does need yield better results.  
+As it can be seen, flush-count=512 and flush-count=1024 both yield the best results (around 2.4 Million messages per second), and setting a higher number does need yield any better results.  
 Most probably this has to do with underlying system file buffers.  
 NOTE: Doing direct/async I/O is not being considered at this time.
 
@@ -680,7 +732,7 @@ Following are the benchmark test results for synchronous file log target with fl
 ![plot](./src/elog_bench/png/flush_size.png)
 
 The results of this test are rather illuminating.
-First, we can conclude that setting buffer size of 64KB yields the best results, peaking at around 2 Million messages per second.
+First, we can conclude that setting buffer size of 64KB yields top results, peaking at around 2.2 Million messages per second.
 Second, increasing the buffer size does not have any notable effect.  
 Again, this is most probably related to the underlying system file buffers.
 
@@ -690,8 +742,8 @@ Following are the benchmark test results for synchronous file log target with fl
 
 ![plot](./src/elog_bench/png/flush_time.png)
 
-The results here shows that a flush period of 200 ms yields the best results, and this again probably has to do with  
-underlying buffer size, and the right timing to flush them (not too early and not too late).
+The results here shows that a flush period of 500 ms and 1000ms yield the best results, but the differences are not so clear.  
+This again probably has to do with underlying buffer size, and the right timing to flush them (not too early and not too late).
 
 ### Single-threaded Synchronous File Log Target Comparison
 
@@ -705,18 +757,18 @@ This last comparison needs further explanation:
 - The 'never' policy simply never flushes, and serves as a baseline for other configurations
 - All other synchronous logging methods exhibit the same single-threaded performance (around 950,000 messages per second)
 
-The last 3 logging methods are asynchronous and mostly exhibit performance as expected, but it should be noted that  
-this does not relate to disk write performance, but rather logger throughput.  
+The last 3 logging methods are asynchronous and mostly exhibit high performance as expected, but it should be noted that  
+this does not relate to disk write performance, but rather to logger throughput.  
 In other words, this actually illustrates the logger latency when using asynchronous log target.
 
 Points to note:
 
-- The deferred log target can receive 3.8 Million messages per second, that is an average latency of 255 nano-seconds per message
-- The quantum log target can receive 5.9 Million messages per second, that is an average latency of 173 nano-seconds per message
-- The queued log target seems to have a performance problem the requires further investigation
+- The deferred log target can receive 4.1 Million messages per second, that is an average latency of 243 nano-seconds per message
+- The quantum log target can receive 5.8 Million messages per second, that is an average latency of 172 nano-seconds per message
+- The queued log target seems to have a performance problem that requires further investigation
 
 All asynchronous loggers were configured with generous buffer sizes for testing peak performance.  
-In reality this measures the peak performance during log message burst.  
+In reality this measures the peak performance during a log message burst.  
 So when configuring log targets to withstand the largest message burst, this is the expected performance.
 
 ### Multi-threaded Asynchronous File Log Target Comparison
@@ -727,4 +779,5 @@ This test checks the scalability of each log target, and the results are interes
 
 As the graph depicts, the deferred and queued log targets are not scalable, since both impose a lock,  
 whereas the quantum log target employs a lock-free ring buffer.  
-The results show that the quantum logger is fully scalable, as much as free resources allow.
+The results show that the quantum logger is fully scalable, as much as system resources allow.  
+In addition, when using a shared logger (for instance, in a code section that is concurrently accessed by many threads), the quantum logger is still scalable, though slightly lagging behind the private logger performance.

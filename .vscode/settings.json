@@ -103,6 +103,7 @@
         "interruptible",
         "millis",
         "msgq",
+        "MSYSTEM",
         "tname"
     ]
 }
