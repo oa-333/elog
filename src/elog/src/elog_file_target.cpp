@@ -12,13 +12,11 @@ ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolic
     setAddNewLine(true);
 }
 
-ELogFileTarget::~ELogFileTarget() {}
-
 bool ELogFileTarget::startLogTarget() {
     if (m_fileHandle == nullptr) {
         m_fileHandle = fopen(m_filePath.c_str(), "a");
         if (m_fileHandle == nullptr) {
-            ELOG_SYS_ERROR(fopen, "Failed to open log file %s", m_filePath.c_str());
+            ELogSystem::reportSysError("fopen", "Failed to open log file %s", m_filePath.c_str());
             return false;
         }
         m_shouldClose = true;
@@ -28,8 +26,9 @@ bool ELogFileTarget::startLogTarget() {
 
 bool ELogFileTarget::stopLogTarget() {
     if (m_fileHandle != nullptr && m_shouldClose) {
+        flush();
         if (fclose(m_fileHandle) == -1) {
-            ELOG_SYS_ERROR(fopen, "Failed to close log file %s", m_filePath.c_str());
+            ELogSystem::reportSysError("fclose", "Failed to close log file %s", m_filePath.c_str());
             return false;
         }
     }
@@ -37,10 +36,20 @@ bool ELogFileTarget::stopLogTarget() {
 }
 
 void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
+    // NOTE: according to https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_concurrency.html
+    // gcc documentations states that: "POSIX standard requires that C stdio FILE* operations are
+    // atomic. POSIX-conforming C libraries (e.g, on Solaris and GNU/Linux) have an internal mutex
+    // to serialize operations on FILE*s."
+    // therefore no lock is required here
     fputs(formattedLogMsg.c_str(), m_fileHandle);
     addBytesWritten(formattedLogMsg.length());
 }
 
-void ELogFileTarget::flush() { fflush(m_fileHandle); }
+void ELogFileTarget::flush() {
+    if (fflush(m_fileHandle) == EOF) {
+        int errCode = errno;
+        ELogSystem::reportError("Failed to flush file: error code %d", errCode);
+    }
+}
 
 }  // namespace elog

@@ -7,7 +7,7 @@ set output "./async_log.png"
 set xlabel "#Threads"
 set ylabel "Throughput (Msg/Sec)"
 
-set format y '%.0f'
+set format y "%'.0f"
 
 set title "Asynchronous Logging Message Throughput"
 

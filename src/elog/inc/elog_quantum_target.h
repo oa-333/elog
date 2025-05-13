@@ -65,10 +65,10 @@ public:
     void flush() final;
 
     /** @brief Queries whether the log target has written all pending messages. */
-    bool isCaughtUp() final {
-        uint32_t writePos = m_writePos.load(std::memory_order_relaxed);
-        uint32_t readPos = m_readPos.load(std::memory_order_relaxed);
-        return writePos == readPos;
+    bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) final {
+        writeCount = m_writePos.load(std::memory_order_relaxed);
+        readCount = m_readPos.load(std::memory_order_relaxed);
+        return writeCount == readCount;
     }
 
     /** @brief As log target may be chained as in a list, this retrieves the final log target. */

@@ -7,6 +7,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "elog_buffered_file_target.h"
 #include "elog_db_schema_handler.h"
 #include "elog_deferred_target.h"
 #include "elog_file_schema_handler.h"
@@ -192,7 +193,8 @@ bool ELogSystem::initialize(ELogErrorHandler* errorHandler /* = nullptr */) {
 }
 
 // TODO: refactor init code
-bool ELogSystem::initializeLogFile(const char* logFilePath,
+bool ELogSystem::initializeLogFile(const char* logFilePath, uint32_t bufferSize /* = 0 */,
+                                   bool useLock /* = false */,
                                    ELogErrorHandler* errorHandler /* = nullptr */,
                                    ELogFlushPolicy* flushPolicy /* = nullptr */,
                                    ELogFilter* logFilter /* = nullptr */,
@@ -201,9 +203,16 @@ bool ELogSystem::initializeLogFile(const char* logFilePath,
     if (!initGlobals()) {
         return false;
     }
-    if (setLogFileTarget(logFilePath, flushPolicy) == ELOG_INVALID_TARGET_ID) {
-        termGlobals();
-        return false;
+    if (bufferSize > 0) {
+        if (!setBufferedLogFileTarget(logFilePath, bufferSize, useLock, flushPolicy)) {
+            termGlobals();
+            return false;
+        }
+    } else {
+        if (setLogFileTarget(logFilePath, flushPolicy) == ELOG_INVALID_TARGET_ID) {
+            termGlobals();
+            return false;
+        }
     }
 
     if (logFilter != nullptr) {
@@ -251,7 +260,7 @@ void ELogSystem::reportError(const char* errorMsgFmt, ...) {
     va_end(ap);
 }
 
-void ELogSystem::reportError(const char* errorMsgFmt, va_list ap) {
+void ELogSystem::reportErrorV(const char* errorMsgFmt, va_list ap) {
     // compute error message length, this requires copying variadic argument pointer
     va_list apCopy;
     va_copy(apCopy, ap);
@@ -265,6 +274,26 @@ void ELogSystem::reportError(const char* errorMsgFmt, va_list ap) {
     ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
     errorHandler->onError(errorMsg);
     va_end(apCopy);
+}
+
+void ELogSystem::reportSysError(const char* sysCall, const char* errorMsgFmt, ...) {
+    int errCode = errno;
+    reportError("System call %s() failed: %d (%s)", sysCall, errCode, sysErrorToStr(errCode));
+
+    va_list ap;
+    va_start(ap, errorMsgFmt);
+    reportError(errorMsgFmt, ap);
+    va_end(ap);
+}
+
+void ELogSystem::reportSysErrorCode(const char* sysCall, int errCode, const char* errorMsgFmt,
+                                    ...) {
+    reportError("System call %s() failed: %d (%s)", sysCall, errCode, sysErrorToStr(errCode));
+
+    va_list ap;
+    va_start(ap, errorMsgFmt);
+    reportError(errorMsgFmt, ap);
+    va_end(ap);
 }
 
 bool ELogSystem::registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
@@ -927,6 +956,56 @@ ELogTargetId ELogSystem::setLogFileTarget(FILE* fileHandle,
     return logTargetId;
 }
 
+ELogTargetId ELogSystem::setBufferedLogFileTarget(const char* logFilePath, uint32_t bufferSize,
+                                                  bool useLock /* = true */,
+                                                  ELogFlushPolicy* flushPolicy /* = nullptr */,
+                                                  bool printBanner /* = false */) {
+    // verify parameters
+    if (bufferSize == 0) {
+        reportError("Invalid zero buffer size for buffered file log target");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    // create new log target
+    ELogTarget* logTarget =
+        new (std::nothrow) ELogBufferedFileTarget(logFilePath, bufferSize, useLock, flushPolicy);
+    if (logTarget == nullptr) {
+        reportError("Failed to create log file target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
+}
+
+ELogTargetId ELogSystem::setBufferedLogFileTarget(FILE* fileHandle, uint32_t bufferSize,
+                                                  bool useLock /* = true */,
+                                                  ELogFlushPolicy* flushPolicy /* = nullptr */,
+                                                  bool printBanner /* = false */) {
+    // verify parameters
+    if (bufferSize == 0) {
+        reportError("Invalid zero buffer size for buffered file log target");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    // create new log target
+    ELogTarget* logTarget =
+        new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock, flushPolicy);
+    if (logTarget == nullptr) {
+        reportError("Failed to create log file target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
+}
+
 ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const char* logName,
                                                    uint32_t segmentLimitMB,
                                                    ELogFlushPolicy* flushPolicy /* = nullptr */,
@@ -964,10 +1043,17 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
     return (ELogTargetId)(sLogTargets.size() - 1);
 }
 
-ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath,
+ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 0 */,
+                                          bool useLock /* = false */,
                                           ELogFlushPolicy* flushPolicy /* = nullptr */) {
     // create new log target
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
+    ELogTarget* logTarget = nullptr;
+    if (bufferSize > 0) {
+        logTarget = new (std::nothrow)
+            ELogBufferedFileTarget(logFilePath, bufferSize, useLock, flushPolicy);
+    } else {
+        logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
+    }
     if (logTarget == nullptr) {
         reportError("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;
@@ -980,9 +1066,16 @@ ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath,
     return logTargetId;
 }
 
-ELogTargetId ELogSystem::addLogFileTarget(FILE* fileHandle,
+ELogTargetId ELogSystem::addLogFileTarget(FILE* fileHandle, uint32_t bufferSize /* = 0 */,
+                                          bool useLock /* = false */,
                                           ELogFlushPolicy* flushPolicy /* = nullptr */) {
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
+    ELogTarget* logTarget = nullptr;
+    if (bufferSize > 0) {
+        logTarget =
+            new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock, flushPolicy);
+    } else {
+        logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
+    }
     if (logTarget == nullptr) {
         reportError("Failed to create log target, out of memory");
         return ELOG_INVALID_TARGET_ID;

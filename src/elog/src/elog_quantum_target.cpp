@@ -90,6 +90,9 @@ void ELogQuantumTarget::flush() {
 
 void ELogQuantumTarget::logThread() {
     bool done = false;
+    // const uint32_t SPIN_COUNT_INIT = 256;
+    // const uint32_t SPIN_COUNT_MAX = 16384;
+    // uint32_t spinCount = SPIN_COUNT_INIT;
     while (!done) {
         // get read/write pos
         volatile uint32_t writePos = m_writePos.load(std::memory_order_relaxed);
@@ -100,10 +103,14 @@ void ELogQuantumTarget::logThread() {
             // wait until record is ready for reading
             ELogRecordData& recordData = m_ringBuffer[readPos % m_ringBuffer.size()];
             EntryState entryState = recordData.m_entryState.load(std::memory_order_relaxed);
+            // uint32_t localSpinCount = SPIN_COUNT_INIT;
             while (entryState != ES_READY) {
                 // cpu relax then try again
                 // CPU_RELAX;
                 entryState = recordData.m_entryState.load(std::memory_order_relaxed);
+                // spin and exponential backoff
+                // for (uint32_t spin = 0; spin < localSpinCount; ++spin);
+                // localSpinCount *= 2;
             }
 
             // set record in reading state
@@ -120,14 +127,22 @@ void ELogQuantumTarget::logThread() {
                 m_logTarget->flush();
             } else {
                 m_logTarget->log(recordData.m_logRecord);
+                m_readPos.fetch_add(1, std::memory_order_relaxed);
             }
 
             // change state back to vacant and update read pos
             recordData.m_entryState.store(ES_VACANT, std::memory_order_relaxed);
-            m_readPos.fetch_add(1, std::memory_order_relaxed);
         } else {
-            // relax before next round
-            // CPU_RELAX;
+            /*if (spinCount > SPIN_COUNT_MAX) {
+                // yield processor
+                std::this_thread::yield();
+            } else {
+                // relax before next round
+                CPU_RELAX;
+                // spin and do exponential backoff
+                for (uint32_t spin = 0; spin < spinCount; ++spin);
+                spinCount *= 2;
+            }*/
         }
     }
 

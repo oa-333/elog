@@ -7,7 +7,7 @@ set output "./flush_size.png"
 set xlabel "#Threads"
 set ylabel "Throughput (Msg/Sec)"
 
-set format y '%.0f'
+set format y "%'.0f"
 
 set title "Flush Size-Policy Message Throughput"
 

@@ -4,12 +4,9 @@
 #include <atomic>
 #include <string>
 
+#include "elog_buffered_file_writer.h"
 #include "elog_def.h"
 #include "elog_target.h"
-
-// TODO: allow combining segmented file log target with deferred log target
-// aso have deferred log target to act on some combined flush policy, such that all queued messages
-// are drained during queue switch
 
 namespace elog {
 

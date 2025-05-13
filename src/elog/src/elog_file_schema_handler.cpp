@@ -1,5 +1,6 @@
 #include "elog_file_schema_handler.h"
 
+#include "elog_buffered_file_target.h"
 #include "elog_file_target.h"
 #include "elog_segmented_file_target.h"
 #include "elog_system.h"
@@ -16,9 +17,30 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
         return nullptr;
     }
 
+    // there could be optional property file-buffer-size
+    uint32_t bufferSize = 0;
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("file-buffer-size");
+    if (itr != logTargetSpec.m_props.end()) {
+        if (!parseIntProp("file-buffer-size", logTargetCfg, itr->second, bufferSize)) {
+            return nullptr;
+        }
+    }
+
+    // there could be an optional property file-no-lock
+    // NOTE: Since file lock is relevant only for buffered file logging, the default value for
+    // file-lock is true, assuming that multi-threaded scenario is the common use case, so unless
+    // user specifies explicitly otherwise, locking is used.
+    bool useFileLock = true;
+    itr = logTargetSpec.m_props.find("file-lock");
+    if (itr != logTargetSpec.m_props.end()) {
+        if (!parseBoolProp("file-lock", logTargetCfg, itr->second, useFileLock)) {
+            return nullptr;
+        }
+    }
+
     // there could be optional property segment-size-mb
     uint32_t segmentSizeMB = 0;
-    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("segment-size-mb");
+    itr = logTargetSpec.m_props.find("segment-size-mb");
     if (itr != logTargetSpec.m_props.end()) {
         if (!parseIntProp("segment-size-mb", logTargetCfg, itr->second, segmentSizeMB)) {
             return nullptr;
@@ -43,7 +65,12 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
                 ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB, nullptr);
         }
     } else {
-        logTarget = new (std::nothrow) ELogFileTarget(logTargetSpec.m_path.c_str());
+        if (bufferSize > 0) {
+            logTarget = new (std::nothrow)
+                ELogBufferedFileTarget(logTargetSpec.m_path.c_str(), bufferSize, useFileLock);
+        } else {
+            logTarget = new (std::nothrow) ELogFileTarget(logTargetSpec.m_path.c_str());
+        }
     }
 
     return logTarget;

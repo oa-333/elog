@@ -70,8 +70,8 @@ void ELogDeferredTarget::logThread() {
                 ELogRecord& logRecord = (*itr).first;
                 logRecord.m_logMsg = (*itr).second.c_str();
                 m_logTarget->log(logRecord);
+                m_readCount.fetch_add(1, std::memory_order_relaxed);
             }
-            m_readCount.fetch_add(1, std::memory_order_relaxed);
             ++itr;
         }
         logQueue.clear();
@@ -85,8 +85,9 @@ void ELogDeferredTarget::logThread() {
             ELogRecord& logRecord = (*itr).first;
             logRecord.m_logMsg = (*itr).second.c_str();
             m_logTarget->log(logRecord);
+            m_readCount.fetch_add(1, std::memory_order_relaxed);
         }
-        m_readCount.fetch_add(1, std::memory_order_relaxed);
+        // skip flush requests, we will do one flush at the end
         ++itr;
     }
 

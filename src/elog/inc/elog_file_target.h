@@ -1,5 +1,5 @@
-#ifndef __FILE_LOG_TARGET_H__
-#define __FILE_LOG_TARGET_H__
+#ifndef __ELOG_FILE_LOG_TARGET_H__
+#define __ELOG_FILE_LOG_TARGET_H__
 
 #include <cstdio>
 
@@ -10,7 +10,21 @@ namespace elog {
 
 class ELOG_API ELogFileTarget : public ELogTarget {
 public:
+    /**
+     * @brief Construct a new ELogFileTarget object.
+     * @param filePath The path to the log file.
+     * @param flushPolicy Optional flush policy to use.
+     * @see @ref ELofBufferedFileWriter.
+     */
     ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy = nullptr);
+
+    /**
+     * @brief Construct a new ELogFileTarget object using an existing file handle.
+     * @note This constructor is usually used for logging to the standard error and output streams.
+     * @param fileHandle The open file handle to use.
+     * @param flushPolicy Optional flush policy to use.
+     * @see @ref ELofBufferedFileWriter.
+     */
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr)
         : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
         setAddNewLine(true);
@@ -18,7 +32,7 @@ public:
     ELogFileTarget(const ELogFileTarget&) = delete;
     ELogFileTarget(ELogFileTarget&&) = delete;
 
-    ~ELogFileTarget() final;
+    ~ELogFileTarget() final {}
 
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush() final;
@@ -41,4 +55,4 @@ private:
 
 }  // namespace elog
 
-#endif  // __FILE_LOG_TARGET_H__
+#endif  // __ELOG_FILE_LOG_TARGET_H__

@@ -25,4 +25,21 @@ bool parseIntProp(const char* propName, const std::string& logTargetCfg, const s
     }
     return true;
 }
+
+bool parseBoolProp(const char* propName, const std::string& logTargetCfg, const std::string& prop,
+                   bool& value, bool issueError /* = true */) {
+    if (prop.compare("true") == 0 || prop.compare("yes") == 0) {
+        value = true;
+    } else if (prop.compare("false") == 0 || prop.compare("no") == 0) {
+        value = false;
+    } else {
+        if (issueError) {
+            ELogSystem::reportError("Invalid boolean property %s value %s: %s", propName,
+                                    prop.c_str(), logTargetCfg.c_str());
+        }
+        return false;
+    }
+    return true;
+}
+
 }  // namespace elog

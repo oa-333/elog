@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cinttypes>
 #include <fstream>
 #include <thread>
 
@@ -25,6 +26,7 @@ static void writeCsvFile(const char* fileName, std::vector<double>& msgThroughpu
                          std::vector<double>& byteThroughput, std::vector<double>& accumThroughput,
                          bool privateLogger);
 static void testPerfFileFlushPolicy();
+static void testPerfBufferedFile();
 static void testPerfDeferredFile();
 static void testPerfQueuedFile();
 static void testPerfQuantumFile(bool privateLogger);
@@ -44,6 +46,8 @@ void testPerfSTFlushCount4096(std::vector<double>& msgThroughput,
 void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput);
 void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput,
                               std::vector<double>& ioThroughput);
+void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
+                               std::vector<double>& ioThroughput);
 void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
                                  std::vector<double>& ioThroughput);
 void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
@@ -62,6 +66,7 @@ int main(int argc, char* argv[]) {
     testPerfPrivateLog();
     testPerfSharedLogger();
     testPerfFileFlushPolicy();
+    testPerfBufferedFile();
     testPerfDeferredFile();
     testPerfQueuedFile();
     testPerfQuantumFile(true);
@@ -118,7 +123,9 @@ void testPerfPrivateLog() {
     }
 
     // wait for test to end
-    while (!logTarget->isCaughtUp());
+    uint64_t writeCount = 0;
+    uint64_t readCount = 0;
+    while (!logTarget->isCaughtUp(writeCount, readCount));
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime =
@@ -155,7 +162,9 @@ void testPerfSharedLogger() {
     }
 
     // wait for test to end
-    while (!logTarget->isCaughtUp());
+    uint64_t writeCount = 0;
+    uint64_t readCount = 0;
+    while (!logTarget->isCaughtUp(writeCount, readCount));
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime =
@@ -181,19 +190,35 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
         return;
     }
 
-    fprintf(stderr, "\n\nRunning %s thread test\n", title);
+    fprintf(stderr, "\n\nRunning %s single-thread test\n", title);
     elog::ELogLogger* logger = elog::ELogSystem::getPrivateLogger("");
     uint64_t bytesStart = logTarget->getBytesWritten();
     auto start = std::chrono::high_resolution_clock::now();
     for (uint64_t j = 0; j < MSG_COUNT; ++j) {
         ELOG_INFO_EX(logger, "Single thread Test log %u", j);
     }
+    auto end0 = std::chrono::high_resolution_clock::now();
+    uint64_t writeCount = 0;
+    uint64_t readCount = 0;
+    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+    }
     auto end = std::chrono::high_resolution_clock::now();
+    uint64_t bytesEnd = logTarget->getBytesWritten();
+    std::chrono::microseconds testTime0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
     std::chrono::microseconds testTime =
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    msgThroughput = MSG_COUNT / (double)testTime.count() * 1000000.0f;
-    uint64_t bytesEnd = logTarget->getBytesWritten();
+
+    // print test result
+    // fprintf(stderr, "Msg Test time: %u usec\n", (unsigned)testTime0.count());
+    // fprintf(stderr, "IO Test time: %u usec\n", (unsigned)testTime.count());
+
+    msgThroughput = MSG_COUNT / (double)testTime0.count() * 1000000.0f;
+    fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", msgThroughput);
+
     ioThroughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
+    fprintf(stderr, "Throughput: %0.3f KB/Sec\n", ioThroughput);
 
     termELog();
 }
@@ -240,7 +265,15 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
             threads[i].join();
         }
         auto end0 = std::chrono::high_resolution_clock::now();
-        while (!logTarget->isCaughtUp());
+        uint64_t writeCount = 0;
+        uint64_t readCount = 0;
+        while (!logTarget->isCaughtUp(writeCount, readCount)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(0));
+            /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
+                    readCount);*/
+        }
+        // fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
+        // readCount);
         auto end = std::chrono::high_resolution_clock::now();
         uint64_t bytesEnd = logTarget->getBytesWritten();
         double throughput = 0;
@@ -250,9 +283,11 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         fprintf(stderr, "%u thread accumulated throughput: %0.2f\n", threadCount, throughput);
         accumThroughput.push_back(throughput);
 
+        std::chrono::microseconds testTime0 =
+            std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
         std::chrono::microseconds testTime =
             std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        throughput = threadCount * MSG_COUNT / (double)testTime.count() * 1000000.0f;
+        throughput = threadCount * MSG_COUNT / (double)testTime0.count() * 1000000.0f;
         /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
         fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
@@ -262,10 +297,11 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         byteThroughput.push_back(throughput);
     }
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     termELog();
 
-    printMermaidChart(title, msgThroughput, byteThroughput);
-    printMarkdownTable(title, msgThroughput, byteThroughput);
+    // printMermaidChart(title, msgThroughput, byteThroughput);
+    // printMarkdownTable(title, msgThroughput, byteThroughput);
     writeCsvFile(fileName, msgThroughput, byteThroughput, accumThroughput, privateLogger);
 }
 
@@ -386,13 +422,49 @@ void testPerfFileFlushPolicy() {
     testPerfTimeFlushPolicy();
 }
 
+void testPerfBufferedFile() {
+    const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_buffered512.log?file-buffer-size=512&file-lock=yes&flush_policy=none";
+    runMultiThreadTest("Buffered File (512 bytes)", "elog_bench_buffered512", cfg);
+
+    cfg =
+        "file://./bench_data/"
+        "elog_bench_buffered4kb.log?file-buffer-size=4096&file-lock=yes&flush_policy=none";
+    runMultiThreadTest("Buffered File (4kb)", "elog_bench_buffered4kb", cfg);
+
+    cfg =
+        "file://./bench_data/"
+        "elog_bench_buffered64kb.log?file-buffer-size=65536&file-lock=yes&flush_policy=none";
+    runMultiThreadTest("Buffered File (64kb)", "elog_bench_buffered64kb", cfg);
+
+    cfg =
+        "file://./bench_data/"
+        "elog_bench_buffered1mb.log?file-buffer-size=1048576&file-lock=yes&flush_policy=none";
+    runMultiThreadTest("Buffered File (1mb)", "elog_bench_buffered1mb", cfg);
+
+    cfg =
+        "file://./bench_data/"
+        "elog_bench_buffered4mb.log?file-buffer-size=4194304&file-lock=yes&flush_policy=none";
+    runMultiThreadTest("Buffered File (4mb)", "elog_bench_buffered4mb", cfg);
+}
+
 void testPerfDeferredFile() {
+    /*const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_deferred.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "count=4096&deferred";*/
     const char* cfg =
         "file://./bench_data/elog_bench_deferred.log?flush_policy=count&flush-count=4096&deferred";
     runMultiThreadTest("Deferred (Flush Count 4096)", "elog_bench_deferred", cfg);
 }
 
 void testPerfQueuedFile() {
+    /*const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_queued.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "count=4096&queue-batch-size=10000&queue-"
+        "timeout-millis=200";*/
     const char* cfg =
         "file://./bench_data/"
         "elog_bench_queued.log?flush_policy=count&flush-count=4096&queue-batch-size=10000&queue-"
@@ -401,6 +473,10 @@ void testPerfQueuedFile() {
 }
 
 void testPerfQuantumFile(bool privateLogger) {
+    /*const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_quantum.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "count=4096&quantum-buffer-size=2000000";*/
     const char* cfg =
         "file://./bench_data/"
         "elog_bench_quantum.log?flush_policy=count&flush-count=4096&quantum-buffer-size=2000000";
@@ -417,6 +493,7 @@ void testPerfAllSingleThread() {
     testPerfSTFlushCount4096(msgThroughput, ioThroughput);
     testPerfSTFlushSize1mb(msgThroughput, ioThroughput);
     testPerfSTFlushTime200ms(msgThroughput, ioThroughput);
+    testPerfSTBufferedFile1mb(msgThroughput, ioThroughput);
     testPerfSTDeferredCount4096(msgThroughput, ioThroughput);
     testPerfSTQueuedCount4096(msgThroughput, ioThroughput);
     testPerfSTQuantumCount4096(msgThroughput, ioThroughput);
@@ -433,6 +510,8 @@ void testPerfAllSingleThread() {
     f << column << " \"Flush\\nSize=1MB\" " << std::fixed << std::setprecision(2)
       << msgThroughput[column++] << std::endl;
     f << column << " \"Flush\\nTime=200ms\" " << std::fixed << std::setprecision(2)
+      << msgThroughput[column++] << std::endl;
+    f << column << " \"Buffered\\nSize=1MB\" " << std::fixed << std::setprecision(2)
       << msgThroughput[column++] << std::endl;
     f << column << " Deferred " << std::fixed << std::setprecision(2) << msgThroughput[column++]
       << std::endl;
@@ -497,20 +576,41 @@ void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput,
     ioThroughput.push_back(ioPerf);
 }
 
+void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
+                               std::vector<double>& ioThroughput) {
+    const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_buffered_1mb_st.log?file-buffer-size=1048576&flush_policy=none";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    runSingleThreadedTest("Buffered Size=1mb", cfg, msgPerf, ioPerf);
+    msgThroughput.push_back(msgPerf);
+    ioThroughput.push_back(ioPerf);
+}
+
 void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
                                  std::vector<double>& ioThroughput) {
+    /*const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_deferred_st.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "count=4096&deferred";*/
     const char* cfg =
         "file://./bench_data/"
         "elog_bench_deferred_st.log?flush_policy=count&flush-count=4096&deferred";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Defrred", cfg, msgPerf, ioPerf);
+    runSingleThreadedTest("Deferred", cfg, msgPerf, ioPerf);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
 }
 
 void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
                                std::vector<double>& ioThroughput) {
+    /*const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_queued_st.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "count=4096&queue-batch-size=10000&queue-"
+        "timeout-millis=500";*/
     const char* cfg =
         "file://./bench_data/"
         "elog_bench_queued_st.log?flush_policy=count&flush-count=4096&queue-batch-size=10000&queue-"
@@ -524,6 +624,14 @@ void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
 
 void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
                                 std::vector<double>& ioThroughput) {
+    /*const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_quantum_st.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "count=4096&quantum-buffer-size=2000000";*/
+    /*const char* cfg =
+        "file://./bench_data/"
+        "elog_bench_quantum_st.log?flush_policy=size&flush-size-bytes=1048576&quantum-buffer-size="
+        "2000000";*/
     const char* cfg =
         "file://./bench_data/"
         "elog_bench_quantum_st.log?flush_policy=count&flush-count=4096&quantum-buffer-size=2000000";

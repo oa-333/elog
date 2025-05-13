@@ -103,7 +103,7 @@ public:
     }
 
     /** @brief Queries whether the log target has written all pending messages. */
-    virtual bool isCaughtUp() { return true; }
+    virtual bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) { return true; }
 
 protected:
     // NOTE: setting log level to DIAG by default has the effect of no log level limitation on the

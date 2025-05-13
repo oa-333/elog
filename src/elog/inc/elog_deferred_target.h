@@ -1,5 +1,5 @@
-#ifndef __DEFERRED_LOG_TARGET_H__
-#define __DEFERRED_LOG_TARGET_H__
+#ifndef __ELOG_DEFERRED_LOG_TARGET_H__
+#define __ELOG_DEFERRED_LOG_TARGET_H__
 
 #include <condition_variable>
 #include <list>
@@ -10,13 +10,6 @@
 #include "elog_target.h"
 
 namespace elog {
-
-// TODO: consider having lock-free implementation with wakeup/batch timeout
-// we call this a pseudo-quantum log target due to its (alleged) ability to not affect the observed
-// system, since it allows logging messages with minimal overhead (besides log formatting, which can
-// be optimized too, by using a ring of log buffers, which can assist in reducing memcpy() calls -
-// this log buffer ring will be implemented by a mult-threaded quantum logger). This of course comes
-// with a larger memory footprint.
 
 /**
  * @brief A utility log target for deferring logging to another context. Log formatting through
@@ -51,9 +44,9 @@ public:
     ELogTarget* getEndLogTarget() override { return m_logTarget; }
 
     /** @brief Queries whether the log target has written all pending messages. */
-    bool isCaughtUp() final {
-        uint32_t writeCount = m_writeCount.load(std::memory_order_relaxed);
-        uint32_t readCount = m_readCount.load(std::memory_order_relaxed);
+    bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) final {
+        writeCount = m_writeCount.load(std::memory_order_relaxed);
+        readCount = m_readCount.load(std::memory_order_relaxed);
         return writeCount == readCount;
     }
 
@@ -86,4 +79,4 @@ protected:
 
 }  // namespace elog
 
-#endif  // __DEFERRED_LOG_TARGET_H__
+#endif  // __ELOG_DEFERRED_LOG_TARGET_H__
