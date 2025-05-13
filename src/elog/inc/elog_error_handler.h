@@ -12,6 +12,8 @@ public:
 
     virtual void onError(const char* msg) = 0;
 
+    virtual void onTrace(const char* msg) = 0;
+
 protected:
     ELogErrorHandler() {}
 };

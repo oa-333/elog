@@ -86,6 +86,12 @@ public:
     /** @brief Installs an error handler. */
     static void setErrorHandler(ELogErrorHandler* errorHandler);
 
+    /** @brief Configures elog tracing. */
+    static void setTraceMode(bool enableTrace = true);
+
+    /** @brief Queries whether trace mode is enabled. */
+    static bool isTraceEnabled();
+
     /** @brief Reports an error (for internal use only). */
     static void reportError(const char* errorMsgFmt, ...);
 
@@ -95,11 +101,33 @@ public:
     /** @brief Reports an error (for internal use only). */
     static void reportSysErrorCode(const char* sysCall, int errCode, const char* errorMsgFmt, ...);
 
+    /** @brief Trace a debug message. */
+    static void reportTrace(const char* fmt, ...);
+
     /** @brief Registers a schema handler by name. */
     static bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler);
 
     /** @brief Retrieves a schema handler by name. */
     static ELogSchemaHandler* getSchemaHandler(const char* schemaName);
+
+    /**
+     * @brief Configures the ELog System from a properties configuration file.
+     * The following properties are recognized:
+     * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
+     *   Determines the global (root source) log level.
+     * - <qualified-source-name>.log_level: Log level of a log source.
+     * - log_target: expected log target URL.
+     * @param props The properties map.
+     * @param defineLogSources[opt] Optional parameter specifying whether each log source
+     * configuration item triggers creation of the log source.
+     * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
+     * all missing loggers along the name path. If not specified, and a logger on the path from root
+     * to leaf is missing, then the call fails.
+     * @return true If configuration succeeded, otherwise false.
+     */
+    static bool configureFromFile(const char* configPath, bool defineLogSources = false,
+                                  bool defineMissingPath = false);
 
     /**
      * @brief Configures the ELog System from a properties map.
@@ -108,6 +136,7 @@ public:
      * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
      *   Determines the global (root source) log level.
      * - <qualified-source-name>.log_level: Log level of a log source.
+     * - log_target: expected log target URL.
      * @param props The properties map.
      * @param defineLogSources[opt] Optional parameter specifying whether each log source
      * configuration item triggers creation of the log source.

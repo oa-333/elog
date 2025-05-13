@@ -47,8 +47,7 @@ void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
 
 void ELogFileTarget::flush() {
     if (fflush(m_fileHandle) == EOF) {
-        int errCode = errno;
-        ELOG_REPORT_ERROR("Failed to flush file: error code %d", errCode);
+        ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
     }
 }
 

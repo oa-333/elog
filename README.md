@@ -5,33 +5,42 @@ The library was designed such that it can be extended for a broad range of use c
 
 The ELog library provides the following notable features:
 
-- Logging to file, optionally with file rotation/segmentation
-- Logging to syslog, stderr, and/or stdout
-- Asynchronous logging
-- Almost fully configurable from configuration file (i.e. string property map)
-- Connectivity to Kafka (Linux, Windows, MinGW)
-- Connectivity to PostgreSQL (Linux, MinGW)
-- Connectivity to SQLite (Windows, Linux, MinGW)
-- Connectivity to MySQL (experimental, Windows only)
-- Multiple platform support: Linux, Windows, MinGW
-- High performance (check out the [benchmarks](#Benchmarks) below)
+- Synchronous and asynchronous logging schemes
+    - **Lock-free** synchronous log file rotation/segmentation
+    - allowing for multiple log targets (i.e. "log appenders"), including file, syslog, stderr, stdout
+- Rich in features:
+    - configurable log line format, flush policies, filtering, rate limiting and more
+- High Performance
+    - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free, scalable in multi-threaded scenarios)
+    - Check out the [benchmarks](#Benchmarks) below
+- Connectivity to external systems
+    - **Kafka, PostgreSQL**, SQLite, MySQL
+- Multiple platform support
+    - **Linux, Windows, MinGW**
+- Designed for extendibility
+    - Special connectors can be developed by user and get registered into the ELog system
+- Configurable from file or properties map
+    - Most common use case scenarios are fully configurable from config file
 
 Additional features:
 
-- Logging to multiple destinations at once
+- Logging to multiple targets (destinations) at once
 - Logger hierarchy with per-logger log level control
 - Various asynchronous logging schemes (low logger latency)
 - Configurable log line format and log level on a per-target basis
-    - For instance, log lines sent to syslog can be formatted differently than regular log file
+    - For instance, when using both file and syslog logging, log lines sent to syslog can be formatted differently than regular log file
     - In addition, it can be configured such that only FATAL messages are sent to syslog
 - Optional rate limiting (global and/or per log target)
 - Configurable flush policy (global and/or per log target)
-- Designed to be externally extendible
 
 Planned Features:
 
 - Connectivity to Windows Event Log
+- Connectivity to SMTP
 - Support on MacOS
+- Connectivity to external TCP/UDP receiver
+- Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
+- Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
 
 # Common Use Cases
 
@@ -102,7 +111,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
 
 Following is the documentation for the ELog library.
 
-# Contents
+## Contents
 - [Basic Usage](#basic-usage)
     - [Initialization and Termination](#initialization-and-termination)
     - [Logging Macros](#logging-macros)
@@ -188,6 +197,14 @@ In this example a segmented log file is used, with 4MB segment size:
         elog::ELogSystem::terminate();
         return 0;
     }
+
+TODO: add more sub-sections for initializations methods
+TODO: reorder sections, add section for how to externally extend SW
+TODO: revise entire doc, consider putting in pdf.
+TODO: in addition to url config, also add nested config with {} syntax
+TODO: allow specifying sizes with units (b, kb, mb - case insensitive)
+TODO: fix segmented log race conditions and add buffered file writer support
+TODO: Consider having buffering as a general step in the chain of logger --> log target --> transport
 
 ### Logging Macros
 
@@ -487,7 +504,7 @@ The following syntax is supported:
     sys://stderr - add log target to standard error stream
     sys://syslog - add log target to syslog (or Windows event log, when running on Windows)
     file://path - add regular log target
-    file://path?segment-size-mb=<segment-size-mb> - add segmented log target
+    file://path?file-segment-size-mb=<file-segment-size-mb> - add segmented file log target
     db://provider?conn-string=<url>&insert-query=<insert-query>...
     msgq://provider?... (see example below for more details)
 
@@ -549,7 +566,7 @@ All options should be separated by an ampersand (&).
 
 Here is an example for a deferred log target that uses segmented file log target:
 
-    log_target = file://logs/app.log?segment-size-mb=4&deferred
+    log_target = file://logs/app.log?file-segment-size-mb=4&deferred
 
 ### Configuring Database Log Targets
 

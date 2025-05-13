@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdarg>
 #include <cstring>
+#include <fstream>
 #include <mutex>
 #include <unordered_map>
 
@@ -44,12 +45,18 @@ public:
         fprintf(stderr, "<ELOG> ERROR: %s\n", msg);
         fflush(stderr);
     }
+
+    void onTrace(const char* msg) final {
+        fprintf(stderr, "<ELOG> TRACE: %s\n", msg);
+        fflush(stderr);
+    }
 };
 
 static const char* ELOG_SCHEMA_MARKER = "://";
 static const uint32_t ELOG_SCHEMA_LEN = 3;
 static const uint32_t ELOG_MAX_SCHEMA = 20;
 
+static bool sTraceEnabled = false;
 static ELogDefaultErrorHandler sDefaultErrorHandler;
 static ELogErrorHandler* sErrorHandler = nullptr;
 static ELogFilter* sGlobalFilter = nullptr;
@@ -110,6 +117,11 @@ void ELogSystem::termSchemaHandlers() {
 }
 
 bool ELogSystem::initGlobals() {
+    if (getenv("ELOG_TRACE") != nullptr) {
+        if (strcmp(getenv("ELOG_TRACE"), "TRUE") == 0) {
+            sTraceEnabled = true;
+        }
+    }
     if (!initFieldSelectors()) {
         reportError("Failed to initialize field selectors");
         return false;
@@ -253,6 +265,10 @@ void ELogSystem::terminate() { termGlobals(); }
 
 void ELogSystem::setErrorHandler(ELogErrorHandler* errorHandler) { sErrorHandler = errorHandler; }
 
+void ELogSystem::setTraceMode(bool enableTrace /* = true */) { sTraceEnabled = enableTrace; }
+
+bool ELogSystem::isTraceEnabled() { return sTraceEnabled; }
+
 void ELogSystem::reportError(const char* errorMsgFmt, ...) {
     va_list ap;
     va_start(ap, errorMsgFmt);
@@ -273,6 +289,7 @@ void ELogSystem::reportErrorV(const char* errorMsgFmt, va_list ap) {
     // report error
     ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
     errorHandler->onError(errorMsg);
+    free(errorMsg);
     va_end(apCopy);
 }
 
@@ -294,6 +311,30 @@ void ELogSystem::reportSysErrorCode(const char* sysCall, int errCode, const char
     va_start(ap, errorMsgFmt);
     reportError(errorMsgFmt, ap);
     va_end(ap);
+}
+
+void ELogSystem::reportTrace(const char* fmt, ...) {
+    if (sTraceEnabled) {
+        va_list ap;
+        va_start(ap, fmt);
+
+        // check how many bytes are required
+        va_list apCopy;
+        va_copy(apCopy, ap);
+        uint32_t requiredBytes = (vsnprintf(nullptr, 0, fmt, apCopy) + 1);
+
+        // format trace message
+        char* traceMsg = (char*)malloc(requiredBytes);
+        vsnprintf(traceMsg, requiredBytes, fmt, ap);
+
+        // report error
+        ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
+        errorHandler->onTrace(traceMsg);
+        free(traceMsg);
+        va_end(apCopy);
+
+        va_end(ap);
+    }
 }
 
 bool ELogSystem::registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
@@ -810,6 +851,40 @@ void ELogSystem::tryParsePathAsHostPort(const std::string& logTargetCfg,
         }
         logTargetSpec.m_host = logTargetSpec.m_path.substr(0, colonPos);
     }
+}
+
+bool ELogSystem::configureFromFile(const char* configPath, bool defineLogSources /* = false */,
+                                   bool defineMissingPath /* = false */) {
+    // use simple format
+    std::ifstream cfgFile(configPath);
+    if (!cfgFile.good()) {
+        reportSysError("fopen", "Failed to open configuration file for reading: %s", configPath);
+        return false;
+    }
+
+    // elog requires properties in order due to log level propagation
+    ELogPropertySequence props;
+
+    std::string line;
+    while (std::getline(cfgFile, line)) {
+        // skip comment lines
+        if (trim(line)[0] == '#') {
+            continue;
+        }
+        // parse line
+        std::istringstream is_line(line);
+        std::string key;
+        if (std::getline(is_line, key, '=')) {
+            std::string value;
+            if (std::getline(is_line, value)) {
+                std::string trimmedKey = trim(key);
+                std::string trimmedValue = trim(value);
+                props.push_back(std::make_pair(trimmedKey, trimmedValue));
+            }
+        }
+    }
+
+    return elog::ELogSystem::configureFromProperties(props, defineLogSources, defineMissingPath);
 }
 
 bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,

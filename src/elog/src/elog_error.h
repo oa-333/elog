@@ -33,7 +33,13 @@ namespace elog {
 #define ELOG_REPORT_WIN32_ERROR(sysCall, fmt, ...) \
     ELOG_REPORT_WIN32_ERROR_NUM(sysCall, ::GetLastError(), fmt, ##__VA_ARGS__);
 
-#endif
+#endif  // ELOG_WINDOWS
+
+/** @brief Report error message to enclosing application/library. */
+#define ELOG_REPORT_TRACE(fmt, ...)                        \
+    if (elog::ELogSystem::isTraceEnabled()) {              \
+        elog::ELogSystem::reportTrace(fmt, ##__VA_ARGS__); \
+    }
 
 }  // namespace elog
 

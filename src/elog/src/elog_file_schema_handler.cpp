@@ -37,22 +37,18 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
         }
     }
 
-    // there could be optional property segment-size-mb
+    // there could be optional property file-segment-size-mb
     uint32_t segmentSizeMB = 0;
-    itr = logTargetSpec.m_props.find("segment-size-mb");
+    itr = logTargetSpec.m_props.find("file-segment-size-mb");
     if (itr != logTargetSpec.m_props.end()) {
-        if (!parseIntProp("segment-size-mb", logTargetCfg, itr->second, segmentSizeMB)) {
+        if (!parseIntProp("file-segment-size-mb", logTargetCfg, itr->second, segmentSizeMB)) {
             return nullptr;
         }
     }
 
     ELogTarget* logTarget = nullptr;
     if (segmentSizeMB > 0) {
-#ifdef ELOG_WINDOWS
-        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of('\\');
-#else
-        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of('/');
-#endif
+        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of("\\/");
         /// assuming segmented log is to be created in current folder, and path is the file name
         if (lastSlashPos == std::string::npos) {
             logTarget = new (std::nothrow)

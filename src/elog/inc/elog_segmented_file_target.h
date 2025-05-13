@@ -2,6 +2,8 @@
 #define __SEGMENTED_FILE_LOG_TARGET_H__
 
 #include <atomic>
+#include <list>
+#include <mutex>
 #include <string>
 
 #include "elog_buffered_file_writer.h"
@@ -23,6 +25,15 @@ namespace elog {
  */
 class ELOG_API ELogSegmentedFileTarget : public ELogTarget {
 public:
+    /**
+     * @brief Construct a new ELogSegmentedFileTarget object
+     * @param logPath The path to the directory in which log file segments are to be put.
+     * @param logName The base name of the log file segments. This should not include ".log"
+     * extension, as it is being automatically added.
+     * @param segmentLimitMB The maximum segment size in megabytes.
+     * @param useLock Specifies whether to use a lock during logging.
+     * @param flushPolicy Any flush policy to be used in conjunction with this log target.
+     */
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
                             ELogFlushPolicy* flushPolicy);
     ELogSegmentedFileTarget(const ELogSegmentedFileTarget&) = delete;
@@ -48,10 +59,14 @@ private:
     std::string m_logName;
     uint32_t m_segmentLimitBytes;
     std::atomic<uint32_t> m_segmentCount;
-    std::atomic<uint32_t> m_segmentSizeBytes;
+    std::atomic<uint64_t> m_bytesLogged;
     std::atomic<FILE*> m_currentSegment;
     std::atomic<uint64_t> m_entered;
     std::atomic<uint64_t> m_left;
+    std::atomic<int64_t> m_currentlyOpeningSegment;
+    std::atomic<uint64_t> m_segmentOpenerId;
+    std::list<std::string> m_pendingMsgQueue;
+    std::mutex m_lock;
 
     bool openSegment();
     bool getSegmentCount(uint32_t& segmentCount, uint32_t& lastSegmentSizeBytes);
@@ -59,8 +74,9 @@ private:
     bool scanDirFiles(const char* dirPath, std::vector<std::string>& fileNames);
     bool getSegmentIndex(const std::string& fileName, int32_t& segmentIndex);
     bool getFileSize(const char* filePath, uint32_t& fileSize);
-    void formatSegmentPath(std::string& segmentPath);
-    bool advanceSegment();
+    void formatSegmentPath(std::string& segmentPath, uint32_t segmentId);
+    bool advanceSegment(uint32_t segmentId, const std::string& logMsg);
+    void logMsgQueue(std::list<std::string>& logMsgs, FILE* segmentFile);
 };
 
 }  // namespace elog
