@@ -24,7 +24,7 @@
 #include <cstring>
 #include <iomanip>
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -73,7 +73,7 @@ static ELogFieldSelectorConstructorMap sFieldSelectorConstructorMap;
 void registerFieldSelectorConstructor(const char* name, ELogFieldSelectorConstructor* constructor) {
     // due to c runtime issues we delay access to unordered map
     if (sFieldConstructorsCount >= ELOG_MAX_FIELD_SELECTOR_COUNT) {
-        ELogSystem::reportError("Cannot register field selector constructor, no space: %s", name);
+        ELOG_REPORT_ERROR("Cannot register field selector constructor, no space: %s", name);
         exit(1);
     } else {
         sFieldConstructors[sFieldConstructorsCount++] = {name, constructor};
@@ -87,7 +87,7 @@ static bool applyFieldSelectorConstructorRegistration() {
                  .insert(ELogFieldSelectorConstructorMap::value_type(nameCtorPair.m_name,
                                                                      nameCtorPair.m_ctor))
                  .second) {
-            ELogSystem::reportError("Duplicate field selector identifier: %s", nameCtorPair.m_name);
+            ELOG_REPORT_ERROR("Duplicate field selector identifier: %s", nameCtorPair.m_name);
             return false;
         }
     }
@@ -97,14 +97,14 @@ static bool applyFieldSelectorConstructorRegistration() {
 ELogFieldSelector* constructFieldSelector(const char* name, int justify) {
     ELogFieldSelectorConstructorMap::iterator itr = sFieldSelectorConstructorMap.find(name);
     if (itr == sFieldSelectorConstructorMap.end()) {
-        ELogSystem::reportError("Invalid field selector %s: not found", name);
+        ELOG_REPORT_ERROR("Invalid field selector %s: not found", name);
         return nullptr;
     }
 
     ELogFieldSelectorConstructor* constructor = itr->second;
     ELogFieldSelector* fieldSelector = constructor->constructFieldSelector(justify);
     if (fieldSelector == nullptr) {
-        ELogSystem::reportError("Failed to create field selector, out of memory");
+        ELOG_REPORT_ERROR("Failed to create field selector, out of memory");
     }
     return fieldSelector;
 }
@@ -118,7 +118,7 @@ static void getProgName() {
     char modulePath[PROG_NAME_MAX];
     DWORD pathLen = GetModuleFileNameA(NULL, progName, PROG_NAME_MAX);
     if (pathLen == 0) {
-        ELogSystem::reportError("WARNING: Failed to get executable file name: %u", GetLastError());
+        ELOG_REPORT_ERROR("WARNING: Failed to get executable file name: %u", GetLastError());
         return;
     }
     const char slash = '\\';
@@ -126,7 +126,7 @@ static void getProgName() {
     // can get it only from /proc/self/cmdline
     int fd = open("/proc/self/cmdline", O_RDONLY, 0);
     if (fd == -1) {
-        ELogSystem::reportError("Failed to open /proc/self/cmdline for reading: %d", errno);
+        ELOG_REPORT_ERROR("Failed to open /proc/self/cmdline for reading: %d", errno);
         return;
     }
 
@@ -134,7 +134,7 @@ static void getProgName() {
     // follow, but we don't care about them)
     ssize_t res = read(fd, progName, PROG_NAME_MAX);
     if (res == ((ssize_t)-1)) {
-        ELogSystem::reportError("Failed to read from /proc/self/cmdline for reading: %d", errno);
+        ELOG_REPORT_ERROR("Failed to read from /proc/self/cmdline for reading: %d", errno);
         close(fd);
         return;
     }

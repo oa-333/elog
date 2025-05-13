@@ -2,7 +2,7 @@
 
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -61,7 +61,7 @@ bool ELogMySqlDbTarget::connectDb(void* dbData) {
         mysqlDbData->m_insertStmt.reset(
             mysqlDbData->m_connection->prepareStatement(processedInsertStmt.c_str()));
     } catch (sql::SQLException& e) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Failed to start MySQL log target. SQL State: %p. Vendor Code: %d. Reason: %p",
             e.getSQLStateCStr(), e.getErrorCode(), e.what());
         mysqlDbData->m_insertStmt.reset();
@@ -82,7 +82,7 @@ bool ELogMySqlDbTarget::disconnectDb(void* dbData) {
         mysqlDbData->m_connection.reset();
         return true;
     } catch (sql::SQLException& e) {
-        ELogSystem::reportError("Failed to stop MySQL log target: %s", e.what());
+        ELOG_REPORT_ERROR("Failed to stop MySQL log target: %s", e.what());
         return false;
     }
     return true;
@@ -102,9 +102,9 @@ bool ELogMySqlDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
         if (mysqlDbData->m_insertStmt->execute()) {
             return true;
         }
-        ELogSystem::reportError("Failed to send log message to MySQL log target");
+        ELOG_REPORT_ERROR("Failed to send log message to MySQL log target");
     } catch (sql::SQLException& e) {
-        ELogSystem::reportError("Failed to send log message to MySQL log target: %s", e.what());
+        ELOG_REPORT_ERROR("Failed to send log message to MySQL log target: %s", e.what());
     }
     return false;
 }
@@ -128,7 +128,7 @@ bool ELogMySqlDbTarget::start() {
         // field selector
         m_insertStmt.reset(m_connection->prepareStatement(processedInsertStmt.c_str()));
     } catch (sql::SQLException& e) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Failed to start MySQL log target. SQL State: %p. Vendor Code: %d. Reason: %p",
             e.getSQLStateCStr(), e.getErrorCode(), e.what());
         m_insertStmt.reset();
@@ -150,7 +150,7 @@ bool ELogMySqlDbTarget::stop() {
         m_connection.reset();
         return true;
     } catch (sql::SQLException& e) {
-        ELogSystem::reportError("Failed to stop MySQL log target: %s", e.what());
+        ELOG_REPORT_ERROR("Failed to stop MySQL log target: %s", e.what());
         return false;
     }
 }
@@ -173,9 +173,9 @@ void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
         if (m_insertStmt->execute()) {
             return;
         }
-        ELogSystem::reportError("Failed to send log message to MySQL log target");
+        ELOG_REPORT_ERROR("Failed to send log message to MySQL log target");
     } catch (sql::SQLException& e) {
-        ELogSystem::reportError("Failed to send log message to MySQL log target: %s", e.what());
+        ELOG_REPORT_ERROR("Failed to send log message to MySQL log target: %s", e.what());
     }
 
     // failure to send a record, so order parent class to start reconnect background task
@@ -186,19 +186,19 @@ void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
 ELogMySqlDbTarget::MySQLDbData* ELogMySqlDbTarget::validateConnectionState(void* dbData,
                                                                            bool shouldBeConnected) {
     if (dbData == nullptr) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Cannot connect to MySQL database, invalid connection state (internal error, database "
             "object is null)");
         return nullptr;
     }
     MySQLDbData* mysqlDbData = (MySQLDbData*)dbData;
     if (shouldBeConnected && mysqlDbData->m_connection.get() == nullptr) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Cannot connect to MySQL database, invalid connection state (internal error, "
             "connection object is null)");
         return nullptr;
     } else if (!shouldBeConnected && mysqlDbData->m_connection.get() != nullptr) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Cannot connect to MySQL database, invalid connection state (internal error, "
             "connection object is not null)");
         return nullptr;
@@ -207,7 +207,7 @@ ELogMySqlDbTarget::MySQLDbData* ELogMySqlDbTarget::validateConnectionState(void*
          mysqlDbData->m_insertStmt.get() != nullptr) ||
         (mysqlDbData->m_connection.get() != nullptr &&
          mysqlDbData->m_insertStmt.get() == nullptr)) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Cannot connect to MySQL database, inconsistent connection state (internal error, "
             "connection and statement objects are neither both null nor both non-null)");
         return nullptr;

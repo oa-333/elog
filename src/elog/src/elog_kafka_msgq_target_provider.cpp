@@ -3,8 +3,8 @@
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 
 #include "elog_common.h"
+#include "elog_error.h"
 #include "elog_kafka_msgq_target.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -16,7 +16,7 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
     // shutdown-flush-timeout-millis
     ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("bootstrap-servers");
     if (itr == targetSpec.m_props.end()) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid Kafka message queue log target specification, missing property "
             "bootstrap-servers: %s",
             logTargetCfg.c_str());
@@ -29,7 +29,7 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
     if (itr != targetSpec.m_props.end()) {
         if (!parseIntProp("kafka-flush-timeout-millis", logTargetCfg, itr->second,
                           flushTimeoutMillis, true)) {
-            ELogSystem::reportError(
+            ELOG_REPORT_ERROR(
                 "Invalid  log target specification, invalid flush timeout millis id: %s",
                 logTargetCfg.c_str());
             return nullptr;
@@ -41,7 +41,7 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
     if (itr != targetSpec.m_props.end()) {
         if (!parseIntProp("kafka-shutdown-flush-timeout-millis", logTargetCfg, itr->second,
                           shutdownFlushTimeoutMillis, true)) {
-            ELogSystem::reportError(
+            ELOG_REPORT_ERROR(
                 "Invalid  log target specification, invalid shutdown flush timeout millis id: %s",
                 logTargetCfg.c_str());
             return nullptr;
@@ -53,8 +53,8 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
     if (itr != targetSpec.m_props.end()) {
         uint32_t part = 0;
         if (!parseIntProp("partition", logTargetCfg, itr->second, part, true)) {
-            ELogSystem::reportError("Invalid  log target specification, invalid partition id: %s",
-                                    logTargetCfg.c_str());
+            ELOG_REPORT_ERROR("Invalid  log target specification, invalid partition id: %s",
+                              logTargetCfg.c_str());
             return nullptr;
         }
         partition = part;
@@ -64,7 +64,7 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const std::string& logTa
         new (std::nothrow) ELogKafkaMsgQTarget(bootstrapServers, topic, headers, partition,
                                                flushTimeoutMillis, shutdownFlushTimeoutMillis);
     if (target == nullptr) {
-        ELogSystem::reportError("Failed to allocate Kafka message queue log target, out of memory");
+        ELOG_REPORT_ERROR("Failed to allocate Kafka message queue log target, out of memory");
     }
     return target;
 }

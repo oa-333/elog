@@ -1,6 +1,6 @@
 #include "elog_db_target.h"
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 // Threading model design
 // ======================
@@ -81,8 +81,7 @@ bool ELogDbTarget::startLogTarget() {
     // NOTE: we do initialization here rather than in start(), because the latter is called
     // repeatedly by the reconnect task, and this needs to be done only once
     if (!parseInsertStatement(m_rawInsertStatement)) {
-        ELogSystem::reportError("Failed to parse insert statement: %s",
-                                m_rawInsertStatement.c_str());
+        ELOG_REPORT_ERROR("Failed to parse insert statement: %s", m_rawInsertStatement.c_str());
     }
     m_formatter.getParamTypes(m_paramTypes);
     initDbTarget();
@@ -112,7 +111,7 @@ bool ELogDbTarget::stopLogTarget() {
             if (slot.m_isConnected.load(std::memory_order_relaxed)) {
                 if (slot.m_dbData != nullptr) {
                     if (!disconnectDb(slot.m_dbData)) {
-                        ELogSystem::reportError("Failed to cleanup database object at slot %u", i);
+                        ELOG_REPORT_ERROR("Failed to cleanup database object at slot %u", i);
                     } else {
                         freeDbData(slot.m_dbData);
                         slot.m_dbData = nullptr;
@@ -135,7 +134,7 @@ void ELogDbTarget::log(const ELogRecord& logRecord) {
         slotId = sThreadSlotId;
         if (slotId == -1) {
             if (!initConnection(slotId)) {
-                ELogSystem::reportError("Failed to initialize DB connection for current thread");
+                ELOG_REPORT_ERROR("Failed to initialize DB connection for current thread");
                 return;
             }
         }
@@ -164,7 +163,7 @@ void ELogDbTarget::log(const ELogRecord& logRecord) {
 
 bool ELogDbTarget::parseInsertStatement(const std::string& insertStatement) {
     if (!m_formatter.initialize(insertStatement.c_str())) {
-        ELogSystem::reportError("Failed to parse insert statement: %s", insertStatement.c_str());
+        ELOG_REPORT_ERROR("Failed to parse insert statement: %s", insertStatement.c_str());
         return false;
     }
     return true;
@@ -188,7 +187,7 @@ void ELogDbTarget::freeSlot(int slot) {
 bool ELogDbTarget::initConnection(int& slotId) {
     slotId = allocSlot();
     if (slotId == -1) {
-        ELogSystem::reportError("No available thread slot");
+        ELOG_REPORT_ERROR("No available thread slot");
         return false;
     }
     // assert(slotId == 0);
@@ -196,13 +195,13 @@ bool ELogDbTarget::initConnection(int& slotId) {
     ThreadSlot& slot = m_threadSlots[slotId];
     slot.m_dbData = allocDbData();
     if (slot.m_dbData == nullptr) {
-        ELogSystem::reportError("Failed to allocate DB data, out of memory");
+        ELOG_REPORT_ERROR("Failed to allocate DB data, out of memory");
         freeSlot(slotId);
         return false;
     }
 
     if (!connectDb(slot.m_dbData)) {
-        ELogSystem::reportError("Failed to connect to %s", m_name.c_str());
+        ELOG_REPORT_ERROR("Failed to connect to %s", m_name.c_str());
         freeDbData(slot.m_dbData);
         slot.m_dbData = nullptr;
         freeSlot(slotId);

@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -14,7 +14,7 @@ bool ELogMsgQFormatter::handleText(const std::string& text) {
 
     // verify text and field references are alternating
     if (m_lastFieldType == FieldType::FT_TEXT) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid headers specification, missing field reference after header name: %s",
             text.c_str());
         return false;
@@ -28,7 +28,7 @@ bool ELogMsgQFormatter::handleText(const std::string& text) {
     }
     std::string::size_type equalPos = text.find('=', startPos);
     if (equalPos == std::string::npos) {
-        ELogSystem::reportError("Header name text '%s' missing expected equal sign", text.c_str());
+        ELOG_REPORT_ERROR("Header name text '%s' missing expected equal sign", text.c_str());
         return false;
     }
     std::string headerName = trim(text.substr(0, equalPos));
@@ -40,7 +40,7 @@ bool ELogMsgQFormatter::handleText(const std::string& text) {
 bool ELogMsgQFormatter::handleField(const char* fieldName, int justify) {
     // we expect alternating header name and field, so verify that
     if (m_lastFieldType != FieldType::FT_TEXT) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid headers specification, missing header name before field reference: %s",
             fieldName);
         return false;

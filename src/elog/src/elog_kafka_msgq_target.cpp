@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -46,8 +46,8 @@ public:
 
     bool prepareHeaders(rd_kafka_headers_t* headers, const std::vector<std::string>& headerNames) {
         if (m_headerValues.size() != headerNames.size()) {
-            ELogSystem::reportError("Mismatching header names a values (%u names, %u values)",
-                                    headerNames.size(), m_headerValues.size());
+            ELOG_REPORT_ERROR("Mismatching header names a values (%u names, %u values)",
+                              headerNames.size(), m_headerValues.size());
             return false;
         }
         for (uint32_t i = 0; i < m_headerValues.size(); ++i) {
@@ -55,9 +55,9 @@ public:
                 rd_kafka_header_add(headers, headerNames[i].c_str(), headerNames[i].length(),
                                     (void*)m_headerValues[i].c_str(), m_headerValues[i].length());
             if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
-                ELogSystem::reportError("Failed to add kafka message header %s=%s: %s",
-                                        headerNames[i].c_str(), m_headerValues[i].c_str(),
-                                        rd_kafka_err2name(res));
+                ELOG_REPORT_ERROR("Failed to add kafka message header %s=%s: %s",
+                                  headerNames[i].c_str(), m_headerValues[i].c_str(),
+                                  rd_kafka_err2name(res));
                 return false;
             }
         }
@@ -85,15 +85,15 @@ bool ELogKafkaMsgQTarget::startLogTarget() {
 
     if (rd_kafka_conf_set(m_conf, "client.id", m_clientId.c_str(), errstr, sizeof(errstr)) !=
         RD_KAFKA_CONF_OK) {
-        ELogSystem::reportError("Failed to create kafka configuration object: %s", errstr);
+        ELOG_REPORT_ERROR("Failed to create kafka configuration object: %s", errstr);
         cleanup();
         return false;
     }
 
     if (rd_kafka_conf_set(m_conf, "bootstrap.servers", m_bootstrapServers.c_str(), errstr,
                           sizeof(errstr)) != RD_KAFKA_CONF_OK) {
-        ELogSystem::reportError("Failed to configure kafka bootstrap servers '%s': %s",
-                                m_bootstrapServers.c_str(), errstr);
+        ELOG_REPORT_ERROR("Failed to configure kafka bootstrap servers '%s': %s",
+                          m_bootstrapServers.c_str(), errstr);
         cleanup();
         return false;
     }
@@ -102,7 +102,7 @@ bool ELogKafkaMsgQTarget::startLogTarget() {
     m_topicConf = rd_kafka_topic_conf_new();
     if (rd_kafka_topic_conf_set(m_topicConf, "acks", "all", errstr, sizeof(errstr)) !=
         RD_KAFKA_CONF_OK) {
-        ELogSystem::reportError("Failed to configure kafka topic acks=all: %s", errstr);
+        ELOG_REPORT_ERROR("Failed to configure kafka topic acks=all: %s", errstr);
         cleanup();
         return false;
     }
@@ -110,7 +110,7 @@ bool ELogKafkaMsgQTarget::startLogTarget() {
     // create producer
     m_producer = rd_kafka_new(RD_KAFKA_PRODUCER, m_conf, errstr, sizeof(errstr));
     if (m_producer == nullptr) {
-        ELogSystem::reportError("Failed to create kafka producer object: %s", errstr);
+        ELOG_REPORT_ERROR("Failed to create kafka producer object: %s", errstr);
         cleanup();
         return false;
     }
@@ -121,8 +121,8 @@ bool ELogKafkaMsgQTarget::startLogTarget() {
     // create topic
     m_topic = rd_kafka_topic_new(m_producer, m_topicName.c_str(), m_topicConf);
     if (m_topic == nullptr) {
-        ELogSystem::reportError("Failed to create kafka topic %s: %s", m_topicName.c_str(),
-                                rd_kafka_err2name(rd_kafka_last_error()));
+        ELOG_REPORT_ERROR("Failed to create kafka topic %s: %s", m_topicName.c_str(),
+                          rd_kafka_err2name(rd_kafka_last_error()));
         cleanup();
         return false;
     }
@@ -141,7 +141,7 @@ bool ELogKafkaMsgQTarget::stopLogTarget() {
     }
     rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, flushTimeoutMillis);
     if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
-        ELogSystem::reportError("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
+        ELOG_REPORT_ERROR("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
         return false;
     }
 
@@ -162,12 +162,12 @@ void ELogKafkaMsgQTarget::log(const ELogRecord& logRecord) {
     if (!m_headers.empty()) {
         headers = rd_kafka_headers_new(getHeaderCount());
         if (headers == nullptr) {
-            ELogSystem::reportError("Failed to allocate kafka headers, out of memory");
+            ELOG_REPORT_ERROR("Failed to allocate kafka headers, out of memory");
             return;
         }
         fillInHeaders(logRecord, &receptor);
         if (!receptor.prepareHeaders(headers, getHeaderNames())) {
-            ELogSystem::reportError("Failed to prepare kafka message headers");
+            ELOG_REPORT_ERROR("Failed to prepare kafka message headers");
             return;
         }
     }
@@ -208,16 +208,16 @@ void ELogKafkaMsgQTarget::log(const ELogRecord& logRecord) {
         rd_kafka_error_t* res = rd_kafka_produceva(m_producer, vus, VU_COUNT);
         if (res != nullptr) {
             const char* errMsg = rd_kafka_err2name(rd_kafka_error_code(res));
-            ELogSystem::reportError("Failed to produce message on kafka topic %s: %s",
-                                    m_topicName.c_str(), errMsg);
+            ELOG_REPORT_ERROR("Failed to produce message on kafka topic %s: %s",
+                              m_topicName.c_str(), errMsg);
             rd_kafka_error_destroy(res);
         }
     } else {
         if (rd_kafka_produce(m_topic, partition, RD_KAFKA_MSG_F_COPY, (void*)logMsg.c_str(),
                              logMsg.length(), nullptr, 0, NULL) == -1) {
             const char* errMsg = rd_kafka_err2name(rd_kafka_last_error());
-            ELogSystem::reportError("Failed to produce message on kafka topic %s: %s",
-                                    m_topicName.c_str(), errMsg);
+            ELOG_REPORT_ERROR("Failed to produce message on kafka topic %s: %s",
+                              m_topicName.c_str(), errMsg);
         }
     }
 }
@@ -229,7 +229,7 @@ void ELogKafkaMsgQTarget::flush() {
     }
     rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, flushTimeoutMillis);
     if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
-        ELogSystem::reportError("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
+        ELOG_REPORT_ERROR("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
     }
 }
 

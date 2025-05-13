@@ -1,10 +1,15 @@
 #include "elog_buffered_file_writer.h"
 
+#ifdef ELOG_MSVC
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <cassert>
+#include <cstring>
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -71,11 +76,15 @@ bool ELogBufferedFileWriter::writeToFile(const char* buffer, uint32_t length) {
     // write log message fully to file
     uint32_t pos = 0;
     while (pos < length) {
+#ifdef ELOG_MSVC
+        int res = _write(m_fd, buffer + pos, length - pos);
+#else
         ssize_t res = write(m_fd, buffer + pos, length - pos);
+#endif
         if (res == -1) {
             int errCode = errno;
-            ELogSystem::reportError("Failed to write %u bytes to log file: system error %d", length,
-                                    errCode);
+            ELOG_REPORT_ERROR("Failed to write %u bytes to log file: system error %d", length,
+                              errCode);
             return false;
         }
         pos += res;

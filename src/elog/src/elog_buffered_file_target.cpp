@@ -1,7 +1,6 @@
 #include "elog_buffered_file_target.h"
 
 #include "elog_error.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -32,7 +31,7 @@ bool ELogBufferedFileTarget::startLogTarget() {
 bool ELogBufferedFileTarget::stopLogTarget() {
     if (m_fileHandle != nullptr && m_shouldClose) {
         if (!m_fileWriter.finishLog()) {
-            ELogSystem::reportError("Failed to write last buffer data into log file");
+            ELOG_REPORT_ERROR("Failed to write last buffer data into log file");
             return false;
         }
         flush();
@@ -53,7 +52,7 @@ void ELogBufferedFileTarget::logFormattedMsg(const std::string& formattedLogMsg)
 void ELogBufferedFileTarget::flush() {
     if (fflush(m_fileHandle) == EOF) {
         int errCode = errno;
-        ELogSystem::reportError("Failed to flush file: error code %d", errCode);
+        ELOG_REPORT_ERROR("Failed to flush file: error code %d", errCode);
     }
 }
 

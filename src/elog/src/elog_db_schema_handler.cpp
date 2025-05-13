@@ -2,10 +2,10 @@
 
 #include <cassert>
 
+#include "elog_error.h"
 #include "elog_mysql_db_target_provider.h"
 #include "elog_pgsql_db_target_provider.h"
 #include "elog_sqlite_db_target_provider.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -13,11 +13,11 @@ template <typename T>
 static bool initDbTargetProvider(ELogDbSchemaHandler* schemaHandler, const char* name) {
     T* provider = new (std::nothrow) T();
     if (provider == nullptr) {
-        ELogSystem::reportError("Failed to create %s db target provider, out of memory", name);
+        ELOG_REPORT_ERROR("Failed to create %s db target provider, out of memory", name);
         return false;
     }
     if (!schemaHandler->registerDbTargetProvider(name, provider)) {
-        ELogSystem::reportError("Failed to register %s db target provider, duplicate name", name);
+        ELOG_REPORT_ERROR("Failed to register %s db target provider, duplicate name", name);
         delete provider;
         return false;
     }
@@ -76,7 +76,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
     // in addition, we expect at least two properties: conn-string, insert-query, db-thread-model,
     // db-max-threads, db-reconnect-timeout-millis
     if (targetSpec.m_props.size() < 2) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid database log target specification, expected at least two properties: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -84,7 +84,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
     ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("conn-string");
     if (itr == targetSpec.m_props.end()) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid database log target specification, missing property conn-string: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -93,7 +93,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
     itr = targetSpec.m_props.find("insert-query");
     if (itr == targetSpec.m_props.end()) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid database log target specification, missing property insert-query: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -113,7 +113,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
         } else if (threadModelStr.compare("conn-per-thread") == 0) {
             threadModel = ELogDbTarget::ThreadModel::TM_CONN_PER_THREAD;
         } else {
-            ELogSystem::reportError(
+            ELOG_REPORT_ERROR(
                 "Invalid database log target specification, invalid thread model '%s': %s",
                 threadModelStr.c_str(), logTargetCfg.c_str());
             return nullptr;
@@ -126,7 +126,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
     if (itr != targetSpec.m_props.end()) {
         const std::string& maxThreadsStr = itr->second;
         if (!parseIntProp("db-max-threads", logTargetCfg, maxThreadsStr, maxThreads, true)) {
-            ELogSystem::reportError(
+            ELOG_REPORT_ERROR(
                 "Invalid database log target specification, invalid maximum thread count '%s': %s",
                 maxThreadsStr.c_str(), logTargetCfg.c_str());
             return nullptr;
@@ -140,7 +140,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
         const std::string& reconnectTimeoutMillisStr = itr->second;
         if (!parseIntProp("db-reconnect-timeout-millis", logTargetCfg, reconnectTimeoutMillisStr,
                           reconnectTimeoutMillis, true)) {
-            ELogSystem::reportError(
+            ELOG_REPORT_ERROR(
                 "Invalid database log target specification, invalid reconnect timeout value '%s': "
                 "%s",
                 reconnectTimeoutMillisStr.c_str(), logTargetCfg.c_str());
@@ -155,8 +155,8 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                     maxThreads, reconnectTimeoutMillis);
     }
 
-    ELogSystem::reportError("Invalid database log target specification, unsupported db type %s: %s",
-                            dbType.c_str(), logTargetCfg.c_str());
+    ELOG_REPORT_ERROR("Invalid database log target specification, unsupported db type %s: %s",
+                      dbType.c_str(), logTargetCfg.c_str());
     return nullptr;
 }
 

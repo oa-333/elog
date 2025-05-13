@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -71,17 +71,15 @@ bool ELogPGSQLDbTarget::connectDb(void* dbData) {
     // connect to database
     pgsqlDbData->m_conn = PQconnectdb(m_connString.c_str());
     if (pgsqlDbData->m_conn == nullptr) {
-        ELogSystem::reportError(
-            "Failed to open PostgreSQL db connection with connection string: %s",
-            m_connString.c_str());
+        ELOG_REPORT_ERROR("Failed to open PostgreSQL db connection with connection string: %s",
+                          m_connString.c_str());
         return false;
     }
 
     // check connection state
     if (PQstatus(pgsqlDbData->m_conn) != CONNECTION_OK) {
-        ELogSystem::reportError(
-            "Failed to open PostgreSQL db connection with connection string%s: %s",
-            m_connString.c_str(), PQerrorMessage(pgsqlDbData->m_conn));
+        ELOG_REPORT_ERROR("Failed to open PostgreSQL db connection with connection string%s: %s",
+                          m_connString.c_str(), PQerrorMessage(pgsqlDbData->m_conn));
         PQfinish(pgsqlDbData->m_conn);
         pgsqlDbData->m_conn = nullptr;
         return false;
@@ -96,8 +94,8 @@ bool ELogPGSQLDbTarget::connectDb(void* dbData) {
         ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
-        ELogSystem::reportError("Failed to prepare PostgreSQL statement '%s': %s (status: %s)",
-                                getProcessedInsertStatement().c_str(), errStr, statusStr);
+        ELOG_REPORT_ERROR("Failed to prepare PostgreSQL statement '%s': %s (status: %s)",
+                          getProcessedInsertStatement().c_str(), errStr, statusStr);
         PQclear(res);
         PQfinish(pgsqlDbData->m_conn);
         pgsqlDbData->m_conn = nullptr;
@@ -119,9 +117,8 @@ bool ELogPGSQLDbTarget::disconnectDb(void* dbData) {
         ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
-        ELogSystem::reportError(
-            "Failed to close prepared PostgreSQL statement '%s': %s (status: %s)",
-            m_stmtName.c_str(), errStr, statusStr);
+        ELOG_REPORT_ERROR("Failed to close prepared PostgreSQL statement '%s': %s (status: %s)",
+                          m_stmtName.c_str(), errStr, statusStr);
         PQclear(res);
         return false;
     }
@@ -155,7 +152,7 @@ bool ELogPGSQLDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
         std::string logMsg;
         ELogSystem::formatLogMsg(logRecord, logMsg);
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
             statusStr, logMsg.c_str());
         PQclear(res);
@@ -190,13 +187,13 @@ bool ELogPGSQLDbTarget::start() {
     // try to connect to database server
     m_connection = PQconnectdb(m_connString.c_str());
     if (m_connection == nullptr) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Failed to open PostgreSQL db connection with connection string: %s",
             m_connString.c_str());
         return false;
     }
     if (PQstatus(m_connection) != CONNECTION_OK) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Failed to open PostgreSQL db connection with connection string%s: %s",
             m_connString.c_str(), PQerrorMessage(m_connection));
         PQfinish(m_connection);
@@ -212,7 +209,7 @@ bool ELogPGSQLDbTarget::start() {
         ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
-        ELogSystem::reportError("Failed to prepare PostgreSQL statement '%s': %s (status: %s)",
+        ELOG_REPORT_ERROR("Failed to prepare PostgreSQL statement '%s': %s (status: %s)",
                                 m_processedInsertStmt.c_str(), errStr, statusStr);
         PQclear(res);
         PQfinish(m_connection);
@@ -237,7 +234,7 @@ bool ELogPGSQLDbTarget::stop() {
             ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
             char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
             char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
-            ELogSystem::reportError(
+            ELOG_REPORT_ERROR(
                 "Failed to close prepared PostgreSQL statement '%s': %s (status: %s)",
                 m_stmtName.c_str(), errStr, statusStr);
             PQclear(res);
@@ -279,7 +276,7 @@ void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
         std::string logMsg;
         ELogSystem::formatLogMsg(logRecord, logMsg);
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
             statusStr, logMsg.c_str());
         PQclear(res);
@@ -304,19 +301,19 @@ void ELogPGSQLDbTarget::formatConnString(const std::string& host, uint32_t port,
 ELogPGSQLDbTarget::PGSQLDbData* ELogPGSQLDbTarget::validateConnectionState(void* dbData,
                                                                            bool shouldBeConnected) {
     if (dbData == nullptr) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
             "database object is null)");
         return nullptr;
     }
     PGSQLDbData* pgsqlDbData = (PGSQLDbData*)dbData;
     if (shouldBeConnected && pgsqlDbData->m_conn == nullptr) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
             "connection object is null)");
         return nullptr;
     } else if (!shouldBeConnected && pgsqlDbData->m_conn != nullptr) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
             "connection object is not null)");
         return nullptr;

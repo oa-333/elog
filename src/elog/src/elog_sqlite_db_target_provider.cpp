@@ -2,8 +2,8 @@
 
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
 
+#include "elog_error.h"
 #include "elog_sqlite_db_target.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -14,7 +14,7 @@ ELogDbTarget* ELogSQLiteDbTargetProvider::loadTarget(
     ELogDbTarget* target = new (std::nothrow) ELogSQLiteDbTarget(
         connString, insertQuery, threadModel, maxThreads, reconnectTimeoutMillis);
     if (target == nullptr) {
-        ELogSystem::reportError("Failed to allocate SQLite log target, out of memory");
+        ELOG_REPORT_ERROR("Failed to allocate SQLite log target, out of memory");
     }
     return target;
 }

@@ -10,7 +10,7 @@
 #include <cstdarg>
 #include <cstring>
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 #ifdef ELOG_MINGW
 // we need windows headers for MinGW
@@ -149,8 +149,7 @@ void ELogLogger::finishLog() {
         // reset log record data
         recordBuilder.reset();
     } else {
-        ELogSystem::reportError(
-            "attempt to end log message without start-log being issued first\n");
+        ELOG_REPORT_ERROR("attempt to end log message without start-log being issued first\n");
     }
 }
 

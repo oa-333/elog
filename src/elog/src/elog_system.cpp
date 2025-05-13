@@ -256,7 +256,7 @@ void ELogSystem::setErrorHandler(ELogErrorHandler* errorHandler) { sErrorHandler
 void ELogSystem::reportError(const char* errorMsgFmt, ...) {
     va_list ap;
     va_start(ap, errorMsgFmt);
-    reportError(errorMsgFmt, ap);
+    reportErrorV(errorMsgFmt, ap);
     va_end(ap);
 }
 

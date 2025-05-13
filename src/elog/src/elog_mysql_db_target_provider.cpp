@@ -2,8 +2,8 @@
 
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
+#include "elog_error.h"
 #include "elog_mysql_db_target.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -14,7 +14,7 @@ ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(
     // we expect 3 properties: db, user, password (optional)
     ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("db");
     if (itr == targetSpec.m_props.end()) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid mysql database log target specification, missing property db: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -23,7 +23,7 @@ ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(
 
     itr = targetSpec.m_props.find("user");
     if (itr == targetSpec.m_props.end()) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid mysql database log target specification, missing property user: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -32,7 +32,7 @@ ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(
 
     itr = targetSpec.m_props.find("passwd");
     if (itr == targetSpec.m_props.end()) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid mysql database log target specification, missing property passwd: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -41,7 +41,7 @@ ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(
     ELogDbTarget* target = new (std::nothrow) ELogMySqlDbTarget(
         connString, db, user, passwd, insertQuery, threadModel, maxThreads, reconnectTimeoutMillis);
     if (target == nullptr) {
-        ELogSystem::reportError("Failed to allocate MySQL log target, out of memory");
+        ELOG_REPORT_ERROR("Failed to allocate MySQL log target, out of memory");
     }
     return target;
 }

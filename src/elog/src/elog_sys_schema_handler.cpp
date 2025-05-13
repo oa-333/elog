@@ -1,8 +1,8 @@
 #include "elog_sys_schema_handler.h"
 
+#include "elog_error.h"
 #include "elog_file_target.h"
 #include "elog_syslog_target.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -19,15 +19,14 @@ ELogTarget* ELogSysSchemaHandler::loadTarget(const std::string& logTargetCfg,
 #ifdef ELOG_LINUX
         logTarget = new (std::nothrow) ELogSysLogTarget();
 #else
-        ELogSystem::reportError(
-            "Cannot create syslog log target, not supported on current platform");
+        ELOG_REPORT_ERROR("Cannot create syslog log target, not supported on current platform");
         return nullptr;
 #endif
     }
 
     if (logTarget == nullptr) {
         if (logTarget == nullptr) {
-            ELogSystem::reportError("Failed to create log target, out of memory");
+            ELOG_REPORT_ERROR("Failed to create log target, out of memory");
             return nullptr;
         }
     }

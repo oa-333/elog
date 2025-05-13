@@ -21,6 +21,20 @@ namespace elog {
 #define ELOG_REPORT_SYS_ERROR(sysCall, fmt, ...) \
     ELOG_REPORT_SYS_ERROR_NUM(sysCall, errno, fmt, ##__VA_ARGS__)
 
+#ifdef ELOG_WINDOWS
+#define ELOG_REPORT_WIN32_ERROR_NUM(sysCall, sysErr, fmt, ...)                                   \
+    {                                                                                            \
+        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                             \
+        ELOG_REPORT_ERROR("Windows system call " #sysCall "() failed: %d (%s)", sysErr, errStr); \
+        elog::ELogSystem::win32FreeErrorStr(errStr);                                             \
+        ELOG_REPORT_ERROR(fmt, ##__VA_ARGS__);                                                   \
+    }
+
+#define ELOG_REPORT_WIN32_ERROR(sysCall, fmt, ...) \
+    ELOG_REPORT_WIN32_ERROR_NUM(sysCall, ::GetLastError(), fmt, ##__VA_ARGS__);
+
+#endif
+
 }  // namespace elog
 
 #endif  // __ELOG_ERROR_H__

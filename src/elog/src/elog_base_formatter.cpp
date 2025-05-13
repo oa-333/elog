@@ -2,8 +2,8 @@
 
 #include <cstring>
 
+#include "elog_error.h"
 #include "elog_string_stream_receptor.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -33,7 +33,7 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
         }
         std::string::size_type closePos = formatSpec.find("}", pos);
         if (closePos == std::string::npos) {
-            ELogSystem::reportError("Missing closing brace in log line format specification");
+            ELOG_REPORT_ERROR("Missing closing brace in log line format specification");
             return false;
         }
         std::string fieldName = formatSpec.substr(pos + 2, closePos - pos - 2);
@@ -69,8 +69,8 @@ bool ELogBaseFormatter::handleText(const std::string& text) {
     // by default we add a static text field selector
     ELogFieldSelector* fieldSelector = new (std::nothrow) ELogStaticTextSelector(text.c_str());
     if (fieldSelector == nullptr) {
-        ELogSystem::reportError(
-            "Failed to allocate field selector for static text '%s', out of memory", text.c_str());
+        ELOG_REPORT_ERROR("Failed to allocate field selector for static text '%s', out of memory",
+                          text.c_str());
         return false;
     }
     m_fieldSelectors.push_back(fieldSelector);

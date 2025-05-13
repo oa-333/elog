@@ -2,8 +2,8 @@
 
 #include <cassert>
 
+#include "elog_error.h"
 #include "elog_kafka_msgq_target_provider.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -11,13 +11,12 @@ template <typename T>
 static bool initMsgQTargetProvider(ELogMsgQSchemaHandler* schemaHandler, const char* name) {
     T* provider = new (std::nothrow) T();
     if (provider == nullptr) {
-        ELogSystem::reportError("Failed to create %s message queue target provider, out of memory",
-                                name);
+        ELOG_REPORT_ERROR("Failed to create %s message queue target provider, out of memory", name);
         return false;
     }
     if (!schemaHandler->registerMsgQTargetProvider(name, provider)) {
-        ELogSystem::reportError(
-            "Failed to register %s message queue target provider, duplicate name", name);
+        ELOG_REPORT_ERROR("Failed to register %s message queue target provider, duplicate name",
+                          name);
         delete provider;
         return false;
     }
@@ -51,7 +50,7 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
     // in addition, we expect at least 'topic' property and optional 'headers'
     if (targetSpec.m_props.size() < 1) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid message queue log target specification, expected at least one property: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -59,7 +58,7 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
     ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("topic");
     if (itr == targetSpec.m_props.end()) {
-        ELogSystem::reportError(
+        ELOG_REPORT_ERROR(
             "Invalid message queue log target specification, missing property topic: %s",
             logTargetCfg.c_str());
         return nullptr;
@@ -78,7 +77,7 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
         return provider->loadTarget(logTargetCfg, targetSpec, topic, headers);
     }
 
-    ELogSystem::reportError(
+    ELOG_REPORT_ERROR(
         "Invalid message queue log target specification, unsupported message queue type %s: %s",
         msgQType.c_str(), logTargetCfg.c_str());
     return nullptr;

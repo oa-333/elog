@@ -1,9 +1,9 @@
 #include "elog_file_schema_handler.h"
 
 #include "elog_buffered_file_target.h"
+#include "elog_error.h"
 #include "elog_file_target.h"
 #include "elog_segmented_file_target.h"
-#include "elog_system.h"
 
 namespace elog {
 
@@ -11,9 +11,8 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                               const ELogTargetSpec& logTargetSpec) {
     // path should be already parsed
     if (logTargetSpec.m_path.empty()) {
-        ELogSystem::reportError(
-            "Invalid log target specification, scheme 'file' requires a path: %s",
-            logTargetCfg.c_str());
+        ELOG_REPORT_ERROR("Invalid log target specification, scheme 'file' requires a path: %s",
+                          logTargetCfg.c_str());
         return nullptr;
     }
 

@@ -11,7 +11,7 @@
 #include <filesystem>
 #include <thread>
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -27,7 +27,8 @@ static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& file
     WIN32_FIND_DATA findFileData = {};
     HANDLE hFind = FindFirstFile(dirPath, &findFileData);
     if (hFind == INVALID_HANDLE_VALUE) {
-        ELOG_WIN32_ERROR(FindFirstFile, "Failed to search for files in directory: %s", dirPath);
+        ELOG_REPORT_WIN32_ERROR(FindFirstFile, "Failed to search for files in directory: %s",
+                                dirPath);
         return false;
     }
 
@@ -42,8 +43,8 @@ static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& file
     // check for error
     DWORD errCode = GetLastError();
     if (errCode != ERROR_NO_MORE_FILES) {
-        ELOG_SYS_ERROR_NUM(FindNextFile, errCode, "Failed to search for next file in directory: %s",
-                           dirPath);
+        ELOG_REPORT_SYS_ERROR_NUM(FindNextFile, errCode,
+                                  "Failed to search for next file in directory: %s", dirPath);
         return false;
     }
 
@@ -56,7 +57,7 @@ inline bool isRegularFile(const char* path, bool& res) {
     struct stat pathStat;
     if (stat(path, &pathStat) == -1) {
         int errCode = errno;
-        ELOG_SYS_ERROR(stat, "Failed to check file %s status: %d", path, errCode);
+        ELOG_REPORT_SYS_ERROR(stat, "Failed to check file %s status: %d", path, errCode);
         return false;
     }
     res = S_ISREG(pathStat.st_mode);
@@ -69,7 +70,8 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
     DIR* dirp = opendir(dirPath);
     if (dirp == nullptr) {
         int errCode = errno;
-        ELOG_SYS_ERROR(opendir, "Failed to open directory %s for reading: %d", dirPath, errCode);
+        ELOG_REPORT_SYS_ERROR(opendir, "Failed to open directory %s for reading: %d", dirPath,
+                              errCode);
         return false;
     }
 
@@ -100,8 +102,8 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
         return false;
     }
     if (closedir(dirp) < 0) {
-        ELOG_SYS_ERROR(closedir, "Failed to terminate listing files in directory %s: %d", dirPath,
-                       errCode);
+        ELOG_REPORT_SYS_ERROR(closedir, "Failed to terminate listing files in directory %s: %d",
+                              dirPath, errCode);
         return false;
     }
     return true;
@@ -131,7 +133,7 @@ bool ELogSegmentedFileTarget::startLogTarget() { return openSegment(); }
 bool ELogSegmentedFileTarget::stopLogTarget() {
     if (m_currentSegment != nullptr) {
         if (fclose(m_currentSegment) == -1) {
-            ELOG_SYS_ERROR(fopen, "Failed to close log segment");
+            ELOG_REPORT_SYS_ERROR(fopen, "Failed to close log segment");
             return false;
         }
         m_currentSegment = nullptr;
@@ -143,6 +145,8 @@ void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg
     // check if segment switch is required
     uint32_t msgSizeBytes = formattedLogMsg.length();
     uint32_t segmentSizeBytes = m_segmentSizeBytes.fetch_add(msgSizeBytes);
+    // TODO: this is incorrect, check segment id of each offset instead
+    // TODO: what about very large message? larger than buffer size
     if (segmentSizeBytes <= m_segmentLimitBytes &&
         (segmentSizeBytes + msgSizeBytes) >= m_segmentLimitBytes) {
         // open new segment
@@ -170,7 +174,7 @@ void ELogSegmentedFileTarget::flush() {
     FILE* currentSegment = m_currentSegment.load(std::memory_order_relaxed);
     if (m_usedSegment == currentSegment) {
         if (fflush(currentSegment) == EOF) {
-            ELOG_SYS_ERROR(fflush, "Failed to flush log file");
+            ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
         }
     }
 }
@@ -197,7 +201,8 @@ bool ELogSegmentedFileTarget::openSegment() {
     FILE* segment = fopen(segmentPath.c_str(), "a");
     if (segment == nullptr) {
         int errCode = errno;
-        ELOG_SYS_ERROR(fopen, "Failed to open segment file %s: %d", segmentPath.c_str(), errCode);
+        ELOG_REPORT_SYS_ERROR(fopen, "Failed to open segment file %s: %d", segmentPath.c_str(),
+                              errCode);
         return false;
     }
     m_currentSegment.store(segment, std::memory_order_relaxed);
@@ -262,7 +267,7 @@ bool ELogSegmentedFileTarget::getSegmentIndex(const std::string& fileName, int32
                 segmentIndex = std::stoi(fileName.substr(logPrefix.length()), &pos);
                 if (logPrefix.length() + pos != fileName.length()) {
                     // something is wrong, we have excess chars, so we ignore this segment
-                    ELogSystem::reportError(
+                    ELOG_REPORT_ERROR(
                         "Invalid segment file name, excess chars after segment index: %s",
                         fileName.c_str());
                     segmentIndex = -1;
@@ -326,7 +331,7 @@ bool ELogSegmentedFileTarget::advanceSegment() {
     // switch segments
     if (!m_currentSegment.compare_exchange_strong(prevSegment, nextSegment,
                                                   std::memory_order_relaxed)) {
-        ELogSystem::reportError("Failed to switch log segment files, suspected log flooding");
+        ELOG_REPORT_ERROR("Failed to switch log segment files, suspected log flooding");
         return false;
     }
 

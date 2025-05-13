@@ -233,8 +233,11 @@ $(ELOG_LIB): $(OBJS_STATIC)
 $(ELOG_DLL): $(OBJS_DYNAMIC)
 	$(CPP) $(OBJS_DYNAMIC) $(LDFLAGS) -shared -o $@
 
-$(BENCH_EXE): src/elog_bench/src/elog_bench.cpp
-	$(CPP) $(CPPFLAGS) $(LDFLAGS) -L$(INSTALL_BIN) -lelog src/elog_bench/src/elog_bench.cpp -o $@
+$(BENCH_EXE): src/elog_bench/src/elog_bench.o
+	$(CPP) src/elog_bench/src/elog_bench.o -L$(INSTALL_BIN) -lelog -o $@
+
+src/elog_bench/src/elog_bench.o: src/elog_bench/src/elog_bench.cpp
+	$(CPP) $(CPPFLAGS) -c src/elog_bench/src/elog_bench.cpp -o src/elog_bench/src/elog_bench.o
 
 # make sure all object files depend on dependency files like this:
 # %.o: %.cpp %.dep

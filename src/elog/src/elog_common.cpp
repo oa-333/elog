@@ -1,6 +1,6 @@
 #include "elog_common.h"
 
-#include "elog_system.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -11,15 +11,15 @@ bool parseIntProp(const char* propName, const std::string& logTargetCfg, const s
         value = std::stoul(prop, &pos);
     } catch (std::exception& e) {
         if (issueError) {
-            ELogSystem::reportError("Invalid %s value %s: %s (%s)", propName, prop.c_str(),
-                                    logTargetCfg.c_str(), e.what());
+            ELOG_REPORT_ERROR("Invalid %s value %s: %s (%s)", propName, prop.c_str(),
+                              logTargetCfg.c_str(), e.what());
         }
         return false;
     }
     if (pos != prop.length()) {
         if (issueError) {
-            ELogSystem::reportError("Excess characters at %s value %s: %s", propName, prop.c_str(),
-                                    logTargetCfg.c_str());
+            ELOG_REPORT_ERROR("Excess characters at %s value %s: %s", propName, prop.c_str(),
+                              logTargetCfg.c_str());
         }
         return false;
     }
@@ -34,8 +34,8 @@ bool parseBoolProp(const char* propName, const std::string& logTargetCfg, const 
         value = false;
     } else {
         if (issueError) {
-            ELogSystem::reportError("Invalid boolean property %s value %s: %s", propName,
-                                    prop.c_str(), logTargetCfg.c_str());
+            ELOG_REPORT_ERROR("Invalid boolean property %s value %s: %s", propName, prop.c_str(),
+                              logTargetCfg.c_str());
         }
         return false;
     }
