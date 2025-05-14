@@ -5,8 +5,8 @@
 #include <new>
 #include <thread>
 
+#include "elog_async_target.h"
 #include "elog_def.h"
-#include "elog_target.h"
 
 namespace elog {
 
@@ -27,7 +27,7 @@ namespace elog {
  * done by coupling this log target with a combined log target that is in turn connected to several
  * segmented log targets.
  */
-class ELOG_API ELogQuantumTarget : public ELogTarget {
+class ELOG_API ELogQuantumTarget : public ELogAsyncTarget {
 public:
     /** @brief Quantum Target congestion policy constants. */
     enum class CongestionPolicy {
@@ -71,9 +71,6 @@ public:
         return writeCount == readCount;
     }
 
-    /** @brief As log target may be chained as in a list, this retrieves the final log target. */
-    ELogTarget* getEndLogTarget() override { return m_logTarget; }
-
 private:
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() final;
@@ -104,7 +101,6 @@ private:
     std::atomic<uint64_t> m_readPos;
     CongestionPolicy m_congestionPolicy;
 
-    ELogTarget* m_logTarget;
     std::thread m_logThread;
     bool m_stop;
 

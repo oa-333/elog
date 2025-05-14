@@ -6,6 +6,12 @@
 
 namespace elog {
 
+ELOG_IMPLEMENT_FLUSH_POLICY(ELogNeverFlushPolicy)
+ELOG_IMPLEMENT_FLUSH_POLICY(ELogImmediateFlushPolicy)
+ELOG_IMPLEMENT_FLUSH_POLICY(ELogCountFlushPolicy)
+ELOG_IMPLEMENT_FLUSH_POLICY(ELogSizeFlushPolicy)
+ELOG_IMPLEMENT_FLUSH_POLICY(ELogTimedFlushPolicy)
+
 #define ELOG_MAX_FLUSH_POLICY_COUNT 100
 
 struct ELogFlushPolicyNameConstructor {
@@ -85,9 +91,47 @@ bool ELogImmediateFlushPolicy::shouldFlush(uint32_t msgSizeBytes) { return true;
 
 bool ELogNeverFlushPolicy::shouldFlush(uint32_t msgSizeBytes) { return false; }
 
+bool ELogCountFlushPolicy::load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+    ELogPropertyMap::const_iterator itr = props.find("flush_count");
+    if (itr == props.end()) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, missing expected flush_count property for "
+            "flush_policy=count: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    if (!parseIntProp("flush_count", logTargetCfg, itr->second, m_logCountLimit, true)) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, flush_count property value '%s' is an "
+            "ill-formed integer: %s",
+            itr->second.c_str(), logTargetCfg.c_str());
+        return false;
+    }
+    return true;
+}
+
 bool ELogCountFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     uint64_t logCount = m_currentLogCount.fetch_add(1, std::memory_order_relaxed);
     return (logCount % m_logCountLimit == 0);
+}
+
+bool ELogSizeFlushPolicy::load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+    ELogPropertyMap::const_iterator itr = props.find("flush_size_bytes");
+    if (itr == props.end()) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, missing expected flush_size_bytes "
+            "property for flush_policy=size: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    if (!parseIntProp("flush_size_bytes", logTargetCfg, itr->second, m_logSizeLimitBytes, true)) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, flush_size_bytes property value '%s' is "
+            "an ill-formed integer: %s",
+            itr->second.c_str(), logTargetCfg.c_str());
+        return false;
+    }
+    return true;
 }
 
 bool ELogSizeFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
@@ -97,13 +141,41 @@ bool ELogSizeFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     return (currSizeBytes / m_logSizeLimitBytes) > (prevSizeBytes / m_logSizeLimitBytes);
 }
 
+ELogTimedFlushPolicy::ELogTimedFlushPolicy()
+    : ELogFlushPolicy(true),
+      m_prevFlushTime(getTimestamp()),
+      m_logTimeLimitMillis(0),
+      m_stopTimer(false) {}
+
 ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarget* logTarget)
-    : m_prevFlushTime(getTimestamp()),
+    : ELogFlushPolicy(true),
+      m_prevFlushTime(getTimestamp()),
       m_logTimeLimitMillis(logTimeLimitMillis),
-      m_logTarget(logTarget),
       m_stopTimer(false) {}
 
 ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
+
+bool ELogTimedFlushPolicy::load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+    ELogPropertyMap::const_iterator itr = props.find("flush_timeout_millis");
+    if (itr == props.end()) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, missing expected flush_timeout_millis "
+            "property for flush_policy=time: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    uint64_t logTimeLimitMillis = 0;
+    if (!parseIntProp("flush_timeout_millis", logTargetCfg, itr->second, logTimeLimitMillis,
+                      true)) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, flush_timeout_millis property value '%s' "
+            "is an ill-formed integer: %s",
+            itr->second.c_str(), logTargetCfg.c_str());
+        return false;
+    }
+    m_logTimeLimitMillis = Millis(logTimeLimitMillis);
+    return true;
+}
 
 bool ELogTimedFlushPolicy::start() {
     m_timerThread = std::thread(&ELogTimedFlushPolicy::onTimer, this);
@@ -155,7 +227,7 @@ void ELogTimedFlushPolicy::onTimer() {
         // we participate with the rest of the concurrent loggers as a phantom logger, so that we
         // avoid duplicate flushes (others call shouldFlush() with some payload size)
         if (shouldFlush(0)) {
-            m_logTarget->flush();
+            getLogTarget()->flush();
         }
     }
 }

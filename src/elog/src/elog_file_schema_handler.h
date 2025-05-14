@@ -15,6 +15,9 @@ public:
     /** @brief Destructor. */
     ~ELogFileSchemaHandler() final {}
 
+    /** @brief Registers predefined target providers. */
+    bool registerPredefinedProviders() final { return true; }
+
     /**
      * @brief Loads a log target by a specification.
      * @param logTargetCfg The log target string specification.
@@ -22,6 +25,15 @@ public:
      * @return ELogTarget* The resulting log target or null if failed.
      */
     ELogTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec) final;
+
+    /**
+     * @brief Loads a log target by a specification.
+     * @param logTargetCfg The log target string specification.
+     * @param targetNestedSpec The log target nested specification.
+     * @return ELogTarget* The resulting log target or null if failed.
+     */
+    ELogTarget* loadTarget(const std::string& logTargetCfg,
+                           const ELogTargetNestedSpec& targetNestedSpec) final;
 };
 
 }  // namespace elog

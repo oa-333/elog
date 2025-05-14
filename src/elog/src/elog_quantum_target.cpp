@@ -17,17 +17,16 @@ namespace elog {
 ELogQuantumTarget::ELogQuantumTarget(
     ELogTarget* logTarget, uint32_t bufferSize,
     CongestionPolicy congestionPolicy /* = CongestionPolicy::CP_WAIT */)
-    : ELogTarget("quantum"),
+    : ELogAsyncTarget(logTarget),
       m_writePos(0),
       m_readPos(0),
       m_congestionPolicy(congestionPolicy),
-      m_logTarget(logTarget),
       m_stop(false) {
     m_ringBuffer.resize(bufferSize);
 }
 
 bool ELogQuantumTarget::startLogTarget() {
-    if (!m_logTarget->start()) {
+    if (!getEndLogTarget()->start()) {
         return false;
     }
     m_logThread = std::thread(&ELogQuantumTarget::logThread, this);
@@ -44,7 +43,7 @@ bool ELogQuantumTarget::stopLogTarget() {
     m_logThread.join();
     uint32_t writePos = m_writePos.load(std::memory_order_relaxed);
     uint32_t readPos = m_readPos.load(std::memory_order_relaxed);
-    return m_logTarget->stop();
+    return getEndLogTarget()->stop();
 }
 
 void ELogQuantumTarget::log(const ELogRecord& logRecord) {
@@ -124,9 +123,9 @@ void ELogQuantumTarget::logThread() {
             if (recordData.m_logRecord.m_logMsg == (const char*)-1) {
                 done = true;
             } else if (recordData.m_logRecord.m_logMsg == nullptr) {
-                m_logTarget->flush();
+                getEndLogTarget()->flush();
             } else {
-                m_logTarget->log(recordData.m_logRecord);
+                getEndLogTarget()->log(recordData.m_logRecord);
                 m_readPos.fetch_add(1, std::memory_order_relaxed);
             }
 
@@ -147,7 +146,7 @@ void ELogQuantumTarget::logThread() {
     }
 
     // do a final flush and terminate
-    m_logTarget->flush();
+    getEndLogTarget()->flush();
 }
 
 }  // namespace elog

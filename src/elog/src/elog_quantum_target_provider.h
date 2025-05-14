@@ -1,0 +1,36 @@
+#ifndef __ELOG_QUANTUM_TARGET_PROVIDER_H__
+#define __ELOG_QUANTUM_TARGET_PROVIDER_H__
+
+#include "elog_async_target_provider.h"
+
+namespace elog {
+
+class ELogQuantumTargetProvider : public ELogAsyncTargetProvider {
+public:
+    ELogQuantumTargetProvider() {}
+    ELogQuantumTargetProvider(const ELogQuantumTargetProvider&) = delete;
+    ELogQuantumTargetProvider(ELogQuantumTargetProvider&&) = delete;
+    ~ELogQuantumTargetProvider() final {}
+
+    /**
+     * @brief Loads a target from configuration (URL style).
+     * @param logTargetCfg The configuration string.
+     * @param targetSpec The parsed configuration string.
+     * @return ELogAsyncTarget* The resulting DB log target, or null of failed.
+     */
+    ELogAsyncTarget* loadTarget(const std::string& logTargetCfg,
+                                const ELogTargetSpec& targetSpec) final;
+
+    /**
+     * @brief Loads a target from configuration (nested style).
+     * @param logTargetCfg The configuration string.
+     * @param targetNestedSpec The parsed configuration string.
+     * @return ELogAsyncTarget* The resulting DB log target, or null of failed.
+     */
+    ELogAsyncTarget* loadTarget(const std::string& logTargetCfg,
+                                const ELogTargetNestedSpec& targetSpec) final;
+};
+
+}  // namespace elog
+
+#endif  // __ELOG_QUANTUM_TARGET_PROVIDER_H__

@@ -24,6 +24,9 @@ typedef uint32_t ELogTargetId;
 /** @def Invalid log target identifier value. */
 #define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
 
+// forward declaration
+class ELogSpecTokenizer;
+
 /** @brief The elog module facade. */
 class ELOG_API ELogSystem {
 public:
@@ -105,10 +108,10 @@ public:
     static void reportTrace(const char* fmt, ...);
 
     /** @brief Registers a schema handler by name. */
-    static bool registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler);
+    static bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler);
 
     /** @brief Retrieves a schema handler by name. */
-    static ELogSchemaHandler* getSchemaHandler(const char* schemaName);
+    static ELogSchemaHandler* getSchemaHandler(const char* schemeName);
 
     /**
      * @brief Configures the ELog System from a properties configuration file.
@@ -148,6 +151,16 @@ public:
     static bool configureFromProperties(const ELogPropertySequence& props,
                                         bool defineLogSources = false,
                                         bool defineMissingPath = false);
+
+    /** @brief Adds a log target from target specification using URL style (internal use only). */
+    static ELogTarget* loadLogTarget(const std::string& logTargetCfg,
+                                     const ELogTargetSpec& logTargetSpec);
+
+    /**
+     * @brief Adds a log target from target specification using nested style (internal use only).
+     */
+    static ELogTarget* loadLogTarget(const std::string& logTargetCfg,
+                                     const ELogTargetNestedSpec& logTargetNestedSpec);
 
     /**
      * Log Target Management Interface
@@ -305,6 +318,43 @@ public:
     static ELogTargetId addLogFileTarget(FILE* fileHandle, uint32_t bufferSize = 0,
                                          bool useLock = false,
                                          ELogFlushPolicy* flushPolicy = nullptr);
+
+    /**
+     * @brief Utility method for adding a buffered file log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
+     * @param logFilePath The path to the log file.
+     * @param bufferSize Buffer size for file buffering. Cannot be zero.
+     * @param useLock Optionally disable use of lock. By default a lock is used because the buffered
+     * file log target is not thread-safe. If lock is disabled, and caller does not take care of
+     * thread-safety then behavior is undefined.
+     * @param flushPolicy Optional flush policy (if not specified then flush after each log
+     * message).
+     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+     * failed.
+     */
+    static ELogTargetId addBufferedLogFileTarget(const char* logFilePath, uint32_t bufferSize,
+                                                 bool useLock = true,
+                                                 ELogFlushPolicy* flushPolicy = nullptr);
+
+    /**
+     * @brief Utility method for adding a buffered file log target.
+     * @note This API call is not thread-safe, and is recommended to take place during application
+     * initialization phase.
+     * @param fileHandle An open file handle. Standard output or error stream handles can be
+     * specified here. The caller is responsible for closing the handle when done if needed.
+     * @param bufferSize Buffer size for file buffering. Cannot be zero.
+     * @param useLock Optionally disable use of lock. By default a lock is used because the buffered
+     * file log target is not thread-safe. If lock is disabled, and caller does not take care of
+     * thread-safety then behavior is undefined.
+     * @param flushPolicy Optional flush policy (if not specified then flush after each log
+     * message).
+     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+     * failed.
+     */
+    static ELogTargetId addBufferedLogFileTarget(FILE* fileHandle, uint32_t bufferSize,
+                                                 bool useLock = true,
+                                                 ELogFlushPolicy* flushPolicy = nullptr);
 
     /**
      * @brief Adds a segmented file log target.
@@ -508,8 +558,17 @@ private:
     static bool configureLogTarget(const std::string& logTargetCfg);
 
     static bool parseLogTargetSpec(const std::string& logTargetCfg, ELogTargetSpec& logTargetSpec);
+    static bool parseLogTargetNestedSpec(const std::string& logTargetCfg,
+                                         ELogTargetNestedSpec& logTargetNestedSpec);
+    static bool parseLogTargetNestedSpec(const std::string& logTargetCfg,
+                                         ELogTargetNestedSpec& logTargetNestedSpec,
+                                         ELogSpecTokenizer& tok);
+    static bool parseSubSpec(const std::string& logTargetCfg,
+                             ELogTargetNestedSpec& logTargetNestedSpec, ELogSpecTokenizer& tok);
     static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                    const std::string& value);
+    static bool configureLogTargetCommon(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                         const ELogTargetSpec& logTargetSpec);
     static void applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec);
     static bool applyTargetLogLevel(ELogTarget* logTarget, const std::string& logTargetCfg,
                                     const ELogTargetSpec& logTargetSpec);
@@ -517,8 +576,8 @@ private:
                                      const ELogTargetSpec& logTargetSpec);
     static bool applyTargetFlushPolicy(ELogTarget* logTarget, const std::string& logTargetCfg,
                                        const ELogTargetSpec& logTargetSpec);
-    static bool applyTargetRateLimiter(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                       const ELogTargetSpec& logTargetSpec);
+    static bool applyTargetFilter(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                  const ELogTargetSpec& logTargetSpec);
     static ELogTarget* applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
                                            const ELogTargetSpec& logTargetSpec,
                                            bool& errorOccurred);

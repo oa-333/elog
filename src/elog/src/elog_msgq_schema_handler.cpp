@@ -23,17 +23,14 @@ static bool initMsgQTargetProvider(ELogMsgQSchemaHandler* schemaHandler, const c
     return true;
 }
 
-ELogMsgQSchemaHandler::ELogMsgQSchemaHandler() {
+bool ELogMsgQSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
     if (!initMsgQTargetProvider<ELogKafkaMsgQTargetProvider>(this, "kafka")) {
-        assert(false);
+        return false;
     }
 #endif
-}
-
-ELogMsgQSchemaHandler::~ELogMsgQSchemaHandler() {
-    // cleanup provider map
+    return true;
 }
 
 bool ELogMsgQSchemaHandler::registerMsgQTargetProvider(const char* brokerName,
@@ -48,7 +45,7 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
     // kafka
     const std::string& msgQType = targetSpec.m_path;
 
-    // in addition, we expect at least 'topic' property and optional 'headers'
+    // in addition, we expect at least 'msgq_topic' property and optional 'msgq_headers'
     if (targetSpec.m_props.size() < 1) {
         ELOG_REPORT_ERROR(
             "Invalid message queue log target specification, expected at least one property: %s",
@@ -56,17 +53,17 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
         return nullptr;
     }
 
-    ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("topic");
+    ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("msgq_topic");
     if (itr == targetSpec.m_props.end()) {
         ELOG_REPORT_ERROR(
-            "Invalid message queue log target specification, missing property topic: %s",
+            "Invalid message queue log target specification, missing property msgq_topic: %s",
             logTargetCfg.c_str());
         return nullptr;
     }
     const std::string& topic = itr->second;
 
     std::string headers;
-    itr = targetSpec.m_props.find("headers");
+    itr = targetSpec.m_props.find("msgq_headers");
     if (itr != targetSpec.m_props.end()) {
         headers = itr->second;
     }
@@ -81,6 +78,19 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
         "Invalid message queue log target specification, unsupported message queue type %s: %s",
         msgQType.c_str(), logTargetCfg.c_str());
     return nullptr;
+}
+
+ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
+                                              const ELogTargetNestedSpec& targetNestedSpec) {
+    // first make sure there ar no sub-specs
+    if (!targetNestedSpec.m_subSpec.empty()) {
+        ELOG_REPORT_ERROR("Message queue log target cannot have sub-targets: %s",
+                          logTargetCfg.c_str());
+        return nullptr;
+    }
+
+    // implementation is identical to URL style
+    return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
 }
 
 }  // namespace elog

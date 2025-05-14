@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+#include "elog_common.h"
 #include "elog_def.h"
 #include "elog_target.h"
 
@@ -29,6 +30,25 @@ class ELOG_API ELogFlushPolicy {
 public:
     virtual ~ELogFlushPolicy() {}
 
+    /** @brief Loads flush policy from property map. */
+    virtual bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+        return true;
+    }
+
+    /**
+     * @brief Queries whether this flush policy is active (i.e. has a background thread that
+     * actively operates on the containing log target).
+     */
+    inline bool isActive() const { return m_isActive; }
+
+    /** @brief Installs the log target for an active flush policy. */
+    inline void setLogTarget(ELogTarget* logTarget) {
+        m_logTarget = logTarget;
+        if (m_isActive) {
+            propagateLogTarget(logTarget);
+        }
+    }
+
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     virtual bool start() { return true; }
 
@@ -43,9 +63,21 @@ public:
     virtual bool shouldFlush(uint32_t msgSizeBytes) = 0;
 
 protected:
-    ELogFlushPolicy() {}
+    ELogFlushPolicy(bool isActive = false) : m_isActive(isActive), m_logTarget(nullptr) {}
     ELogFlushPolicy(const ELogFlushPolicy&) = delete;
     ELogFlushPolicy(ELogFlushPolicy&&) = delete;
+
+    // allow derived classes to modify active state
+    inline void setActive() { m_isActive = true; }
+
+    inline ELogTarget* getLogTarget() { return m_logTarget; }
+
+    // helper for combined flush policy
+    virtual void propagateLogTarget(ELogTarget* logTarget) {}
+
+private:
+    bool m_isActive;
+    ELogTarget* m_logTarget;
 };
 
 // forward declaration
@@ -105,10 +137,21 @@ public:
 
     inline void addFlushPolicy(ELogFlushPolicy* flushPolicy) {
         m_flushPolicies.push_back(flushPolicy);
+        if (flushPolicy->isActive()) {
+            setActive();
+        }
     }
 
 protected:
     std::vector<ELogFlushPolicy*> m_flushPolicies;
+
+    // helper for combined flush policy
+    virtual void propagateLogTarget(ELogTarget* logTarget) {
+        for (uint32_t i = 0; i < m_flushPolicies.size(); ++i) {
+            // this will get propagated to all active sub-policies
+            m_flushPolicies[i]->setLogTarget(getLogTarget());
+        }
+    }
 };
 
 /** @class A combined flush policy, for enforcing all specified flush policies. */
@@ -137,11 +180,15 @@ public:
 class ELOG_API ELogImmediateFlushPolicy : public ELogFlushPolicy {
 public:
     ELogImmediateFlushPolicy() {}
+    ELogImmediateFlushPolicy(const ELogPropertyMap& props) {}
     ELogImmediateFlushPolicy(const ELogImmediateFlushPolicy&) = delete;
     ELogImmediateFlushPolicy(ELogImmediateFlushPolicy&&) = delete;
     ~ELogImmediateFlushPolicy() {}
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
+
+private:
+    ELOG_DECLARE_FLUSH_POLICY(ELogImmediateFlushPolicy, immediate);
 };
 
 /**
@@ -151,11 +198,15 @@ public:
 class ELOG_API ELogNeverFlushPolicy : public ELogFlushPolicy {
 public:
     ELogNeverFlushPolicy() {}
+    ELogNeverFlushPolicy(const ELogPropertyMap& props) {}
     ELogNeverFlushPolicy(const ELogNeverFlushPolicy&) = delete;
     ELogNeverFlushPolicy(ELogNeverFlushPolicy&&) = delete;
     ~ELogNeverFlushPolicy() {}
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
+
+private:
+    ELOG_DECLARE_FLUSH_POLICY(ELogNeverFlushPolicy, never);
 };
 
 /**
@@ -164,17 +215,23 @@ public:
  */
 class ELOG_API ELogCountFlushPolicy : public ELogFlushPolicy {
 public:
+    ELogCountFlushPolicy() : m_logCountLimit(0), m_currentLogCount(0) {}
     ELogCountFlushPolicy(uint64_t logCountLimit)
         : m_logCountLimit(logCountLimit), m_currentLogCount(0) {}
     ELogCountFlushPolicy(const ELogCountFlushPolicy&) = delete;
     ELogCountFlushPolicy(ELogCountFlushPolicy&&) = delete;
     ~ELogCountFlushPolicy() {}
 
+    /** @brief Loads flush policy from property map. */
+    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
+
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
-    const uint64_t m_logCountLimit;
+    uint64_t m_logCountLimit;
     std::atomic<uint64_t> m_currentLogCount;
+
+    ELOG_DECLARE_FLUSH_POLICY(ELogCountFlushPolicy, count);
 };
 
 /**
@@ -183,17 +240,23 @@ private:
  */
 class ELOG_API ELogSizeFlushPolicy : public ELogFlushPolicy {
 public:
+    ELogSizeFlushPolicy() : m_logSizeLimitBytes(0), m_currentLogSizeBytes(0) {}
     ELogSizeFlushPolicy(uint64_t logSizeLimitBytes)
         : m_logSizeLimitBytes(logSizeLimitBytes), m_currentLogSizeBytes(0) {}
     ELogSizeFlushPolicy(const ELogSizeFlushPolicy&) = delete;
     ELogSizeFlushPolicy(ELogSizeFlushPolicy&&) = delete;
     ~ELogSizeFlushPolicy() {}
 
+    /** @brief Loads flush policy from property map. */
+    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
+
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
-    const uint64_t m_logSizeLimitBytes;
+    uint64_t m_logSizeLimitBytes;
     std::atomic<uint64_t> m_currentLogSizeBytes;
+
+    ELOG_DECLARE_FLUSH_POLICY(ELogSizeFlushPolicy, size);
 };
 
 /**
@@ -203,10 +266,14 @@ private:
  */
 class ELOG_API ELogTimedFlushPolicy : public ELogFlushPolicy {
 public:
+    ELogTimedFlushPolicy();
     ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarget* logTarget);
     ELogTimedFlushPolicy(const ELogTimedFlushPolicy&) = delete;
     ELogTimedFlushPolicy(ELogTimedFlushPolicy&&) = delete;
     ~ELogTimedFlushPolicy();
+
+    /** @brief Loads flush policy from property map. */
+    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
 
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     bool start() final;
@@ -226,8 +293,7 @@ private:
         return std::chrono::duration_cast<std::chrono::milliseconds>(later - earlier);
     }
 
-    const Millis m_logTimeLimitMillis;
-    ELogTarget* m_logTarget;
+    Millis m_logTimeLimitMillis;
     std::atomic<Timestamp> m_prevFlushTime;
     std::mutex m_lock;
     std::condition_variable m_cv;
@@ -237,6 +303,8 @@ private:
     void onTimer();
 
     bool shouldStop();
+
+    ELOG_DECLARE_FLUSH_POLICY(ELogTimedFlushPolicy, time);
 };
 
 }  // namespace elog

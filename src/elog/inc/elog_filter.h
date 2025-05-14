@@ -1,6 +1,7 @@
 #ifndef __ELOG_FILTER_H__
 #define __ELOG_FILTER_H__
 
+#include "elog_common.h"
 #include "elog_def.h"
 #include "elog_record.h"
 
@@ -10,12 +11,17 @@ namespace elog {
 extern ELOG_API bool initFilters();
 
 /** @brief Destroys all filters (for internal use only). */
-extern ELOG_API void termFilter();
+extern ELOG_API void termFilters();
 
 /** @brief Parent interface for all log filters. */
 class ELOG_API ELogFilter {
 public:
     virtual ~ELogFilter() {}
+
+    /** @brief Loads filter from property map. */
+    virtual bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+        return true;
+    }
 
     /**
      * @brief Filters a log record.

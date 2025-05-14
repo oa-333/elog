@@ -6,8 +6,8 @@
 #include <mutex>
 #include <thread>
 
+#include "elog_async_target.h"
 #include "elog_def.h"
-#include "elog_target.h"
 
 namespace elog {
 
@@ -16,18 +16,14 @@ namespace elog {
  * still takes places at the caller's context. For an even shorter deferring latency consider using
  * the @ref ELogQueuedTarget, or the @ref ELogQuantumTarget.
  */
-class ELOG_API ELogDeferredTarget : public ELogTarget {
+class ELOG_API ELogDeferredTarget : public ELogAsyncTarget {
 public:
     /**
      * @brief Construct a new ELogDeferredTarget object.
      * @param logTarget The deferred log target.
      */
     ELogDeferredTarget(ELogTarget* logTarget)
-        : ELogTarget("deferred"),
-          m_logTarget(logTarget),
-          m_stop(false),
-          m_writeCount(0),
-          m_readCount(0) {}
+        : ELogAsyncTarget(logTarget), m_stop(false), m_writeCount(0), m_readCount(0) {}
     ~ELogDeferredTarget() override {}
 
     /** @brief Sends a log record to a log target. */
@@ -40,9 +36,6 @@ public:
      */
     void flush() override;
 
-    /** @brief As log target may be chained as in a list, this retrieves the final log target. */
-    ELogTarget* getEndLogTarget() override { return m_logTarget; }
-
     /** @brief Queries whether the log target has written all pending messages. */
     bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) final {
         writeCount = m_writeCount.load(std::memory_order_relaxed);
@@ -53,7 +46,6 @@ public:
 protected:
     typedef std::list<std::pair<ELogRecord, std::string>> LogQueue;
 
-    ELogTarget* m_logTarget;
     std::thread m_logThread;
     LogQueue m_logQueue;
     std::mutex m_lock;

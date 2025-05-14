@@ -7,7 +7,7 @@
 namespace elog {
 
 bool ELogDeferredTarget::startLogTarget() {
-    if (!m_logTarget->start()) {
+    if (!getEndLogTarget()->start()) {
         return false;
     }
     m_logThread = std::thread(&ELogDeferredTarget::logThread, this);
@@ -16,7 +16,7 @@ bool ELogDeferredTarget::startLogTarget() {
 
 bool ELogDeferredTarget::stopLogTarget() {
     stopLogThread();
-    return m_logTarget->stop();
+    return getEndLogTarget()->stop();
 }
 
 void ELogDeferredTarget::log(const ELogRecord& logRecord) {
@@ -65,11 +65,11 @@ void ELogDeferredTarget::logThread() {
             std::string logMsg = (*itr).second;
             if (logMsg.empty()) {
                 // empty log message signifies flush request
-                m_logTarget->flush();
+                getEndLogTarget()->flush();
             } else {
                 ELogRecord& logRecord = (*itr).first;
                 logRecord.m_logMsg = (*itr).second.c_str();
-                m_logTarget->log(logRecord);
+                getEndLogTarget()->log(logRecord);
                 m_readCount.fetch_add(1, std::memory_order_relaxed);
             }
             ++itr;
@@ -84,7 +84,7 @@ void ELogDeferredTarget::logThread() {
         if (!logMsg.empty()) {
             ELogRecord& logRecord = (*itr).first;
             logRecord.m_logMsg = (*itr).second.c_str();
-            m_logTarget->log(logRecord);
+            getEndLogTarget()->log(logRecord);
             m_readCount.fetch_add(1, std::memory_order_relaxed);
         }
         // skip flush requests, we will do one flush at the end
@@ -92,7 +92,7 @@ void ELogDeferredTarget::logThread() {
     }
 
     // finally flush
-    m_logTarget->flush();
+    getEndLogTarget()->flush();
 }
 
 bool ELogDeferredTarget::shouldStop() {

@@ -24,37 +24,34 @@ static bool initDbTargetProvider(ELogDbSchemaHandler* schemaHandler, const char*
     return true;
 }
 
-ELogDbSchemaHandler::ELogDbSchemaHandler() {
+bool ELogDbSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
     if (!initDbTargetProvider<ELogMySqlDbTargetProvider>(this, "mysql")) {
-        assert(false);
+        return false;
     }
 #endif
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
     if (!initDbTargetProvider<ELogSQLiteDbTargetProvider>(this, "sqlite")) {
-        assert(false);
+        return false;
     }
 #endif
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
     if (!initDbTargetProvider<ELogPGSQLDbTargetProvider>(this, "postgresql")) {
-        assert(false);
+        return false;
     }
 #endif
 #ifdef ELOG_ENABLE_ORACLE_DB_CONNECTOR
     if (!initDbTargetProvider<ELogOracleDbTargetProvider>(this, "oracle")) {
-        assert(false);
+        return false;
     }
 #endif
 #ifdef ELOG_ENABLE_SQLSERVER_DB_CONNECTOR
     if (!initDbTargetProvider<ELogSqlServerDbTargetProvider>(this, "sqlserver")) {
-        assert(false);
+        return false;
     }
 #endif
-}
-
-ELogDbSchemaHandler::~ELogDbSchemaHandler() {
-    // cleanup provider map
+    return true;
 }
 
 bool ELogDbSchemaHandler::registerDbTargetProvider(const char* dbName,
@@ -73,8 +70,8 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
     // sqlserver
     const std::string& dbType = targetSpec.m_path;
 
-    // in addition, we expect at least two properties: conn-string, insert-query, db-thread-model,
-    // db-max-threads, db-reconnect-timeout-millis
+    // in addition, we expect at least two properties: conn_string, insert_query, db_thread_model,
+    // db_max_threads, db_reconnect_timeout_millis
     if (targetSpec.m_props.size() < 2) {
         ELOG_REPORT_ERROR(
             "Invalid database log target specification, expected at least two properties: %s",
@@ -82,28 +79,28 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
         return nullptr;
     }
 
-    ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("conn-string");
+    ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("conn_string");
     if (itr == targetSpec.m_props.end()) {
         ELOG_REPORT_ERROR(
-            "Invalid database log target specification, missing property conn-string: %s",
+            "Invalid database log target specification, missing property conn_string: %s",
             logTargetCfg.c_str());
         return nullptr;
     }
     const std::string& connString = itr->second;
 
-    itr = targetSpec.m_props.find("insert-query");
+    itr = targetSpec.m_props.find("insert_query");
     if (itr == targetSpec.m_props.end()) {
         ELOG_REPORT_ERROR(
-            "Invalid database log target specification, missing property insert-query: %s",
+            "Invalid database log target specification, missing property insert_query: %s",
             logTargetCfg.c_str());
         return nullptr;
     }
     const std::string& insertQuery = itr->second;
 
     // check for optional parameters
-    // optional db-thread-model
+    // optional db_thread_model
     ELogDbTarget::ThreadModel threadModel = ELogDbTarget::ThreadModel::TM_NONE;
-    itr = targetSpec.m_props.find("db-thread-model");
+    itr = targetSpec.m_props.find("db_thread_model");
     if (itr != targetSpec.m_props.end()) {
         const std::string& threadModelStr = itr->second;
         if (threadModelStr.compare("none") == 0) {
@@ -120,12 +117,12 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
         }
     }
 
-    // check for optional db-max-threads
+    // check for optional db_max_threads
     uint32_t maxThreads = ELOG_DB_MAX_THREADS;
-    itr = targetSpec.m_props.find("db-max-threads");
+    itr = targetSpec.m_props.find("db_max_threads");
     if (itr != targetSpec.m_props.end()) {
         const std::string& maxThreadsStr = itr->second;
-        if (!parseIntProp("db-max-threads", logTargetCfg, maxThreadsStr, maxThreads, true)) {
+        if (!parseIntProp("db_max_threads", logTargetCfg, maxThreadsStr, maxThreads, true)) {
             ELOG_REPORT_ERROR(
                 "Invalid database log target specification, invalid maximum thread count '%s': %s",
                 maxThreadsStr.c_str(), logTargetCfg.c_str());
@@ -133,12 +130,12 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
         }
     }
 
-    // check for optional db-reconnect-timeout-millis
+    // check for optional db_reconnect_timeout_millis
     uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS;
-    itr = targetSpec.m_props.find("db-reconnect-timeout-millis");
+    itr = targetSpec.m_props.find("db_reconnect_timeout_millis");
     if (itr != targetSpec.m_props.end()) {
         const std::string& reconnectTimeoutMillisStr = itr->second;
-        if (!parseIntProp("db-reconnect-timeout-millis", logTargetCfg, reconnectTimeoutMillisStr,
+        if (!parseIntProp("db_reconnect_timeout_millis", logTargetCfg, reconnectTimeoutMillisStr,
                           reconnectTimeoutMillis, true)) {
             ELOG_REPORT_ERROR(
                 "Invalid database log target specification, invalid reconnect timeout value '%s': "
@@ -158,6 +155,19 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
     ELOG_REPORT_ERROR("Invalid database log target specification, unsupported db type %s: %s",
                       dbType.c_str(), logTargetCfg.c_str());
     return nullptr;
+}
+
+ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
+                                            const ELogTargetNestedSpec& targetNestedSpec) {
+    // first make sure there ar no sub-specs
+    if (!targetNestedSpec.m_subSpec.empty()) {
+        ELOG_REPORT_ERROR("Message queue log target cannot have sub-targets: %s",
+                          logTargetCfg.c_str());
+        return nullptr;
+    }
+
+    // no difference, just call URL style loading
+    return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
 }
 
 }  // namespace elog

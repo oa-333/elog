@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <list>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -35,6 +36,10 @@ inline bool getProp(const ELogPropertySequence& props, const char* propName,
 extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
                          const std::string& prop, uint32_t& value, bool issueError = true);
 
+/** @brief Helper function for parsing an integer property */
+extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
+                         const std::string& prop, uint64_t& value, bool issueError = true);
+
 /** @brief Helper function for parsing a boolean property */
 extern bool parseBoolProp(const char* propName, const std::string& logTargetCfg,
                           const std::string& prop, bool& value, bool issueError = true);
@@ -55,7 +60,7 @@ inline std::string trim(const std::string& s) {
 
 /** @struct Log Target specification (used for loading from configuration). */
 struct ELogTargetSpec {
-    /** @brief The target schema (sys, file, db, msgq, etc.) */
+    /** @brief The target scheme (sys, file, db, msgq, etc.) */
     std::string m_scheme;
 
     /** @brief The server host name or address (optional). */
@@ -69,6 +74,18 @@ struct ELogTargetSpec {
 
     /** @brief Additional properties */
     ELogPropertyMap m_props;
+};
+
+/** @brief Nested target specification. */
+struct ELogTargetNestedSpec {
+    /** @brief The target specification */
+    ELogTargetSpec m_spec;
+
+    /**
+     * @brief Optional nested target specification (may be an array, which implies using @ref
+     * ELogCombinedTarget).
+     */
+    std::vector<ELogTargetNestedSpec> m_subSpec;
 };
 
 }  // namespace elog

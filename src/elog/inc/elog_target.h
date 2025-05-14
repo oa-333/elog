@@ -149,7 +149,7 @@ private:
 /** @class Combined log target. Dispatches to multiple log targets. */
 class ELOG_API ELogCombinedTarget : public ELogTarget {
 public:
-    ELogCombinedTarget(const char* typeName) : ELogTarget(typeName) {}
+    ELogCombinedTarget() : ELogTarget("combined") {}
     ~ELogCombinedTarget() final {}
 
     inline void addLogTarget(ELogTarget* target) { m_logTargets.push_back(target); }

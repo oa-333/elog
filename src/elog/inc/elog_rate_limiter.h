@@ -19,12 +19,15 @@ namespace elog {
 /** @brief Log rate limiter. */
 class ELogRateLimiter : public ELogFilter {
 public:
-    ELogRateLimiter(uint64_t maxMsgPerSecond)
+    ELogRateLimiter(uint64_t maxMsgPerSecond = 0)
         : m_maxMsgPerSecond(maxMsgPerSecond),
           m_currSecond(0),
           m_currSecondCount(0),
           m_prevSecondCount(0) {}
     ~ELogRateLimiter() final {}
+
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
 
     /**
      * @brief Filters a log record.
@@ -44,6 +47,8 @@ protected:
     typedef std::chrono::milliseconds tstamp_t;
 
     tstamp_t getTstamp();
+
+    ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limiter);
 };
 
 }  // namespace elog

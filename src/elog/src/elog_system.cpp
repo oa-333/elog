@@ -8,6 +8,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "elog_async_schema_handler.h"
 #include "elog_buffered_file_target.h"
 #include "elog_db_schema_handler.h"
 #include "elog_deferred_target.h"
@@ -19,6 +20,7 @@
 #include "elog_queued_target.h"
 #include "elog_rate_limiter.h"
 #include "elog_segmented_file_target.h"
+#include "elog_spec_tokenizer.h"
 #include "elog_sys_schema_handler.h"
 #include "elog_syslog_target.h"
 
@@ -26,6 +28,20 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
+
+// TODO: add more sub-sections for initializations methods
+// TODO: reorder sections, add section for how to externally extend SW
+// TODO: revise entire doc, consider putting in pdf.
+// TODO: in addition to url config, also add nested config with {} syntax
+// TODO: allow specifying sizes with units (b, kb, mb - case insensitive)
+// TODO: fix segmented log race conditions and add buffered file writer support
+// TODO: Consider having buffering as a general step in the chain of logger --> log target -->
+// transport
+// TODO: put all internal use functions in src folder and do not have then exposed
+// TODO: refactor out all configuration loading logic into ELogConfig and put in src folder
+// TODO: must write regression tests
+// TODO: update configuration due to new changes (nested log target, flush policy and filter
+// loadable etc.)
 
 namespace elog {
 
@@ -100,7 +116,8 @@ bool ELogSystem::initSchemaHandlers() {
     if (!initSchemaHandler<ELogSysSchemaHandler>("sys") ||
         !initSchemaHandler<ELogFileSchemaHandler>("file") ||
         !initSchemaHandler<ELogDbSchemaHandler>("db") ||
-        !initSchemaHandler<ELogMsgQSchemaHandler>("msgq")) {
+        !initSchemaHandler<ELogMsgQSchemaHandler>("msgq") ||
+        !initSchemaHandler<ELogAsyncSchemaHandler>("async")) {
         termGlobals();
         return false;
     }
@@ -343,23 +360,27 @@ void ELogSystem::reportTrace(const char* fmt, ...) {
     }
 }
 
-bool ELogSystem::registerSchemaHandler(const char* schemaName, ELogSchemaHandler* schemaHandler) {
+bool ELogSystem::registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler) {
     if (sSchemaHandlerCount == ELOG_MAX_SCHEMA) {
-        ELogSystem::reportError("Cannot initialize %s schema handler, out of space", schemaName);
+        reportError("Cannot initialize %s schema handler, out of space", schemeName);
+        return false;
+    }
+    if (!schemaHandler->registerPredefinedProviders()) {
+        reportError("Failed to register %s schema handler predefined target providers", schemeName);
         return false;
     }
     uint32_t id = sSchemaHandlerCount;
-    if (!sSchemaHandlerMap.insert(ELogSchemaHandlerMap::value_type(schemaName, id)).second) {
-        ELogSystem::reportError("Cannot initialize %s schema handler, duplicate name", schemaName);
+    if (!sSchemaHandlerMap.insert(ELogSchemaHandlerMap::value_type(schemeName, id)).second) {
+        reportError("Cannot initialize %s schema handler, duplicate scheme name", schemeName);
         return false;
     }
     sSchemaHandlers[sSchemaHandlerCount++] = schemaHandler;
     return true;
 }
 
-ELogSchemaHandler* ELogSystem::getSchemaHandler(const char* schemaName) {
+ELogSchemaHandler* ELogSystem::getSchemaHandler(const char* schemeName) {
     ELogSchemaHandler* schemaHandler = nullptr;
-    ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(schemaName);
+    ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(schemeName);
     if (itr != sSchemaHandlerMap.end()) {
         schemaHandler = sSchemaHandlers[itr->second];
     }
@@ -434,83 +455,53 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
     //
     // optional parameters (each set is mutually exclusive with other sets)
     // defer (no value associated)
-    // queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
-    // quantum-buffer-size=<buffer-size>
+    // queue_batch_size=<batch-size>,queue_timeout_millis=<timeout-millis>
+    // quantum_buffer_size=<buffer-size>
     //
     // future provision:
     // tcp://host:port
     // udp://host:port
-    // db://db-name?conn-string=<conn-string>&insert-statement=<insert-statement>
-    // msgq://message-broker-name?conn-string=<conn-string>&queue=<queue-name>&topic=<topic-name>
+    // db://db-name?conn_string=<conn-string>&insert-statement=<insert-statement>
+    // msgq://message-broker-name?conn_string=<conn-string>&queue=<queue-name>&msgq_topic=<topic-name>
+    //
+    // additionally the following nested format is accepted:
+    //
+    // log_target = { scheme=db, db-name=postgresql, ...}
+    // log_target = { scheme = async, type = deferred, log_target = { scheme = file, path = ...}}
+    // log_target = { scheme = async, type = quantum, quantum_buffer_size = 10000, log_target = [{
+    // scheme = file, path = ...}, {}, {}]}
+    //
+    // in theory nesting level is not restricted, but it doesn't make sense to have more than 2
+
+    bool isNestedSpec = false;
     ELogTargetSpec logTargetSpec;
-    if (!parseLogTargetSpec(logTargetCfg, logTargetSpec)) {
+    ELogTargetNestedSpec logTargetNestedSpec;
+    if (logTargetCfg.starts_with("{") || logTargetCfg.starts_with("[")) {
+        if (!parseLogTargetNestedSpec(logTargetCfg, logTargetNestedSpec)) {
+            reportError("Invalid log target specification: %s", logTargetCfg.c_str());
+            return false;
+        }
+        isNestedSpec = true;
+    } else if (!parseLogTargetSpec(logTargetCfg, logTargetSpec)) {
         reportError("Invalid log target specification: %s", logTargetCfg.c_str());
         return false;
     }
 
-    // check for registered schemas
-    ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(logTargetSpec.m_scheme);
-    if (itr != sSchemaHandlerMap.end()) {
-        ELogSchemaHandler* schemaHandler = sSchemaHandlers[itr->second];
-        ELogTarget* logTarget = schemaHandler->loadTarget(logTargetCfg, logTargetSpec);
-        if (logTarget == nullptr) {
-            reportError("Failed to load target for schema %s: %s", logTargetSpec.m_scheme.c_str(),
-                        logTargetCfg.c_str());
-            return false;
-        }
-
-        // apply compound target
-        bool errorOccurred = false;
-        ELogTarget* compoundTarget =
-            applyCompoundTarget(logTarget, logTargetCfg, logTargetSpec, errorOccurred);
-        if (errorOccurred) {
-            reportError("Failed to apply compound log target specification");
-            delete logTarget;
-            return false;
-        }
-        if (compoundTarget != nullptr) {
-            logTarget = compoundTarget;
-        }
-
-        // apply target name if any
-        applyTargetName(logTarget, logTargetSpec);
-
-        // apply target log level if any
-        if (!applyTargetLogLevel(logTarget, logTargetCfg, logTargetSpec)) {
-            delete logTarget;
-            return false;
-        }
-
-        // apply log format if any
-        if (!applyTargetLogFormat(logTarget, logTargetCfg, logTargetSpec)) {
-            delete logTarget;
-            return false;
-        }
-
-        // apply flush policy if any
-        if (!applyTargetFlushPolicy(logTarget, logTargetCfg, logTargetSpec)) {
-            delete logTarget;
-            return false;
-        }
-
-        // apply rate limiter if any
-        if (!applyTargetRateLimiter(logTarget, logTargetCfg, logTargetSpec)) {
-            delete logTarget;
-            return false;
-        }
-
-        if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
-            reportError("Failed to add log target for schema %s: %s",
-                        logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
-            delete logTarget;
-            return false;
-        }
-        return true;
+    // load the target (common properties already configured)
+    ELogTarget* logTarget = isNestedSpec ? loadLogTarget(logTargetCfg, logTargetNestedSpec)
+                                         : loadLogTarget(logTargetCfg, logTargetSpec);
+    if (logTarget == nullptr) {
+        return false;
     }
 
-    reportError("Invalid log target specification, unrecognized schema %s: %s",
-                logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
-    return false;
+    // finally add the log target
+    if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
+        reportError("Failed to add log target for scheme %s: %s", logTargetSpec.m_scheme.c_str(),
+                    logTargetCfg.c_str());
+        delete logTarget;
+        return false;
+    }
+    return true;
 }
 
 bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
@@ -568,6 +559,251 @@ bool ELogSystem::parseLogTargetSpec(const std::string& logTargetCfg,
     return true;
 }
 
+bool ELogSystem::parseLogTargetNestedSpec(const std::string& logTargetCfg,
+                                          ELogTargetNestedSpec& logTargetNestedSpec) {
+    // we need to parse this recursively as a stream:
+    // 1. whenever seeing an opening brace we descend to recursive call
+    // 2. whenever seeing a closing brace we return from recursive call
+    // 3. otherwise we parse prop = value, and look carefully that value does not begin with an
+    // opening brace.
+    // 4. each nested call expected first char to be a curly open brace
+
+    // it is much easier with a tokenizer, a token stream, and parse state machine...
+    ELogSpecTokenizer tok(logTargetCfg);
+    if (!parseLogTargetNestedSpec(logTargetCfg, logTargetNestedSpec, tok)) {
+        return false;
+    }
+    if (tok.hasMoreTokens()) {
+        reportError(
+            "Excess characters after position %u not parsed in log target specification: %s",
+            tok.getPos(), logTargetCfg.c_str());
+        return false;
+    }
+    return true;
+}
+
+static bool parseExpectedToken(ELogSpecTokenizer& tok, ELogTokenType expectedTokenType,
+                               std::string& token, const char* expectedStr) {
+    uint32_t pos = 0;
+    ELogTokenType tokenType;
+    if (!tok.hasMoreTokens() || !tok.nextToken(tokenType, token, pos)) {
+        ELogSystem::reportError("Unexpected enf of log target nested specification");
+        return false;
+    }
+    if (tokenType != expectedTokenType) {
+        ELogSystem::reportError(
+            "Invalid token in nested log target specification, expected %s, at pos %u: %s",
+            expectedStr, pos, tok.getSpec());
+        return false;
+    }
+    return true;
+}
+
+static bool parseExpectedToken2(ELogSpecTokenizer& tok, ELogTokenType expectedTokenType1,
+                                ELogTokenType expectedTokenType2, ELogTokenType& tokenType,
+                                std::string& token, uint32_t& tokenPos, const char* expectedStr1,
+                                const char* expectedStr2) {
+    if (!tok.hasMoreTokens() || !tok.nextToken(tokenType, token, tokenPos)) {
+        ELogSystem::reportError("Unexpected enf of log target nested specification");
+        return false;
+    }
+    if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2) {
+        ELogSystem::reportError(
+            "Invalid token in nested log target specification, expected either %s or %s, at pos "
+            "%u: %s",
+            expectedStr1, expectedStr2, tokenPos, tok.getSpec());
+        return false;
+    }
+    return true;
+}
+
+static bool parseExpectedToken3(ELogSpecTokenizer& tok, ELogTokenType expectedTokenType1,
+                                ELogTokenType expectedTokenType2, ELogTokenType expectedTokenType3,
+                                ELogTokenType& tokenType, std::string& token, uint32_t& tokenPos,
+                                const char* expectedStr1, const char* expectedStr2,
+                                const char* expectedStr3) {
+    if (!tok.hasMoreTokens() || !tok.nextToken(tokenType, token, tokenPos)) {
+        ELogSystem::reportError("Unexpected enf of log target nested specification");
+        return false;
+    }
+    if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2 &&
+        tokenType != expectedTokenType3) {
+        ELogSystem::reportError(
+            "Invalid token in nested log target specification, expected either %s, %s, or %s, at "
+            "pos %u: %s",
+            expectedStr1, expectedStr2, expectedStr3, tokenPos, tok.getSpec());
+        return false;
+    }
+    return true;
+}
+
+bool ELogSystem::parseLogTargetNestedSpec(const std::string& logTargetCfg,
+                                          ELogTargetNestedSpec& logTargetNestedSpec,
+                                          ELogSpecTokenizer& tok) {
+    std::string token;
+
+    // first token must be open brace
+    if (!parseExpectedToken(tok, ELogTokenType::TT_OPEN_BRACE, token, "'{'")) {
+        return false;
+    }
+
+    std::string key;
+    ELogTokenType tokenType;
+    uint32_t tokenPos = 0;
+    enum PraseState {
+        PS_INIT,
+        PS_KEY,
+        PS_EQUAL,
+        PS_BRACKET,
+        PS_VALUE,
+        PS_DONE
+    } parseState = PS_INIT;
+
+    while (tok.hasMoreTokens() && parseState != PS_DONE) {
+        // parse state: INIT
+        if (parseState == PS_INIT) {
+            // either a key or a close brace
+            if (!parseExpectedToken2(tok, ELogTokenType::TT_TOKEN, ELogTokenType::TT_CLOSE_BRACE,
+                                     tokenType, key, tokenPos, "text", "'}'")) {
+                return false;
+            }
+            // move to next state
+            parseState = (tokenType == ELogTokenType::TT_CLOSE_BRACE) ? PS_DONE : PS_KEY;
+        }
+
+        // parse state: KEY
+        else if (parseState == PS_KEY) {
+            // expecting equal sign
+            if (!parseExpectedToken(tok, ELogTokenType::TT_EQUAL_SIGN, token, "'='")) {
+                return false;
+            }
+            // move to state PS_EQUAL
+            parseState = PS_EQUAL;
+        }
+
+        // parse state: EQUAL
+        else if (parseState == PS_EQUAL) {
+            // expecting either value, open brace or open brackets
+            if (!parseExpectedToken3(tok, ELogTokenType::TT_TOKEN, ELogTokenType::TT_OPEN_BRACE,
+                                     ELogTokenType::TT_OPEN_BRACKET, tokenType, token, tokenPos,
+                                     "text", "'{'", "'['")) {
+                return false;
+            }
+            // if open brace, then make recursive parsing, after which move to state PS_VALUE
+            // if open bracket, then make recursive parsing, but next expected is bracket-comma or
+            // end bracket
+            // if value then move to state PS_VALUE
+            if (tokenType == ELogTokenType::TT_OPEN_BRACE) {
+                // this is allowed only if key is "log_target"
+                if (key.compare("log_target") != 0) {
+                    reportError(
+                        "Invalid nested log target specification, nesting is allowed only for key "
+                        "'log_target', but specified for key '%s', at pos %u: %s",
+                        key.c_str(), tokenPos, logTargetCfg.c_str());
+                    return false;
+                }
+                // put back the open brace, parse the sub-spec
+                tok.rewind(tokenPos);
+                if (!parseSubSpec(logTargetCfg, logTargetNestedSpec, tok)) {
+                    return false;
+                }
+                parseState = PS_VALUE;
+            } else if (tokenType == ELogTokenType::TT_OPEN_BRACKET) {
+                // start of log target spec array [{}, {}, ...]
+                // parse sub-spec and stay in BRACKET state
+                if (!parseSubSpec(logTargetCfg, logTargetNestedSpec, tok)) {
+                    return false;
+                }
+                parseState = PS_BRACKET;
+            } else {
+                // add value to property map
+                std::pair<ELogPropertyMap::iterator, bool> itrRes =
+                    logTargetNestedSpec.m_spec.m_props.insert(
+                        ELogPropertyMap::value_type(key, token));
+                if (!itrRes.second) {
+                    // override existing key-value mappings
+                    itrRes.first->second = token;
+                }
+                parseState = PS_VALUE;
+            }
+        }
+
+        // parse state: BRACKET
+        else if (parseState == PS_BRACKET) {
+            // expected either a comma (followed by another sub-spec) or end bracket
+            if (!parseExpectedToken2(tok, ELogTokenType::TT_COMMA, ELogTokenType::TT_CLOSE_BRACKET,
+                                     tokenType, key, tokenPos, "text", "']'")) {
+                return false;
+            }
+            // if close bracket then move to state PS_INIT
+            // if comman then parse sub-spec and stay in state PS_BRACKET
+            if (tokenType == ELogTokenType::TT_CLOSE_BRACKET) {
+                parseState = PS_INIT;
+            } else {
+                if (!parseSubSpec(logTargetCfg, logTargetNestedSpec, tok)) {
+                    return false;
+                }
+                parseState = PS_BRACKET;
+            }
+        }
+
+        // parse state: VALUE
+        else if (parseState == PS_VALUE) {
+            // expecting comma or close brace
+            if (!parseExpectedToken2(tok, ELogTokenType::TT_COMMA, ELogTokenType::TT_CLOSE_BRACE,
+                                     tokenType, key, tokenPos, "text", "'}'")) {
+                return false;
+            }
+            // if close brace then exit
+            // if comman then move to state PS_INIT
+            if (tokenType == ELogTokenType::TT_CLOSE_BRACE) {
+                parseState = PS_DONE;
+            } else {
+                parseState = PS_INIT;
+            }
+        }
+
+        // invalid parse state
+        else {
+            reportError(
+                "Internal error: Invalid parse state %u while parsing nested log target "
+                "specification",
+                (unsigned)parseState);
+            return false;
+        }
+    }
+
+    if (parseState != PS_DONE) {
+        reportError("Premature end of nested log target specification at pos %u: %s", tokenPos,
+                    logTargetCfg.c_str());
+        return false;
+    }
+
+    // apply common members if there are such
+    ELogPropertyMap::iterator itr = logTargetNestedSpec.m_spec.m_props.find("scheme");
+    if (itr != logTargetNestedSpec.m_spec.m_props.end()) {
+        logTargetNestedSpec.m_spec.m_scheme = itr->second;
+    }
+    itr = logTargetNestedSpec.m_spec.m_props.find("path");
+    if (itr != logTargetNestedSpec.m_spec.m_props.end()) {
+        logTargetNestedSpec.m_spec.m_path = itr->second;
+        tryParsePathAsHostPort(logTargetCfg, logTargetNestedSpec.m_spec);
+    }
+
+    return true;
+}
+
+bool ELogSystem::parseSubSpec(const std::string& logTargetCfg,
+                              ELogTargetNestedSpec& logTargetNestedSpec, ELogSpecTokenizer& tok) {
+    // allocate sub-spec and parse
+    logTargetNestedSpec.m_subSpec.push_back(ELogTargetNestedSpec());
+    if (!parseLogTargetNestedSpec(logTargetCfg, logTargetNestedSpec.m_subSpec.back(), tok)) {
+        reportError("Failed to parse nested log target specification");
+        return false;
+    }
+    return true;
+}
+
 void ELogSystem::insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                     const std::string& value) {
     std::pair<ELogPropertyMap::iterator, bool> itrRes =
@@ -575,6 +811,34 @@ void ELogSystem::insertPropOverride(ELogPropertyMap& props, const std::string& k
     if (!itrRes.second) {
         itrRes.first->second = value;
     }
+}
+
+bool ELogSystem::configureLogTargetCommon(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                          const ELogTargetSpec& logTargetSpec) {
+    // apply target name if any
+    applyTargetName(logTarget, logTargetSpec);
+
+    // apply target log level if any
+    if (!applyTargetLogLevel(logTarget, logTargetCfg, logTargetSpec)) {
+        delete logTarget;
+        return false;
+    }
+
+    // apply log format if any
+    if (!applyTargetLogFormat(logTarget, logTargetCfg, logTargetSpec)) {
+        return false;
+    }
+
+    // apply flush policy if any
+    if (!applyTargetFlushPolicy(logTarget, logTargetCfg, logTargetSpec)) {
+        return false;
+    }
+
+    // apply filter if any
+    if (!applyTargetFilter(logTarget, logTargetCfg, logTargetSpec)) {
+        return false;
+    }
+    return true;
 }
 
 void ELogSystem::applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec) {
@@ -619,44 +883,68 @@ bool ELogSystem::applyTargetFlushPolicy(ELogTarget* logTarget, const std::string
                                         const ELogTargetSpec& logTargetSpec) {
     ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("flush_policy");
     if (itr != logTargetSpec.m_props.end()) {
-        ELogFlushPolicy* flushPolicy = nullptr;
         const std::string& flushPolicyCfg = itr->second;
-        if (flushPolicyCfg.compare("immediate") == 0) {
+        if (flushPolicyCfg.compare("none") == 0) {
+            // special case, let target decide by itself what happens when no flush policy is set
+            return true;
+        }
+        ELogFlushPolicy* flushPolicy = constructFlushPolicy(flushPolicyCfg.c_str());
+        if (flushPolicy == nullptr) {
+            reportError("Failed to create flush policy by type %s: %s", flushPolicyCfg.c_str(),
+                        logTargetCfg.c_str());
+            return false;
+        }
+        if (!flushPolicy->load(logTargetCfg, logTargetSpec.m_props)) {
+            reportError("Failed to load flush policy by properties %s: %s", flushPolicyCfg.c_str(),
+                        logTargetCfg.c_str());
+            delete flushPolicy;
+            return false;
+        }
+
+        // active policies require a log target
+        if (flushPolicy->isActive()) {
+            flushPolicy->setLogTarget(logTarget);
+        }
+
+        // that's it
+        logTarget->setFlushPolicy(flushPolicy);
+
+        /*if (flushPolicyCfg.compare("immediate") == 0) {
             flushPolicy = new (std::nothrow) ELogImmediateFlushPolicy();
         } else if (flushPolicyCfg.compare("never") == 0) {
             flushPolicy = new (std::nothrow) ELogNeverFlushPolicy();
         } else if (flushPolicyCfg.compare("count") == 0) {
-            ELogPropertyMap::const_iterator itr2 = logTargetSpec.m_props.find("flush-count");
+            ELogPropertyMap::const_iterator itr2 = logTargetSpec.m_props.find("flush_count");
             if (itr2 == logTargetSpec.m_props.end()) {
                 reportError(
-                    "Invalid flush policy configuration, missing expected flush-count property for "
+                    "Invalid flush policy configuration, missing expected flush_count property for "
                     "flush_policy=count: %s",
                     logTargetCfg.c_str());
                 return false;
             }
             uint32_t logCountLimit = 0;
-            if (!parseIntProp("flush-count", logTargetCfg, itr2->second, logCountLimit, true)) {
+            if (!parseIntProp("flush_count", logTargetCfg, itr2->second, logCountLimit, true)) {
                 reportError(
-                    "Invalid flush policy configuration, flush-count property value '%s' is an "
+                    "Invalid flush policy configuration, flush_count property value '%s' is an "
                     "ill-formed integer: %s",
                     itr2->second.c_str(), logTargetCfg.c_str());
                 return false;
             }
             flushPolicy = new (std::nothrow) ELogCountFlushPolicy(logCountLimit);
         } else if (flushPolicyCfg.compare("size") == 0) {
-            ELogPropertyMap::const_iterator itr2 = logTargetSpec.m_props.find("flush-size-bytes");
+            ELogPropertyMap::const_iterator itr2 = logTargetSpec.m_props.find("flush_size_bytes");
             if (itr2 == logTargetSpec.m_props.end()) {
                 reportError(
-                    "Invalid flush policy configuration, missing expected flush-size-bytes "
-                    "property for flush-policy=size: %s",
+                    "Invalid flush policy configuration, missing expected flush_size_bytes "
+                    "property for flush_policy=size: %s",
                     logTargetCfg.c_str());
                 return false;
             }
             uint32_t logSizeLimitBytes = 0;
-            if (!parseIntProp("flush-size-bytes", logTargetCfg, itr2->second, logSizeLimitBytes,
+            if (!parseIntProp("flush_size_bytes", logTargetCfg, itr2->second, logSizeLimitBytes,
                               true)) {
                 reportError(
-                    "Invalid flush policy configuration, flush-size-bytes property value '%s' is "
+                    "Invalid flush policy configuration, flush_size_bytes property value '%s' is "
                     "an ill-formed integer: %s",
                     itr2->second.c_str(), logTargetCfg.c_str());
                 return false;
@@ -664,19 +952,19 @@ bool ELogSystem::applyTargetFlushPolicy(ELogTarget* logTarget, const std::string
             flushPolicy = new (std::nothrow) ELogSizeFlushPolicy(logSizeLimitBytes);
         } else if (flushPolicyCfg.compare("time") == 0) {
             ELogPropertyMap::const_iterator itr2 =
-                logTargetSpec.m_props.find("flush-timeout-millis");
+                logTargetSpec.m_props.find("flush_timeout_millis");
             if (itr2 == logTargetSpec.m_props.end()) {
                 reportError(
-                    "Invalid flush policy configuration, missing expected flush-timeout-millis "
-                    "property for flush-policy=time: %s",
+                    "Invalid flush policy configuration, missing expected flush_timeout_millis "
+                    "property for flush_policy=time: %s",
                     logTargetCfg.c_str());
                 return false;
             }
             uint32_t logTimeLimitMillis = 0;
-            if (!parseIntProp("flush-timeout-millis", logTargetCfg, itr2->second,
+            if (!parseIntProp("flush_timeout_millis", logTargetCfg, itr2->second,
                               logTimeLimitMillis, true)) {
                 reportError(
-                    "Invalid flush policy configuration, flush-timeout-millis property value '%s' "
+                    "Invalid flush policy configuration, flush_timeout_millis property value '%s' "
                     "is an ill-formed integer: %s",
                     itr2->second.c_str(), logTargetCfg.c_str());
                 return false;
@@ -687,27 +975,31 @@ bool ELogSystem::applyTargetFlushPolicy(ELogTarget* logTarget, const std::string
                         logTargetCfg.c_str());
             return false;
         }
-        logTarget->setFlushPolicy(flushPolicy);
+        logTarget->setFlushPolicy(flushPolicy);*/
     }
     return true;
 }
 
-bool ELogSystem::applyTargetRateLimiter(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                        const ELogTargetSpec& logTargetSpec) {
-    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("rate-limit-msg-per-sec");
+bool ELogSystem::applyTargetFilter(ELogTarget* logTarget, const std::string& logTargetCfg,
+                                   const ELogTargetSpec& logTargetSpec) {
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("filter");
     if (itr != logTargetSpec.m_props.end()) {
-        const std::string& rateLimitCfg = itr->second;
-        uint32_t maxMsgPerSec = 0;
-        if (!parseIntProp("rate-limit-msg-per-sec", logTargetCfg, rateLimitCfg, maxMsgPerSec,
-                          true)) {
-            reportError(
-                "Invalid rate limit configuration, property value '%s' is an ill-formed integer: "
-                "%s",
-                rateLimitCfg.c_str(), logTargetCfg.c_str());
+        const std::string& filterCfg = itr->second;
+        ELogFilter* filter = constructFilter(filterCfg.c_str());
+        if (filter == nullptr) {
+            reportError("Failed to create filter by type %s: %s", filterCfg.c_str(),
+                        logTargetCfg.c_str());
             return false;
         }
-        ELogRateLimiter* rateLimiter = new (std::nothrow) ELogRateLimiter(maxMsgPerSec);
-        logTarget->setLogFilter(rateLimiter);
+        if (!filter->load(logTargetCfg, logTargetSpec.m_props)) {
+            reportError("Failed to load filter by properties %s: %s", filterCfg.c_str(),
+                        logTargetCfg.c_str());
+            delete filter;
+            return false;
+        }
+
+        // that's it
+        logTarget->setLogFilter(filter);
     }
     return true;
 }
@@ -716,8 +1008,8 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
                                             const ELogTargetSpec& logTargetSpec,
                                             bool& errorOccurred) {
     // there could be optional poperties: deferred,
-    // queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
-    // quantum-buffer-size=<buffer-size>, quantum-congestion-policy=wait/discard
+    // queue_batch_size=<batch-size>,queue_timeout_millis=<timeout-millis>
+    // quantum_buffer_size=<buffer-size>, quantum-congestion-policy=wait/discard
     errorOccurred = true;
     bool deferred = false;
     uint32_t queueBatchSize = 0;
@@ -743,7 +1035,7 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
         }
 
         // parse queue batch size property
-        else if (prop.first.compare("queue-batch-size") == 0) {
+        else if (prop.first.compare("queue_batch_size") == 0) {
             if (deferred || quantumBufferSize > 0) {
                 reportError(
                     "Queued log target cannot be specified with deferred or quantum target: %s",
@@ -755,13 +1047,13 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
                             logTargetCfg.c_str());
                 return nullptr;
             }
-            if (!parseIntProp("queue-batch-size", logTargetCfg, prop.second, queueBatchSize)) {
+            if (!parseIntProp("queue_batch_size", logTargetCfg, prop.second, queueBatchSize)) {
                 return nullptr;
             }
         }
 
         // parse queue timeout millis property
-        else if (prop.first.compare("queue-timeout-millis") == 0) {
+        else if (prop.first.compare("queue_timeout_millis") == 0) {
             if (deferred || quantumBufferSize > 0) {
                 reportError(
                     "Queued log target cannot be specified with deferred or quantum target: %s",
@@ -773,14 +1065,14 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
                             logTargetCfg.c_str());
                 return nullptr;
             }
-            if (!parseIntProp("queue-timeout-millis", logTargetCfg, prop.second,
+            if (!parseIntProp("queue_timeout_millis", logTargetCfg, prop.second,
                               queueTimeoutMillis)) {
                 return nullptr;
             }
         }
 
         // parse quantum buffer size
-        else if (prop.first.compare("quantum-buffer-size") == 0) {
+        else if (prop.first.compare("quantum_buffer_size") == 0) {
             if (deferred || queueBatchSize > 0 || queueTimeoutMillis > 0) {
                 reportError(
                     "Quantum log target cannot be specified with deferred or queued target: %s",
@@ -792,7 +1084,7 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
                             logTargetCfg.c_str());
                 return nullptr;
             }
-            if (!parseIntProp("quantum-buffer-size", logTargetCfg, prop.second,
+            if (!parseIntProp("quantum_buffer_size", logTargetCfg, prop.second,
                               quantumBufferSize)) {
                 return nullptr;
             }
@@ -821,13 +1113,13 @@ ELogTarget* ELogSystem::applyCompoundTarget(ELogTarget* logTarget, const std::st
     }
 
     if (queueBatchSize > 0 && queueTimeoutMillis == 0) {
-        reportError("Missing queue-timeout-millis parameter in log target specification: %s",
+        reportError("Missing queue_timeout_millis parameter in log target specification: %s",
                     logTargetCfg.c_str());
         return nullptr;
     }
 
     if (queueBatchSize == 0 && queueTimeoutMillis > 0) {
-        reportError("Missing queue-batch-size parameter in log target specification: %s",
+        reportError("Missing queue_batch_size parameter in log target specification: %s",
                     logTargetCfg.c_str());
         return nullptr;
     }
@@ -977,6 +1269,73 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
     }
 
     return true;
+}
+
+ELogTarget* ELogSystem::loadLogTarget(const std::string& logTargetCfg,
+                                      const ELogTargetSpec& logTargetSpec) {
+    ELogSchemaHandlerMap::iterator itr = sSchemaHandlerMap.find(logTargetSpec.m_scheme);
+    if (itr != sSchemaHandlerMap.end()) {
+        ELogSchemaHandler* schemaHandler = sSchemaHandlers[itr->second];
+        ELogTarget* logTarget = schemaHandler->loadTarget(logTargetCfg, logTargetSpec);
+        if (logTarget == nullptr) {
+            reportError("Failed to load target for scheme %s: %s", logTargetSpec.m_scheme.c_str(),
+                        logTargetCfg.c_str());
+            return nullptr;
+        }
+
+        // apply compound target
+        bool errorOccurred = false;
+        ELogTarget* compoundTarget =
+            applyCompoundTarget(logTarget, logTargetCfg, logTargetSpec, errorOccurred);
+        if (errorOccurred) {
+            reportError("Failed to apply compound log target specification");
+            delete logTarget;
+            return nullptr;
+        }
+        if (compoundTarget != nullptr) {
+            logTarget = compoundTarget;
+        }
+
+        if (!configureLogTargetCommon(logTarget, logTargetCfg, logTargetSpec)) {
+            delete logTarget;
+            return nullptr;
+        }
+        return logTarget;
+    }
+
+    reportError("Invalid log target specification, unrecognized scheme %s: %s",
+                logTargetSpec.m_scheme.c_str(), logTargetCfg.c_str());
+    return nullptr;
+}
+
+ELogTarget* ELogSystem::loadLogTarget(const std::string& logTargetCfg,
+                                      const ELogTargetNestedSpec& logTargetNestedSpec) {
+    ELogSchemaHandlerMap::iterator itr =
+        sSchemaHandlerMap.find(logTargetNestedSpec.m_spec.m_scheme);
+    if (itr != sSchemaHandlerMap.end()) {
+        ELogSchemaHandler* schemaHandler = sSchemaHandlers[itr->second];
+        ELogTarget* logTarget = schemaHandler->loadTarget(logTargetCfg, logTargetNestedSpec);
+        if (logTarget == nullptr) {
+            reportError("Failed to load target for scheme %s: %s",
+                        logTargetNestedSpec.m_spec.m_scheme.c_str(), logTargetCfg.c_str());
+            return nullptr;
+        }
+
+        // no need to apply compound target, the schema handler already loads it nested (this is
+        // actually done in recursive manner, schema handler calls configureLogTarget for each sub
+        // target, which in turn activates the schema handler again)
+
+        // configure common properties (just this target, not recursively nested)
+        if (!configureLogTargetCommon(logTarget, logTargetCfg, logTargetNestedSpec.m_spec)) {
+            delete logTarget;
+            return nullptr;
+        }
+        return logTarget;
+    }
+
+    reportError("Invalid log target specification, unrecognized scheme %s: %s",
+                logTargetNestedSpec.m_spec.m_scheme.c_str(), logTargetCfg.c_str());
+    return nullptr;
 }
 
 ELogTargetId ELogSystem::setLogTarget(ELogTarget* logTarget, bool printBanner /* = false */) {
@@ -1159,6 +1518,54 @@ ELogTargetId ELogSystem::addLogFileTarget(FILE* fileHandle, uint32_t bufferSize 
     }
     if (logTarget == nullptr) {
         reportError("Failed to create log target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
+}
+
+ELogTargetId ELogSystem::addBufferedLogFileTarget(const char* logFilePath, uint32_t bufferSize,
+                                                  bool useLock /* = true */,
+                                                  ELogFlushPolicy* flushPolicy /* = nullptr */) {
+    // verify parameters
+    if (bufferSize == 0) {
+        reportError("Invalid zero buffer size for buffered file log target");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    // create new log target
+    ELogTarget* logTarget =
+        new (std::nothrow) ELogBufferedFileTarget(logFilePath, bufferSize, useLock, flushPolicy);
+    if (logTarget == nullptr) {
+        reportError("Failed to create log file target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        delete logTarget;
+    }
+    return logTargetId;
+}
+
+ELogTargetId ELogSystem::addBufferedLogFileTarget(FILE* fileHandle, uint32_t bufferSize,
+                                                  bool useLock /* = true */,
+                                                  ELogFlushPolicy* flushPolicy /* = nullptr */) {
+    // verify parameters
+    if (bufferSize == 0) {
+        reportError("Invalid zero buffer size for buffered file log target");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    // create new log target
+    ELogTarget* logTarget =
+        new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock, flushPolicy);
+    if (logTarget == nullptr) {
+        reportError("Failed to create log file target, out of memory");
         return ELOG_INVALID_TARGET_ID;
     }
 

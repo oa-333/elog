@@ -33,4 +33,16 @@ ELogTarget* ELogSysSchemaHandler::loadTarget(const std::string& logTargetCfg,
     return logTarget;
 }
 
+ELogTarget* ELogSysSchemaHandler::loadTarget(const std::string& logTargetCfg,
+                                             const ELogTargetNestedSpec& targetNestedSpec) {
+    // first make sure there ar no sub-specs
+    if (!targetNestedSpec.m_subSpec.empty()) {
+        ELOG_REPORT_ERROR("System log target cannot have sub-targets: %s", logTargetCfg.c_str());
+        return nullptr;
+    }
+
+    // no difference, just call URL style loading
+    return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
+}
+
 }  // namespace elog

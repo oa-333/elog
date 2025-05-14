@@ -1,28 +1,28 @@
-#ifndef __ELOG_DB_SCHEMA_HANDLER_H__
-#define __ELOG_DB_SCHEMA_HANDLER_H__
+#ifndef __ELOG_ASYNC_SCHEMA_HANDLER_H__
+#define __ELOG_ASYNC_SCHEMA_HANDLER_H__
 
 #include <unordered_map>
 
-#include "elog_db_target_provider.h"
+#include "elog_async_target_provider.h"
 #include "elog_schema_handler.h"
 
 namespace elog {
 
-/** @brief Handler for loading DB log target from configuration. */
-class ELogDbSchemaHandler : public ELogSchemaHandler {
+/** @brief Handler for loading asynchronous log target from configuration. */
+class ELogAsyncSchemaHandler : public ELogSchemaHandler {
 public:
-    ELogDbSchemaHandler() {}
-    ELogDbSchemaHandler(const ELogDbSchemaHandler&) = default;
-    ELogDbSchemaHandler(ELogDbSchemaHandler&&) = default;
+    ELogAsyncSchemaHandler() {}
+    ELogAsyncSchemaHandler(const ELogAsyncSchemaHandler&) = default;
+    ELogAsyncSchemaHandler(ELogAsyncSchemaHandler&&) = default;
 
     /** @brief Destructor. */
-    ~ELogDbSchemaHandler() final {}
+    ~ELogAsyncSchemaHandler() final {}
 
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;
 
-    /** @brief Register external database log target provider. */
-    bool registerDbTargetProvider(const char* dbName, ELogDbTargetProvider* provider);
+    /** @brief Register external message queue log target provider. */
+    bool registerAsyncTargetProvider(const char* asyncName, ELogAsyncTargetProvider* provider);
 
     /**
      * @brief Loads a log target by a specification.
@@ -42,10 +42,10 @@ public:
                            const ELogTargetNestedSpec& targetNestedSpec) final;
 
 private:
-    typedef std::unordered_map<std::string, ELogDbTargetProvider*> ProviderMap;
+    typedef std::unordered_map<std::string, ELogAsyncTargetProvider*> ProviderMap;
     ProviderMap m_providerMap;
 };
 
 }  // namespace elog
 
-#endif  // __ELOG_DB_SCHEMA_HANDLER_H__
+#endif  // __ELOG_ASYNC_SCHEMA_HANDLER_H__

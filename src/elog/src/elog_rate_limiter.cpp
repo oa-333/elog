@@ -2,7 +2,29 @@
 
 #include <cinttypes>
 
+#include "elog_error.h"
+
 namespace elog {
+
+ELOG_IMPLEMENT_FILTER(ELogRateLimiter);
+
+bool ELogRateLimiter::load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+    ELogPropertyMap::const_iterator itr = props.find("max_msg_per_sec");
+    if (itr == props.end()) {
+        ELOG_REPORT_ERROR(
+            "Invalid rate limiter configuration, missing expected max_msg_per_sec property: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    if (!parseIntProp("max_msg_per_sec", logTargetCfg, itr->second, m_maxMsgPerSecond, true)) {
+        ELOG_REPORT_ERROR(
+            "Invalid rate limit configuration, property 'max_msg_per_sec value '%s' is an "
+            "ill-formed integer: %s",
+            itr->second.c_str(), logTargetCfg.c_str());
+        return false;
+    }
+    return true;
+}
 
 // TODO: consider providing several types of rate limiters
 bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {

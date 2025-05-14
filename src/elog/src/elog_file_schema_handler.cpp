@@ -16,32 +16,32 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
         return nullptr;
     }
 
-    // there could be optional property file-buffer-size
+    // there could be optional property file_buffer_size
     uint32_t bufferSize = 0;
-    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("file-buffer-size");
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_props.find("file_buffer_size");
     if (itr != logTargetSpec.m_props.end()) {
-        if (!parseIntProp("file-buffer-size", logTargetCfg, itr->second, bufferSize)) {
+        if (!parseIntProp("file_buffer_size", logTargetCfg, itr->second, bufferSize)) {
             return nullptr;
         }
     }
 
     // there could be an optional property file-no-lock
     // NOTE: Since file lock is relevant only for buffered file logging, the default value for
-    // file-lock is true, assuming that multi-threaded scenario is the common use case, so unless
+    // file_lock is true, assuming that multi-threaded scenario is the common use case, so unless
     // user specifies explicitly otherwise, locking is used.
     bool useFileLock = true;
-    itr = logTargetSpec.m_props.find("file-lock");
+    itr = logTargetSpec.m_props.find("file_lock");
     if (itr != logTargetSpec.m_props.end()) {
-        if (!parseBoolProp("file-lock", logTargetCfg, itr->second, useFileLock)) {
+        if (!parseBoolProp("file_lock", logTargetCfg, itr->second, useFileLock)) {
             return nullptr;
         }
     }
 
-    // there could be optional property file-segment-size-mb
+    // there could be optional property file_segment_size_mb
     uint32_t segmentSizeMB = 0;
-    itr = logTargetSpec.m_props.find("file-segment-size-mb");
+    itr = logTargetSpec.m_props.find("file_segment_size_mb");
     if (itr != logTargetSpec.m_props.end()) {
-        if (!parseIntProp("file-segment-size-mb", logTargetCfg, itr->second, segmentSizeMB)) {
+        if (!parseIntProp("file_segment_size_mb", logTargetCfg, itr->second, segmentSizeMB)) {
             return nullptr;
         }
     }
@@ -69,6 +69,18 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
     }
 
     return logTarget;
+}
+
+ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
+                                              const ELogTargetNestedSpec& targetNestedSpec) {
+    // first make sure there ar no sub-specs
+    if (!targetNestedSpec.m_subSpec.empty()) {
+        ELOG_REPORT_ERROR("File log target cannot have sub-targets: %s", logTargetCfg.c_str());
+        return nullptr;
+    }
+
+    // no difference, just call URL style loading
+    return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
 }
 
 }  // namespace elog
