@@ -13,8 +13,8 @@ struct ELogFlushPolicyNameConstructor {
     ELogFlushPolicyConstructor* m_ctor;
 };
 
-static ELogFlushPolicyNameConstructor sFieldConstructors[ELOG_MAX_FLUSH_POLICY_COUNT] = {};
-static uint32_t sFieldConstructorsCount = 0;
+static ELogFlushPolicyNameConstructor sFlushPolicyConstructors[ELOG_MAX_FLUSH_POLICY_COUNT] = {};
+static uint32_t sFlushPolicyConstructorsCount = 0;
 
 typedef std::unordered_map<std::string, ELogFlushPolicyConstructor*> ELogFlushPolicyConstructorMap;
 
@@ -22,17 +22,17 @@ static ELogFlushPolicyConstructorMap sFlushPolicyConstructorMap;
 
 void registerFlushPolicyConstructor(const char* name, ELogFlushPolicyConstructor* constructor) {
     // due to c runtime issues we delay access to unordered map
-    if (sFieldConstructorsCount >= ELOG_MAX_FLUSH_POLICY_COUNT) {
+    if (sFlushPolicyConstructorsCount >= ELOG_MAX_FLUSH_POLICY_COUNT) {
         ELOG_REPORT_ERROR("Cannot register flush policy constructor, no space: %s", name);
         exit(1);
     } else {
-        sFieldConstructors[sFieldConstructorsCount++] = {name, constructor};
+        sFlushPolicyConstructors[sFlushPolicyConstructorsCount++] = {name, constructor};
     }
 }
 
 static bool applyFlushPolicyConstructorRegistration() {
-    for (uint32_t i = 0; i < sFieldConstructorsCount; ++i) {
-        ELogFlushPolicyNameConstructor& nameCtorPair = sFieldConstructors[i];
+    for (uint32_t i = 0; i < sFlushPolicyConstructorsCount; ++i) {
+        ELogFlushPolicyNameConstructor& nameCtorPair = sFlushPolicyConstructors[i];
         if (!sFlushPolicyConstructorMap
                  .insert(ELogFlushPolicyConstructorMap::value_type(nameCtorPair.m_name,
                                                                    nameCtorPair.m_ctor))
@@ -44,11 +44,8 @@ static bool applyFlushPolicyConstructorRegistration() {
     return true;
 }
 
-bool initFlushPolicies() {
-    if (!applyFlushPolicyConstructorRegistration()) {
-        return false;
-    }
-}
+bool initFlushPolicies() { return applyFlushPolicyConstructorRegistration(); }
+
 void termFlushPolicies() { sFlushPolicyConstructorMap.clear(); }
 
 ELogFlushPolicy* constructFlushPolicy(const char* name) {

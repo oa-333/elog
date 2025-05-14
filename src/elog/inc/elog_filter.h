@@ -6,6 +6,12 @@
 
 namespace elog {
 
+/** @brief Initialize all filters (for internal use only). */
+extern ELOG_API bool initFilters();
+
+/** @brief Destroys all filters (for internal use only). */
+extern ELOG_API void termFilter();
+
 /** @brief Parent interface for all log filters. */
 class ELOG_API ELogFilter {
 public:
@@ -22,6 +28,51 @@ public:
 protected:
     ELogFilter() {}
 };
+
+// forward declaration
+class ELOG_API ELogFilterConstructor;
+
+/**
+ * @brief Filter constructor registration helper.
+ * @param name The filter identifier.
+ * @param allocator The filter constructor.
+ */
+extern ELOG_API void registerFilterConstructor(const char* name,
+                                               ELogFilterConstructor* constructor);
+
+/**
+ * @brief Utility helper for constructing a filter from type name identifier.
+ * @param name The filter identifier.
+ * @return ELogFilter* The resulting filter, or null if failed.
+ */
+extern ELOG_API ELogFilter* constructFilter(const char* name);
+
+/** @brief Utility helper class for filter construction. */
+class ELOG_API ELogFilterConstructor {
+public:
+    /**
+     * @brief Constructs a filter.
+     * @return ELogFilter* The resulting filter, or null if failed.
+     */
+    virtual ELogFilter* constructFilter() = 0;
+
+protected:
+    /** @brief Constructor. */
+    ELogFilterConstructor(const char* name) { registerFilterConstructor(name, this); }
+};
+
+/** @def Utility macro for declaring filter factory method registration. */
+#define ELOG_DECLARE_FILTER(FilterType, Name)                                                 \
+    class FilterType##Constructor : public elog::ELogFilterConstructor {                      \
+    public:                                                                                   \
+        FilterType##Constructor() : elog::ELogFilterConstructor(#Name) {}                     \
+        elog::ELogFilter* constructFilter() final { return new (std::nothrow) FilterType(); } \
+    };                                                                                        \
+    static FilterType##Constructor sConstructor;
+
+/** @def Utility macro for implementing filter factory method registration. */
+#define ELOG_IMPLEMENT_FILTER(FilterType) \
+    FilterType::FilterType##Constructor FilterType::sConstructor;
 
 /** @brief A log filter that negates the result of another log filter. */
 class ELOG_API ELogNegateFilter : public ELogFilter {
