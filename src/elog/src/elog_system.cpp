@@ -127,7 +127,12 @@ bool ELogSystem::initGlobals() {
         return false;
     }
     if (!initSchemaHandlers()) {
-        reportError("Failed to initialize predefined schema handlers");
+        reportError("Failed to initialize schema handlers");
+        termGlobals();
+        return false;
+    }
+    if (!initFlushPolicies()) {
+        reportError("Failed to initialize flush policies");
         termGlobals();
         return false;
     }
@@ -195,6 +200,7 @@ void ELogSystem::termGlobals() {
     sDefaultLogger = nullptr;
     sLogSourceMap.clear();
 
+    termFlushPolicies();
     termSchemaHandlers();
     termFieldSelectors();
 }

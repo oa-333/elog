@@ -14,6 +14,12 @@
 
 namespace elog {
 
+/** @brief Initialize all flush policies (for internal use only). */
+extern ELOG_API bool initFlushPolicies();
+
+/** @brief Destroys all flush policies (for internal use only). */
+extern ELOG_API void termFlushPolicies();
+
 /**
  * @brief Flush policy. As some log targets are buffered, a flush policy should be defined to govern
  * the occasions on which the log target should be flushed so that log messages reach their
@@ -41,6 +47,53 @@ protected:
     ELogFlushPolicy(const ELogFlushPolicy&) = delete;
     ELogFlushPolicy(ELogFlushPolicy&&) = delete;
 };
+
+// forward declaration
+class ELOG_API ELogFlushPolicyConstructor;
+
+/**
+ * @brief Flush policy constructor registration helper.
+ * @param name The flush policy identifier.
+ * @param allocator The flush policy constructor.
+ */
+extern ELOG_API void registerFlushPolicyConstructor(const char* name,
+                                                    ELogFlushPolicyConstructor* constructor);
+
+/**
+ * @brief Utility helper for constructing a flush policy from type name identifier.
+ * @param name The flush policy identifier.
+ * @return ELogFlushPolicy* The resulting flush policy, or null if failed.
+ */
+extern ELOG_API ELogFlushPolicy* constructFlushPolicy(const char* name);
+
+/** @brief Utility helper class for flush policy construction. */
+class ELOG_API ELogFlushPolicyConstructor {
+public:
+    /**
+     * @brief Constructs a flush policy.
+     * @return ELogFlushPolicy* The resulting flush policy, or null if failed.
+     */
+    virtual ELogFlushPolicy* constructFlushPolicy() = 0;
+
+protected:
+    /** @brief Constructor. */
+    ELogFlushPolicyConstructor(const char* name) { registerFlushPolicyConstructor(name, this); }
+};
+
+/** @def Utility macro for declaring flush policy factory method registration. */
+#define ELOG_DECLARE_FLUSH_POLICY(FlushPolicyType, Name)                            \
+    class FlushPolicyType##Constructor : public elog::ELogFlushPolicyConstructor {  \
+    public:                                                                         \
+        FlushPolicyType##Constructor() : elog::ELogFlushPolicyConstructor(#Name) {} \
+        elog::ELogFlushPolicy* constructFlushPolicy() final {                       \
+            return new (std::nothrow) FlushPolicyType();                            \
+        }                                                                           \
+    };                                                                              \
+    static FlushPolicyType##Constructor sConstructor;
+
+/** @def Utility macro for implementing flush policy factory method registration. */
+#define ELOG_IMPLEMENT_FLUSH_POLICY(FlushPolicyType) \
+    FlushPolicyType::FlushPolicyType##Constructor FlushPolicyType::sConstructor;
 
 /** @class A combined flush policy, for enforcing several flush policies. */
 class ELOG_API ELogCombinedFlushPolicy : public ELogFlushPolicy {

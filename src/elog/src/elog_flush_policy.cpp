@@ -1,6 +1,70 @@
 #include "elog_flush_policy.h"
 
+#include <unordered_map>
+
+#include "elog_error.h"
+
 namespace elog {
+
+#define ELOG_MAX_FLUSH_POLICY_COUNT 100
+
+struct ELogFlushPolicyNameConstructor {
+    const char* m_name;
+    ELogFlushPolicyConstructor* m_ctor;
+};
+
+static ELogFlushPolicyNameConstructor sFieldConstructors[ELOG_MAX_FLUSH_POLICY_COUNT] = {};
+static uint32_t sFieldConstructorsCount = 0;
+
+typedef std::unordered_map<std::string, ELogFlushPolicyConstructor*> ELogFlushPolicyConstructorMap;
+
+static ELogFlushPolicyConstructorMap sFlushPolicyConstructorMap;
+
+void registerFlushPolicyConstructor(const char* name, ELogFlushPolicyConstructor* constructor) {
+    // due to c runtime issues we delay access to unordered map
+    if (sFieldConstructorsCount >= ELOG_MAX_FLUSH_POLICY_COUNT) {
+        ELOG_REPORT_ERROR("Cannot register flush policy constructor, no space: %s", name);
+        exit(1);
+    } else {
+        sFieldConstructors[sFieldConstructorsCount++] = {name, constructor};
+    }
+}
+
+static bool applyFlushPolicyConstructorRegistration() {
+    for (uint32_t i = 0; i < sFieldConstructorsCount; ++i) {
+        ELogFlushPolicyNameConstructor& nameCtorPair = sFieldConstructors[i];
+        if (!sFlushPolicyConstructorMap
+                 .insert(ELogFlushPolicyConstructorMap::value_type(nameCtorPair.m_name,
+                                                                   nameCtorPair.m_ctor))
+                 .second) {
+            ELOG_REPORT_ERROR("Duplicate flush policy identifier: %s", nameCtorPair.m_name);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool initFlushPolicies() {
+    if (!applyFlushPolicyConstructorRegistration()) {
+        return false;
+    }
+}
+void termFlushPolicies() { sFlushPolicyConstructorMap.clear(); }
+
+ELogFlushPolicy* constructFlushPolicy(const char* name) {
+    ELogFlushPolicyConstructorMap::iterator itr = sFlushPolicyConstructorMap.find(name);
+    if (itr == sFlushPolicyConstructorMap.end()) {
+        ELOG_REPORT_ERROR("Invalid flush policy %s: not found", name);
+        return nullptr;
+    }
+
+    ELogFlushPolicyConstructor* constructor = itr->second;
+    ELogFlushPolicy* flushPolicy = constructor->constructFlushPolicy();
+    if (flushPolicy == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create flush policy, out of memory");
+    }
+    return flushPolicy;
+}
 
 bool ELogAndFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     for (ELogFlushPolicy* flushPolicy : m_flushPolicies) {

@@ -79,14 +79,14 @@ extern ELOG_API void registerFieldSelectorConstructor(const char* name,
                                                       ELogFieldSelectorConstructor* constructor);
 
 /**
- * @brief Utility helper for constructing message from an input stream given a message id.
+ * @brief Utility helper for constructing a field selector from type name identifier.
  * @param name The field selector identifier.
  * @param justify The field justification.
  * @return ELogFieldSelector* The resulting field selector, or null if failed.
  */
 extern ELOG_API ELogFieldSelector* constructFieldSelector(const char* name, int justify);
 
-/** @brief Utility helper class for message construction. */
+/** @brief Utility helper class for field selector construction. */
 class ELOG_API ELogFieldSelectorConstructor {
 public:
     /**
