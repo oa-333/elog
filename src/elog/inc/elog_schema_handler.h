@@ -1,8 +1,8 @@
 #ifndef __ELOG_SCHEMA_HANDLER_H__
 #define __ELOG_SCHEMA_HANDLER_H__
 
-#include "elog_common.h"
 #include "elog_target.h"
+#include "elog_target_spec.h"
 
 namespace elog {
 

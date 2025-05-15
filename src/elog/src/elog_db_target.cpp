@@ -92,7 +92,10 @@ bool ELogDbTarget::startLogTarget() {
         if (!initConnection(slotId)) {
             return false;
         }
-        assert(slotId == 0);
+        if (slotId != 0) {
+            ELOG_REPORT_ERROR("Internal error, expected slot id 0, got instead %d", slotId);
+            return false;
+        }
     }
     // NOTE: on conn-per-thread mode initialization is postponed to log()
 

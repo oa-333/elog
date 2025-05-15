@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "elog_error.h"
+#include "elog_system.h"
 
 namespace elog {
 

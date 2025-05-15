@@ -2,7 +2,7 @@
 #define __ELOG_ASYNC_TARGET_PROVIDER_H__
 
 #include "elog_async_target.h"
-#include "elog_common.h"
+#include "elog_target_spec.h"
 
 namespace elog {
 

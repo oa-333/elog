@@ -1,17 +1,13 @@
 #ifndef __ELOG_SYSTEM_H__
 #define __ELOG_SYSTEM_H__
 
-#include <cstdarg>
-#include <cstdio>
-#include <vector>
-
-#include "elog_common.h"
 #include "elog_def.h"
 #include "elog_error_handler.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
 #include "elog_level.h"
 #include "elog_logger.h"
+#include "elog_props.h"
 #include "elog_schema_handler.h"
 #include "elog_source.h"
 #include "elog_target.h"
@@ -95,23 +91,8 @@ public:
     /** @brief Queries whether trace mode is enabled. */
     static bool isTraceEnabled();
 
-    /** @brief Reports an error (for internal use only). */
-    static void reportError(const char* errorMsgFmt, ...);
-
-    /** @brief Reports an error (for internal use only). */
-    static void reportSysError(const char* sysCall, const char* errorMsgFmt, ...);
-
-    /** @brief Reports an error (for internal use only). */
-    static void reportSysErrorCode(const char* sysCall, int errCode, const char* errorMsgFmt, ...);
-
-    /** @brief Trace a debug message. */
-    static void reportTrace(const char* fmt, ...);
-
     /** @brief Registers a schema handler by name. */
     static bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler);
-
-    /** @brief Retrieves a schema handler by name. */
-    static ELogSchemaHandler* getSchemaHandler(const char* schemeName);
 
     /**
      * @brief Configures the ELog System from a properties configuration file.
@@ -151,26 +132,6 @@ public:
     static bool configureFromProperties(const ELogPropertySequence& props,
                                         bool defineLogSources = false,
                                         bool defineMissingPath = false);
-
-    /**
-     * @brief Adds a log target from target specification (internal use only).
-     */
-    static ELogTarget* loadLogTarget(const std::string& logTargetCfg,
-                                     const ELogTargetNestedSpec& logTargetNestedSpec,
-                                     ELogTargetSpecStyle specStyle);
-
-    /**
-     * @brief Loads a flush policy from target specification using nested style (internal use only).
-     */
-    static ELogFlushPolicy* loadFlushPolicy(const std::string& logTargetCfg,
-                                            const ELogTargetNestedSpec& logTargetNestedSpec,
-                                            bool allowNone, bool& result);
-
-    /**
-     * @brief Loads a log filter from target specification using nested style (internal use only).
-     */
-    static ELogFilter* loadLogFilter(const std::string& logTargetCfg,
-                                     const ELogTargetNestedSpec& logTargetNestedSpec, bool& result);
 
     /**
      * Log Target Management Interface
@@ -545,55 +506,12 @@ public:
      */
     static void log(const ELogRecord& logRecord);
 
-    /** @brief Converts system error code to string. */
-    static char* sysErrorToStr(int sysErrorCode);
-
-#ifdef ELOG_WINDOWS
-    /** @brief Converts Windows system error code to string. */
-    static char* win32SysErrorToStr(unsigned long sysErrorCode);
-
-    /** @brief Deallocates Windows system error string. */
-    static void win32FreeErrorStr(char* errStr);
-#endif
-
 private:
     static bool initGlobals();
     static void termGlobals();
-    static bool initSchemaHandlers();
-    static void termSchemaHandlers();
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
-    static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
-                              ELogSource::PropagateMode& propagateMode);
-    static bool configureRateLimit(const std::string rateLimitCfg);
+    static bool configureRateLimit(const std::string& rateLimitCfg);
     static bool configureLogTarget(const std::string& logTargetCfg);
-
-    static bool parseLogTargetSpec(const std::string& logTargetCfg, ELogTargetSpec& logTargetSpec);
-    static bool parseLogTargetNestedSpec(const std::string& logTargetCfg,
-                                         ELogTargetNestedSpec& logTargetNestedSpec);
-    static bool parseLogTargetNestedSpec(const std::string& logTargetCfg,
-                                         ELogTargetNestedSpec& logTargetNestedSpec,
-                                         ELogSpecTokenizer& tok);
-    static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
-                                   const std::string& value);
-    static bool configureLogTargetCommon(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                         const ELogTargetNestedSpec& logTargetSpec);
-    static void applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec);
-    static bool applyTargetLogLevel(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                    const ELogTargetSpec& logTargetSpec);
-    static bool applyTargetLogFormat(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                     const ELogTargetSpec& logTargetSpec);
-    static bool applyTargetFlushPolicy(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                       const ELogTargetNestedSpec& logTargetSpec);
-    static bool applyTargetFilter(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                  const ELogTargetNestedSpec& logTargetSpec);
-    static ELogTarget* applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                           const ELogTargetSpec& logTargetSpec,
-                                           bool& errorOccurred);
-    static void tryParsePathAsHostPort(const std::string& logTargetCfg,
-                                       ELogTargetSpec& logTargetSpec);
-
-    /** @brief Reports an error (for internal use only). */
-    static void reportErrorV(const char* errorMsgFmt, va_list ap);
 };
 
 /** @brief Queries whether the default logger can log a record with a given log level. */

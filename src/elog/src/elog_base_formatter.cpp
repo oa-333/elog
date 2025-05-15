@@ -44,8 +44,9 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
             try {
                 justify = std::stoi(fieldName.substr(colonPos + 1).c_str());
             } catch (std::exception& e) {
-                ELOG_WARN(
-                    "Invalid justification number encountered, while parsing field selector %s",
+                ELOG_REPORT_ERROR(
+                    "WARN: Invalid justification number encountered, while parsing field selector "
+                    "%s",
                     fieldName.c_str());
             }
             fieldName = fieldName.substr(0, colonPos);

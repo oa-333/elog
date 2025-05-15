@@ -1,8 +1,8 @@
 #ifndef __ELOG_MSGQ_TARGET_PROVIDER_H__
 #define __ELOG_MSGQ_TARGET_PROVIDER_H__
 
-#include "elog_common.h"
 #include "elog_msgq_target.h"
+#include "elog_target_spec.h"
 
 namespace elog {
 
@@ -20,7 +20,7 @@ public:
      * @param topic The target topic name.
      * @param headers Optional headers specification (in property-CSV format: "header-name=${field},
      * header-name=${field}, ...").
-     * @return ELogMsgQTarget* The resulting DB log target, or null of failed.
+     * @return ELogMsgQTarget* The resulting message queue log target, or null of failed.
      */
     virtual ELogMsgQTarget* loadTarget(const std::string& logTargetCfg,
                                        const ELogTargetSpec& targetSpec, const std::string& topic,

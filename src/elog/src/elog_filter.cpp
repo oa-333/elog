@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 
+#include "elog_config_loader.h"
 #include "elog_error.h"
 
 namespace elog {
@@ -95,7 +96,7 @@ bool ELogNegateFilter::load(const std::string& logTargetCfg,
     }
     const ELogTargetNestedSpec& subSpec = subSpecList[0];
     bool result = false;
-    m_filter = ELogSystem::loadLogFilter(logTargetCfg, logTargetSpec, result);
+    m_filter = ELogConfigLoader::loadLogFilter(logTargetCfg, logTargetSpec, result);
     if (!result) {
         ELOG_REPORT_ERROR("Failed to load sub-filter for NOT filter: %s (see errors above)",
                           logTargetCfg.c_str());
@@ -138,7 +139,7 @@ bool ELogCompoundLogFilter::load(const std::string& logTargetCfg,
     for (uint32_t i = 0; i < subSpecList.size(); ++i) {
         const ELogTargetNestedSpec& subSpec = subSpecList[i];
         bool result = true;
-        ELogFilter* filter = ELogSystem::loadLogFilter(logTargetCfg, subSpec, result);
+        ELogFilter* filter = ELogConfigLoader::loadLogFilter(logTargetCfg, subSpec, result);
         if (!result) {
             ELOG_REPORT_ERROR(
                 "Failed to load %uth sub-filter for compound filter: %s (see previous errors)", i,

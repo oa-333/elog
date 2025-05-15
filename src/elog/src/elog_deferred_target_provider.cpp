@@ -1,6 +1,5 @@
 #include "elog_deferred_target_provider.h"
 
-#include "elog_common.h"
 #include "elog_deferred_target.h"
 #include "elog_error.h"
 

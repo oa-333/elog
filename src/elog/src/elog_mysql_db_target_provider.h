@@ -5,7 +5,6 @@
 
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
-#include "elog_common.h"
 #include "elog_db_target_provider.h"
 
 namespace elog {

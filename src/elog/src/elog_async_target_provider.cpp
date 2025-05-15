@@ -1,6 +1,6 @@
 #include "elog_async_target_provider.h"
 
-#include "elog_common.h"
+#include "elog_config_loader.h"
 #include "elog_error.h"
 
 namespace elog {
@@ -45,7 +45,8 @@ ELogTarget* ELogAsyncTargetProvider::loadNestedTarget(const std::string& logTarg
 
 ELogTarget* ELogAsyncTargetProvider::loadSingleSubTarget(const std::string& logTargetCfg,
                                                          const ELogTargetNestedSpec& targetSpec) {
-    ELogTarget* target = ELogSystem::loadLogTarget(logTargetCfg, targetSpec, ELOG_STYLE_NESTED);
+    ELogTarget* target =
+        ELogConfigLoader::loadLogTarget(logTargetCfg, targetSpec, ELOG_STYLE_NESTED);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to load nested log target by scheme: %s",
                           targetSpec.m_spec.m_scheme.c_str());

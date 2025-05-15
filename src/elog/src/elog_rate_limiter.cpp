@@ -2,6 +2,7 @@
 
 #include <cinttypes>
 
+#include "elog_common.h"
 #include "elog_error.h"
 
 namespace elog {

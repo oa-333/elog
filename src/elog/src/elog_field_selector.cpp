@@ -23,8 +23,10 @@
 #include <climits>
 #include <cstring>
 #include <iomanip>
+#include <unordered_map>
 
 #include "elog_error.h"
+#include "elog_system.h"
 
 namespace elog {
 

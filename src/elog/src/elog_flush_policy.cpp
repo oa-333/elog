@@ -2,6 +2,8 @@
 
 #include <unordered_map>
 
+#include "elog_common.h"
+#include "elog_config_loader.h"
 #include "elog_error.h"
 
 namespace elog {
@@ -94,7 +96,7 @@ bool ELogCompoundFlushPolicy::load(const std::string& logTargetCfg,
         const ELogTargetNestedSpec& subSpec = subSpecList[i];
         bool result = true;
         ELogFlushPolicy* flushPolicy =
-            ELogSystem::loadFlushPolicy(logTargetCfg, subSpec, false, result);
+            ELogConfigLoader::loadFlushPolicy(logTargetCfg, subSpec, false, result);
         if (!result) {
             ELOG_REPORT_ERROR(
                 "Failed to load %uth sub-flush-policy for compound flush policy: %s (see previous "

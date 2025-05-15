@@ -170,7 +170,8 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 #endif
     int errCode = errno;
     if (errCode != 0) {
-        ELOG_SYS_ERROR(readdir, "Failed to list files in directory %s: %d", dirPath, errCode);
+        ELOG_REPORT_SYS_ERROR(readdir, "Failed to list files in directory %s: %d", dirPath,
+                              errCode);
         closedir(dirp);
         return false;
     }
@@ -248,7 +249,7 @@ void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg
     // NOTE: the following call to fputs() is guaranteed to be atomic according to POSIX
     FILE* currentSegment = m_currentSegment.load(std::memory_order_relaxed);
     if (fputs(formattedLogMsg.c_str(), currentSegment) == EOF) {
-        ELOG_SYS_ERROR(fputs, "Failed to write to log file");
+        ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
     }
 
     // we must remember the segment we used for logging, so that we can tell during flush it is
@@ -403,7 +404,7 @@ bool ELogSegmentedFileTarget::getSegmentIndex(const std::string& fileName, int32
                 ELOG_REPORT_TRACE("Found segment index %u from segment file %s", segmentIndex,
                                   fileName.c_str());
             } catch (std::exception& e) {
-                ELOG_SYS_ERROR(
+                ELOG_REPORT_SYS_ERROR(
                     std::stoi,
                     "Invalid segment file name %s, segment index could not be parsed: %s",
                     fileName.c_str(), e.what());
@@ -421,8 +422,8 @@ bool ELogSegmentedFileTarget::getFileSize(const char* filePath, uint32_t& fileSi
         fileSize = std::filesystem::file_size(p);
         return true;
     } catch (std::exception& e) {
-        ELOG_SYS_ERROR(std::filesystem::file_size, "Failed to get size of segment %s: %s", filePath,
-                       e.what());
+        ELOG_REPORT_SYS_ERROR(std::filesystem::file_size, "Failed to get size of segment %s: %s",
+                              filePath, e.what());
         return false;
     }
 }
@@ -471,7 +472,7 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     // first write this thread's log message
     // NOTE: we write to the previous segment
     if (fputs(logMsg.c_str(), prevSegment) == EOF) {
-        ELOG_SYS_ERROR(fputs, "Failed to write to log file");
+        ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
     }
     addBytesWritten(logMsg.size());
 
@@ -566,7 +567,7 @@ void ELogSegmentedFileTarget::logMsgQueue(std::list<std::string>& logMsgs, FILE*
     while (!logMsgs.empty()) {
         const std::string& logMsg = logMsgs.back();
         if (fputs(logMsg.c_str(), segmentFile) == EOF) {
-            ELOG_SYS_ERROR(fputs, "Failed to write to log file");
+            ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
         }
         addBytesWritten(logMsg.size());
         logMsgs.pop_back();

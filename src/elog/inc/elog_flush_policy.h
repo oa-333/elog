@@ -9,9 +9,9 @@
 #include <thread>
 #include <vector>
 
-#include "elog_common.h"
 #include "elog_def.h"
 #include "elog_target.h"
+#include "elog_target_spec.h"
 
 namespace elog {
 

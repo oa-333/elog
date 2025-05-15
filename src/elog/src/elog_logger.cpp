@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include "elog_error.h"
+#include "elog_system.h"
 
 #ifdef ELOG_MINGW
 // we need windows headers for MinGW

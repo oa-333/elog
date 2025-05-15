@@ -1,9 +1,9 @@
 #ifndef __ELOG_FILTER_H__
 #define __ELOG_FILTER_H__
 
-#include "elog_common.h"
 #include "elog_def.h"
 #include "elog_record.h"
+#include "elog_target_spec.h"
 
 namespace elog {
 
