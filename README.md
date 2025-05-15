@@ -7,17 +7,17 @@ The ELog library provides the following notable features:
 
 - Synchronous and asynchronous logging schemes
     - **Lock-free** synchronous log file rotation/segmentation
-    - allowing for multiple log targets (i.e. "log appenders"), including file, syslog, stderr, stdout
-- Rich in features:
-    - configurable log line format, flush policies, filtering, rate limiting and more
-- High Performance
+    - Allowing for multiple log targets (i.e. "log appenders"), including file, syslog, stderr, stdout
+- Flexible and rich in features
+    - Configurable logger hierarchy, log line format, flush policies, filtering, rate limiting, compound log targets and more
+- High performance
     - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free, scalable in multi-threaded scenarios)
     - Check out the [benchmarks](#Benchmarks) below
 - Connectivity to external systems
     - **Kafka, PostgreSQL**, SQLite, MySQL
 - Multiple platform support
     - **Linux, Windows, MinGW**
-- Designed for extendibility
+- Designed for external extendibility
     - Special connectors can be developed by user and get registered into the ELog system
 - Configurable from file or properties map
     - Most common use case scenarios are fully configurable from config file
@@ -44,20 +44,27 @@ Planned Features:
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
 
-# Common Use Cases
+
+## Common Use Cases
+
+### Logging Library
 
 The most common use case is a utility logging library, in order to write log messages to file, but much more can be done with it.  
 For instance, it can be rather easily extended to be hooked to an external message queue, while applying complex message filtering and transformations. One such extension, namely Kafka Connector, is already implemented built-in.  
 This could be useful for DevOps use cases.
+
+### Log Flooding
 
 One more use case is a bug investigation that requires log flooding.  
 In this case, sending messages to a log file may affect application timing and hinder bug reproduction during heavy logging.  
 For such a situation there is a specialized log target (ELogQuantumTarget), which is designed to minimize the logging latency, by using a lock-free ring buffer and a designated background CPU-bound thread that logs batches of log messages.  
 Pay attention that simply using a queue guarded by a mutex is not scalable (check out the [benchmark](#multi-threaded-asynchronous-file-log-target-comparison) below).
 
-Another common use case is log file rotation/segmentation (i.e. breaking log file to segments of some size).
+### External Systems Connectivity
 
 The ELog system also allows directing log messages to several destinations, so tapping to external log analysis tools, for instance, in addition to doing regular logging to file, is also rather straightforward.
+
+### Library Development
 
 One more use case is when developing infrastructure library which requires logging, but the actual logging system
 that will be used by the enclosing application is not known (and cannot be known).
@@ -97,21 +104,19 @@ Add to linker flags:
 
     -L<install-path>/bin -lelog
 
-# Help
+## Help
 
 See [documentation](#Documentation) section below, and documentation in header files for more information.
 
-# Authors
+## Authors
 
 Oren Amor (oren.amor@gmail.com)
 
-# License
+## License
 
 This project is licensed under the Apache 2.0 License - see the LICENSE file for details.
 
 # Documentation
-
-Following is the documentation for the ELog library.
 
 ## Contents
 - [Basic Usage](#basic-usage)
@@ -135,6 +140,7 @@ Following is the documentation for the ELog library.
     - [Connecting to SQLite](#connecting-to-sqlite)
     - [Connecting to MySQL (experimental)](#connecting-to-mysql-experimental)
     - [Connecting to Kafka Topic](#connecting-to-kafka-topic)
+    - [Nested Specification Style](#nested-specification-style)
 - [Benchmarks](#benchmarks)
     - [Benchmark Highlights](#benchmark-highlights)
     - [Empty Logging Benchmark](#empty-logging-benchmark)
@@ -146,16 +152,12 @@ Following is the documentation for the ELog library.
 
 ## Basic Usage
 
-In the following sections all that is related to basic usage of the ELog library shall be covered.
-
 ### Initialization and Termination
 
-Following is a simple example of initializing and terminating the elog system:
+The ELog library can be used out of box as follows:
 
     #include "elog_system.h"
     ...
-    // import common elog log level and macro definitions into global name space without name space pollution
-    ELOG_USING()
 
     int main(int argc, char* argv[]) {
         // initialize the elog system to log into file
@@ -165,6 +167,7 @@ Following is a simple example of initializing and terminating the elog system:
         }
 
         // do application stuff
+        ELOG_INFO("App starting");
         ...
 
         // terminate the elog system
@@ -172,20 +175,26 @@ Following is a simple example of initializing and terminating the elog system:
         return 0;
     }
 
-In this example a segmented log file is used, with 4MB segment size:
+The example exhibits the main parts of the ELog library:
+
+- Including the ELog library's main facade header "elog_system.h"
+- Initialization (in this case using a log file)
+- Invoking the logging macros
+- Termination
+
+There are several initialization functions, which can all be found in the ELogSystem facade.
+In this example a synchronous segmented log file is used, with 4MB segment size:
 
     #include "elog_system.h"
     ...
-    // import common elog definition into global name space without name space pollution
-    ELOG_USING()
-
+    
     #define MB (1024 * 1024)
 
     int main(int argc, char* argv[]) {
         // initialize the elog system to log into segmented file
         if (!elog::ELogSystem::initializeSegmentedLogFile(
                 ".",        // log dir
-                "test.log", // segment base name
+                "test",     // segment base name
                 4 * MB)) {  // segment size
             fprintf(stderr, "Failed to initialize elog\n);
             return 1;
@@ -677,6 +686,67 @@ In case message msgq_headers are to be passed as well, the 'msgq_headers' parame
     log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&msgq_headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
 
 Since log target resource strings tend to get complex, future versions will include property trees for configuration.
+
+### Nested Specification Style
+
+As log target URLs tend to be rather complex in some cases, a different specification style was devised, namely nested style.
+For instance, let's take the last example (sending log messages to Kafka topic with headers), but let's put it behind a deferred
+log target. The result looks like this:
+
+    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&msgq_headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}&deferred
+
+This is rather not pleasing to the eye, and probably prone to error.  
+Instead here is how it may look using the nested specification style:
+
+    log_target = {
+        scheme = async,
+        type = deferred,
+        log_target = {
+            scheme = msgq,
+            type = kafka,
+            kafka_bootstrap_server = localhost:9092,
+            msgq_topic = log_records,
+            msgq_headers = rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
+        }
+    }
+
+With this type of log target specification, the log target nesting is much clearer. In this example, it is evident that log messages are handed over to a deferred log target, which in turn sends log messages to a kafka topic.
+
+Besides clarity, the nested specification style allows doing things which are not possible with URL style.  
+For instance, suppose we have a syslog target configured with log level ERROR, but some module, say core.files, reports many errors due to disk failure, and causes log flooding in syslog. As a result, we would like to restrict the rate of this specific log source to syslog (assume we don't care about other log targets) to 10 messages per second, but we would not like to restrict other log sources. This can be achieved in configuration with compound log filters as follows:
+
+    log_target = {
+        scheme = sys,
+        path = syslog,
+        log_level = ERROR,
+        filter = OR,
+        filter_args = [
+            {
+                filter = NOT,
+                filter_args = {
+                    filter = log_source_filter,
+                    log_source = core.files
+                }
+            },
+            {
+                filter = rate_limiter,
+                max_msg_per_sec = 10
+            }
+        ]
+    }
+
+The logic this configuration uses is as follows: allow messages to pass if the log source is NOT core.files OR (i.e. the log source is core.files) the rate does not exceed 10 messages per second. In any case the log level is set at ERROR for syslog.  
+This example is a bit complex, but it illustrates the flexibility nested configuration has.
+
+In case of simply limiting the rate for all incoming messages, the configuration becomes much simpler:
+
+    log_target = {
+        scheme = sys,
+        path = syslog,
+        log_level = ERROR,
+        filter = rate_limiter,
+        max_msg_per_sec = 10
+    }
 
 ## Benchmarks
 

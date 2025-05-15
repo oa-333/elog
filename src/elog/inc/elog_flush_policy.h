@@ -168,7 +168,7 @@ public:
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
-    ELOG_DECLARE_FLUSH_POLICY(ELogAndFlushPolicy, and);
+    ELOG_DECLARE_FLUSH_POLICY(ELogAndFlushPolicy, AND);
 };
 
 /** @class A combined flush policy, for enforcing one of many flush policies. */
@@ -182,7 +182,7 @@ public:
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
-    ELOG_DECLARE_FLUSH_POLICY(ELogOrFlushPolicy, or);
+    ELOG_DECLARE_FLUSH_POLICY(ELogOrFlushPolicy, OR);
 };
 
 /** @class A immediate flush policy, for enforcing log target flush after every log message.  */

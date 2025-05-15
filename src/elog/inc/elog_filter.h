@@ -103,7 +103,7 @@ public:
 private:
     ELogFilter* m_filter;
 
-    ELOG_DECLARE_FILTER(ELogNegateFilter, not);
+    ELOG_DECLARE_FILTER(ELogNegateFilter, NOT);
 };
 
 /**
@@ -146,7 +146,7 @@ public:
     ~ELogAndLogFilter() final {}
 
 private:
-    ELOG_DECLARE_FILTER(ELogAndLogFilter, and);
+    ELOG_DECLARE_FILTER(ELogAndLogFilter, AND);
 };
 
 /**
@@ -159,7 +159,139 @@ public:
     ~ELogOrLogFilter() final {}
 
 private:
-    ELOG_DECLARE_FILTER(ELogOrLogFilter, or);
+    ELOG_DECLARE_FILTER(ELogOrLogFilter, OR);
+};
+
+class ELogSourceFilter : public ELogFilter {
+public:
+    ELogSourceFilter(const char* logSourceName = "") : m_logSourceName(logSourceName) {}
+    ~ELogSourceFilter() final {}
+
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
+
+private:
+    std::string m_logSourceName;
+
+    ELOG_DECLARE_FILTER(ELogSourceFilter, log_source_filter);
+};
+
+class ELogModuleFilter : public ELogFilter {
+public:
+    ELogModuleFilter(const char* logModuleName = "") : m_logModuleName(logModuleName) {}
+    ~ELogModuleFilter() final {}
+
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
+
+private:
+    std::string m_logModuleName;
+
+    ELOG_DECLARE_FILTER(ELogModuleFilter, log_module_filter);
+};
+
+class ELogThreadNameFilter : public ELogFilter {
+public:
+    ELogThreadNameFilter(const char* threadName = "") : m_threadName(threadName) {}
+    ~ELogThreadNameFilter() final {}
+
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
+
+private:
+    std::string m_threadName;
+
+    ELOG_DECLARE_FILTER(ELogThreadNameFilter, thread_name_filter);
+};
+
+class ELogFileNameFilter : public ELogFilter {
+public:
+    ELogFileNameFilter(const char* fileName = "") : m_fileName(fileName) {}
+    ~ELogFileNameFilter() final {}
+
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
+
+private:
+    std::string m_fileName;
+
+    ELOG_DECLARE_FILTER(ELogFileNameFilter, file_name_filter);
+};
+
+class ELogFunctionNameFilter : public ELogFilter {
+public:
+    ELogFunctionNameFilter(const char* functionName = "") : m_functionName(functionName) {}
+    ~ELogFunctionNameFilter() final {}
+
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
+
+private:
+    std::string m_functionName;
+
+    ELOG_DECLARE_FILTER(ELogFunctionNameFilter, function_name_filter);
+};
+
+class ELogLevelFilter : public ELogFilter {
+public:
+    ELogLevelFilter(ELogLevel logLevel = ELEVEL_INFO) : m_logLevel(logLevel) {}
+    ~ELogLevelFilter() final {}
+
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
+
+private:
+    ELogLevel m_logLevel;
+
+    ELOG_DECLARE_FILTER(ELogLevelFilter, log_level_filter);
 };
 
 }  // namespace elog

@@ -224,6 +224,8 @@ void setCurrentThreadNameField(const char* threadName) {
     strncpy(sThreadName, threadName, THREAD_NAME_MAX);
 }
 
+const char* getCurrentThreadNameField() { return sThreadName; }
+
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     receptor->receiveStringField(m_text, m_justify);
 }

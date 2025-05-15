@@ -27,6 +27,9 @@ extern ELOG_API const char* getProgramName();
 /** @brief Installs the current thread name (for internal use only). */
 extern ELOG_API void setCurrentThreadNameField(const char* threadName);
 
+/** @brief Retrieves the currently installed thread name (for internal use only). */
+extern ELOG_API const char* getCurrentThreadNameField();
+
 /** @enum Constants for field types (generic). */
 enum class ELogFieldType : uint32_t {
     /** @var Field type is string (text). */
