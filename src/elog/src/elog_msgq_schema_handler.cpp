@@ -82,8 +82,8 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
 ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                               const ELogTargetNestedSpec& targetNestedSpec) {
-    // first make sure there ar no sub-specs
-    if (!targetNestedSpec.m_subSpec.empty()) {
+    // first make sure there ar no log target sub-specs
+    if (targetNestedSpec.m_subSpec.find("log_target") != targetNestedSpec.m_subSpec.end()) {
         ELOG_REPORT_ERROR("Message queue log target cannot have sub-targets: %s",
                           logTargetCfg.c_str());
         return nullptr;

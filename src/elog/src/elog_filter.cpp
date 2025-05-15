@@ -63,4 +63,115 @@ ELogFilter* constructFilter(const char* name) {
     return filter;
 }
 
+ELogNegateFilter::~ELogNegateFilter() {
+    if (m_filter != nullptr) {
+        delete m_filter;
+        m_filter = nullptr;
+    }
+}
+
+bool ELogNegateFilter::load(const std::string& logTargetCfg,
+                            const ELogTargetNestedSpec& logTargetSpec) {
+    // we expect to find a nested property 'filter_args' with one array item
+    ELogTargetNestedSpec::SubSpecMap::const_iterator itr =
+        logTargetSpec.m_subSpec.find("filter_args");
+    if (itr == logTargetSpec.m_subSpec.end()) {
+        ELOG_REPORT_ERROR("Missing 'filter_args' nested property required for NOT filter: %s",
+                          logTargetCfg.c_str());
+        return false;
+    }
+
+    const ELogTargetNestedSpec::SubSpecList& subSpecList = itr->second;
+    if (subSpecList.empty()) {
+        ELOG_REPORT_ERROR("Nested property 'filter_args' (required for NOT filter) is empty: %s",
+                          logTargetCfg.c_str());
+        return false;
+    }
+    if (subSpecList.size() > 1) {
+        ELOG_REPORT_ERROR(
+            "Nested property 'filter_args' (required for NOT filter) has more than one item: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    const ELogTargetNestedSpec& subSpec = subSpecList[0];
+    bool result = false;
+    m_filter = ELogSystem::loadLogFilter(logTargetCfg, logTargetSpec, result);
+    if (!result) {
+        ELOG_REPORT_ERROR("Failed to load sub-filter for NOT filter: %s (see errors above)",
+                          logTargetCfg.c_str());
+        return false;
+    }
+    if (m_filter == nullptr) {
+        ELOG_REPORT_ERROR(
+            "Failed to load sub-filter for NOT filter, filter specification not found: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    return true;
+}
+
+ELogCompoundLogFilter::~ELogCompoundLogFilter() {
+    for (ELogFilter* filter : m_filters) {
+        delete filter;
+    }
+    m_filters.clear();
+}
+
+bool ELogCompoundLogFilter::load(const std::string& logTargetCfg,
+                                 const ELogTargetNestedSpec& logTargetSpec) {
+    // we expect to find a nested property 'filter_args' with one or more array item
+    ELogTargetNestedSpec::SubSpecMap::const_iterator itr =
+        logTargetSpec.m_subSpec.find("filter_args");
+    if (itr == logTargetSpec.m_subSpec.end()) {
+        ELOG_REPORT_ERROR("Missing 'filter_args' nested property required for compound filter: %s",
+                          logTargetCfg.c_str());
+        return false;
+    }
+
+    const ELogTargetNestedSpec::SubSpecList& subSpecList = itr->second;
+    if (subSpecList.empty()) {
+        ELOG_REPORT_ERROR(
+            "Nested property 'filter_args' (required for compound filter) is empty: %s",
+            logTargetCfg.c_str());
+        return false;
+    }
+    for (uint32_t i = 0; i < subSpecList.size(); ++i) {
+        const ELogTargetNestedSpec& subSpec = subSpecList[i];
+        bool result = true;
+        ELogFilter* filter = ELogSystem::loadLogFilter(logTargetCfg, subSpec, result);
+        if (!result) {
+            ELOG_REPORT_ERROR(
+                "Failed to load %uth sub-filter for compound filter: %s (see previous errors)", i,
+                logTargetCfg.c_str());
+            return false;
+        }
+        if (filter == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to load %uth sub-filter for compound filter, policy specification not "
+                "found: %s",
+                i, logTargetCfg.c_str());
+            return false;
+        }
+        addFilter(filter);
+    }
+    return true;
+}
+
+bool ELogCompoundLogFilter::filterLogRecord(const ELogRecord& logRecord) {
+    for (ELogFilter* filter : m_filters) {
+        bool res = filter->filterLogRecord(logRecord);
+        if (m_opType == OpType::OT_AND && !res) {
+            // no need to compute second filter
+            return false;
+        } else if (m_opType == OpType::OT_OR && res) {
+            // no need to compute second filter
+            return true;
+        }
+    }
+
+    // in case of AND filter, all passed so result is true
+    // in case of OR filter, none have passed, so result is false
+    return (m_opType == OpType::OT_AND) ? true : false;
+}
+
 }  // namespace elog

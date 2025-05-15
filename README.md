@@ -38,6 +38,8 @@ Planned Features:
 - Connectivity to Windows Event Log
 - Connectivity to SMTP
 - Support on MacOS
+- Optional handling of signals (configurable) with full call stack dumping (including files and lines)
+- Going fully configurable from file or properties array
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
@@ -198,14 +200,6 @@ In this example a segmented log file is used, with 4MB segment size:
         return 0;
     }
 
-TODO: add more sub-sections for initializations methods
-TODO: reorder sections, add section for how to externally extend SW
-TODO: revise entire doc, consider putting in pdf.
-TODO: in addition to url config, also add nested config with {} syntax
-TODO: allow specifying sizes with units (b, kb, mb - case insensitive)
-TODO: fix segmented log race conditions and add buffered file writer support
-TODO: Consider having buffering as a general step in the chain of logger --> log target --> transport
-
 ### Logging Macros
 
 The ELog system defines utility macros for logging.  
@@ -276,6 +270,10 @@ The ELog system allows configuring log line format using a format specification 
 For instance, the default log line format specification that is used by ELog is:
 
     ${time} ${level:6} [${tid}] ${msg}
+
+In code, it can be done as follows:
+
+    elog::ELogSystem::configureLogFormat("${time} ${level:6} [${tid}] ${msg}");
 
 This format in reality gets expanded to something like this:
 
@@ -504,8 +502,8 @@ The following syntax is supported:
     sys://stderr - add log target to standard error stream
     sys://syslog - add log target to syslog (or Windows event log, when running on Windows)
     file://path - add regular log target
-    file://path?file-segment-size-mb=<file-segment-size-mb> - add segmented file log target
-    db://provider?conn-string=<url>&insert-query=<insert-query>...
+    file://path?file_segment_size_mb=<file-segment-size-mb> - add segmented file log target
+    db://provider?conn_string=<url>&insert_query=<insert-query>...
     msgq://provider?... (see example below for more details)
 
 Log targets may be assigned a name for identification, if further special configuration is required.  
@@ -531,7 +529,7 @@ Pay attention that the rest of the log targets will use the global log level and
 Log targets can be assigned a flush policy (file targets by default flush after every message).
 The flush policy can be configured as follows:
 
-    flush-policy=none|immediate|never|count|size|time
+    flush_policy=none|immediate|never|count|size|time
 
 Where each value designates a different policy:
 
@@ -544,9 +542,9 @@ Where each value designates a different policy:
 
 The last three flush policies require the following addition parameter each respectively:
 
-- flush-count
-- flush-size-bytes
-- flush-timeout-millis
+- flush_count
+- flush_size_bytes
+- flush_timeout_millis
 
 For more complex flush policy, assign a name to the log target and configure manually its flush policy.
 
@@ -555,8 +553,8 @@ For more complex flush policy, assign a name to the log target and configure man
 The following optional parameters are supported for compound log targets:
 
     defer (no value associated)
-    queue-batch-size=<batch-size>,queue-timeout-millis=<timeout-millis>
-    quantum-buffer-size=<buffer-size>
+    queue_batch_size=<batch-size>,queue_timeout_millis=<timeout-millis>
+    quantum_buffer_size=<buffer-size>
 
 These optional parameters can be used to specify a compound deferred or queued log target.  
 The defer option specifies a deferred log target.  
@@ -566,43 +564,43 @@ All options should be separated by an ampersand (&).
 
 Here is an example for a deferred log target that uses segmented file log target:
 
-    log_target = file://logs/app.log?file-segment-size-mb=4&deferred
+    log_target = file://logs/app.log?file_segment_size_mb=4&deferred
 
 ### Configuring Database Log Targets
 
 Here is another example for connecting to a MySQL database behind a queued log target:
 
-    log_target = db://mysql?conn-string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert-query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&queue-batch-size=1024&queue-timeout-millis=100
+    log_target = db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert_query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&queue_batch_size=1024&queue_timeout_millis=100
 
 Pay attention to the last log target example components:
 
-- schema: db
+- scheme: db
 - path: mysql (designates the database type)
-- conn-string: The connection string (url in MySQL terminology)
-- db: The MySQL db (schema) being connected to
+- conn_string: The connection string (url in MySQL terminology)
+- db: The MySQL db schema being connected to
 - user: The user name used to connect to the database
 - passwd: The password used to connect to the database (for security put the configuration file in a directory with restricted access)
-- insert-query: The query used to insert a log record into the database
-- queue-batch-size: When this is present a queued log target is used
-- queue-timeout-millis: Specifies the timeout used by the queued log target
+- insert_query: The query used to insert a log record into the database
+- queue_batch_size: When this is present a queued log target is used
+- queue_timeout_millis: Specifies the timeout used by the queued log target
 
-In the example above, queue-batch-size and queue-timeout-millis are not related to the database target specification,  
+In the example above, queue_batch_size and queue_timeout_millis are not related to the database target specification,  
 and their presence only configures a compound log target (namely, a queued log target over a database lgo target).  
 
-When using the db schema, the conn-string and insert-query components are mandatory.
+When using the db scheme, the conn_string and insert_query components are mandatory.
 The following parameters are optional for database target configuration:
 
-- db-thread-model: Specified how the database should be accessed by multiple threads concurrently. Possible values:
+- db_thread_model: Specified how the database should be accessed by multiple threads concurrently. Possible values:
     - none: No thread-model is in use.  
         User code is responsible for managing multi-threaded access to database log target.
     - lock: A single lock is used to serialize all access to db log target.  
         This is thread-safe but will not scale well, and may be suitable for simple multi-threaded scenarios.
     - conn-per-thread: Each thread is allocated a separate connection, and no lock is used.
         This is a thread-safe and scalable.
-- db-max-threads: When specifying db-thread-model=conn-per-thread it is possible also to configure the maximum  
+- db_max_threads: When specifying db_thread_model=conn-per-thread it is possible also to configure the maximum  
     number of threads expected to concurrently send log messages to the database log target.  
     If not specified, then a default value of 4096 is used.
-- db-reconnect-timeout-millis: When using database log target, a background thread is used to reconnect to the  
+- db_reconnect_timeout_millis: When using database log target, a background thread is used to reconnect to the  
     database after disconnect. This value determines the timeout in milliseconds between any two consecutive reconnect attempts.
 
 Additional required components may differ from one database to another.
@@ -611,17 +609,17 @@ Additional required components may differ from one database to another.
 
 Here are the required parameters for connecting to PostgreSQL:
 
-    db://postgresql?conn-string=localhost&port=5432&db=mydb&user=oren&passwd=1234&insert-query=INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
+    db://postgresql?conn_string=localhost&port=5432&db=mydb&user=oren&passwd=1234&insert_query=INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
 
 Here are the relevant components:
 
-    - schema: db
+    - scheme: db
     - path: postgresql
-    - conn-string: simply denotes the host name/ip.
+    - conn_string: simply denotes the host name/ip.
     - port: the server port (note, unlike MySQL, this is passed separately, and not as part of the connection string)
     - user: The user name used to connect to the database
     - passwd: The password used to connect to the database (for security put the configuration file in a directory with restricted access)
-    - insert-query: The query used to insert a log record into the database
+    - insert_query: The query used to insert a log record into the database
 
 In this example there is no compound log target specification.
 
@@ -629,54 +627,54 @@ In this example there is no compound log target specification.
 
 Following is a sample configuration for SQLite connector:
 
-    db://sqlite?conn-string=wal.db&insert-query=INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
+    db://sqlite?conn_string=wal.db&insert_query=INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
 
 Here are the relevant components:
 
-    - schema: db
+    - scheme: db
     - path: sqlite
-    - conn-string: denotes the path to the DB file on disk.
-    - insert-query: The query used to insert a log record into the database
+    - conn_string: denotes the path to the DB file on disk.
+    - insert_query: The query used to insert a log record into the database
 
 ### Connecting to MySQL (experimental)
 
 Following is a sample configuration for SQLite connector:
 
-    db://mysql?conn-string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert-query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
+    db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert_query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
 
 Here are the relevant components:
 
-    - schema: db
+    - scheme: db
     - path: mysql
-    - conn-string: denotes the server address (host and port)
+    - conn_string: denotes the server address (host and port)
     - db: denotes the database name
     - user: the user name used to login to the database
     - passwd: the password used to login to the database
-    - insert-query: The query used to insert a log record into the database
+    - insert_query: The query used to insert a log record into the database
 
 ### Connecting to Kafka Topic
 
 The following example shows how to connect to a Kafka topic:
 
-    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records
+    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records
 
-The kafka log target uses the 'msgq' schema, and 'kafka' provider.  
-Two mandatory parameters are expected: 'bootstrap-servers' and 'topic'.  
-Optionally, a partition id may be passed as well with the syntax 'partition={id}, and also headers (see below).  
+The kafka log target uses the 'msgq' scheme, and 'kafka' provider.  
+Two mandatory parameters are expected: 'kafka_bootstrap_servers' and 'msgq_topic'.  
+Optionally, a partition id may be passed as well with the syntax 'partition={id}, and also msgq_headers (see below).  
 Pay attention that in the example above, the global log format is used as the message payload.  
 If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
 
 In case a flush policy is used, then the flush timeouts, both during regular flush, and during shutdown flush,  
-can be configured via 'kafka-flush-timeout-millis' and 'shutdown-kafka-flush-timeout-millis' respectively:
+can be configured via 'kafka_flush_timeout_millis' and 'kafka_shutdown_flush_timeout_millis' respectively:
 
-    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records&kafka-flush-timeout-millis=50&flush-policy=immediate
+    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&kafka_flush_timeout_millis=50&flush_policy=immediate
 
-Pay attention that the flush-policy parameter enforces kafka message flush after each message is being produced.  
+Pay attention that the flush_policy parameter enforces kafka message flush after each message is being produced.  
 Different flush policies can be applied, as explained above.
 
-In case message headers are to be passed as well, the 'headers' parameter should be used as a CSV property list:
+In case message msgq_headers are to be passed as well, the 'msgq_headers' parameter should be used as a CSV property list:
 
-    log_target = msgq://kafka?bootstrap-servers=localhost:9092&topic=log_records&headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
+    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&msgq_headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
 
 Since log target resource strings tend to get complex, future versions will include property trees for configuration.
 
@@ -735,17 +733,17 @@ Note that the latency on the logging application is minimal: 0.2 and 1.3 nano-se
 
 ### Synchronous File Log Target with Count Flush Policy
 
-Following are the benchmark test results for synchronous file log target with flush-policy=count, setting varying count values:
+Following are the benchmark test results for synchronous file log target with flush_policy=count, setting varying count values:
 
 ![plot](./src/elog_bench/png/flush_count.png)
 
-As it can be seen, flush-count=512 and flush-count=1024 both yield the best results (around 2.4 Million messages per second), and setting a higher number does need yield any better results.  
+As it can be seen, flush_count=512 and flush_count=1024 both yield the best results (around 2.4 Million messages per second), and setting a higher number does need yield any better results.  
 Most probably this has to do with underlying system file buffers.  
 NOTE: Doing direct/async I/O is not being considered at this time.
 
 ### Synchronous File Log Target with Size Flush Policy
 
-Following are the benchmark test results for synchronous file log target with flush-policy=size, setting varying size values:
+Following are the benchmark test results for synchronous file log target with flush_policy=size, setting varying size values:
 
 ![plot](./src/elog_bench/png/flush_size.png)
 
@@ -756,7 +754,7 @@ Again, this is most probably related to the underlying system file buffers.
 
 ### Synchronous File Log Target with Time Flush Policy
 
-Following are the benchmark test results for synchronous file log target with flush-policy=time, setting varying time values:
+Following are the benchmark test results for synchronous file log target with flush_policy=time, setting varying time values:
 
 ![plot](./src/elog_bench/png/flush_time.png)
 

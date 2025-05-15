@@ -30,8 +30,8 @@ class ELOG_API ELogFlushPolicy {
 public:
     virtual ~ELogFlushPolicy() {}
 
-    /** @brief Loads flush policy from property map. */
-    virtual bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+    /** @brief Loads filter from configuration. */
+    virtual bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) {
         return true;
     }
 
@@ -127,13 +127,16 @@ protected:
 #define ELOG_IMPLEMENT_FLUSH_POLICY(FlushPolicyType) \
     FlushPolicyType::FlushPolicyType##Constructor FlushPolicyType::sConstructor;
 
-/** @class A combined flush policy, for enforcing several flush policies. */
-class ELOG_API ELogCombinedFlushPolicy : public ELogFlushPolicy {
+/** @class A compound flush policy, for enforcing several flush policies. */
+class ELOG_API ELogCompoundFlushPolicy : public ELogFlushPolicy {
 public:
-    ELogCombinedFlushPolicy() {}
-    ELogCombinedFlushPolicy(const ELogCombinedFlushPolicy&) = delete;
-    ELogCombinedFlushPolicy(ELogCombinedFlushPolicy&&) = delete;
-    ~ELogCombinedFlushPolicy() {}
+    ELogCompoundFlushPolicy() {}
+    ELogCompoundFlushPolicy(const ELogCompoundFlushPolicy&) = delete;
+    ELogCompoundFlushPolicy(ELogCompoundFlushPolicy&&) = delete;
+    ~ELogCompoundFlushPolicy() {}
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     inline void addFlushPolicy(ELogFlushPolicy* flushPolicy) {
         m_flushPolicies.push_back(flushPolicy);
@@ -155,7 +158,7 @@ protected:
 };
 
 /** @class A combined flush policy, for enforcing all specified flush policies. */
-class ELOG_API ELogAndFlushPolicy : public ELogCombinedFlushPolicy {
+class ELOG_API ELogAndFlushPolicy : public ELogCompoundFlushPolicy {
 public:
     ELogAndFlushPolicy() {}
     ELogAndFlushPolicy(const ELogAndFlushPolicy&) = delete;
@@ -163,10 +166,13 @@ public:
     ~ELogAndFlushPolicy() {}
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
+
+private:
+    ELOG_DECLARE_FLUSH_POLICY(ELogAndFlushPolicy, and);
 };
 
 /** @class A combined flush policy, for enforcing one of many flush policies. */
-class ELOG_API ELogOrFlushPolicy : public ELogCombinedFlushPolicy {
+class ELOG_API ELogOrFlushPolicy : public ELogCompoundFlushPolicy {
 public:
     ELogOrFlushPolicy() {}
     ELogOrFlushPolicy(const ELogOrFlushPolicy&) = delete;
@@ -174,6 +180,9 @@ public:
     ~ELogOrFlushPolicy() {}
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
+
+private:
+    ELOG_DECLARE_FLUSH_POLICY(ELogOrFlushPolicy, or);
 };
 
 /** @class A immediate flush policy, for enforcing log target flush after every log message.  */
@@ -222,8 +231,8 @@ public:
     ELogCountFlushPolicy(ELogCountFlushPolicy&&) = delete;
     ~ELogCountFlushPolicy() {}
 
-    /** @brief Loads flush policy from property map. */
-    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
+    /** @brief Loads flush policy from configuration. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -247,8 +256,8 @@ public:
     ELogSizeFlushPolicy(ELogSizeFlushPolicy&&) = delete;
     ~ELogSizeFlushPolicy() {}
 
-    /** @brief Loads flush policy from property map. */
-    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
+    /** @brief Loads flush policy from configuration. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -272,8 +281,8 @@ public:
     ELogTimedFlushPolicy(ELogTimedFlushPolicy&&) = delete;
     ~ELogTimedFlushPolicy();
 
-    /** @brief Loads flush policy from property map. */
-    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
+    /** @brief Loads flush policy from configuration. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     bool start() final;

@@ -40,6 +40,8 @@ public:
 
     inline const char* getSpec() const { return m_spec.c_str(); }
 
+    std::string getErrLocStr(uint32_t tokenPos) const;
+
     bool nextToken(ELogTokenType& tokenType, std::string& token, uint32_t& tokenPos);
 
 private:

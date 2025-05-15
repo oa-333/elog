@@ -27,7 +27,7 @@ public:
     ~ELogRateLimiter() final {}
 
     /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) final;
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /**
      * @brief Filters a log record.

@@ -18,8 +18,8 @@ class ELOG_API ELogFilter {
 public:
     virtual ~ELogFilter() {}
 
-    /** @brief Loads filter from property map. */
-    virtual bool load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
+    /** @brief Loads filter from configuration. */
+    virtual bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) {
         return true;
     }
 
@@ -83,69 +83,83 @@ protected:
 /** @brief A log filter that negates the result of another log filter. */
 class ELOG_API ELogNegateFilter : public ELogFilter {
 public:
+    ELogNegateFilter() : m_filter(nullptr) {}
     ELogNegateFilter(ELogFilter* filter) : m_filter(filter) {}
-    ~ELogNegateFilter() final {}
+    ~ELogNegateFilter() final;
 
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
     bool filterLogRecord(const ELogRecord& logRecord) final {
-        return m_filter->filterLogRecord(logRecord);
+        return !m_filter->filterLogRecord(logRecord);
     }
 
 private:
     ELogFilter* m_filter;
+
+    ELOG_DECLARE_FILTER(ELogNegateFilter, not);
 };
 
 /**
- * @brief A composite log filter that combines the result of two other log filters by either
- * applying AND operator on the result or applying OR operator on the result of the underlying two
+ * @brief A compound log filter that combines the result of two or more other log filters by either
+ * applying AND operator on the result or applying OR operator on the result of the underlying
  * filters.
  */
-class ELOG_API ELogCompositeLogFilter : public ELogFilter {
+class ELOG_API ELogCompoundLogFilter : public ELogFilter {
 public:
     enum class OpType { OT_AND, OT_OR };
 
-    ELogCompositeLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter, OpType opType)
-        : m_lhsFilter(lhsFilter), m_rhsFilter(rhsFilter), m_opType(opType) {}
-    ~ELogCompositeLogFilter() override {}
+    ELogCompoundLogFilter(OpType opType) : m_opType(opType) {}
+    ~ELogCompoundLogFilter() override;
 
-    bool filterLogRecord(const ELogRecord& logRecord) final {
-        bool lhsRes = m_lhsFilter->filterLogRecord(logRecord);
-        if (m_opType == OpType::OT_AND && !lhsRes) {
-            // no need to compute second filter
-            return false;
-        } else if (m_opType == OpType::OT_OR && lhsRes) {
-            // no need to compute second filter
-            return true;
-        }
+    /** @brief Adds a sub-filter to the filter set. */
+    inline void addFilter(ELogFilter* filter) { m_filters.push_back(filter); }
 
-        // result determined by RHS filter
-        return m_rhsFilter->filterLogRecord(logRecord);
-    }
+    /** @brief Loads filter from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
 
 private:
-    ELogFilter* m_lhsFilter;
-    ELogFilter* m_rhsFilter;
+    std::vector<ELogFilter*> m_filters;
     OpType m_opType;
 };
 
 /**
  * @brief An AND log filter that checks both underlying filters allow the record to be processed.
  */
-class ELOG_API ELogAndLogFilter : public ELogCompositeLogFilter {
+class ELOG_API ELogAndLogFilter : public ELogCompoundLogFilter {
 public:
-    ELogAndLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)
-        : ELogCompositeLogFilter(lhsFilter, rhsFilter, ELogCompositeLogFilter::OpType::OT_AND) {}
+    ELogAndLogFilter() : ELogCompoundLogFilter(ELogCompoundLogFilter::OpType::OT_AND) {}
     ~ELogAndLogFilter() final {}
+
+private:
+    ELOG_DECLARE_FILTER(ELogAndLogFilter, and);
 };
 
 /**
  * @brief An OR log filter that checks if either one of the underlying filters allows the record to
  * be processed.
  */
-class ELOG_API ELogOrLogFilter : public ELogCompositeLogFilter {
+class ELOG_API ELogOrLogFilter : public ELogCompoundLogFilter {
 public:
-    ELogOrLogFilter(ELogFilter* lhsFilter, ELogFilter* rhsFilter)
-        : ELogCompositeLogFilter(lhsFilter, rhsFilter, ELogCompositeLogFilter::OpType::OT_OR) {}
+    ELogOrLogFilter() : ELogCompoundLogFilter(ELogCompoundLogFilter::OpType::OT_OR) {}
     ~ELogOrLogFilter() final {}
+
+private:
+    ELOG_DECLARE_FILTER(ELogOrLogFilter, or);
 };
 
 }  // namespace elog

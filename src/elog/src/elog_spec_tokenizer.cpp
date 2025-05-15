@@ -52,4 +52,8 @@ bool ELogSpecTokenizer::nextToken(ELogTokenType& tokenType, std::string& token,
     return true;
 }
 
+std::string ELogSpecTokenizer::getErrLocStr(uint32_t tokenPos) const {
+    return m_spec.substr(0, tokenPos) + RED " | HERE ===>>> | " RESET + m_spec.substr(tokenPos);
+}
+
 }  // namespace elog

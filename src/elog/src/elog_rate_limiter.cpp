@@ -8,9 +8,10 @@ namespace elog {
 
 ELOG_IMPLEMENT_FILTER(ELogRateLimiter);
 
-bool ELogRateLimiter::load(const std::string& logTargetCfg, const ELogPropertyMap& props) {
-    ELogPropertyMap::const_iterator itr = props.find("max_msg_per_sec");
-    if (itr == props.end()) {
+bool ELogRateLimiter::load(const std::string& logTargetCfg,
+                           const ELogTargetNestedSpec& logTargetSpec) {
+    ELogPropertyMap::const_iterator itr = logTargetSpec.m_spec.m_props.find("max_msg_per_sec");
+    if (itr == logTargetSpec.m_spec.m_props.end()) {
         ELOG_REPORT_ERROR(
             "Invalid rate limiter configuration, missing expected max_msg_per_sec property: %s",
             logTargetCfg.c_str());

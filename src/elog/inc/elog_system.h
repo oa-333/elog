@@ -152,15 +152,25 @@ public:
                                         bool defineLogSources = false,
                                         bool defineMissingPath = false);
 
-    /** @brief Adds a log target from target specification using URL style (internal use only). */
-    static ELogTarget* loadLogTarget(const std::string& logTargetCfg,
-                                     const ELogTargetSpec& logTargetSpec);
-
     /**
-     * @brief Adds a log target from target specification using nested style (internal use only).
+     * @brief Adds a log target from target specification (internal use only).
      */
     static ELogTarget* loadLogTarget(const std::string& logTargetCfg,
-                                     const ELogTargetNestedSpec& logTargetNestedSpec);
+                                     const ELogTargetNestedSpec& logTargetNestedSpec,
+                                     ELogTargetSpecStyle specStyle);
+
+    /**
+     * @brief Loads a flush policy from target specification using nested style (internal use only).
+     */
+    static ELogFlushPolicy* loadFlushPolicy(const std::string& logTargetCfg,
+                                            const ELogTargetNestedSpec& logTargetNestedSpec,
+                                            bool allowNone, bool& result);
+
+    /**
+     * @brief Loads a log filter from target specification using nested style (internal use only).
+     */
+    static ELogFilter* loadLogFilter(const std::string& logTargetCfg,
+                                     const ELogTargetNestedSpec& logTargetNestedSpec, bool& result);
 
     /**
      * Log Target Management Interface
@@ -563,21 +573,19 @@ private:
     static bool parseLogTargetNestedSpec(const std::string& logTargetCfg,
                                          ELogTargetNestedSpec& logTargetNestedSpec,
                                          ELogSpecTokenizer& tok);
-    static bool parseSubSpec(const std::string& logTargetCfg,
-                             ELogTargetNestedSpec& logTargetNestedSpec, ELogSpecTokenizer& tok);
     static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                    const std::string& value);
     static bool configureLogTargetCommon(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                         const ELogTargetSpec& logTargetSpec);
+                                         const ELogTargetNestedSpec& logTargetSpec);
     static void applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec);
     static bool applyTargetLogLevel(ELogTarget* logTarget, const std::string& logTargetCfg,
                                     const ELogTargetSpec& logTargetSpec);
     static bool applyTargetLogFormat(ELogTarget* logTarget, const std::string& logTargetCfg,
                                      const ELogTargetSpec& logTargetSpec);
     static bool applyTargetFlushPolicy(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                       const ELogTargetSpec& logTargetSpec);
+                                       const ELogTargetNestedSpec& logTargetSpec);
     static bool applyTargetFilter(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                  const ELogTargetSpec& logTargetSpec);
+                                  const ELogTargetNestedSpec& logTargetSpec);
     static ELogTarget* applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
                                            const ELogTargetSpec& logTargetSpec,
                                            bool& errorOccurred);
