@@ -7,12 +7,6 @@
 
 namespace elog {
 
-/** @brief Initialize all filters (for internal use only). */
-extern ELOG_API bool initFilters();
-
-/** @brief Destroys all filters (for internal use only). */
-extern ELOG_API void termFilters();
-
 /** @brief Parent interface for all log filters. */
 class ELOG_API ELogFilter {
 public:

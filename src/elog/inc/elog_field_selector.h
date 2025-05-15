@@ -1,5 +1,5 @@
-#ifndef __ELOG_FIELD_SELECTOR__
-#define __ELOG_FIELD_SELECTOR__
+#ifndef __ELOG_FIELD_SELECTOR_H___
+#define __ELOG_FIELD_SELECTOR_H___
 
 #include <sstream>
 
@@ -8,27 +8,6 @@
 #include "elog_record.h"
 
 namespace elog {
-
-/** @brief Initialize all field selectors (for internal use only). */
-extern ELOG_API bool initFieldSelectors();
-
-/** @brief Destroys all field selectors (for internal use only). */
-extern ELOG_API void termFieldSelectors();
-
-/** @brief Retrieves host name (for internal use only). */
-extern ELOG_API const char* getHostName();
-
-/** @brief Retrieves user name (for internal use only). */
-extern ELOG_API const char* getUserName();
-
-/** @brief Retrieves program name (for internal use only). */
-extern ELOG_API const char* getProgramName();
-
-/** @brief Installs the current thread name (for internal use only). */
-extern ELOG_API void setCurrentThreadNameField(const char* threadName);
-
-/** @brief Retrieves the currently installed thread name (for internal use only). */
-extern ELOG_API const char* getCurrentThreadNameField();
 
 /** @enum Constants for field types (generic). */
 enum class ELogFieldType : uint32_t {
@@ -302,4 +281,4 @@ private:
 
 }  // namespace elog
 
-#endif  // __ELOG_FIELD_SELECTOR__
+#endif  // __ELOG_FIELD_SELECTOR_H___

@@ -13,8 +13,11 @@
 #include "elog_config_loader.h"
 #include "elog_config_parser.h"
 #include "elog_error.h"
+#include "elog_field_selector_internal.h"
 #include "elog_file_target.h"
+#include "elog_filter_internal.h"
 #include "elog_flush_policy.h"
+#include "elog_flush_policy_internal.h"
 #include "elog_rate_limiter.h"
 #include "elog_schema_manager.h"
 #include "elog_segmented_file_target.h"
@@ -29,7 +32,6 @@
 // TODO: fix segmented log race conditions and add buffered file writer support
 // TODO: Consider having buffering as a general step in the chain of logger --> log target -->
 // transport
-// TODO: put all internal use functions in src folder and do not have then exposed
 // TODO: refactor out all configuration loading logic into ELogConfig and put in src folder
 // TODO: must write regression tests
 // TODO: update configuration due to new changes (nested log target, flush policy and filter
@@ -74,6 +76,11 @@ bool ELogSystem::initGlobals() {
     }
     if (!initFlushPolicies()) {
         ELOG_REPORT_ERROR("Failed to initialize flush policies");
+        termGlobals();
+        return false;
+    }
+    if (!initFilters()) {
+        ELOG_REPORT_ERROR("Failed to initialize filters");
         termGlobals();
         return false;
     }
@@ -142,6 +149,7 @@ void ELogSystem::termGlobals() {
     sDefaultLogger = nullptr;
     sLogSourceMap.clear();
 
+    termFilters();
     termFlushPolicies();
     ELogSchemaManager::termSchemaHandlers();
     termFieldSelectors();

@@ -15,12 +15,6 @@
 
 namespace elog {
 
-/** @brief Initialize all flush policies (for internal use only). */
-extern ELOG_API bool initFlushPolicies();
-
-/** @brief Destroys all flush policies (for internal use only). */
-extern ELOG_API void termFlushPolicies();
-
 /**
  * @brief Flush policy. As some log targets are buffered, a flush policy should be defined to govern
  * the occasions on which the log target should be flushed so that log messages reach their
