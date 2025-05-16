@@ -7,7 +7,7 @@ namespace elog {
 void ELogFormatter::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
     ELogStringStreamReceptor receptor;
     applyFieldSelectors(logRecord, &receptor);
-    logMsg = receptor.getFormattedLogMsg();
+    receptor.getFormattedLogMsg(logMsg);
 }
 
 }  // namespace elog

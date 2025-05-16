@@ -34,6 +34,9 @@ public:
 
     ~ELogFileTarget() final {}
 
+    /** @brief Experimental API for configuring optimal buffer size according to setvbuf(). */
+    bool configureOptimalBufferSize();
+
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush() final;
 

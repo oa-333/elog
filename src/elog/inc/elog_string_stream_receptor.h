@@ -34,7 +34,9 @@ public:
     void receiveLogLevelField(ELogLevel logLevel, int justify) final;
 
     /** @brief Retrieves the formatted log message. */
-    inline std::string getFormattedLogMsg() const { return m_msgStream.str(); }
+    inline void getFormattedLogMsg(std::string& logMsg) const {
+        logMsg = std::move(m_msgStream).str();
+    }
 
 private:
     std::stringstream m_msgStream;
