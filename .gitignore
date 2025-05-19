@@ -9,3 +9,6 @@
 **/*.so
 **/*.pdb
 **/*.a
+cmake_build/**/*
+bin/**/*
+build/**/*

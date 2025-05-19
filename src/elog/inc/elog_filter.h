@@ -1,7 +1,6 @@
 #ifndef __ELOG_FILTER_H__
 #define __ELOG_FILTER_H__
 
-#include "elog_def.h"
 #include "elog_record.h"
 #include "elog_target_spec.h"
 
@@ -63,7 +62,7 @@ protected:
 
 /** @def Utility macro for declaring filter factory method registration. */
 #define ELOG_DECLARE_FILTER(FilterType, Name)                                                 \
-    class FilterType##Constructor : public elog::ELogFilterConstructor {                      \
+    class ELOG_API FilterType##Constructor : public elog::ELogFilterConstructor {             \
     public:                                                                                   \
         FilterType##Constructor() : elog::ELogFilterConstructor(#Name) {}                     \
         elog::ELogFilter* constructFilter() final { return new (std::nothrow) FilterType(); } \
@@ -156,7 +155,7 @@ private:
     ELOG_DECLARE_FILTER(ELogOrLogFilter, OR);
 };
 
-class ELogSourceFilter : public ELogFilter {
+class ELOG_API ELogSourceFilter : public ELogFilter {
 public:
     ELogSourceFilter(const char* logSourceName = "") : m_logSourceName(logSourceName) {}
     ~ELogSourceFilter() final {}
@@ -178,7 +177,7 @@ private:
     ELOG_DECLARE_FILTER(ELogSourceFilter, log_source_filter);
 };
 
-class ELogModuleFilter : public ELogFilter {
+class ELOG_API ELogModuleFilter : public ELogFilter {
 public:
     ELogModuleFilter(const char* logModuleName = "") : m_logModuleName(logModuleName) {}
     ~ELogModuleFilter() final {}
@@ -200,7 +199,7 @@ private:
     ELOG_DECLARE_FILTER(ELogModuleFilter, log_module_filter);
 };
 
-class ELogThreadNameFilter : public ELogFilter {
+class ELOG_API ELogThreadNameFilter : public ELogFilter {
 public:
     ELogThreadNameFilter(const char* threadName = "") : m_threadName(threadName) {}
     ~ELogThreadNameFilter() final {}
@@ -222,7 +221,7 @@ private:
     ELOG_DECLARE_FILTER(ELogThreadNameFilter, thread_name_filter);
 };
 
-class ELogFileNameFilter : public ELogFilter {
+class ELOG_API ELogFileNameFilter : public ELogFilter {
 public:
     ELogFileNameFilter(const char* fileName = "") : m_fileName(fileName) {}
     ~ELogFileNameFilter() final {}
@@ -244,7 +243,7 @@ private:
     ELOG_DECLARE_FILTER(ELogFileNameFilter, file_name_filter);
 };
 
-class ELogFunctionNameFilter : public ELogFilter {
+class ELOG_API ELogFunctionNameFilter : public ELogFilter {
 public:
     ELogFunctionNameFilter(const char* functionName = "") : m_functionName(functionName) {}
     ~ELogFunctionNameFilter() final {}
@@ -266,7 +265,7 @@ private:
     ELOG_DECLARE_FILTER(ELogFunctionNameFilter, function_name_filter);
 };
 
-class ELogLevelFilter : public ELogFilter {
+class ELOG_API ELogLevelFilter : public ELogFilter {
 public:
     ELogLevelFilter(ELogLevel logLevel = ELEVEL_INFO) : m_logLevel(logLevel) {}
     ~ELogLevelFilter() final {}

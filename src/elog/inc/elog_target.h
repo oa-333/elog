@@ -5,14 +5,13 @@
 #include <string>
 #include <vector>
 
-#include "elog_def.h"
 #include "elog_record.h"
 
 namespace elog {
 
-class ELogFilter;
-class ELogFormatter;
-class ELogFlushPolicy;
+class ELOG_API ELogFilter;
+class ELOG_API ELogFormatter;
+class ELOG_API ELogFlushPolicy;
 
 /**
  * @class Parent class for all log targets. Used to decouple log formatting from actual logging.

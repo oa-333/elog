@@ -5,7 +5,6 @@
 #include <list>
 #include <thread>
 
-#include "elog_def.h"
 #include "elog_deferred_target.h"
 
 namespace elog {

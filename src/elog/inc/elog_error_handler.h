@@ -1,10 +1,12 @@
 #ifndef __ELOG_ERROR_HANDLER_H__
 #define __ELOG_ERROR_HANDLER_H__
 
+#include "elog_def.h"
+
 namespace elog {
 
 /** @brief Error handling interface. */
-class ELogErrorHandler {
+class ELOG_API ELogErrorHandler {
 public:
     ELogErrorHandler(const ELogErrorHandler&) = delete;
     ELogErrorHandler(ELogErrorHandler&&) = delete;

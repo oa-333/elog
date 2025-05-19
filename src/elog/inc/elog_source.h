@@ -6,7 +6,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "elog_def.h"
 #include "elog_level.h"
 
 namespace elog {

@@ -17,7 +17,7 @@ namespace elog {
 #define ELOG_DB_RECONNECT_TIMEOUT_MILLIS 1000
 
 /** @brief Abstract parent class for DB log targets. */
-class ELogDbTarget : public ELogTarget {
+class ELOG_API ELogDbTarget : public ELogTarget {
 public:
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord) override;

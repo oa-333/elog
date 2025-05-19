@@ -1,8 +1,6 @@
 #ifndef __ELOG_PGSQL_DB_TARGET_H__
 #define __ELOG_PGSQL_DB_TARGET_H__
 
-#include "elog_def.h"
-
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 
 #include <libpq-fe.h>
@@ -11,7 +9,7 @@
 
 namespace elog {
 
-class ELogPGSQLDbTarget : public ELogDbTarget {
+class ELOG_API ELogPGSQLDbTarget : public ELogDbTarget {
 public:
     ELogPGSQLDbTarget(const std::string& host, uint32_t port, const std::string& db,
                       const std::string& user, const std::string& passwd,

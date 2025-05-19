@@ -15,8 +15,23 @@ set SQLITE_LIB_PATH="C:\Program Files\SQLite\3.49.1\x64"
 set KAFKA_INC_PATH="C:\Program Files\librdkafka\librdkafka.redist.2.10.0\build\native\include"
 set KAFKA_LIB_PATH="C:\Program Files\librdkafka\librdkafka.redist.2.10.0\build\native\lib\win\x64\win-x64-Release\v142"
 
+set INC_PATH=/I %MYSQL_INC_PATH% /I %SQLITE_INC_PATH% /I %KAFKA_INC_PATH% /I src\elog\inc
+set DEFINES=/DELOG_ENABLE_SQLITE_DB_CONNECTOR /DELOG_ENABLE_MYSQL_DB_CONNECTOR /DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+
+set DEBUG_CPPFLAGS=/Od /DDEBUG /MDd
+set RELEASE_CPPFLAGS=/O2 /DNDEBUG
+set CPPFLAGS=%RELEASE_CPPFLAGS%
+
+set DEBUG_LDFLAGS=/LDd /MDd
+set RELEASE_LDFLAGS=/LD /MD
+set LDFLAGS=%RELEASE_LDFLAGS%
+
+set LIBS=Advapi32.lib Ws2_32.lib mysqlcppconn.lib sqlite3.lib librdkafka.lib
+set LIB_PATH=/LIBPATH:%MYSQL_LIB_PATH% /LIBPATH:%SQLITE_LIB_PATH% /LIBPATH:%KAFKA_LIB_PATH%
+
 REM compile
-cl.exe /DELOG_ENABLE_SQLITE_DB_CONNECTOR /DELOG_ENABLE_MYSQL_DB_CONNECTOR /DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR /I %MYSQL_INC_PATH% /I %SQLITE_INC_PATH% /I %KAFKA_INC_PATH% /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /DELOG_DLL /c src\elog\src\*.cpp
+REM cl.exe /DELOG_ENABLE_SQLITE_DB_CONNECTOR /DELOG_ENABLE_MYSQL_DB_CONNECTOR /DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR /I %MYSQL_INC_PATH% /I %SQLITE_INC_PATH% /I %KAFKA_INC_PATH% /I src\elog\inc /std:c++20 /Zi /EHsc /MP /MDd /DELOG_DLL /c src\elog\src\*.cpp
+cl.exe %DEFINES% %INC_PATH% /std:c++20 /Zi /EHsc /MP %CPPFLAGS% /DELOG_DLL /c src\elog\src\*.cpp
 if errorlevel 1 goto COMPILE_ERROR
 
 REM move object files
@@ -25,7 +40,8 @@ move vc140.pdb build\vc\
 
 REM link
 cd build\vc
-cl.exe /Zi /EHsc /MP /MDd /LDd /Fe:elog.dll *.obj Advapi32.lib Ws2_32.lib mysqlcppconn.lib sqlite3.lib librdkafka.lib /link /LIBPATH:%MYSQL_LIB_PATH% /LIBPATH:%SQLITE_LIB_PATH% /LIBPATH:%KAFKA_LIB_PATH%
+REM cl.exe /Zi /EHsc /MP /MDd /LDd /Fe:elog.dll *.obj Advapi32.lib Ws2_32.lib mysqlcppconn.lib sqlite3.lib librdkafka.lib /link /LIBPATH:%MYSQL_LIB_PATH% /LIBPATH:%SQLITE_LIB_PATH% /LIBPATH:%KAFKA_LIB_PATH%
+cl.exe /Zi /EHsc /MP %LDFLAGS% /Fe:elog.dll *.obj %LIBS% /link %LIB_PATH%
 if errorlevel 1 goto LINK_ERROR
 cd ..\..
 

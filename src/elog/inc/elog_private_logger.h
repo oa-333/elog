@@ -1,7 +1,6 @@
 #ifndef __ELOG_PRIVATE_LOGGER_H__
 #define __ELOG_PRIVATE_LOGGER_H__
 
-#include "elog_def.h"
 #include "elog_logger.h"
 
 namespace elog {

@@ -11,7 +11,7 @@
 
 namespace elog {
 
-class ELogKafkaMsgQTarget : public ELogMsgQTarget {
+class ELOG_API ELogKafkaMsgQTarget : public ELogMsgQTarget {
 public:
     ELogKafkaMsgQTarget(const std::string& bootstrapServers, const std::string& topicName,
                         const std::string& headers, int partition = -1,

@@ -6,7 +6,7 @@
 namespace elog {
 
 /** @brief Abstract parent class for asynchronous log targets. */
-class ELogAsyncTarget : public ELogTarget {
+class ELOG_API ELogAsyncTarget : public ELogTarget {
 public:
     ~ELogAsyncTarget() override {
         if (m_endTarget != nullptr) {

@@ -3,7 +3,6 @@
 
 #include <atomic>
 
-#include "elog_def.h"
 #include "elog_level.h"
 #include "elog_record_builder.h"
 #include "elog_source.h"

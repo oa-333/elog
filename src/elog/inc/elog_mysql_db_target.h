@@ -1,8 +1,6 @@
 #ifndef __ELOG_MYSQL_DB_TARGET_H__
 #define __ELOG_MYSQL_DB_TARGET_H__
 
-#include "elog_def.h"
-
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
 #include <mysql/jdbc.h>
@@ -13,7 +11,7 @@
 
 namespace elog {
 
-class ELogMySqlDbTarget : public ELogDbTarget {
+class ELOG_API ELogMySqlDbTarget : public ELogDbTarget {
 public:
     ELogMySqlDbTarget(const std::string& url, const std::string& db, const std::string& user,
                       const std::string& passwd, const std::string& insertStmt,

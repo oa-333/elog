@@ -37,6 +37,7 @@ static void testPerfImmediateFlushPolicy();
 static void testPerfCountFlushPolicy();
 static void testPerfSizeFlushPolicy();
 static void testPerfTimeFlushPolicy();
+static void testPerfCompoundFlushPolicy();
 
 void testPerfSTFlushImmediate(std::vector<double>& msgThroughput,
                               std::vector<double>& ioThroughput);
@@ -82,10 +83,12 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
 
     elog::ELogPropertySequence props;
     std::string namedCfg = cfg;
-    if (namedCfg.find('?') != std::string::npos) {
-        namedCfg += "&name=elog_bench";
-    } else {
-        namedCfg += "?name=elog_bench";
+    if (namedCfg.find("{") == std::string::npos) {
+        if (namedCfg.find('?') != std::string::npos) {
+            namedCfg += "&name=elog_bench";
+        } else {
+            namedCfg += "?name=elog_bench";
+        }
     }
     props.push_back(elog::ELogProperty("log_target", namedCfg));
     if (!elog::ELogSystem::configureFromProperties(props)) {
@@ -239,6 +242,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         privateLogger ? nullptr : elog::ELogSystem::getSharedLogger("");
     for (uint32_t threadCount = MIN_THREAD_COUNT; threadCount <= MAX_THREAD_COUNT; ++threadCount) {
         // fprintf(stderr, "Running %u threads test\n", threadCount);
+        ELOG_INFO("Running %u Thread Test", threadCount);
         std::vector<std::thread> threads;
         std::vector<double> resVec(threadCount, 0.0);
         auto start = std::chrono::high_resolution_clock::now();
@@ -275,6 +279,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         // fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
         // readCount);
         auto end = std::chrono::high_resolution_clock::now();
+        ELOG_INFO("%u Thread Test ended", threadCount);
         uint64_t bytesEnd = logTarget->getBytesWritten();
         double throughput = 0;
         for (double val : resVec) {
@@ -420,66 +425,69 @@ void testPerfFileFlushPolicy() {
 
     // flush time
     testPerfTimeFlushPolicy();
+
+    // compound flush policy, size or count
+    // testPerfCompoundFlushPolicy();
 }
 
 void testPerfBufferedFile() {
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_buffered512.log?file-buffer-size=512&file-lock=yes&flush_policy=none";
+        "elog_bench_buffered512.log?file_buffer_size=512&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (512 bytes)", "elog_bench_buffered512", cfg);
 
     cfg =
         "file://./bench_data/"
-        "elog_bench_buffered4kb.log?file-buffer-size=4096&file-lock=yes&flush_policy=none";
+        "elog_bench_buffered4kb.log?file_buffer_size=4096&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (4kb)", "elog_bench_buffered4kb", cfg);
 
     cfg =
         "file://./bench_data/"
-        "elog_bench_buffered64kb.log?file-buffer-size=65536&file-lock=yes&flush_policy=none";
+        "elog_bench_buffered64kb.log?file_buffer_size=65536&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (64kb)", "elog_bench_buffered64kb", cfg);
 
     cfg =
         "file://./bench_data/"
-        "elog_bench_buffered1mb.log?file-buffer-size=1048576&file-lock=yes&flush_policy=none";
+        "elog_bench_buffered1mb.log?file_buffer_size=1048576&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (1mb)", "elog_bench_buffered1mb", cfg);
 
     cfg =
         "file://./bench_data/"
-        "elog_bench_buffered4mb.log?file-buffer-size=4194304&file-lock=yes&flush_policy=none";
+        "elog_bench_buffered4mb.log?file_buffer_size=4194304&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (4mb)", "elog_bench_buffered4mb", cfg);
 }
 
 void testPerfDeferredFile() {
     /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_deferred.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "elog_bench_deferred.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&deferred";*/
     const char* cfg =
-        "file://./bench_data/elog_bench_deferred.log?flush_policy=count&flush-count=4096&deferred";
+        "file://./bench_data/elog_bench_deferred.log?flush_policy=count&flush_count=4096&deferred";
     runMultiThreadTest("Deferred (Flush Count 4096)", "elog_bench_deferred", cfg);
 }
 
 void testPerfQueuedFile() {
     /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_queued.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
-        "count=4096&queue-batch-size=10000&queue-"
-        "timeout-millis=200";*/
+        "elog_bench_queued.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
+        "count=4096&queue_batch_size=10000&queue_"
+        "timeout_millis=200";*/
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_queued.log?flush_policy=count&flush-count=4096&queue-batch-size=10000&queue-"
-        "timeout-millis=200";
+        "elog_bench_queued.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&queue_"
+        "timeout_millis=200";
     runMultiThreadTest("Queued 4096 + 200ms (Flush Count 4096)", "elog_bench_queued", cfg);
 }
 
 void testPerfQuantumFile(bool privateLogger) {
     /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_quantum.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
-        "count=4096&quantum-buffer-size=2000000";*/
+        "elog_bench_quantum.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
+        "count=4096&quantum_buffer_size=2000000";*/
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_quantum.log?flush_policy=count&flush-count=4096&quantum-buffer-size=2000000";
+        "elog_bench_quantum.log?flush_policy=count&flush_count=4096&quantum_buffer_size=2000000";
     runMultiThreadTest("Quantum 200000 (Flush Count 4096)", "elog_bench_quantum", cfg,
                        privateLogger);
 }
@@ -545,7 +553,7 @@ void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double
 void testPerfSTFlushCount4096(std::vector<double>& msgThroughput,
                               std::vector<double>& ioThroughput) {
     const char* cfg =
-        "file://./bench_data/elog_bench_flush_count4096_st.log?flush_policy=count&flush-count=4096";
+        "file://./bench_data/elog_bench_flush_count4096_st.log?flush_policy=count&flush_count=4096";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Flush Count=4096", cfg, msgPerf, ioPerf);
@@ -556,7 +564,7 @@ void testPerfSTFlushCount4096(std::vector<double>& msgThroughput,
 void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput) {
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_flush_size_1mb_st.log?flush_policy=size&flush-size-bytes=1048576";
+        "elog_bench_flush_size_1mb_st.log?flush_policy=size&flush_size_bytes=1048576";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Flush Size=1MB", cfg, msgPerf, ioPerf);
@@ -568,7 +576,7 @@ void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput,
                               std::vector<double>& ioThroughput) {
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_flush_time_200ms_st.log?flush_policy=time&flush-timeout-millis=200";
+        "elog_bench_flush_time_200ms_st.log?flush_policy=time&flush_timeout_millis=200";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Flush Time=200ms", cfg, msgPerf, ioPerf);
@@ -580,7 +588,7 @@ void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
                                std::vector<double>& ioThroughput) {
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_buffered_1mb_st.log?file-buffer-size=1048576&flush_policy=none";
+        "elog_bench_buffered_1mb_st.log?file_buffer_size=1048576&flush_policy=none";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Buffered Size=1mb", cfg, msgPerf, ioPerf);
@@ -592,11 +600,11 @@ void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
                                  std::vector<double>& ioThroughput) {
     /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_deferred_st.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
+        "elog_bench_deferred_st.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&deferred";*/
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_deferred_st.log?flush_policy=count&flush-count=4096&deferred";
+        "elog_bench_deferred_st.log?flush_policy=count&flush_count=4096&deferred";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Deferred", cfg, msgPerf, ioPerf);
@@ -608,13 +616,13 @@ void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
                                std::vector<double>& ioThroughput) {
     /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_queued_st.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
-        "count=4096&queue-batch-size=10000&queue-"
-        "timeout-millis=500";*/
+        "elog_bench_queued_st.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
+        "count=4096&queue_batch_size=10000&queue_"
+        "timeout_millis=500";*/
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_queued_st.log?flush_policy=count&flush-count=4096&queue-batch-size=10000&queue-"
-        "timeout-millis=500";
+        "elog_bench_queued_st.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&queue_"
+        "timeout_millis=500";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Queued", cfg, msgPerf, ioPerf);
@@ -626,15 +634,27 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
                                 std::vector<double>& ioThroughput) {
     /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_quantum_st.log?file-buffer-size=4194304&file-lock=no&flush_policy=count&flush-"
-        "count=4096&quantum-buffer-size=2000000";*/
+        "elog_bench_quantum_st.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
+        "count=4096&quantum_buffer_size=2000000";*/
     /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_quantum_st.log?flush_policy=size&flush-size-bytes=1048576&quantum-buffer-size="
+        "elog_bench_quantum_st.log?flush_policy=size&flush_size_bytes=1048576&quantum_buffer_size="
         "2000000";*/
-    const char* cfg =
+    /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_quantum_st.log?flush_policy=count&flush-count=4096&quantum-buffer-size=2000000";
+        "elog_bench_quantum_st.log?flush_policy=count&flush_count=4096&quantum_buffer_size=2000000";*/
+    const char* cfg =
+        "{  scheme = async, "
+        "   type = quantum, "
+        "   quantum_buffer_size = 2000000, "
+        "   name = elog_bench, "
+        "   log_target = { "
+        "       scheme = file, "
+        "       path = ./bench_data/elog_bench_quantum_st.log, "
+        "       flush_policy = count,"
+        "       flush_count = 4096"
+        "   }"
+        "}";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Quantum", cfg, msgPerf, ioPerf);
@@ -654,55 +674,78 @@ static void testPerfImmediateFlushPolicy() {
 
 static void testPerfCountFlushPolicy() {
     const char* cfg =
-        "file://./bench_data/elog_bench_count64.log?flush_policy=count&flush-count=64";
+        "file://./bench_data/elog_bench_count64.log?flush_policy=count&flush_count=64";
     runMultiThreadTest("File (Count 64 Flush Policy)", "elog_bench_count64", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count256.log?flush_policy=count&flush-count=256";
+    cfg = "file://./bench_data/elog_bench_count256.log?flush_policy=count&flush_count=256";
     runMultiThreadTest("File (Count 256 Flush Policy)", "elog_bench_count256", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count512.log?flush_policy=count&flush-count=512";
+    cfg = "file://./bench_data/elog_bench_count512.log?flush_policy=count&flush_count=512";
     runMultiThreadTest("File (Count 512 Flush Policy)", "elog_bench_count512", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count1024.log?flush_policy=count&flush-count=1024";
+    cfg = "file://./bench_data/elog_bench_count1024.log?flush_policy=count&flush_count=1024";
     runMultiThreadTest("File (Count 1024 Flush Policy)", "elog_bench_count1024", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count4096.log?flush_policy=count&flush-count=4096";
+    cfg = "file://./bench_data/elog_bench_count4096.log?flush_policy=count&flush_count=4096";
     runMultiThreadTest("File (Count 4096 Flush Policy)", "elog_bench_count4096", cfg);
 }
 
 static void testPerfSizeFlushPolicy() {
     const char* cfg =
-        "file://./bench_data/elog_bench_size64.log?flush_policy=size&flush-size-bytes=64";
+        "file://./bench_data/elog_bench_size64.log?flush_policy=size&flush_size_bytes=64";
     runMultiThreadTest("File (Size 64 bytes Flush Policy)", "elog_bench_size64", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_1kb.log?flush_policy=size&flush-size-bytes=1024";
+    cfg = "file://./bench_data/elog_bench_size_1kb.log?flush_policy=size&flush_size_bytes=1024";
     runMultiThreadTest("File (Size 1KB Flush Policy)", "elog_bench_size_1kb", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_4kb.log?flush_policy=size&flush-size-bytes=4096";
+    cfg = "file://./bench_data/elog_bench_size_4kb.log?flush_policy=size&flush_size_bytes=4096";
     runMultiThreadTest("File (Size 4KB Flush Policy)", "elog_bench_size_4kb", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_64kb.log?flush_policy=size&flush-size-bytes=65536";
+    cfg = "file://./bench_data/elog_bench_size_64kb.log?flush_policy=size&flush_size_bytes=65536";
     runMultiThreadTest("File (Size 64KB Flush Policy)", "elog_bench_size_64kb", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_1mb.log?flush_policy=size&flush-size-bytes=1048576";
+    cfg = "file://./bench_data/elog_bench_size_1mb.log?flush_policy=size&flush_size_bytes=1048576";
     runMultiThreadTest("File (Size 1MB Flush Policy)", "elog_bench_size_1mb", cfg);
 }
 
 static void testPerfTimeFlushPolicy() {
+    /*const char* cfg =
+        "file://./bench_data/elog_bench_time_100ms.log?flush_policy=time&flush_timeout_millis=100";*/
     const char* cfg =
-        "file://./bench_data/elog_bench_time_100ms.log?flush_policy=time&flush-timeout-millis=100";
+        "{ scheme = file, "
+        "   path = ./bench_data/elog_bench_time_100ms.log, "
+        "   flush_policy = time, "
+        "   flush_timeout_millis = 100, "
+        "   name = elog_bench"
+        "}";
     runMultiThreadTest("File (Time 100 ms Flush Policy)", "elog_bench_time_100ms", cfg);
 
     cfg =
-        "file://./bench_data/elog_bench_time_200ms.log?flush_policy=time&flush-timeout-millis=200";
+        "file://./bench_data/"
+        "elog_bench_time_200ms?flush_policy=time&flush_timeout_millis=200";
     runMultiThreadTest("File (Time 200 ms Flush Policy)", "elog_bench_time_200ms", cfg);
 
     cfg =
-        "file://./bench_data/elog_bench_time_500ms.log?flush_policy=time&flush-timeout-millis=500";
+        "file://./bench_data/elog_bench_time_500ms.log?flush_policy=time&flush_timeout_millis=500";
     runMultiThreadTest("File (Time 500 ms Flush Policy)", "elog_bench_time_500ms", cfg);
 
     cfg =
         "file://./bench_data/"
-        "elog_bench_time_1000ms.log?flush_policy=time&flush-timeout-millis=1000";
+        "elog_bench_time_1000ms.log?flush_policy=time&flush_timeout_millis=1000";
     runMultiThreadTest("File (Time 1000 ms Flush Policy)", "elog_bench_time_1000ms", cfg);
+}
+
+static void testPerfCompoundFlushPolicy() {
+    const char* cfg =
+        "{ scheme = file, "
+        "   path = ./bench_data/elog_bench_compound.log, "
+        "   flush_policy = or, "
+        "   flush_policy_args = ["
+        "       { flush_policy = count, flush_count = 4096 },"
+        "       { flush_policy = size, flush_size_bytes = 1024 },"
+        "       { flush_policy = time, flush_timeout_millis = 200 }"
+        "   ],"
+        "   name = elog_bench"
+        "}";
+    runMultiThreadTest("File (Compound Flush Policy)", "elog_bench_compound", cfg);
 }

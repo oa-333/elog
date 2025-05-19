@@ -7,7 +7,7 @@
 namespace elog {
 
 /** @brief Parent interface for all DB log targets. */
-class ELogDbTargetProvider {
+class ELOG_API ELogDbTargetProvider {
 public:
     ELogDbTargetProvider(const ELogDbTargetProvider&) = delete;
     ELogDbTargetProvider(ELogDbTargetProvider&&) = delete;

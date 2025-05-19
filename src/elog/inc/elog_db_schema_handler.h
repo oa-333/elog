@@ -9,7 +9,7 @@
 namespace elog {
 
 /** @brief Handler for loading DB log target from configuration. */
-class ELogDbSchemaHandler : public ELogSchemaHandler {
+class ELOG_API ELogDbSchemaHandler : public ELogSchemaHandler {
 public:
     ELogDbSchemaHandler() {}
     ELogDbSchemaHandler(const ELogDbSchemaHandler&) = default;

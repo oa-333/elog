@@ -9,7 +9,6 @@
 #include <thread>
 #include <vector>
 
-#include "elog_def.h"
 #include "elog_target.h"
 #include "elog_target_spec.h"
 
@@ -107,14 +106,14 @@ protected:
 };
 
 /** @def Utility macro for declaring flush policy factory method registration. */
-#define ELOG_DECLARE_FLUSH_POLICY(FlushPolicyType, Name)                            \
-    class FlushPolicyType##Constructor : public elog::ELogFlushPolicyConstructor {  \
-    public:                                                                         \
-        FlushPolicyType##Constructor() : elog::ELogFlushPolicyConstructor(#Name) {} \
-        elog::ELogFlushPolicy* constructFlushPolicy() final {                       \
-            return new (std::nothrow) FlushPolicyType();                            \
-        }                                                                           \
-    };                                                                              \
+#define ELOG_DECLARE_FLUSH_POLICY(FlushPolicyType, Name)                                    \
+    class ELOG_API FlushPolicyType##Constructor : public elog::ELogFlushPolicyConstructor { \
+    public:                                                                                 \
+        FlushPolicyType##Constructor() : elog::ELogFlushPolicyConstructor(#Name) {}         \
+        elog::ELogFlushPolicy* constructFlushPolicy() final {                               \
+            return new (std::nothrow) FlushPolicyType();                                    \
+        }                                                                                   \
+    };                                                                                      \
     static FlushPolicyType##Constructor sConstructor;
 
 /** @def Utility macro for implementing flush policy factory method registration. */

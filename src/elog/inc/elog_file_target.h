@@ -3,7 +3,6 @@
 
 #include <cstdio>
 
-#include "elog_def.h"
 #include "elog_target.h"
 
 namespace elog {

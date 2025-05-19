@@ -17,7 +17,7 @@
 namespace elog {
 
 /** @brief Log rate limiter. */
-class ELogRateLimiter : public ELogFilter {
+class ELOG_API ELogRateLimiter : public ELogFilter {
 public:
     ELogRateLimiter(uint64_t maxMsgPerSecond = 0)
         : m_maxMsgPerSecond(maxMsgPerSecond),

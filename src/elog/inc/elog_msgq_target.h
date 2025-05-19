@@ -11,7 +11,7 @@
 namespace elog {
 
 /** @brief Abstract parent class for message queue log targets. */
-class ELogMsgQTarget : public ELogTarget {
+class ELOG_API ELogMsgQTarget : public ELogTarget {
 public:
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush() override {}

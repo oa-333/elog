@@ -5,7 +5,7 @@
 
 namespace elog {
 
-class ELogDbFormatter : public ELogBaseFormatter {
+class ELOG_API ELogDbFormatter : public ELogBaseFormatter {
 public:
     /** @enum Prepared statement processing style. */
     enum class QueryStyle : uint32_t {

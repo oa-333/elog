@@ -7,7 +7,7 @@
 namespace elog {
 
 /** @brief Parent interface for all DB log targets. */
-class ELogMsgQTargetProvider {
+class ELOG_API ELogMsgQTargetProvider {
 public:
     ELogMsgQTargetProvider(const ELogMsgQTargetProvider&) = delete;
     ELogMsgQTargetProvider(ELogMsgQTargetProvider&&) = delete;

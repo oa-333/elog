@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <ctime>
 
-#include "elog_def.h"
 #include "elog_level.h"
 
 namespace elog {

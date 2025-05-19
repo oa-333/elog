@@ -5,7 +5,7 @@
 
 namespace elog {
 
-class ELogMsgQFormatter : public ELogBaseFormatter {
+class ELOG_API ELogMsgQFormatter : public ELogBaseFormatter {
 public:
     ELogMsgQFormatter() : m_lastFieldType(FieldType::FT_NONE) {}
     ELogMsgQFormatter(const ELogMsgQFormatter&) = delete;

@@ -7,7 +7,7 @@
 namespace elog {
 
 /** @brief Parent interface for all asynchronous log target providers. */
-class ELogAsyncTargetProvider {
+class ELOG_API ELogAsyncTargetProvider {
 public:
     ELogAsyncTargetProvider(const ELogAsyncTargetProvider&) = delete;
     ELogAsyncTargetProvider(ELogAsyncTargetProvider&&) = delete;

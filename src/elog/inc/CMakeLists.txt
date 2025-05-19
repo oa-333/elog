@@ -1,0 +1,53 @@
+
+target_sources(
+    elog
+    PUBLIC
+        FILE_SET publicheaders
+        TYPE HEADERS
+        FILES
+            elog_async_schema_handler.h
+            elog_async_target.h
+            elog_async_target_provider.h
+            elog_base_formatter.h
+            elog_buffer.h
+            elog_buffered_file_target.h
+            elog_buffered_file_writer.h
+            elog_db_formatter.h
+            elog_db_schema_handler.h
+            elog_db_target.h
+            elog_db_target_provider.h
+            elog_def.h
+            elog_deferred_target.h
+            elog_error_handler.h
+            elog_field_receptor.h
+            elog_field_selector.h
+            elog_file_target.h
+            elog_filter.h
+            elog_flush_policy.h
+            elog_formatter.h
+            elog_kafka_msgq_target.h
+            elog_level.h
+            elog_logger.h
+            elog_msgq_formatter.h
+            elog_msgq_schema_handler.h
+            elog_msgq_target.h
+            elog_msgq_target_provider.h
+            elog_mysql_db_target.h
+            elog_pgsql_db_target.h
+            elog_private_logger.h
+            elog_props.h
+            elog_quantum_target.h
+            elog_queued_target.h
+            elog_rate_limiter.h
+            elog_record.h
+            elog_record_builder.h
+            elog_schema_handler.h
+            elog_segmented_file_target.h
+            elog_shared_logger.h
+            elog_source.h
+            elog_sqlite_db_target.h
+            elog_string_stream_receptor.h
+            elog_syslog_target.h
+            elog_system.h
+            elog_target.h
+            elog_target_spec.h)

@@ -104,6 +104,7 @@
         "interruptible",
         "millis",
         "msgq",
+        "MSVC",
         "MSYSTEM",
         "tname"
     ]

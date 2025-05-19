@@ -24,19 +24,6 @@
 #include "elog_syslog_target.h"
 #include "elog_target_spec.h"
 
-// TODO: add more sub-sections for initializations methods
-// TODO: reorder sections, add section for how to externally extend SW
-// TODO: revise entire doc, consider putting in pdf.
-// TODO: in addition to url config, also add nested config with {} syntax
-// TODO: allow specifying sizes with units (b, kb, mb - case insensitive)
-// TODO: fix segmented log race conditions and add buffered file writer support
-// TODO: Consider having buffering as a general step in the chain of logger --> log target -->
-// transport
-// TODO: refactor out all configuration loading logic into ELogConfig and put in src folder
-// TODO: must write regression tests
-// TODO: update configuration due to new changes (nested log target, flush policy and filter
-// loadable etc.)
-
 namespace elog {
 
 /** @brief Log level configuration used for delayed log level propagation. */
@@ -743,9 +730,7 @@ ELogSource* ELogSystem::addChildSource(ELogSource* parent, const char* sourceNam
     ELogSource* logSource = new (std::nothrow) ELogSource(allocLogSourceId(), sourceName, parent);
     if (!parent->addChild(logSource)) {
         // impossible
-        // TODO: consider having an error listener to pass to user all errors and let the user deal
-        // with them, dumping to stderr is not acceptable in an infrastructure library, but there is
-        // also no sense in defining error codes, convert to string, etc.
+        ELOG_REPORT_ERROR("Internal error, cannot add child source %s, already exists", sourceName);
         delete logSource;
         return nullptr;
     }
@@ -754,6 +739,8 @@ ELogSource* ELogSystem::addChildSource(ELogSource* parent, const char* sourceNam
         sLogSourceMap.insert(ELogSourceMap::value_type(logSource->getId(), logSource)).second;
     if (!res) {
         // internal error, roll back
+        ELOG_REPORT_ERROR("Internal error, cannot add new log source %s by id %u, already exists",
+                          sourceName, logSource->getId());
         parent->removeChild(logSource->getName());
         delete logSource;
         return nullptr;
@@ -926,5 +913,15 @@ void ELogSystem::log(const ELogRecord& logRecord) {
         sDefaultLogTarget->log(logRecord);
     }
 }
+
+char* ELogSystem::sysErrorToStr(int sysErrorCode) { return ELogError::sysErrorToStr(sysErrorCode); }
+
+#ifdef ELOG_WINDOWS
+char* ELogSystem::win32SysErrorToStr(unsigned long sysErrorCode) {
+    return ELogError::win32SysErrorToStr(sysErrorCode);
+}
+
+void ELogSystem::win32FreeErrorStr(char* errStr) { ELogError::win32FreeErrorStr(errStr); }
+#endif
 
 }  // namespace elog

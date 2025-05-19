@@ -1,7 +1,6 @@
 #ifndef __ELOG_SYSTEM_H__
 #define __ELOG_SYSTEM_H__
 
-#include "elog_def.h"
 #include "elog_error_handler.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
@@ -21,7 +20,7 @@ typedef uint32_t ELogTargetId;
 #define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
 
 // forward declaration
-class ELogSpecTokenizer;
+class ELOG_API ELogSpecTokenizer;
 
 /** @brief The elog module facade. */
 class ELOG_API ELogSystem {
@@ -505,6 +504,17 @@ public:
      * @param logRecord The lgo record to process.
      */
     static void log(const ELogRecord& logRecord);
+
+    /** @brief Converts system error code to string. */
+    static char* sysErrorToStr(int sysErrorCode);
+
+#ifdef ELOG_WINDOWS
+    /** @brief Converts Windows system error code to string. */
+    static char* win32SysErrorToStr(unsigned long sysErrorCode);
+
+    /** @brief Deallocates Windows system error string. */
+    static void win32FreeErrorStr(char* errStr);
+#endif
 
 private:
     static bool initGlobals();

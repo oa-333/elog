@@ -8,7 +8,7 @@
 namespace elog {
 
 /** @struct Log Target specification (used for loading from configuration). */
-struct ELogTargetSpec {
+struct ELOG_API ELogTargetSpec {
     /** @brief The target scheme (sys, file, db, msgq, etc.) */
     std::string m_scheme;
 
@@ -26,7 +26,7 @@ struct ELogTargetSpec {
 };
 
 /** @brief Target specification style constants. */
-enum ELogTargetSpecStyle {
+enum ELOG_API ELogTargetSpecStyle {
     /**
      * @brief URL target specification style (properties may contain asynchronous logging
      * specification).
@@ -41,7 +41,7 @@ enum ELogTargetSpecStyle {
 };
 
 /** @brief Nested target specification. */
-struct ELogTargetNestedSpec {
+struct ELOG_API ELogTargetNestedSpec {
     /** @brief The target specification */
     ELogTargetSpec m_spec;
 

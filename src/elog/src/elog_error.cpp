@@ -1,5 +1,6 @@
 #include "elog_error.h"
 
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -89,11 +90,14 @@ void ELogError::reportTrace(const char* fmt, ...) {
 }
 
 char* ELogError::sysErrorToStr(int sysErrorCode) {
+    const int BUF_LEN = 256;
+    static thread_local char buf[BUF_LEN];
 #ifdef ELOG_WINDOWS
-    return strerror(sysErrorCode);
+    (void)strerror_s(buf, BUF_LEN, sysErrorCode);
+    return buf;
 #else
-    static thread_local char buf[256];
-    return strerror_r(sysErrorCode, buf, 256);
+    (void)strerror_r(sysErrorCode, buf, BUF_LEN);
+    return buf;
 #endif
 }
 

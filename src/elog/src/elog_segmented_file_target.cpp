@@ -9,6 +9,7 @@
 #endif
 
 #include <cinttypes>
+#include <cstring>
 #include <filesystem>
 #include <thread>
 

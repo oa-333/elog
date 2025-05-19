@@ -9,7 +9,7 @@ namespace elog {
  * @brief A default implementation of the @ref ELogFieldReceptor interface that redirects selected
  * log record fields into a string stream.
  */
-class ELogStringStreamReceptor : public ELogFieldReceptor {
+class ELOG_API ELogStringStreamReceptor : public ELogFieldReceptor {
 public:
     ELogStringStreamReceptor() {}
     ELogStringStreamReceptor(const ELogStringStreamReceptor&) = delete;

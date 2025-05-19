@@ -7,7 +7,6 @@
 #include <string>
 
 #include "elog_buffered_file_writer.h"
-#include "elog_def.h"
 #include "elog_target.h"
 
 namespace elog {

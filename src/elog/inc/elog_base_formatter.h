@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "elog_def.h"
 #include "elog_field_selector.h"
 #include "elog_record.h"
 
@@ -12,8 +11,6 @@ namespace elog {
 
 // the following special log field reference tokens can be used in configuration:
 // ${rid} ${time} ${host} ${user} ${prog} ${pid} ${tid} ${src} ${msg}
-
-// TODO: consider having a parent interface with no ctor params
 
 /** @class Utility class for formatting log messages. */
 class ELOG_API ELogBaseFormatter {

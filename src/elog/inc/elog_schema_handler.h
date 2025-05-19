@@ -7,7 +7,7 @@
 namespace elog {
 
 /** @brief Interface for loading log targets by a given scheme. */
-class ELogSchemaHandler {
+class ELOG_API ELogSchemaHandler {
 public:
     ELogSchemaHandler(const ELogSchemaHandler&) = default;
     ELogSchemaHandler(ELogSchemaHandler&&) = default;

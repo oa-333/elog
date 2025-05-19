@@ -10,7 +10,7 @@
 
 namespace elog {
 
-class ELOG_API ELogSysLogTarget : public ELogTarget {
+class ELogSysLogTarget : public ELogTarget {
 public:
     ELogSysLogTarget() : ELogTarget("syslog") {}
     ELogSysLogTarget(const ELogSysLogTarget&) = delete;

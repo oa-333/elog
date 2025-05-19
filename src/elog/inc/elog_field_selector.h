@@ -3,7 +3,6 @@
 
 #include <sstream>
 
-#include "elog_def.h"
 #include "elog_field_receptor.h"
 #include "elog_record.h"
 
@@ -84,14 +83,14 @@ protected:
 };
 
 /** @def Utility macro for declaring field selector factory method registration. */
-#define ELOG_DECLARE_FIELD_SELECTOR(FieldSelectorType, Name)                            \
-    class FieldSelectorType##Constructor : public elog::ELogFieldSelectorConstructor {  \
-    public:                                                                             \
-        FieldSelectorType##Constructor() : elog::ELogFieldSelectorConstructor(#Name) {} \
-        elog::ELogFieldSelector* constructFieldSelector(int justify) final {            \
-            return new (std::nothrow) FieldSelectorType(justify);                       \
-        }                                                                               \
-    };                                                                                  \
+#define ELOG_DECLARE_FIELD_SELECTOR(FieldSelectorType, Name)                                    \
+    class ELOG_API FieldSelectorType##Constructor : public elog::ELogFieldSelectorConstructor { \
+    public:                                                                                     \
+        FieldSelectorType##Constructor() : elog::ELogFieldSelectorConstructor(#Name) {}         \
+        elog::ELogFieldSelector* constructFieldSelector(int justify) final {                    \
+            return new (std::nothrow) FieldSelectorType(justify);                               \
+        }                                                                                       \
+    };                                                                                          \
     static FieldSelectorType##Constructor sConstructor;
 
 /** @def Utility macro for implementing field selector factory method registration. */

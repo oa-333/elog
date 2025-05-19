@@ -5,13 +5,12 @@
 #include <sstream>
 #include <string>
 
-#include "elog_def.h"
 #include "elog_level.h"
 
 namespace elog {
 
 /** @brief Parent interface for the target receptor of selected log record fields. */
-class ELogFieldReceptor {
+class ELOG_API ELogFieldReceptor {
 public:
     virtual ~ELogFieldReceptor() {}
 

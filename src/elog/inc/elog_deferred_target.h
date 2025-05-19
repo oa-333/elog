@@ -7,7 +7,6 @@
 #include <thread>
 
 #include "elog_async_target.h"
-#include "elog_def.h"
 
 namespace elog {
 

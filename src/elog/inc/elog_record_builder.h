@@ -4,7 +4,6 @@
 #include <cstdio>
 
 #include "elog_buffer.h"
-#include "elog_def.h"
 #include "elog_record.h"
 
 namespace elog {

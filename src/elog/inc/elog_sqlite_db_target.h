@@ -1,8 +1,6 @@
 #ifndef __ELOG_SQLITE_DB_TARGET_H__
 #define __ELOG_SQLITE_DB_TARGET_H__
 
-#include "elog_def.h"
-
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
 
 #include <sqlite3.h>
@@ -13,7 +11,7 @@
 
 namespace elog {
 
-class ELogSQLiteDbTarget : public ELogDbTarget {
+class ELOG_API ELogSQLiteDbTarget : public ELogDbTarget {
 public:
     ELogSQLiteDbTarget(const std::string& filePath, const std::string& insertStmt,
                        ELogDbTarget::ThreadModel threadModel,

@@ -9,7 +9,7 @@
 namespace elog {
 
 /** @brief Handler for loading asynchronous log target from configuration. */
-class ELogAsyncSchemaHandler : public ELogSchemaHandler {
+class ELOG_API ELogAsyncSchemaHandler : public ELogSchemaHandler {
 public:
     ELogAsyncSchemaHandler() {}
     ELogAsyncSchemaHandler(const ELogAsyncSchemaHandler&) = default;

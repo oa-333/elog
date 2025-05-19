@@ -12,7 +12,7 @@
 namespace elog {
 
 /** @brief A utility class for writing data to file with internal buffering. */
-class ELogBufferedFileWriter {
+class ELOG_API ELogBufferedFileWriter {
 public:
     /**
      * @brief Construct a new ELogBufferedFileWriter object.

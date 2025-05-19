@@ -62,10 +62,10 @@ bool ELogFileTarget::configureOptimalBufferSize() {
         m_fileHandle = nullptr;
         return false;
     }
-    ELOG_REPORT_TRACE("Recommended buffer size is %d, but optimal block size is %ld\n", BUFSIZ,
-                      optimalBlockSize);
-    fprintf(stderr, "Recommended buffer size is %d, but optimal block size is %ld\n", BUFSIZ,
-            optimalBlockSize);
+    ELOG_REPORT_TRACE("Recommended buffer size is %u, but optimal block size is %ld\n",
+                      (unsigned)BUFSIZ, optimalBlockSize);
+    fprintf(stderr, "Recommended buffer size is %u, but optimal block size is %u\n",
+            (unsigned)BUFSIZ, optimalBlockSize);
 
     if (setvbuf(m_fileHandle, NULL, _IOFBF, optimalBlockSize) != 0) {
         ELOG_REPORT_SYS_ERROR(setvbuf,
@@ -87,6 +87,14 @@ bool ELogFileTarget::startLogTarget() {
         }
         m_shouldClose = true;
     }
+#if 0
+    if (!configureOptimalBufferSize()) {
+        ELOG_REPORT_ERROR("Failed to configure optimal buffer size on Windows/MSVC");
+        fclose(m_fileHandle);
+        m_fileHandle = nullptr;
+        return false;
+    }
+#endif
     return true;
 }
 
