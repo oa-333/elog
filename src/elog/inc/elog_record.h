@@ -58,6 +58,10 @@ struct ELOG_API ELogRecord {
     ~ELogRecord() {}
 
     inline ELogRecord& operator=(const ELogRecord& logRecord) = default;
+
+    inline bool operator==(const ELogRecord& logRecord) const {
+        return m_logRecordId == logRecord.m_logRecordId;
+    }
 };
 
 }  // namespace elog

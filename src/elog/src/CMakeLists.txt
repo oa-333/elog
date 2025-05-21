@@ -6,63 +6,46 @@ target_sources(elog PRIVATE
     ./elog_buffered_file_target.cpp
     ./elog_buffered_file_writer.cpp
     ./elog_common.cpp
-    ./elog_common.h
     ./elog_config_loader.cpp
-    ./elog_config_loader.h
     ./elog_config_parser.cpp
-    ./elog_config_parser.h
     ./elog_db_formatter.cpp
     ./elog_db_schema_handler.cpp
     ./elog_db_target.cpp
     ./elog_deferred_target.cpp
     ./elog_deferred_target_provider.cpp
-    ./elog_deferred_target_provider.h
     ./elog_error.cpp
     ./elog_error.h
     ./elog_field_selector.cpp
-    ./elog_field_selector_internal.h
     ./elog_file_schema_handler.cpp
-    ./elog_file_schema_handler.h
     ./elog_file_target.cpp
     ./elog_filter.cpp
-    ./elog_filter_internal.h
     ./elog_flush_policy.cpp
-    ./elog_flush_policy_internal.h
     ./elog_formatter.cpp
     ./elog_kafka_msgq_target.cpp
     ./elog_kafka_msgq_target_provider.cpp
-    ./elog_kafka_msgq_target_provider.h
     ./elog_level.cpp
     ./elog_logger.cpp
     ./elog_msgq_formatter.cpp
     ./elog_msgq_schema_handler.cpp
     ./elog_mysql_db_target.cpp
     ./elog_mysql_db_target_provider.cpp
-    ./elog_mysql_db_target_provider.h
     ./elog_pgsql_db_target.cpp
     ./elog_pgsql_db_target_provider.cpp
-    ./elog_pgsql_db_target_provider.h
     ./elog_quantum_target.cpp
     ./elog_quantum_target_provider.cpp
-    ./elog_quantum_target_provider.h
     ./elog_queued_target.cpp
     ./elog_queued_target_provider.cpp
-    ./elog_queued_target_provider.h
     ./elog_rate_limiter.cpp
     ./elog_record_builder.cpp
     ./elog_schema_manager.cpp
-    ./elog_schema_manager.h
     ./elog_segmented_file_target.cpp
     ./elog_shared_logger.cpp
     ./elog_source.cpp
     ./elog_spec_tokenizer.cpp
-    ./elog_spec_tokenizer.h
     ./elog_sqlite_db_target.cpp
     ./elog_sqlite_db_target_provider.cpp
-    ./elog_sqlite_db_target_provider.h
     ./elog_string_stream_receptor.cpp
     ./elog_sys_schema_handler.cpp
-    ./elog_sys_schema_handler.h
     ./elog_syslog_target.cpp
     ./elog_system.cpp
     ./elog_target.cpp)

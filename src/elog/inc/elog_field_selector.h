@@ -1,8 +1,6 @@
 #ifndef __ELOG_FIELD_SELECTOR_H___
 #define __ELOG_FIELD_SELECTOR_H___
 
-#include <sstream>
-
 #include "elog_field_receptor.h"
 #include "elog_record.h"
 

@@ -40,6 +40,8 @@ IF NOT "%1" == "" GOTO GET_OPTS
 echo [DEBUG] Args parsed, options left: %*
 
 REM set normal options
+echo [INFO] Build type: $BUILD_TYPE
+echo [INFO] Install dir: $INSTALL_DIR
 SET OPTS=-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR%
 IF "%VERBOSE%" == "1" SET OPTS=%OPTS% -DCMAKE_VERBOSE_MAKEFILE=ON
 echo [DEBUG] Current options: %OPTS%
@@ -76,6 +78,7 @@ pushd %BUILD_DIR% > NUL
 REM configure phase
 echo INFO: Executing build command cmake %OPTS% %* ..\..\
 REM TODO: not passing extra parameters after "--"
+echo [INFO] Configuring project
 cmake %OPTS% ..\..\
 IF errorlevel 1 (
     echo ERROR: Configure phase failed, see errors above, aborting
@@ -84,7 +87,8 @@ IF errorlevel 1 (
 )
 
 REM build phase
-cmake --build . -j1
+echo [INFO] Building
+cmake --build . -j
 IF errorlevel 1 (
     echo ERROR: Build phase failed, see errors above, aborting
     popd > NUL
@@ -92,6 +96,7 @@ IF errorlevel 1 (
 )
 
 REM install phase
+echo [INFO] Installing
 cmake --install .
 IF errorlevel 1 (
     echo ERROR: Install phase failed, see errors above, aborting

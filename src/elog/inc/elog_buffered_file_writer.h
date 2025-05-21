@@ -32,7 +32,8 @@ public:
      */
     ELogBufferedFileWriter(uint32_t bufferSize, bool useLock)
         : m_fd(0), m_bufferSize(bufferSize), m_bufferOffset(0), m_useLock(useLock) {}
-
+    ELogBufferedFileWriter(const ELogBufferedFileWriter&) = delete;
+    ELogBufferedFileWriter(ELogBufferedFileWriter&&) = delete;
     ~ELogBufferedFileWriter() {}
 
     /**

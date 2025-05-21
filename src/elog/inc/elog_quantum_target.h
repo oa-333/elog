@@ -90,6 +90,14 @@ private:
             : m_logRecord(recordData.m_logRecord),
               m_logMsg(recordData.m_logMsg),
               m_entryState(recordData.m_entryState.load(std::memory_order_relaxed)) {}
+
+        inline ELogRecordData operator=(const ELogRecordData& recordData) {
+            m_logRecord = recordData.m_logRecord;
+            m_logMsg = recordData.m_logMsg;
+            m_entryState.store(recordData.m_entryState.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            return *this;
+        }
     };
 
     typedef std::vector<ELogRecordData> LogRingBuffer;

@@ -3,6 +3,7 @@
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 
 #include <cstring>
+#include <sstream>
 
 #include "elog_error.h"
 #include "elog_system.h"

@@ -2,8 +2,12 @@
 #define __ELOG_FIELD_RECEPTOR_H__
 
 #include <cstdint>
-#include <sstream>
 #include <string>
+
+#include "elog_def.h"
+#ifndef ELOG_MSVC
+#include <sys/time.h>
+#endif
 
 #include "elog_level.h"
 

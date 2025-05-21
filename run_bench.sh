@@ -1,7 +1,13 @@
 #!/bin/bash
 
 # change this to actual destination
-export INSTALL_DIR=/c/install
+OS=`uname -o`
+if [ "$OS" = "Msys" ]; then
+    INSTALL_DIR=/c/install/
+else
+    INSTALL_DIR=~/install/
+fi
+export INSTALL_DIR
 
 # build elog
 ./build.sh --rel-with-debug-info --verbose
@@ -17,9 +23,14 @@ DEV_DIR=`readlink -f .`
 pushd $INSTALL_DIR/bin
 
 mkdir -p bench_data
-rm bench_data/*
+rm -f bench_data/*
 cp $INSTALL_DIR/elog/bin/* .
-./elog_bench_mingw.exe
+cp $INSTALL_DIR/elog/lib/* .
+if [ "$OS" = "Msys" ]; then
+    ./elog_bench_mingw.exe
+else
+    ./elog_bench
+fi
 
 # plot
 cp $DEV_DIR/src/elog_bench/gnuplot/*.gp .

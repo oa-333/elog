@@ -65,6 +65,8 @@ protected:
 
     virtual void waitQueue(std::unique_lock<std::mutex>& lock);
 
+    void logQueueMsgs(LogQueue& logQueue, bool flushOnEmptyMsg);
+
     void stopLogThread();
 };
 

@@ -117,7 +117,6 @@ static void getProgName() {
 
     // get executable file name
 #ifdef ELOG_WINDOWS
-    char modulePath[PROG_NAME_MAX];
     DWORD pathLen = GetModuleFileNameA(NULL, progName, PROG_NAME_MAX);
     if (pathLen == 0) {
         ELOG_REPORT_ERROR("WARNING: Failed to get executable file name: %u", GetLastError());
@@ -238,15 +237,15 @@ void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* 
     const uint32_t bufSize = 64;
     char buffer[bufSize];
 #ifdef ELOG_MSVC
-    size_t offset = snprintf(buffer, bufSize, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u",
-                             record.m_logTime.wYear, record.m_logTime.wMonth, record.m_logTime.wDay,
-                             record.m_logTime.wHour, record.m_logTime.wMinute,
-                             record.m_logTime.wSecond, record.m_logTime.wMilliseconds);
+    std::size_t offset = snprintf(
+        buffer, bufSize, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u", record.m_logTime.wYear,
+        record.m_logTime.wMonth, record.m_logTime.wDay, record.m_logTime.wHour,
+        record.m_logTime.wMinute, record.m_logTime.wSecond, record.m_logTime.wMilliseconds);
     receptor->receiveTimeField(record.m_logTime, buffer, m_justify);
 #else
     time_t timer = record.m_logTime.tv_sec;
     struct tm* tm_info = localtime(&timer);
-    size_t offset = strftime(buffer, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
+    std::size_t offset = strftime(buffer, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
     offset += snprintf(buffer + offset, bufSize - offset, "%.3u",
                        (unsigned)(record.m_logTime.tv_usec / 1000));
     receptor->receiveTimeField(record.m_logTime, buffer, m_justify);

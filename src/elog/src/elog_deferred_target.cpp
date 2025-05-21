@@ -59,37 +59,12 @@ void ELogDeferredTarget::logThread() {
             m_logQueue.clear();
         }
 
-        // defer log messages to log target out of lock context (out of lock scope)
-        LogQueue::iterator itr = logQueue.begin();
-        while (itr != logQueue.end()) {
-            std::string logMsg = (*itr).second;
-            if (logMsg.empty()) {
-                // empty log message signifies flush request
-                getEndLogTarget()->flush();
-            } else {
-                ELogRecord& logRecord = (*itr).first;
-                logRecord.m_logMsg = (*itr).second.c_str();
-                getEndLogTarget()->log(logRecord);
-                m_readCount.fetch_add(1, std::memory_order_relaxed);
-            }
-            ++itr;
-        }
-        logQueue.clear();
+        // write to log target outside of lock scope (allow loggers to push messages)
+        logQueueMsgs(logQueue, true);
     }
 
     // log whatever is left (no lock required)
-    LogQueue::iterator itr = m_logQueue.begin();
-    while (itr != m_logQueue.end()) {
-        std::string logMsg = (*itr).second;
-        if (!logMsg.empty()) {
-            ELogRecord& logRecord = (*itr).first;
-            logRecord.m_logMsg = (*itr).second.c_str();
-            getEndLogTarget()->log(logRecord);
-            m_readCount.fetch_add(1, std::memory_order_relaxed);
-        }
-        // skip flush requests, we will do one flush at the end
-        ++itr;
-    }
+    logQueueMsgs(m_logQueue, false);
 
     // finally flush
     getEndLogTarget()->flush();
@@ -102,6 +77,26 @@ bool ELogDeferredTarget::shouldStop() {
 
 void ELogDeferredTarget::waitQueue(std::unique_lock<std::mutex>& lock) {
     m_cv.wait(lock, [this] { return m_stop || !m_logQueue.empty(); });
+}
+
+void ELogDeferredTarget::logQueueMsgs(LogQueue& logQueue, bool flushOnEmptyMsg) {
+    LogQueue::iterator itr = logQueue.begin();
+    while (itr != logQueue.end()) {
+        std::string& logMsg = itr->second;
+        if (logMsg.empty()) {
+            // empty log message signifies flush request (ignored during last time)
+            if (flushOnEmptyMsg) {
+                getEndLogTarget()->flush();
+            }
+        } else {
+            ELogRecord& logRecord = itr->first;
+            logRecord.m_logMsg = itr->second.c_str();
+            getEndLogTarget()->log(logRecord);
+            m_readCount.fetch_add(1, std::memory_order_relaxed);
+        }
+        ++itr;
+    }
+    logQueue.clear();
 }
 
 void ELogDeferredTarget::stopLogThread() {

@@ -86,33 +86,16 @@ public:
      * @return false A child log source with the same name already exists (and therefore the request
      * to add the child was rejected).
      */
-    inline bool addChild(ELogSource* logSource) {
-        return m_children.insert(ChildMap::value_type(logSource->getName(), logSource)).second;
-    }
+    bool addChild(ELogSource* logSource);
 
     /** @brief Retrieves a child log source by name. Returns null if not found. */
-    inline ELogSource* getChild(const char* name) {
-        ELogSource* logSource = nullptr;
-        ChildMap::iterator itr = m_children.find(name);
-        if (itr != m_children.end()) {
-            logSource = itr->second;
-        }
-        return logSource;
-    }
+    ELogSource* getChild(const char* name);
 
     /** @brief Queries for existence of a child by name. */
     inline bool containsChild(const char* name) { return getChild(name) != nullptr; }
 
     /** @brief Removes a child log source by name. Silently ignored if child not found. */
-    inline void removeChild(const char* name) {
-        ELogSource* logSource = nullptr;
-        ChildMap::iterator itr = m_children.find(name);
-        if (itr != m_children.end()) {
-            m_children.erase(itr);
-        }
-    }
-
-    /** @brief Sets the log level associated with the log source and all of its managed loggers. */
+    void removeChild(const char* name);
 
     /**
      * @brief Sets the log level associated with the log source and all of its managed loggers.

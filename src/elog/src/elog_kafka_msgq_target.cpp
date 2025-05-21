@@ -3,6 +3,7 @@
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 
 #include <cstring>
+#include <sstream>
 
 #include "elog_error.h"
 #include "elog_field_selector_internal.h"

@@ -2,7 +2,6 @@
 #define __ELOG_QUEUED_TARGET_H__
 
 #include <condition_variable>
-#include <list>
 #include <thread>
 
 #include "elog_deferred_target.h"

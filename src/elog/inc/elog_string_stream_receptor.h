@@ -1,6 +1,8 @@
 #ifndef __ELOG_STRING_STREAM_RECEPTOR_H__
 #define __ELOG_STRING_STREAM_RECEPTOR_H__
 
+#include <sstream>
+
 #include "elog_field_receptor.h"
 
 namespace elog {

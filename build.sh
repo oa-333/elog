@@ -37,6 +37,8 @@ while true; do
 done
 
 # set normal options
+echo "[INFO] Build type: $BUILD_TYPE"
+echo "[INFO] Install dir: $INSTALL_DIR"
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 if [ $VERBOSE==1 ]; then
     OPTS+=" -DCMAKE_VERBOSE_MAKEFILE=ON"
@@ -70,7 +72,7 @@ mkdir -p $BUILD_DIR
 pushd $BUILD_DIR > /dev/null
 
 # configure phase
-echo "[INFO] Executing: cmake $OPTS $* ../../"
+echo "[INFO] Configuring project"
 cmake $OPTS $* ../../
 if [ $? -ne 0 ]; then
     echo "[ERROR] Configure phase failed, see errors above, aborting"
@@ -80,6 +82,7 @@ fi
 
 # build phase
 cmake --build . -j
+echo "[INFO] Building target elog"
 if [ $? -ne 0 ]; then
     echo "[ERROR] Build phase failed, see errors above, aborting"
     popd > /dev/null
@@ -87,6 +90,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # install phase
+echo "[INFO] Installing"
 cmake --install .
 if [ $? -ne 0 ]; then
     echo "[ERROR] Install phase failed, see errors above, aborting"

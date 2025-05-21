@@ -31,6 +31,27 @@ ELogSource::~ELogSource() {
     m_loggers.clear();
 }
 
+bool ELogSource::addChild(ELogSource* logSource) {
+    return m_children.insert(ChildMap::value_type(logSource->getName(), logSource)).second;
+}
+
+ELogSource* ELogSource::getChild(const char* name) {
+    ELogSource* logSource = nullptr;
+    ChildMap::iterator itr = m_children.find(name);
+    if (itr != m_children.end()) {
+        logSource = itr->second;
+    }
+    return logSource;
+}
+
+void ELogSource::removeChild(const char* name) {
+    ELogSource* logSource = nullptr;
+    ChildMap::iterator itr = m_children.find(name);
+    if (itr != m_children.end()) {
+        m_children.erase(itr);
+    }
+}
+
 void ELogSource::setLogLevel(ELogLevel logLevel, PropagateMode propagateMode) {
     m_logLevel = logLevel;
     if (propagateMode == PropagateMode::PM_NONE) {

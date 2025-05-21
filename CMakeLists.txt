@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.23)
 project(ELog VERSION 1.0 DESCRIPTION "ELog Error Logging Library" LANGUAGES CXX)
 #CMAKE_CXX_STANDARD=23
 
@@ -8,8 +8,12 @@ set_target_properties(elog PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # build executable benchmark
 add_executable(elog_bench)
+
+# add dependency from elog_bench to elog to enforce correct build order
+#add_dependencies(elog_bench elog)
+
+# set different name on MinGW
 if (MINGW)
-    # set different name on MinGW
     set_target_properties(elog_bench PROPERTIES OUTPUT_NAME "elog_bench_mingw")
 endif()
 
@@ -41,7 +45,7 @@ if (MSVC)
         target_compile_options(elog PRIVATE "/Oi")
         target_compile_options(elog_bench PRIVATE "/Oi")
         # allowing more inlining
-        target_compile_options(elog PRIVATE "/Ob2")
+        #target_compile_options(elog PRIVATE "/Ob2")
         target_compile_options(elog_bench PRIVATE "/Ob2")
         # disable security checks
         target_compile_options(elog PRIVATE "/GS-")
@@ -50,11 +54,8 @@ if (MSVC)
         target_compile_options(elog PRIVATE "/Gy")
         target_compile_options(elog_bench PRIVATE "/Gy")
         # disable runtime type information
-        target_compile_options(elog PRIVATE "/GR-")
+        #target_compile_options(elog PRIVATE "/GR-")
         target_compile_options(elog_bench PRIVATE "/GR-")
-        # disable overriding compiler option warning (since we override /Ob1 with /Ob2 and /GR with /GR-)
-        target_compile_options(elog PRIVATE /wd9025)
-        target_compile_options(elog_bench PRIVATE /wd9025)
         # don't generate manifest
         target_link_options(elog PRIVATE "/MANIFEST:NO")
         target_link_options(elog_bench PRIVATE "/MANIFEST:NO")
@@ -82,17 +83,17 @@ if (MSVC)
     target_compile_definitions(elog PRIVATE -DELOG_DLL)
     # TODO: need to remove /Zi and check it gets added with Debug and 
     add_compile_options(/Zi /EHsc)
+    # disable notorious C4251
+    target_compile_options(elog PRIVATE /wd4251)
+    target_compile_options(elog_bench PRIVATE /wd4251)
     target_link_libraries(elog Ws2_32 Advapi32)
-    target_include_directories(elog_bench PRIVATE C:\\install\\elog\\include)
-    target_link_directories(elog_bench PRIVATE C:\\install\\elog\\lib)
-elseif(MINGW)
-    target_include_directories(elog_bench PRIVATE C:\\install\\elog\\include)
-    target_link_directories(elog_bench PRIVATE C:\\install\\elog\\lib)
-else()
-    target_include_directories(elog_bench PRIVATE ~/install/elog/include)
-    target_link_directories(elog_bench PRIVATE ~/install/elog/lib)
 endif()
 
+# include directories
+target_include_directories(elog PRIVATE src/elog/inc)
+target_include_directories(elog_bench PRIVATE src/elog/inc)
+
+# special include directories for MinGW
 if (MINGW)
     target_include_directories(elog PRIVATE /ucrt64/include)
     target_include_directories(elog_bench PRIVATE /ucrt64/include)
@@ -102,6 +103,8 @@ elseif(NOT MSVC)
     add_link_options(-rdynamic)
 endif()
 
+# link libraries
+# NOTE: no need to specify the directory of elog's output
 target_link_libraries(elog_bench elog)
 
 # optional compilation features
@@ -114,6 +117,7 @@ option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF
 if (ELOG_ENABLE_SQLITE_DB_CONNECTOR)
     add_compile_definitions(-DELOG_ENABLE_SQLITE_DB_CONNECTOR)
     if (MSVC)
+        # TODO: use env var instead of hard coded path, also document it
         target_include_directories(elog PRIVATE "C:\\Program Files\\SQLite\\3.49.1\\inc")
     endif()
     target_link_libraries(elog sqlite3)
@@ -147,9 +151,6 @@ if (ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
     endif()
     target_link_libraries(elog rdkafka)
 endif()
-
-# include path
-target_include_directories(elog PRIVATE src/elog/inc)
 
 # source folders
 add_subdirectory(src/elog/src)

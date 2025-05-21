@@ -141,6 +141,15 @@ private:
             m_dbData = slot.m_dbData;
         }
         ThreadSlot(ThreadSlot&&) = delete;
+
+        inline ThreadSlot& operator=(const ThreadSlot& slot) {
+            m_isUsed.store(slot.m_isUsed.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            m_isConnected.store(slot.m_isConnected.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            m_dbData = slot.m_dbData;
+            return *this;
+        }
     };
 
     std::vector<ThreadSlot> m_threadSlots;

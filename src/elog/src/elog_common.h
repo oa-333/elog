@@ -3,10 +3,8 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <list>
+#include <cstring>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 #include "elog_props.h"
 

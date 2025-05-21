@@ -7,7 +7,7 @@ namespace elog {
 
 uint32_t ELogRecordBuilder::elog_strncpy(char* dest, const char* src, uint32_t dest_len) {
     assert(dest_len > 0);
-    size_t src_len = strlen(src);
+    std::size_t src_len = strlen(src);
     if (src_len + 1 < dest_len) {
         // copy terminating null as well
         strncpy(dest, src, src_len + 1);
