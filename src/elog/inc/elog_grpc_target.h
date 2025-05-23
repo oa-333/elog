@@ -1,0 +1,222 @@
+#ifndef __ELOG_GRPC_TARGET_H__
+#define __ELOG_GRPC_TARGET_H__
+
+#include "elog_def.h"
+
+#define ELOG_ENABLE_GRPC_CONNECTOR
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
+
+#include <grpc/grpc.h>
+#include <grpcpp/channel.h>
+
+#include "elog.grpc.pb.h"
+#include "elog.pb.h"
+#include "elog_rpc_target.h"
+
+// gRPC log target has the following possible configurations:
+// - simple: each log record is sent synchronously, flush does nothing
+// - streaming: each log record is sent through a writer, only during flush the writer calls
+// WritesDone(), so never flush policy is not allowed, and immediate flush policy will have adverse
+// effect, as it acts like simple mode but with more overhead
+// - async: in this mode a completion queue is used, as in a synchronous, where a send-receive
+
+namespace elog {
+
+enum class ELogGRPCClientMode : uint32_t {
+    /** @var Unary client. */
+    GRPC_CM_UNARY,
+
+    /** @var Steaming client. */
+    GRPC_CM_STREAM,
+
+    /** @var Asynchronous client with completion queue. */
+    GRPC_CM_ASYNC,
+
+    /** @var Asynchronous client with callback, employing unary reactor. */
+    GRPC_CM_ASYNC_CALLBACK_UNARY,
+
+    /** @var Asynchronous client with callback, employing stream reactor. */
+    GRPC_CM_ASYNC_CALLBACK_STREAM
+};
+
+class ELogGRPCFieldReceptor : public ELogFieldReceptor {
+public:
+    ELogGRPCFieldReceptor() : m_logRecordMsg(nullptr) {}
+    ~ELogGRPCFieldReceptor() final {}
+
+    /** @brief Provide from outside a log record message to be filled-in by the field receptor. */
+    inline void setLogRecordMsg(elog_grpc::ELogGRPCRecordMsg* logRecordMsg) {
+        m_logRecordMsg = logRecordMsg;
+    }
+
+    /** @brief Receives a string log record field. */
+    void receiveStringField(uint32_t typeId, const std::string& value, int justify) final;
+
+    /** @brief Receives an integer log record field. */
+    void receiveIntField(uint32_t typeId, uint64_t value, int justify) final;
+
+#ifdef ELOG_MSVC
+    /** @brief Receives a time log record field. */
+    void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
+                          int justify) final;
+#else
+    /** @brief Receives a time log record field. */
+    void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
+                          int justify) final;
+#endif
+
+    /** @brief Receives a log level log record field. */
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) final;
+
+private:
+    elog_grpc::ELogGRPCRecordMsg* m_logRecordMsg;
+};
+
+// the client write reactor used with asynchronous callback streaming
+// unfortunately, in order to make this code (mostly) lock-free, the implementation had to be a bit
+// complex
+class ELogReactor final : public grpc::ClientWriteReactor<elog_grpc::ELogGRPCRecordMsg> {
+public:
+    ELogReactor(elog_grpc::ELogGRPCService::Stub* stub, ELogRpcFormatter* rpcFormatter)
+        : m_stub(stub),
+          m_rpcFormatter(rpcFormatter),
+          m_state(ReactorState::RS_INIT),
+          m_inFlight(false),
+          m_inFlightRequestId(0),
+          m_nextRequestId(0) {
+        m_inFlightRequests.resize(MAX_INFLIGHT_REQUESTS);
+    }
+    ~ELogReactor() {}
+
+    uint32_t writeLogRecord(const ELogRecord& logRecord);
+
+    void flush();
+
+    void waitFlushDone();
+
+    void OnWriteDone(bool ok) override;
+
+    void OnDone(const grpc::Status& s) override;
+
+private:
+    grpc::ClientContext m_context;
+    elog_grpc::ELogGRPCStatus m_status;
+    elog_grpc::ELogGRPCService::Stub* m_stub;
+    ELogRpcFormatter* m_rpcFormatter;
+    std::mutex m_lock;
+    std::condition_variable m_cv;
+    enum class ReactorState : uint32_t { RS_INIT, RS_BATCH, RS_FLUSH, RS_DONE };
+    std::atomic<ReactorState> m_state;
+    std::atomic<bool> m_inFlight;
+    std::atomic<uint64_t> m_inFlightRequestId;
+
+    struct CallData {
+        uint64_t m_requestId;
+        elog_grpc::ELogGRPCRecordMsg* m_logRecordMsg;
+        ELogGRPCFieldReceptor m_receptor;
+
+        CallData() {
+            m_logRecordMsg = new (std::nothrow) elog_grpc::ELogGRPCRecordMsg();
+            m_receptor.setLogRecordMsg(m_logRecordMsg);
+        }
+    };
+
+    template <typename T>
+    struct atomic_wrapper {
+        std::atomic<T> m_atomicValue;
+        atomic_wrapper() : m_atomicValue() {}
+        atomic_wrapper(const T& value) : m_atomicValue(value) {}
+        atomic_wrapper(const std::atomic<T>& atomicValue)
+            : m_atomicValue(atomicValue.load(std::memory_order_relaxed)) {}
+        atomic_wrapper(const atomic_wrapper& other)
+            : m_atomicValue(other.m_atomicValue.load(std::memory_order_relaxed)) {}
+        atomic_wrapper& operator=(const atomic_wrapper& other) {
+            m_atomicValue.store(other.m_atomicValue.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            return *this;
+        }
+    };
+
+    std::vector<atomic_wrapper<CallData*>> m_inFlightRequests;
+    std::atomic<uint64_t> m_nextRequestId;
+    const uint32_t MAX_INFLIGHT_REQUESTS = 100000;
+
+    std::list<uint64_t> m_pendingWriteRequests;
+
+    CallData* allocCallData();
+
+    bool setStateFlush();
+
+    void setStateInit();
+};
+
+class ELOG_API ELogGRPCTarget : public ELogRpcTarget {
+public:
+    ELogGRPCTarget(const std::string& server, const std::string& params,
+                   ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
+                   uint32_t deadlineTimeoutMillis = 0)
+        : ELogRpcTarget(server.c_str(), "", 0, ""),
+          m_params(params),
+          m_clientMode(clientMode),
+          m_deadlineTimeoutMillis(deadlineTimeoutMillis),
+          m_reactor(nullptr) {}
+
+    ELogGRPCTarget(const ELogGRPCTarget&) = delete;
+    ELogGRPCTarget(ELogGRPCTarget&&) = delete;
+    ~ELogGRPCTarget() final {}
+
+protected:
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool startLogTarget() final;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() final;
+
+    /** @brief Sends a log record to a log target. */
+    uint32_t writeLogRecord(const ELogRecord& logRecord) final;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget() final;
+
+private:
+    std::string m_params;
+    ELogGRPCClientMode m_clientMode;
+    uint32_t m_deadlineTimeoutMillis;
+
+    // the stub
+    std::unique_ptr<elog_grpc::ELogGRPCService::Stub> m_serviceStub;
+
+    // synchronous stream mode members
+    grpc::ClientContext m_streamContext;
+    elog_grpc::ELogGRPCStatus m_streamStatus;
+    std::unique_ptr<grpc::ClientWriter<elog_grpc::ELogGRPCRecordMsg>> m_clientWriter;
+
+    // asynchronous unary mode members
+    grpc::CompletionQueue m_cq;
+
+    inline void setDeadline(grpc::ClientContext& context) {
+        std::chrono::time_point deadlineMillis =
+            std::chrono::system_clock::now() + std::chrono::milliseconds(m_deadlineTimeoutMillis);
+        context.set_deadline(deadlineMillis);
+    }
+
+    ELogReactor* m_reactor;
+
+    /** @brief Sends a log record to a log target in synchronous unary mode. */
+    // void logUnary(const ELogRecord& logRecord);
+};
+
+// TODO: asynchronous callback stream is by far the fastest (22K msg.sec vs at most 7k msg/sec)
+// but it needs more fixes:
+// 1. use static CallData and avoid allocating on heap, just allocate once and use vacant flag
+// 2. cleanup code, consider using strategy pattern to avoid confusing implementations (there are 5)
+// 3. it is possible that async queue can work faster, but docs recommend using callback API
+// 4. async callback streaming client needs to configure max_inflight_calls, such that beyond that
+// the logging application will block
+// 5. looks like deferred target with gRPC target gets stuck (spin on CPU)
+
+}  // namespace elog
+
+#endif  // ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+
+#endif  // __ELOG_KAFKA_MSGQ_TARGET_H__

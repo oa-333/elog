@@ -58,6 +58,7 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
     IF "!CONNS[%%n]!" == "mysql" SET OPTS=%OPTS% -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON
     IF "!CONNS[%%n]!" == "postgresql" SET OPTS=!OPTS! -DELOG_ENABLE_POSTGRESQL_DB_CONNECTOR=ON
     IF "!CONNS[%%n]!" == "kafka" SET OPTS=!OPTS! -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON
+    IF "!CONNS[%%n]!" == "grpc" SET OPTS=!OPTS! -DELOG_ENABLE_GRPC_CONNECTOR=ON
 )
 echo [DEBUG] Parsed connections
 echo [DEBUG] Current options: %OPTS%

@@ -25,6 +25,7 @@ target_sources(
             elog_filter.h
             elog_flush_policy.h
             elog_formatter.h
+            elog_grpc_target.h
             elog_kafka_msgq_target.h
             elog_level.h
             elog_logger.h
@@ -41,6 +42,10 @@ target_sources(
             elog_rate_limiter.h
             elog_record.h
             elog_record_builder.h
+            elog_rpc_formatter.h
+            elog_rpc_schema_handler.h
+            elog_rpc_target_provider.h
+            elog_rpc_target.h
             elog_schema_handler.h
             elog_segmented_file_target.h
             elog_shared_logger.h

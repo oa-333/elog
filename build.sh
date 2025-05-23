@@ -59,6 +59,15 @@ do
     elif [ "$conn" == "kafka" ]; then
         echo "[INFO] Adding Kafka connector"
         OPTS+=" -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON"
+    elif [ "$conn" == "grpc" ]; then
+        echo "[INFO] Adding gRPC connector"
+        OPTS+=" -DELOG_ENABLE_GRPC_CONNECTOR=ON"
+    elif [ "$conn" == "all" ]; then
+        echo "[INFO] Enabling all connectors"
+        OPTS+=" -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_POSTGRESQL_DB_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_GRPC_CONNECTOR=ON"
     else
         echo "[ERROR] Invalid connector name $conn, aborting"
         exit 1
@@ -81,8 +90,8 @@ if [ $? -ne 0 ]; then
 fi
 
 # build phase
-cmake --build . -j
 echo "[INFO] Building target elog"
+cmake --build . -j
 if [ $? -ne 0 ]; then
     echo "[ERROR] Build phase failed, see errors above, aborting"
     popd > /dev/null

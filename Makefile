@@ -22,6 +22,9 @@ ELOG_INC_DIR := $(ELOG_DIR)/inc
 # source directories
 ELOG_SRC_DIR := $(ELOG_DIR)/src
 
+# protocol directory
+ELOG_PROTO_DIR := $(ELOG_DIR)/proto
+
 # object directories
 ELOG_OBJ_DIR := $(OBJ_DIR)/elog
 
@@ -171,7 +174,7 @@ CPP := g++
 CPPFLAGS := -std=c++23 -g3 -O2 -Wno-interference-size
 
 # project include path
-CPPFLAGS += -I. -I$(ELOG_INC_DIR)
+CPPFLAGS += -I. -I$(ELOG_INC_DIR) -I$(ELOG_PROTO_DIR)
 
 # special MinGW include dirs
 ifeq ($(MINGW), 1)

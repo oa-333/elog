@@ -3,6 +3,9 @@
 #include <fstream>
 #include <thread>
 
+#include "absl/log/initialize.h"
+#include "elog.grpc.pb.h"
+#include "elog.pb.h"
 #include "elog_system.h"
 
 static const uint64_t MSG_COUNT = 10000;
@@ -14,6 +17,12 @@ static elog::ELogTarget* initElog(const char* cfg = DEFAULT_CFG);
 static void termELog();
 static void testPerfPrivateLog();
 static void testPerfSharedLogger();
+static void testGRPC();
+static void testGRPCSimple();
+static void testGRPCStream();
+static void testGRPCAsync();
+static void testGRPCAsyncCallbackUnary();
+static void testGRPCAsyncCallbackStream();
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                                   double& ioThroughput);
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
@@ -56,6 +65,264 @@ void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
 void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
                                 std::vector<double>& ioThroughput);
 
+// TODO: check rdtsc for percentile tests
+
+#include <grpc/grpc.h>
+#include <grpcpp/security/server_credentials.h>
+#include <grpcpp/server.h>
+#include <grpcpp/server_builder.h>
+#include <grpcpp/server_context.h>
+
+static std::mutex coutLock;
+static void handleLogRecord(const elog_grpc::ELogGRPCRecordMsg* msg) {
+    return;
+    std::stringstream s;
+    uint32_t fieldCount = 0;
+    s << "Received log record: [";
+    if (msg->has_recordid()) {
+        s << "{rid = " << msg->recordid() << "}";
+        ++fieldCount;
+    }
+    if (msg->has_timeutcmillis()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "utc = " << msg->timeutcmillis();
+    }
+    if (msg->has_hostname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "host = " << msg->hostname();
+    }
+    if (msg->has_username()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "user = " << msg->username();
+    }
+    if (msg->has_programname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "program = " << msg->programname();
+    }
+    if (msg->has_processid()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "pid = " << msg->programname();
+    }
+    if (msg->has_threadid()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "tid = " << msg->threadid();
+    }
+    if (msg->has_threadname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "tname = " << msg->threadname();
+    }
+    if (msg->has_logsourcename()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "source = " << msg->logsourcename();
+    }
+    if (msg->has_modulename()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "module = " << msg->modulename();
+    }
+    if (msg->has_file()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "file = " << msg->file();
+    }
+    if (msg->has_line()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "line = " << msg->line();
+    }
+    if (msg->has_functionname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "function = " << msg->functionname();
+    }
+    if (msg->has_loglevel()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "log_level = " << msg->loglevel();
+    }
+    if (msg->has_logmsg()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "msg = " << msg->logmsg();
+    }
+    std::unique_lock<std::mutex> lock(coutLock);
+    std::cout << s.str() << std::endl;
+}
+
+class TestGRPCServer final : public elog_grpc::ELogGRPCService::Service {
+public:
+    TestGRPCServer() {}
+
+    ::grpc::Status SendLogRecord(::grpc::ServerContext* context,
+                                 const ::elog_grpc::ELogGRPCRecordMsg* request,
+                                 ::elog_grpc::ELogGRPCStatus* response) final {
+        handleLogRecord(request);
+        return grpc::Status::OK;
+    }
+
+    ::grpc::Status StreamLogRecords(::grpc::ServerContext* context,
+                                    ::grpc::ServerReader< ::elog_grpc::ELogGRPCRecordMsg>* reader,
+                                    ::elog_grpc::ELogGRPCStatus* response) {
+        elog_grpc::ELogGRPCRecordMsg msg;
+        while (reader->Read(&msg)) {
+            handleLogRecord(&msg);
+        }
+        return grpc::Status::OK;
+    }
+};
+
+class TestGRPCAsyncServer final : public elog_grpc::ELogGRPCService::AsyncService {
+public:
+    TestGRPCAsyncServer() {}
+
+    void HandleRpcs(grpc::ServerCompletionQueue* cq) {
+        // Spawn a new CallData instance to serve new clients.
+        new CallData(this, cq);
+        void* tag;  // uniquely identifies a request.
+        bool ok;
+        while (true) {
+            // Block waiting to read the next event from the completion queue. The
+            // event is uniquely identified by its tag, which in this case is the
+            // memory address of a CallData instance.
+            // The return value of Next should always be checked. This return value
+            // tells us whether there is any kind of event or cq_ is shutting down.
+            if (!cq->Next(&tag, &ok)) {
+                break;
+            }
+            if (!ok) {
+                break;
+            }
+            static_cast<CallData*>(tag)->Proceed();
+        }
+    }
+
+private:
+    // Class encompassing the state and logic needed to serve a request.
+    // Code adapted from examples on the internet, but logic is not intuitive, especially spawning
+    // child call data, and deleting this call data
+    // actual phases are like this:
+    // 1. request for incoming message
+    // 2. wait for next event on completion queue:
+    //      - either incoming message on the completion queue arrived
+    //      - or a response sending has finished
+    // 3. handle event: incoming message arrived, or response send finished
+    // 4. for incoming message:
+    //          handle incoming message
+    //          spawn a new request as in step 1
+    //          async send response to client
+    //    for send finished:
+    //          delete call data object
+    class CallData {
+    public:
+        // Take in the "service" instance (in this case representing an asynchronous
+        // server) and the completion queue "cq" used for asynchronous communication
+        // with the gRPC runtime.
+        CallData(elog_grpc::ELogGRPCService::AsyncService* service, grpc::ServerCompletionQueue* cq)
+            : m_service(service), m_cq(cq), m_responder(&m_serverContext), m_callState(CS_CREATE) {
+            // Invoke the serving logic right away.
+            Proceed();
+        }
+
+        void Proceed() {
+            if (m_callState == CS_CREATE) {
+                // As part of the initial CREATE state, we *request* that the system
+                // start processing SayHello requests. In this request, "this" acts are
+                // the tag uniquely identifying the request (so that different CallData
+                // instances can serve different requests concurrently), in this case
+                // the memory address of this CallData instance.
+                m_service->RequestSendLogRecord(&m_serverContext, &m_logRecordMsg, &m_responder,
+                                                m_cq, m_cq, this);
+
+                // Make this instance progress to the PROCESS state.
+                m_callState = CS_PROCESS;
+            } else if (m_callState == CS_PROCESS) {
+                // handle currently arrived request (print log record)
+                handleLogRecord(&m_logRecordMsg);
+
+                // Spawn a new CallData instance to serve new clients while we process
+                // the one for this CallData. The instance will deallocate itself as
+                // part of its FINISH state.
+                new CallData(m_service, m_cq);
+
+                // And we are done! Let the gRPC runtime know we've finished, using the
+                // memory address of this instance as the uniquely identifying tag for
+                // the event.
+                m_callState = CS_FINISH;
+                m_responder.Finish(m_statusMsg, grpc::Status::OK, this);
+            } else {
+                assert(m_callState == CS_FINISH);
+                // Once in the FINISH state, deallocate ourselves (CallData).
+                delete this;
+            }
+        }
+
+    private:
+        // The means of communication with the gRPC runtime for an asynchronous
+        // server.
+        elog_grpc::ELogGRPCService::AsyncService* m_service;
+        // The producer-consumer queue where for asynchronous server notifications.
+        grpc::ServerCompletionQueue* m_cq;
+        // Context for the rpc, allowing to tweak aspects of it such as the use
+        // of compression, authentication, as well as to send metadata back to the
+        // client.
+        grpc::ServerContext m_serverContext;
+
+        // What we get from the client.
+        elog_grpc::ELogGRPCRecordMsg m_logRecordMsg;
+        // What we send back to the client.
+        elog_grpc::ELogGRPCStatus m_statusMsg;
+
+        // The means to get back to the client.
+        grpc::ServerAsyncResponseWriter<elog_grpc::ELogGRPCStatus> m_responder;
+
+        // Let's implement a tiny state machine with the following states.
+        enum CallState { CS_CREATE, CS_PROCESS, CS_FINISH };
+        CallState m_callState;  // The current serving call state.
+    };
+};
+
+class TestGRPCAsyncCallbackServer final : public elog_grpc::ELogGRPCService::CallbackService {
+public:
+    TestGRPCAsyncCallbackServer() {}
+
+    grpc::ServerUnaryReactor* SendLogRecord(grpc::CallbackServerContext* context,
+                                            const elog_grpc::ELogGRPCRecordMsg* request,
+                                            elog_grpc::ELogGRPCStatus* response) override {
+        class Reactor : public grpc::ServerUnaryReactor {
+        public:
+            Reactor(const elog_grpc::ELogGRPCRecordMsg& logRecordMsg) {
+                handleLogRecord(&logRecordMsg);
+                Finish(grpc::Status::OK);
+            }
+
+        private:
+            void OnDone() override { delete this; }
+        };
+        return new Reactor(*request);
+    }
+
+    grpc::ServerReadReactor< ::elog_grpc::ELogGRPCRecordMsg>* StreamLogRecords(
+        ::grpc::CallbackServerContext* context, ::elog_grpc::ELogGRPCStatus* response) override {
+        class StreamReactor : public grpc::ServerReadReactor<elog_grpc::ELogGRPCRecordMsg> {
+        public:
+            StreamReactor() { StartRead(&m_logRecord); }
+
+            void OnReadDone(bool ok) override {
+                if (ok) {
+                    handleLogRecord(&m_logRecord);
+                    StartRead(&m_logRecord);
+                } else {
+                    // all stream/batch messages read, now call Finish()
+                    Finish(grpc::Status::OK);
+                }
+            }
+
+            void OnDone() override {
+                // all reactor callbacks have been, now we can delete reactor
+                delete this;
+            }
+
+        private:
+            elog_grpc::ELogGRPCRecordMsg m_logRecord;
+        };
+        return new StreamReactor();
+    }
+};
+
 // plots:
 // file flush count values
 // file flush size values
@@ -66,6 +333,7 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
 int main(int argc, char* argv[]) {
     testPerfPrivateLog();
     testPerfSharedLogger();
+    // testGRPC();
     testPerfFileFlushPolicy();
     testPerfBufferedFile();
     testPerfDeferredFile();
@@ -83,7 +351,13 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
 
     elog::ELogPropertySequence props;
     std::string namedCfg = cfg;
-    if (namedCfg.find("{") == std::string::npos) {
+    std::string::size_type nonSpacePos = namedCfg.find_first_not_of(" \t\r\n");
+    if (nonSpacePos == std::string::npos) {
+        fprintf(stderr, "Invalid log target configuration, all white space\n");
+        elog::ELogSystem::terminate();
+        return nullptr;
+    }
+    if (namedCfg[nonSpacePos] != '{') {
         if (namedCfg.find('?') != std::string::npos) {
             namedCfg += "&name=elog_bench";
         } else {
@@ -185,6 +459,126 @@ void testPerfSharedLogger() {
     termELog();
 }
 
+void testGRPC() {
+    testGRPCSimple();
+    testGRPCStream();
+    testGRPCAsync();
+    testGRPCAsyncCallbackUnary();
+    testGRPCAsyncCallbackStream();
+}
+
+void testGRPCSimple() {
+    // start gRPC server
+    // absl::InitializeLog();
+    std::string serverAddress = "0.0.0.0:5051";
+    TestGRPCServer service;
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    std::cout << "Server listening on " << serverAddress << std::endl;
+    std::thread t = std::thread([&server]() { server->Wait(); });
+
+    const char* cfg =
+        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
+        "${msg})";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+
+    server->Shutdown();
+    t.join();
+}
+
+void testGRPCStream() {
+    std::string serverAddress = "0.0.0.0:5051";
+    TestGRPCServer service;
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    std::cout << "Server listening on " << serverAddress << std::endl;
+    std::thread t = std::thread([&server]() { server->Wait(); });
+
+    const char* cfg =
+        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
+        "${msg})&grpc_client_mode=stream";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+
+    server->Shutdown();
+    t.join();
+}
+
+void testGRPCAsync() {
+    std::string serverAddress = "0.0.0.0:5051";
+    TestGRPCAsyncServer service;
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+    std::unique_ptr<grpc::ServerCompletionQueue> cq = builder.AddCompletionQueue();
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    std::cout << "Server listening on " << serverAddress << std::endl;
+    std::thread t = std::thread([&service, &cq]() { service.HandleRpcs(cq.get()); });
+
+    const char* cfg =
+        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
+        "${msg})&grpc_client_mode=async";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+
+    // test is over, order server to shut down
+    server->Shutdown();
+    t.join();
+    cq->Shutdown();
+}
+
+void testGRPCAsyncCallbackUnary() {
+    std::string serverAddress = "0.0.0.0:5051";
+    TestGRPCAsyncCallbackServer service;
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    std::cout << "Server listening on " << serverAddress << std::endl;
+    std::thread t = std::thread([&server]() { server->Wait(); });
+
+    const char* cfg =
+        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
+        "${msg})&grpc_client_mode=async_callback_unary";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+
+    // test is over, order server to shut down
+    server->Shutdown();
+    t.join();
+}
+
+void testGRPCAsyncCallbackStream() {
+    std::string serverAddress = "0.0.0.0:5051";
+    TestGRPCAsyncCallbackServer service;
+    grpc::ServerBuilder builder;
+    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    std::cout << "Server listening on " << serverAddress << std::endl;
+    std::thread t = std::thread([&server]() { server->Wait(); });
+
+    const char* cfg =
+        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
+        "${msg})&grpc_client_mode=async_callback_stream&flush_policy=count&flush_count=10&deferred";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+
+    // test is over, order server to shut down
+    server->Shutdown();
+    t.join();
+}
+
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput) {
     elog::ELogTarget* logTarget = initElog(cfg);
@@ -259,9 +653,9 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
                 std::chrono::microseconds testTime =
                     std::chrono::duration_cast<std::chrono::microseconds>(end - start);
                 double throughput = MSG_COUNT / (double)testTime.count() * 1000000.0f;
-                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n", (unsigned)testTime.count(),
-                        (unsigned)MSG_COUNT);
-                fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", throughput);*/
+                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n",
+                (unsigned)testTime.count(), (unsigned)MSG_COUNT); fprintf(stderr, "Throughput:
+                %0.3f MSg/Sec\n", throughput);*/
                 resVec[i] = throughput;
             }));
         }
@@ -463,7 +857,8 @@ void testPerfDeferredFile() {
         "elog_bench_deferred.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&deferred";*/
     const char* cfg =
-        "file://./bench_data/elog_bench_deferred.log?flush_policy=count&flush_count=4096&deferred";
+        "file://./bench_data/"
+        "elog_bench_deferred.log?flush_policy=count&flush_count=4096&deferred";
     runMultiThreadTest("Deferred (Flush Count 4096)", "elog_bench_deferred", cfg);
 }
 
@@ -475,7 +870,8 @@ void testPerfQueuedFile() {
         "timeout_millis=200";*/
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_queued.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&queue_"
+        "elog_bench_queued.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&"
+        "queue_"
         "timeout_millis=200";
     runMultiThreadTest("Queued 4096 + 200ms (Flush Count 4096)", "elog_bench_queued", cfg);
 }
@@ -487,7 +883,8 @@ void testPerfQuantumFile(bool privateLogger) {
         "count=4096&quantum_buffer_size=2000000";*/
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_quantum.log?flush_policy=count&flush_count=4096&quantum_buffer_size=2000000";
+        "elog_bench_quantum.log?flush_policy=count&flush_count=4096&quantum_buffer_size="
+        "2000000";
     runMultiThreadTest("Quantum 200000 (Flush Count 4096)", "elog_bench_quantum", cfg,
                        privateLogger);
 }
@@ -553,7 +950,8 @@ void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double
 void testPerfSTFlushCount4096(std::vector<double>& msgThroughput,
                               std::vector<double>& ioThroughput) {
     const char* cfg =
-        "file://./bench_data/elog_bench_flush_count4096_st.log?flush_policy=count&flush_count=4096";
+        "file://./bench_data/"
+        "elog_bench_flush_count4096_st.log?flush_policy=count&flush_count=4096";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("Flush Count=4096", cfg, msgPerf, ioPerf);
@@ -621,7 +1019,8 @@ void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
         "timeout_millis=500";*/
     const char* cfg =
         "file://./bench_data/"
-        "elog_bench_queued_st.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&queue_"
+        "elog_bench_queued_st.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&"
+        "queue_"
         "timeout_millis=500";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
@@ -704,7 +1103,9 @@ static void testPerfSizeFlushPolicy() {
     cfg = "file://./bench_data/elog_bench_size_64kb.log?flush_policy=size&flush_size_bytes=65536";
     runMultiThreadTest("File (Size 64KB Flush Policy)", "elog_bench_size_64kb", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_1mb.log?flush_policy=size&flush_size_bytes=1048576";
+    cfg =
+        "file://./bench_data/"
+        "elog_bench_size_1mb.log?flush_policy=size&flush_size_bytes=1048576";
     runMultiThreadTest("File (Size 1MB Flush Policy)", "elog_bench_size_1mb", cfg);
 }
 
@@ -726,7 +1127,8 @@ static void testPerfTimeFlushPolicy() {
     runMultiThreadTest("File (Time 200 ms Flush Policy)", "elog_bench_time_200ms", cfg);
 
     cfg =
-        "file://./bench_data/elog_bench_time_500ms.log?flush_policy=time&flush_timeout_millis=500";
+        "file://./bench_data/"
+        "elog_bench_time_500ms.log?flush_policy=time&flush_timeout_millis=500";
     runMultiThreadTest("File (Time 500 ms Flush Policy)", "elog_bench_time_500ms", cfg);
 
     cfg =

@@ -514,6 +514,7 @@ The following syntax is supported:
     file://path?file_segment_size_mb=<file-segment-size-mb> - add segmented file log target
     db://provider?conn_string=<url>&insert_query=<insert-query>...
     msgq://provider?... (see example below for more details)
+    rpc://provider?rpc_server=<host:port>&rpc_call=<function-name>(<param-list>)
 
 Log targets may be assigned a name for identification, if further special configuration is required.  
 Target name may be specified by the 'name' parameter, as follows:

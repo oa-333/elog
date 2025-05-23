@@ -16,6 +16,8 @@ public:
                                    ELogTargetNestedSpec& logTargetNestedSpec,
                                    ELogTargetSpecStyle& specStyle);
 
+    static bool parseHostPort(const std::string& server, std::string& host, int& port);
+
 private:
     static bool parseLogTargetSpec(const std::string& logTargetCfg, ELogTargetSpec& logTargetSpec);
     static bool parseLogTargetNestedSpec(const std::string& logTargetCfg,

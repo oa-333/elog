@@ -9,6 +9,90 @@ set_target_properties(elog PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # build executable benchmark
 add_executable(elog_bench)
 
+# optional compilation features
+option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
+option(ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
+option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
+option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF)
+option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
+
+# if gRPC is enabled we need to generate protocol headers# Proto file
+# NOTE: all definitions here are adapted from the gRPC C++ client example in grpc.io
+if (ELOG_ENABLE_GRPC_CONNECTOR)
+    # enable connector in code
+    add_compile_definitions(-DELOG_ENABLE_GRPC_CONNECTOR)
+
+    # apparently gRPC on Windows/MSVC requires windows headers define _WIN32_WINNT=0x600
+    if(MSVC)
+        add_definitions(-D_WIN32_WINNT=0x600)
+    endif()
+
+    # Find Protobuf installation
+    # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
+    option(protobuf_MODULE_COMPATIBLE TRUE)
+    find_package(Protobuf CONFIG REQUIRED)
+    message(STATUS "Using protobuf ${Protobuf_VERSION}")
+
+    set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
+    set(_REFLECTION gRPC::grpc++_reflection)
+    set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
+
+    # Find gRPC installation
+    # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
+    find_package(gRPC CONFIG REQUIRED)
+    message(STATUS "Using gRPC ${gRPC_VERSION}")
+
+    set(_GRPC_GRPCPP gRPC::grpc++)
+    set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:gRPC::grpc_cpp_plugin>)
+
+    # Find absl package
+    #find_package(absl CONFIG REQUIRED)
+
+    # protocol file
+    get_filename_component(elog_proto "${CMAKE_SOURCE_DIR}/src/elog/proto/elog.proto" ABSOLUTE)
+    get_filename_component(elog_proto_path "${elog_proto}" PATH)
+
+    # Generated sources
+    set(elog_proto_srcs "${elog_proto_path}/elog.pb.cc")
+    set(elog_proto_hdrs "${elog_proto_path}/elog.pb.h")
+    set(elog_grpc_srcs "${elog_proto_path}/elog.grpc.pb.cc")
+    set(elog_grpc_hdrs "${elog_proto_path}/elog.grpc.pb.h")
+
+    # generate files command
+    add_custom_command(
+        OUTPUT "${elog_proto_srcs}" "${elog_proto_hdrs}" "${elog_grpc_srcs}" "${elog_grpc_hdrs}"
+        COMMAND ${_PROTOBUF_PROTOC}
+        ARGS --grpc_out="${elog_proto_path}"
+            --cpp_out="${elog_proto_path}"
+            -I "${elog_proto_path}"
+            --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+            "${elog_proto}"
+        DEPENDS "${elog_proto}")
+
+    # add generated headers to public interface
+    target_sources(elog PUBLIC FILE_SET grpcpublicheaders TYPE HEADERS FILES ${elog_proto_hdrs} ${elog_grpc_hdrs})
+
+    # add generated sources to library and test bench
+    target_sources(elog PRIVATE ${elog_proto_srcs} ${elog_grpc_srcs})
+
+    # make sure elog is linked against required libraries
+    target_link_libraries(elog
+        absl::absl_log
+        ${_REFLECTION}
+        ${_GRPC_GRPCPP}
+        ${_PROTOBUF_LIBPROTOBUF})
+
+    # make sure elog_bench is linked against required libraries
+    target_link_libraries(elog_bench
+        absl::absl_log
+        absl::flags_parse
+        absl::log_initialize
+        absl::log_globals
+        ${_REFLECTION}
+        ${_GRPC_GRPCPP}
+        ${_PROTOBUF_LIBPROTOBUF})
+endif()
+
 # add dependency from elog_bench to elog to enforce correct build order
 #add_dependencies(elog_bench elog)
 
@@ -92,6 +176,10 @@ endif()
 # include directories
 target_include_directories(elog PRIVATE src/elog/inc)
 target_include_directories(elog_bench PRIVATE src/elog/inc)
+if(ELOG_ENABLE_GRPC_CONNECTOR)
+    target_include_directories(elog PRIVATE src/elog/proto)
+    target_include_directories(elog_bench PRIVATE src/elog/proto)
+endif()
 
 # special include directories for MinGW
 if (MINGW)
@@ -106,12 +194,6 @@ endif()
 # link libraries
 # NOTE: no need to specify the directory of elog's output
 target_link_libraries(elog_bench elog)
-
-# optional compilation features
-option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
-option(ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
-option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
-option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF)
 
 # SQLite - supported on all platforms
 if (ELOG_ENABLE_SQLITE_DB_CONNECTOR)

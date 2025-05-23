@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "io.grpc.elog";
+option java_outer_classname = "ELogProto";
+option objc_class_prefix = "ELOG";
+
+package elog_grpc;
+
+// Interface exported by the server.
+service ELogGRPCService {
+
+  // Sends a log record to the server.
+  rpc SendLogRecord(ELogGRPCRecordMsg) returns (ELogGRPCStatus) {}
+
+  // Sends a stream of log records to the server
+  rpc StreamLogRecords(stream ELogGRPCRecordMsg) returns (ELogGRPCStatus) {}
+}
+
+// ELog Record
+message ELogGRPCRecordMsg {
+    optional uint64 recordId = 1;
+    optional uint64 timeUTCMillis = 2;
+    optional string hostName = 3;
+    optional string userName = 4;
+    optional string programName = 5;
+    optional uint64 processId = 6;
+    optional uint64 threadId = 7;
+    optional string threadName = 8;
+    optional string file = 9;
+    optional uint32 line = 10;
+    optional string functionName = 11;
+    optional uint32 logLevel = 12;
+    optional string logSourceName = 13;
+    optional string moduleName = 14;
+    optional string logMsg = 15;
+}
+
+message ELogGRPCStatus {}

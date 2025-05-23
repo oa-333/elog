@@ -74,7 +74,10 @@
         "*.rh": "cpp",
         "strstream": "cpp",
         "source_location": "cpp",
-        "ranges": "cpp"
+        "ranges": "cpp",
+        "any": "cpp",
+        "forward_list": "cpp",
+        "set": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

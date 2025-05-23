@@ -5,6 +5,7 @@
 #include "elog_error.h"
 #include "elog_file_schema_handler.h"
 #include "elog_msgq_schema_handler.h"
+#include "elog_rpc_schema_handler.h"
 #include "elog_sys_schema_handler.h"
 
 namespace elog {
@@ -38,7 +39,8 @@ bool ELogSchemaManager::initSchemaHandlers() {
         !initSchemaHandler<ELogFileSchemaHandler>("file") ||
         !initSchemaHandler<ELogDbSchemaHandler>("db") ||
         !initSchemaHandler<ELogMsgQSchemaHandler>("msgq") ||
-        !initSchemaHandler<ELogAsyncSchemaHandler>("async")) {
+        !initSchemaHandler<ELogAsyncSchemaHandler>("async") ||
+        !initSchemaHandler<ELogRpcSchemaHandler>("rpc")) {
         return false;
     }
     return true;

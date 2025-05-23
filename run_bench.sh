@@ -10,7 +10,7 @@ fi
 export INSTALL_DIR
 
 # build elog
-./build.sh --rel-with-debug-info --verbose
+./build.sh --rel-with-debug-info --verbose --conn grpc
 if [ $? -ne 0 ]; then
     echo "ERROR: Build failed"
     exit 1

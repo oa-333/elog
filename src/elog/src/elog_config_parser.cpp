@@ -64,6 +64,19 @@ bool ELogConfigParser::parseLogTargetSpec(const std::string& logTargetCfg,
     return true;
 }
 
+bool ELogConfigParser::parseHostPort(const std::string& server, std::string& host, int& port) {
+    std::string::size_type colonPos = server.find(':');
+    if (colonPos == std::string::npos) {
+        ELOG_REPORT_ERROR("Server specification missing colon: %s", server.c_str());
+        return false;
+    }
+    if (!parseIntProp("port", "", server.substr(colonPos + 1), port, false)) {
+        return false;
+    }
+    host = server.substr(0, colonPos);
+    return true;
+}
+
 bool ELogConfigParser::parseLogTargetSpec(const std::string& logTargetCfg,
                                           ELogTargetSpec& logTargetSpec) {
     // find scheme separator
