@@ -86,11 +86,7 @@ uint32_t ELogReactor::writeLogRecord(const ELogRecord& logRecord) {
     // this must be done regardless of state
     // TODO: allocate data in ring buffer and assign id for fast locating
     CallData* callData = allocCallData();
-    if (callData == nullptr) {
-        // out of memory
-        ELOG_REPORT_ERROR("Cannot allocate call data for gRPC call, out of memory");
-        return 0;
-    }
+    assert(callData != nullptr);
     m_rpcFormatter->fillInParams(logRecord, &callData->m_receptor);
     uint32_t bytesWritten = callData->m_logRecordMsg->ByteSizeLong();
 
@@ -105,7 +101,9 @@ uint32_t ELogReactor::writeLogRecord(const ELogRecord& logRecord) {
         ELOG_REPORT_TRACE("*** INIT --> BATCH, adding HOLD ***");
         AddHold();
         m_inFlight.store(true, std::memory_order_relaxed);
-        m_inFlightRequestId.store(callData->m_requestId, std::memory_order_relaxed);
+        m_inFlightRequestId.store(
+            callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed),
+            std::memory_order_relaxed);
         StartWrite(callData->m_logRecordMsg);
         StartCall();  // this actually marks the start of a new stream
     } else if (state == ReactorState::RS_BATCH) {
@@ -115,12 +113,15 @@ uint32_t ELogReactor::writeLogRecord(const ELogRecord& logRecord) {
             // NOTE: there is no race with other writers or flush, but rather only with
             // OnWriteDone() but inflight is false, so OnWriteDone for last message has already
             // executed and reset the inflight flag to false
-            m_inFlightRequestId.store(callData->m_requestId, std::memory_order_release);
+            m_inFlightRequestId.store(
+                callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed),
+                std::memory_order_release);
             StartWrite(callData->m_logRecordMsg);
         } else {
             // need to push on request queue and wait until in flight write request finishes
             std::unique_lock<std::mutex> lock(m_lock);
-            m_pendingWriteRequests.push_front(callData->m_requestId);
+            m_pendingWriteRequests.push_front(
+                callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed));
         }
     } else if (state == ReactorState::RS_FLUSH) {
         // this cannot happen, after FLUSH no incoming messages are allowed
@@ -170,11 +171,8 @@ void ELogReactor::OnWriteDone(bool ok) {
 
     // get call data and free it
     uint64_t requestId = m_inFlightRequestId.load(std::memory_order_relaxed);
-    CallData* callData = m_inFlightRequests[requestId % MAX_INFLIGHT_REQUESTS].m_atomicValue.load(
-        std::memory_order_relaxed);
-    m_inFlightRequests[requestId % MAX_INFLIGHT_REQUESTS].m_atomicValue.store(
-        nullptr, std::memory_order_release);
-    delete callData;
+    CallData* callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
+    callData->clear();
 
     // in order to maintain correct order, we do not reset yet the inflight flag,
     // but first, we check the pending queue
@@ -193,8 +191,7 @@ void ELogReactor::OnWriteDone(bool ok) {
         StartWritesDone();
         RemoveHold();
     } else if (requestId != -1) {
-        callData = m_inFlightRequests[requestId % MAX_INFLIGHT_REQUESTS].m_atomicValue.load(
-            std::memory_order_relaxed);
+        callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
         StartWrite(callData->m_logRecordMsg);
         // keep in-flight raised
     } else {
@@ -222,18 +219,18 @@ void ELogReactor::OnDone(const grpc::Status& s) {
 }
 
 ELogReactor::CallData* ELogReactor::allocCallData() {
-    CallData* callData = new (std::nothrow) CallData();
-    if (callData == nullptr) {
-        return nullptr;
+    uint64_t requestId = m_nextRequestId.fetch_add(1, std::memory_order_relaxed);
+    CallData* callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
+    bool isUsed = callData->m_isUsed.m_atomicValue.load(std::memory_order::relaxed);
+    if (isUsed) {
+        while (isUsed || !callData->m_isUsed.m_atomicValue.compare_exchange_strong(
+                             isUsed, true, std::memory_order_seq_cst)) {
+            // wait
+            std::this_thread::yield();
+            isUsed = callData->m_isUsed.m_atomicValue.load(std::memory_order::relaxed);
+        }
     }
-    callData->m_requestId = m_nextRequestId.fetch_add(1, std::memory_order_relaxed);
-    std::atomic<CallData*>& callDataSlot =
-        m_inFlightRequests[callData->m_requestId % MAX_INFLIGHT_REQUESTS].m_atomicValue;
-    while (callDataSlot.load(std::memory_order_acquire) != nullptr) {
-        // wait
-        std::this_thread::yield();
-    }
-    callDataSlot.store(callData, std::memory_order_release);
+    callData->init(requestId);
     return callData;
 }
 
@@ -292,7 +289,8 @@ bool ELogGRPCTarget::startLogTarget() {
     if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM) {
         m_clientWriter = m_serviceStub->StreamLogRecords(&m_streamContext, &m_streamStatus);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
-        m_reactor = new (std::nothrow) ELogReactor(m_serviceStub.get(), getRpcFormatter());
+        m_reactor = new (std::nothrow)
+            ELogReactor(m_serviceStub.get(), getRpcFormatter(), m_maxInflightCalls);
         m_serviceStub->async()->StreamLogRecords(&m_streamContext, &m_streamStatus, m_reactor);
     }
 
@@ -497,7 +495,7 @@ void ELogGRPCTarget::flushLogTarget() {
 
         // regenerate reactor for next messages
         delete m_reactor;
-        m_reactor = new ELogReactor(m_serviceStub.get(), getRpcFormatter());
+        m_reactor = new ELogReactor(m_serviceStub.get(), getRpcFormatter(), m_maxInflightCalls);
         m_streamContext.~ClientContext();
         new (&m_streamContext) grpc::ClientContext();
         m_serviceStub->async()->StreamLogRecords(&m_streamContext, &m_streamStatus, m_reactor);

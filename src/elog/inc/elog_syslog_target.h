@@ -18,18 +18,18 @@ public:
 
     ~ELogSysLogTarget() final {}
 
-    /** @brief Sends a log record to a log target. */
-    void log(const ELogRecord& logRecord) final;
-
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() final;
-
 protected:
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() final;
 
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
+
+    /** @brief Sends a log record to a log target. */
+    uint32_t writeLogRecord(const ELogRecord& logRecord) final;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget();
 
 private:
     bool logLevelToSysLevel(ELogLevel logLevel, int& sysLevel);

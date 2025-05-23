@@ -13,6 +13,8 @@
 #include "elog.pb.h"
 #include "elog_rpc_target.h"
 
+#define ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS 1024
+
 // gRPC log target has the following possible configurations:
 // - simple: each log record is sent synchronously, flush does nothing
 // - streaming: each log record is sent through a writer, only during flush the writer calls
@@ -77,14 +79,18 @@ private:
 // complex
 class ELogReactor final : public grpc::ClientWriteReactor<elog_grpc::ELogGRPCRecordMsg> {
 public:
-    ELogReactor(elog_grpc::ELogGRPCService::Stub* stub, ELogRpcFormatter* rpcFormatter)
+    ELogReactor(elog_grpc::ELogGRPCService::Stub* stub, ELogRpcFormatter* rpcFormatter,
+                uint32_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS)
         : m_stub(stub),
           m_rpcFormatter(rpcFormatter),
           m_state(ReactorState::RS_INIT),
           m_inFlight(false),
           m_inFlightRequestId(0),
           m_nextRequestId(0) {
-        m_inFlightRequests.resize(MAX_INFLIGHT_REQUESTS);
+        if (maxInflightCalls == 0) {
+            maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS;
+        }
+        m_inFlightRequests.resize(maxInflightCalls);
     }
     ~ELogReactor() {}
 
@@ -110,17 +116,6 @@ private:
     std::atomic<bool> m_inFlight;
     std::atomic<uint64_t> m_inFlightRequestId;
 
-    struct CallData {
-        uint64_t m_requestId;
-        elog_grpc::ELogGRPCRecordMsg* m_logRecordMsg;
-        ELogGRPCFieldReceptor m_receptor;
-
-        CallData() {
-            m_logRecordMsg = new (std::nothrow) elog_grpc::ELogGRPCRecordMsg();
-            m_receptor.setLogRecordMsg(m_logRecordMsg);
-        }
-    };
-
     template <typename T>
     struct atomic_wrapper {
         std::atomic<T> m_atomicValue;
@@ -137,9 +132,32 @@ private:
         }
     };
 
-    std::vector<atomic_wrapper<CallData*>> m_inFlightRequests;
+    struct CallData {
+        atomic_wrapper<uint64_t> m_requestId;
+        atomic_wrapper<bool> m_isUsed;
+        elog_grpc::ELogGRPCRecordMsg* m_logRecordMsg;
+        ELogGRPCFieldReceptor m_receptor;
+
+        CallData() : m_requestId(0), m_isUsed(false), m_logRecordMsg(nullptr) {}
+
+        void init(uint64_t requestId) {
+            m_requestId.m_atomicValue.store(requestId, std::memory_order_relaxed);
+            // NOTE: the grpc framework deletes the message
+            m_logRecordMsg = new (std::nothrow) elog_grpc::ELogGRPCRecordMsg();
+            m_receptor.setLogRecordMsg(m_logRecordMsg);
+        }
+
+        void clear() {
+            m_requestId.m_atomicValue.store(-1, std::memory_order_relaxed);
+            m_isUsed.m_atomicValue.store(false, std::memory_order_relaxed);
+            // NOTE: the grpc framework deletes it
+            m_logRecordMsg = nullptr;
+            m_receptor.setLogRecordMsg(nullptr);
+        }
+    };
+
+    std::vector<CallData> m_inFlightRequests;
     std::atomic<uint64_t> m_nextRequestId;
-    const uint32_t MAX_INFLIGHT_REQUESTS = 100000;
 
     std::list<uint64_t> m_pendingWriteRequests;
 
@@ -154,7 +172,7 @@ class ELOG_API ELogGRPCTarget : public ELogRpcTarget {
 public:
     ELogGRPCTarget(const std::string& server, const std::string& params,
                    ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
-                   uint32_t deadlineTimeoutMillis = 0)
+                   uint32_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
         : ELogRpcTarget(server.c_str(), "", 0, ""),
           m_params(params),
           m_clientMode(clientMode),
@@ -182,6 +200,7 @@ private:
     std::string m_params;
     ELogGRPCClientMode m_clientMode;
     uint32_t m_deadlineTimeoutMillis;
+    uint32_t m_maxInflightCalls;
 
     // the stub
     std::unique_ptr<elog_grpc::ELogGRPCService::Stub> m_serviceStub;
@@ -208,12 +227,13 @@ private:
 
 // TODO: asynchronous callback stream is by far the fastest (22K msg.sec vs at most 7k msg/sec)
 // but it needs more fixes:
-// 1. use static CallData and avoid allocating on heap, just allocate once and use vacant flag
+// [DONE] 1. use static CallData and avoid allocating on heap, just allocate once and use vacant
+// flag
 // 2. cleanup code, consider using strategy pattern to avoid confusing implementations (there are 5)
 // 3. it is possible that async queue can work faster, but docs recommend using callback API
-// 4. async callback streaming client needs to configure max_inflight_calls, such that beyond that
-// the logging application will block
-// 5. looks like deferred target with gRPC target gets stuck (spin on CPU)
+// [DONE] 4. async callback streaming client needs to configure max_inflight_calls, such that beyond
+// that the logging application will block [DONE] 5. looks like deferred target with gRPC target
+// gets stuck (spin on CPU)
 
 }  // namespace elog
 

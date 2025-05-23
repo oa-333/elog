@@ -18,7 +18,7 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(
         if (!parseIntProp("grpc_deadline_timeout_millis", logTargetCfg, itr->second,
                           deadlineTimeoutMillis, true)) {
             ELOG_REPORT_ERROR(
-                "Invalid log target specification, invalid gRPC deadline timeout millis id: %s",
+                "Invalid log target specification, invalid gRPC deadline timeout millis value: %s",
                 logTargetCfg.c_str());
             return nullptr;
         }
@@ -47,8 +47,21 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(
         }
     }
 
-    ELogGRPCTarget* target =
-        new (std::nothrow) ELogGRPCTarget(server, params, clientMode, deadlineTimeoutMillis);
+    // for async callback stream, it is also possible to specify grpc_max_inflight_calls
+    uint32_t maxInflightCalls = 0;
+    itr = targetSpec.m_props.find("grpc_max_inflight_calls");
+    if (itr != targetSpec.m_props.end()) {
+        if (!parseIntProp("grpc_max_inflight_calls", logTargetCfg, itr->second, maxInflightCalls,
+                          true)) {
+            ELOG_REPORT_ERROR(
+                "Invalid log target specification, invalid gRPC max inflight calls value: %s",
+                logTargetCfg.c_str());
+            return nullptr;
+        }
+    }
+
+    ELogGRPCTarget* target = new (std::nothrow)
+        ELogGRPCTarget(server, params, clientMode, deadlineTimeoutMillis, maxInflightCalls);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate gRPC message queue log target, out of memory");
     }

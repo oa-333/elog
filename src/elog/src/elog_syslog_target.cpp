@@ -20,19 +20,19 @@ bool ELogSysLogTarget::stopLogTarget() {
     return true;
 }
 
-void ELogSysLogTarget::log(const ELogRecord& logRecord) {
-    if (shouldLog(logRecord)) {
-        // first translate log level
-        int sysLevel = 0;
-        if (logLevelToSysLevel(logRecord.m_logLevel, sysLevel)) {
-            std::string logMsg;
-            formatLogMsg(logRecord, logMsg);
-            syslog(sysLevel | LOG_USER, "%s", logMsg.c_str());
-        }
+uint32_t ELogSysLogTarget::writeLogRecord(const ELogRecord& logRecord) {
+    // first translate log level
+    int sysLevel = 0;
+    if (logLevelToSysLevel(logRecord.m_logLevel, sysLevel)) {
+        std::string logMsg;
+        formatLogMsg(logRecord, logMsg);
+        syslog(sysLevel | LOG_USER, "%s", logMsg.c_str());
+        return logMsg.length();
     }
+    return 0;
 }
 
-void ELogSysLogTarget::flush() {}
+void ELogSysLogTarget::flushLogTarget() {}
 
 bool ELogSysLogTarget::logLevelToSysLevel(ELogLevel logLevel, int& sysLevel) {
     switch (logLevel) {
