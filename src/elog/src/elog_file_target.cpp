@@ -51,6 +51,7 @@ ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolic
       m_filePath(filePath),
       m_fileHandle(nullptr),
       m_shouldClose(false) {
+    setNativelyThreadSafe();
     setAddNewLine(true);
 }
 
@@ -116,10 +117,9 @@ void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
     // to serialize operations on FILE*s."
     // therefore no lock is required here
     fputs(formattedLogMsg.c_str(), m_fileHandle);
-    addBytesWritten(formattedLogMsg.length());
 }
 
-void ELogFileTarget::flush() {
+void ELogFileTarget::flushLogTarget() {
     if (fflush(m_fileHandle) == EOF) {
         ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
     }

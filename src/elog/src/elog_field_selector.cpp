@@ -78,6 +78,9 @@ void registerFieldSelectorConstructor(const char* name, ELogFieldSelectorConstru
         ELOG_REPORT_ERROR("Cannot register field selector constructor, no space: %s", name);
         exit(1);
     } else {
+        // let order of registration decide dynamic type id
+        // this is required since we need to support externally installed field selectors
+        constructor->setTypeId(sFieldConstructorsCount);
         sFieldConstructors[sFieldConstructorsCount++] = {name, constructor};
     }
 }
@@ -226,11 +229,11 @@ void setCurrentThreadNameField(const char* threadName) {
 const char* getCurrentThreadNameField() { return sThreadName; }
 
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(m_text, m_justify);
+    receptor->receiveStringField(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text, m_justify);
 }
 
 void ELogRecordIdSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveIntField(record.m_logRecordId, m_justify);
+    receptor->receiveIntField(getTypeId(), record.m_logRecordId, m_justify);
 }
 
 void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
@@ -241,77 +244,77 @@ void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* 
         buffer, bufSize, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u", record.m_logTime.wYear,
         record.m_logTime.wMonth, record.m_logTime.wDay, record.m_logTime.wHour,
         record.m_logTime.wMinute, record.m_logTime.wSecond, record.m_logTime.wMilliseconds);
-    receptor->receiveTimeField(record.m_logTime, buffer, m_justify);
+    receptor->receiveTimeField(getTypeId(), record.m_logTime, buffer, m_justify);
 #else
     time_t timer = record.m_logTime.tv_sec;
     struct tm* tm_info = localtime(&timer);
     std::size_t offset = strftime(buffer, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
     offset += snprintf(buffer + offset, bufSize - offset, "%.3u",
                        (unsigned)(record.m_logTime.tv_usec / 1000));
-    receptor->receiveTimeField(record.m_logTime, buffer, m_justify);
+    receptor->receiveTimeField(getTypeId(), record.m_logTime, buffer, m_justify);
 #endif
 }
 
 void ELogHostNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(hostName, m_justify);
+    receptor->receiveStringField(getTypeId(), hostName, m_justify);
 }
 
 void ELogUserNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(userName, m_justify);
+    receptor->receiveStringField(getTypeId(), userName, m_justify);
 }
 
 void ELogProgramNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(progName, m_justify);
+    receptor->receiveStringField(getTypeId(), progName, m_justify);
 }
 
 void ELogProcessIdSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveIntField(pid, m_justify);
+    receptor->receiveIntField(getTypeId(), pid, m_justify);
 }
 
 void ELogThreadIdSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveIntField(record.m_threadId, m_justify);
+    receptor->receiveIntField(getTypeId(), record.m_threadId, m_justify);
 }
 
 void ELogThreadNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(sThreadName, m_justify);
+    receptor->receiveStringField(getTypeId(), sThreadName, m_justify);
 }
 
 void ELogSourceSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
     if (logSource != nullptr && (*logSource->getQualifiedName() != 0)) {
-        receptor->receiveStringField(logSource->getQualifiedName(), m_justify);
+        receptor->receiveStringField(getTypeId(), logSource->getQualifiedName(), m_justify);
     } else {
-        receptor->receiveStringField("N/A", m_justify);
+        receptor->receiveStringField(getTypeId(), "N/A", m_justify);
     }
 }
 
 void ELogModuleSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
     if (logSource != nullptr && (*logSource->getModuleName() != 0)) {
-        receptor->receiveStringField(logSource->getModuleName(), m_justify);
+        receptor->receiveStringField(getTypeId(), logSource->getModuleName(), m_justify);
     } else {
-        receptor->receiveStringField("N/A", m_justify);
+        receptor->receiveStringField(getTypeId(), "N/A", m_justify);
     }
 }
 
 void ELogFileSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(record.m_file, m_justify);
+    receptor->receiveStringField(getTypeId(), record.m_file, m_justify);
 }
 
 void ELogLineSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveIntField(record.m_line, m_justify);
+    receptor->receiveIntField(getTypeId(), record.m_line, m_justify);
 }
 
 void ELogFunctionSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(record.m_function, m_justify);
+    receptor->receiveStringField(getTypeId(), record.m_function, m_justify);
 }
 
 void ELogLevelSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveLogLevelField(record.m_logLevel, m_justify);
+    receptor->receiveLogLevelField(getTypeId(), record.m_logLevel, m_justify);
 }
 
 void ELogMsgSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveStringField(record.m_logMsg, m_justify);
+    receptor->receiveStringField(getTypeId(), record.m_logMsg, m_justify);
 }
 
 }  // namespace elog

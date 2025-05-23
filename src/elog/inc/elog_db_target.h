@@ -19,12 +19,6 @@ namespace elog {
 /** @brief Abstract parent class for DB log targets. */
 class ELOG_API ELogDbTarget : public ELogTarget {
 public:
-    /** @brief Sends a log record to a log target. */
-    void log(const ELogRecord& logRecord) override;
-
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() final {}
-
     /** @brief Threading model constants. */
     enum class ThreadModel : uint32_t {
         /**
@@ -68,6 +62,12 @@ protected:
 
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() override;
+
+    /** @brief Sends a log record to a log target. */
+    uint32_t writeLogRecord(const ELogRecord& logRecord) override;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget() final {}
 
     /**
      * @brief Retrieves the processed insert statement resulting from the call to @ref

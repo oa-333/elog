@@ -16,7 +16,9 @@ public:
     }
 
 protected:
-    ELogAsyncTarget(ELogTarget* endTarget) : ELogTarget("async"), m_endTarget(endTarget) {}
+    ELogAsyncTarget(ELogTarget* endTarget) : ELogTarget("async"), m_endTarget(endTarget) {
+        m_endTarget->setExternallyThreadSafe();
+    }
 
     ELogTarget* getEndLogTarget() { return m_endTarget; }
 

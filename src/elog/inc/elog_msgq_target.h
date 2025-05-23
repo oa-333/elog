@@ -12,18 +12,17 @@ namespace elog {
 
 /** @brief Abstract parent class for message queue log targets. */
 class ELOG_API ELogMsgQTarget : public ELogTarget {
-public:
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() override {}
-
 protected:
     ELogMsgQTarget() : ELogTarget("msgq") {}
     ~ELogMsgQTarget() override {}
 
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget() override {}
+
     /**
      * @brief Parses the headers loaded from configuration, builds all log record field selectors,
      * and extracts header names.
-     * @param headers The insert statement to parse.
+     * @param headers The headers to parse.
      * @return true If succeeded, otherwise false.
      */
     inline bool parseHeaders(const std::string& headers) {

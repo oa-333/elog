@@ -31,7 +31,7 @@ public:
     inline int getRes() const { return m_res; }
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(const std::string& field, int justify) {
+    void receiveStringField(uint32_t typeId, const std::string& field, int justify) {
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, field.c_str(), field.length(),
                                     SQLITE_TRANSIENT);
         if (m_res == 0) {
@@ -40,7 +40,7 @@ public:
     }
 
     /** @brief Receives an integer log record field. */
-    void receiveIntField(uint64_t field, int justify) final {
+    void receiveIntField(uint32_t typeId, uint64_t field, int justify) final {
         int res = sqlite3_bind_int64(m_stmt, m_fieldNum++, field);
         if (m_res == 0) {
             m_res = res;
@@ -49,7 +49,8 @@ public:
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr, int justify) final {
+    void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
+                          int justify) final {
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, timeStr, -1, SQLITE_TRANSIENT);
         if (m_res == 0) {
             m_res = res;
@@ -57,7 +58,8 @@ public:
     }
 #else
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const timeval& sysTime, const char* timeStr, int justify) final {
+    void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
+                          int justify) final {
         int res =
             sqlite3_bind_text(m_stmt, m_fieldNum++, timeStr, strlen(timeStr), SQLITE_TRANSIENT);
         if (m_res == 0) {
@@ -67,7 +69,7 @@ public:
 #endif
 
     /** @brief Receives a log level log record field. */
-    void receiveLogLevelField(ELogLevel logLevel, int justify) final {
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) final {
         const char* logLevelStr = elogLevelToStr(logLevel);
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, logLevelStr, strlen(logLevelStr),
                                     SQLITE_TRANSIENT);

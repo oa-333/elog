@@ -4,6 +4,8 @@
 #include "elog_field_receptor.h"
 #include "elog_record.h"
 
+#define ELOG_INVALID_FIELD_SELECTOR_TYPE_ID ((uint32_t)-1)
+
 namespace elog {
 
 /** @enum Constants for field types (generic). */
@@ -75,13 +77,25 @@ public:
      */
     virtual ELogFieldSelector* constructFieldSelector(int justify) = 0;
 
+    /** @brief Installs field selector type id (for internal use only). */
+    inline void setTypeId(uint32_t typeId) { m_typeId = typeId; }
+
+    /** @brief Retrieves the field selector type id (for internal use only). */
+    inline uint32_t getTypeId() const { return m_typeId; }
+
 protected:
     /** @brief Constructor. */
-    ELogFieldSelectorConstructor(const char* name) { registerFieldSelectorConstructor(name, this); }
+    ELogFieldSelectorConstructor(const char* name) : m_typeId(0) {
+        registerFieldSelectorConstructor(name, this);
+    }
+
+private:
+    uint32_t m_typeId;
 };
 
 /** @def Utility macro for declaring field selector factory method registration. */
 #define ELOG_DECLARE_FIELD_SELECTOR(FieldSelectorType, Name)                                    \
+private:                                                                                        \
     class ELOG_API FieldSelectorType##Constructor : public elog::ELogFieldSelectorConstructor { \
     public:                                                                                     \
         FieldSelectorType##Constructor() : elog::ELogFieldSelectorConstructor(#Name) {}         \
@@ -89,7 +103,10 @@ protected:
             return new (std::nothrow) FieldSelectorType(justify);                               \
         }                                                                                       \
     };                                                                                          \
-    static FieldSelectorType##Constructor sConstructor;
+    static FieldSelectorType##Constructor sConstructor;                                         \
+                                                                                                \
+public:                                                                                         \
+    static uint32_t getTypeId() { return sConstructor.getTypeId(); }
 
 /** @def Utility macro for implementing field selector factory method registration. */
 #define ELOG_IMPLEMENT_FIELD_SELECTOR(FieldSelectorType) \

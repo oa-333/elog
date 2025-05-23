@@ -19,21 +19,23 @@ public:
     ~ELogStringStreamReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(const std::string& field, int justify) final;
+    void receiveStringField(uint32_t typeId, const std::string& field, int justify) final;
 
     /** @brief Receives an integer log record field. */
-    void receiveIntField(uint64_t field, int justify) final;
+    void receiveIntField(uint32_t typeId, uint64_t field, int justify) final;
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr, int justify) final;
+    void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
+                          int justify) final;
 #else
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const timeval& sysTime, const char* timeStr, int justify) final;
+    void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
+                          int justify) final;
 #endif
 
     /** @brief Receives a log level log record field. */
-    void receiveLogLevelField(ELogLevel logLevel, int justify) final;
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) final;
 
     /** @brief Retrieves the formatted log message. */
     inline void getFormattedLogMsg(std::string& logMsg) const {

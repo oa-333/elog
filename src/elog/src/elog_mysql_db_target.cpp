@@ -12,29 +12,31 @@ public:
     ~ELogMySqlDbFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(const std::string& field, int justify) {
+    void receiveStringField(uint32_t typeId, const std::string& field, int justify) {
         m_stmt->setString(m_fieldNum++, field);
     }
 
     /** @brief Receives an integer log record field. */
-    void receiveIntField(uint64_t field, int justify) final {
+    void receiveIntField(uint32_t typeId, uint64_t field, int justify) final {
         m_stmt->setInt64(m_fieldNum++, field);
     }
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr, int justify) final {
+    void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
+                          int justify) final {
         m_stmt->setDateTime(m_fieldNum++, timeStr);
     }
 #else
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const timeval& sysTime, const char* timeStr, int justify) final {
+    void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
+                          int justify) final {
         m_stmt->setDateTime(m_fieldNum++, timeStr);
     }
 #endif
 
     /** @brief Receives a log level log record field. */
-    void receiveLogLevelField(ELogLevel logLevel, int justify) final {
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) final {
         m_stmt->setString(m_fieldNum++, elogLevelToStr(logLevel));
     }
 

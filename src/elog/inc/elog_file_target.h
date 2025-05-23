@@ -26,6 +26,7 @@ public:
      */
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr)
         : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
+        setNativelyThreadSafe();
         setAddNewLine(true);
     }
     ELogFileTarget(const ELogFileTarget&) = delete;
@@ -36,9 +37,6 @@ public:
     /** @brief Experimental API for configuring optimal buffer size according to setvbuf(). */
     bool configureOptimalBufferSize();
 
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() final;
-
 protected:
     /** @brief Log a formatted message. */
     void logFormattedMsg(const std::string& formattedLogMsg) final;
@@ -48,6 +46,9 @@ protected:
 
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget() final;
 
 private:
     std::string m_filePath;

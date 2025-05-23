@@ -8,7 +8,7 @@
 
 namespace elog {
 
-/** @brief Handler for loading DB log target from configuration. */
+/** @brief Handler for loading message queue log target from configuration. */
 class ELOG_API ELogMsgQSchemaHandler : public ELogSchemaHandler {
 public:
     ELogMsgQSchemaHandler() {}

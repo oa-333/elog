@@ -6,31 +6,33 @@
 
 namespace elog {
 
-void ELogStringStreamReceptor::receiveStringField(const std::string& field, int justify) {
+void ELogStringStreamReceptor::receiveStringField(uint32_t typeId, const std::string& field,
+                                                  int justify) {
     applyJustify(justify);
     m_msgStream << field;
 }
 
-void ELogStringStreamReceptor::receiveIntField(uint64_t field, int justify) {
+void ELogStringStreamReceptor::receiveIntField(uint32_t typeId, uint64_t field, int justify) {
     applyJustify(justify);
     m_msgStream << std::to_string(field);
 }
 
 #ifdef ELOG_MSVC
-void ELogStringStreamReceptor::receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr,
-                                                int justify) {
+void ELogStringStreamReceptor::receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime,
+                                                const char* timeStr, int justify) {
     applyJustify(justify);
     m_msgStream << timeStr;
 }
 #else
-void ELogStringStreamReceptor::receiveTimeField(const timeval& sysTime, const char* timeStr,
-                                                int justify) {
+void ELogStringStreamReceptor::receiveTimeField(uint32_t typeId, const timeval& sysTime,
+                                                const char* timeStr, int justify) {
     applyJustify(justify);
     m_msgStream << timeStr;
 }
 #endif
 
-void ELogStringStreamReceptor::receiveLogLevelField(ELogLevel logLevel, int justify) {
+void ELogStringStreamReceptor::receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
+                                                    int justify) {
     applyJustify(justify);
     m_msgStream << elogLevelToStr(logLevel);
 }

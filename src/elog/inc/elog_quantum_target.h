@@ -58,12 +58,6 @@ public:
                       CongestionPolicy congestionPolicy = CongestionPolicy::CP_WAIT);
     ~ELogQuantumTarget() final {}
 
-    /** @brief Sends a log record to a log target. */
-    void log(const ELogRecord& logRecord) final;
-
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() final;
-
     /** @brief Queries whether the log target has written all pending messages. */
     bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) final {
         writeCount = m_writePos.load(std::memory_order_relaxed);
@@ -77,6 +71,12 @@ private:
 
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
+
+    /** @brief Sends a log record to a log target. */
+    uint32_t writeLogRecord(const ELogRecord& logRecord) final;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget() final;
 
 private:
     enum EntryState : uint32_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };

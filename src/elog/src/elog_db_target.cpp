@@ -127,18 +127,14 @@ bool ELogDbTarget::stopLogTarget() {
     return true;
 }
 
-void ELogDbTarget::log(const ELogRecord& logRecord) {
-    if (!shouldLog(logRecord)) {
-        return;
-    }
-
+uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
     int slotId = 0;
     if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
         slotId = sThreadSlotId;
         if (slotId == -1) {
             if (!initConnection(slotId)) {
                 ELOG_REPORT_ERROR("Failed to initialize DB connection for current thread");
-                return;
+                return 0;
             }
         }
     }
@@ -146,7 +142,7 @@ void ELogDbTarget::log(const ELogRecord& logRecord) {
     // check if connected to database, otherwise discard log record
     // (wait until reconnected in the background)
     if (!isConnected(slotId)) {
-        return;
+        return 0;
     }
     ThreadSlot& slot = m_threadSlots[slotId];
 
@@ -162,6 +158,8 @@ void ELogDbTarget::log(const ELogRecord& logRecord) {
         disconnectDb(slot.m_dbData);
         wakeUpReconnect();
     }
+    // NOTE: DB log target does not flush, so the byte count is meaningless
+    return 0;
 }
 
 bool ELogDbTarget::parseInsertStatement(const std::string& insertStatement) {

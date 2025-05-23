@@ -19,34 +19,37 @@ public:
     ~ELogKafkaMsgQFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(const std::string& field, int justify) {
+    void receiveStringField(uint32_t typeId, const std::string& field, int justify) {
         m_headerValues.push_back(field);
     }
 
     /** @brief Receives an integer log record field. */
-    void receiveIntField(uint64_t field, int justify) final {
+    void receiveIntField(uint32_t typeId, uint64_t field, int justify) final {
         m_headerValues.push_back(std::to_string(field));
     }
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr, int justify) final {
+    void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
+                          int justify) final {
         m_headerValues.push_back(timeStr);
     }
 #else
     /** @brief Receives a time log record field. */
-    void receiveTimeField(const timeval& sysTime, const char* timeStr, int justify) final {
+    void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
+                          int justify) final {
         m_headerValues.push_back(timeStr);
     }
 #endif
 
     /** @brief Receives a log level log record field. */
-    void receiveLogLevelField(ELogLevel logLevel, int justify) final {
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) final {
         const char* logLevelStr = elogLevelToStr(logLevel);
         m_headerValues.push_back(logLevelStr);
     }
 
-    bool prepareHeaders(rd_kafka_headers_t* headers, const std::vector<std::string>& headerNames) {
+    bool prepareHeaders(rd_kafka_headers_t* headers, const std::vector<std::string>& headerNames,
+                        uint32_t& bytesWritten) {
         if (m_headerValues.size() != headerNames.size()) {
             ELOG_REPORT_ERROR("Mismatching header names a values (%u names, %u values)",
                               headerNames.size(), m_headerValues.size());
@@ -61,6 +64,8 @@ public:
                                   headerNames[i].c_str(), m_headerValues[i].c_str(),
                                   rd_kafka_err2name(res));
                 return false;
+            } else {
+                bytesWritten += m_headerValues[i].length();
             }
         }
         return true;
@@ -152,31 +157,29 @@ bool ELogKafkaMsgQTarget::stopLogTarget() {
     return true;
 }
 
-void ELogKafkaMsgQTarget::log(const ELogRecord& logRecord) {
-    if (!shouldLog(logRecord)) {
-        return;
-    }
-
+uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
     // prepare headers if any
     // NOTE: receptor must live until message sending, because it holds value strings
+    uint32_t bytesWritten = 0;
     ELogKafkaMsgQFieldReceptor receptor;
     rd_kafka_headers_t* headers = nullptr;
     if (!m_headers.empty()) {
         headers = rd_kafka_headers_new(getHeaderCount());
         if (headers == nullptr) {
             ELOG_REPORT_ERROR("Failed to allocate kafka headers, out of memory");
-            return;
+            return 0;
         }
         fillInHeaders(logRecord, &receptor);
-        if (!receptor.prepareHeaders(headers, getHeaderNames())) {
+        if (!receptor.prepareHeaders(headers, getHeaderNames(), bytesWritten)) {
             ELOG_REPORT_ERROR("Failed to prepare kafka message headers");
-            return;
+            return 0;
         }
     }
 
-    // prepare formatter log message
+    // prepare formatted log message
     std::string logMsg;
     formatLogMsg(logRecord, logMsg);
+    bytesWritten += logMsg.length();
 
     // unassigned partition, copy payload, no key specification, payload is formatted string
     // headers include specific log record fields
@@ -222,9 +225,11 @@ void ELogKafkaMsgQTarget::log(const ELogRecord& logRecord) {
                               m_topicName.c_str(), errMsg);
         }
     }
+
+    return bytesWritten;
 }
 
-void ELogKafkaMsgQTarget::flush() {
+void ELogKafkaMsgQTarget::flushLogTarget() {
     uint32_t flushTimeoutMillis = m_flushTimeoutMillis;
     if (flushTimeoutMillis == 0) {
         flushTimeoutMillis = ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS;

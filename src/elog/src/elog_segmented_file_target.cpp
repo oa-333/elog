@@ -200,6 +200,7 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char
       m_currentlyOpeningSegment(0),
       m_segmentOpenerId(0) {
     // open current segment (start a new one if needed)
+    setNativelyThreadSafe();
     setAddNewLine(true);
     openSegment();
 }
@@ -209,7 +210,7 @@ ELogSegmentedFileTarget::~ELogSegmentedFileTarget() {}
 bool ELogSegmentedFileTarget::startLogTarget() { return openSegment(); }
 
 bool ELogSegmentedFileTarget::stopLogTarget() {
-    if (m_currentSegment != nullptr) {
+    if (m_currentSegment.load(std::memory_order_relaxed) != nullptr) {
         if (fclose(m_currentSegment) == -1) {
             ELOG_REPORT_SYS_ERROR(fopen, "Failed to close log segment");
             return false;
@@ -243,7 +244,6 @@ void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg
         }
         // don't forget to increase left counter
         m_left.fetch_add(1, std::memory_order_release);
-        addBytesWritten(formattedLogMsg.size());
         return;
     }
 
@@ -259,10 +259,9 @@ void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg
 
     // mark log finish
     m_left.fetch_add(1, std::memory_order_release);
-    addBytesWritten(formattedLogMsg.size());
 }
 
-void ELogSegmentedFileTarget::flush() {
+void ELogSegmentedFileTarget::flushLogTarget() {
     // first thing, increment the entered count
     m_entered.fetch_add(1, std::memory_order_acquire);
 
@@ -475,7 +474,6 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     if (fputs(logMsg.c_str(), prevSegment) == EOF) {
         ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
     }
-    addBytesWritten(logMsg.size());
 
     // it is theoretically possible that during log flooding we will not have time to close one
     // segment, when another segment already needs to be opened. this is ok, as several threads
@@ -570,7 +568,6 @@ void ELogSegmentedFileTarget::logMsgQueue(std::list<std::string>& logMsgs, FILE*
         if (fputs(logMsg.c_str(), segmentFile) == EOF) {
             ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
         }
-        addBytesWritten(logMsg.size());
         logMsgs.pop_back();
     }
 }

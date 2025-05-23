@@ -40,15 +40,15 @@ public:
           m_fileWriter(bufferSize, useLock),
           m_fileHandle(nullptr),
           m_shouldClose(false) {
+        if (useLock) {
+            setNativelyThreadSafe();
+        }
         setAddNewLine(true);
     }
     ELogBufferedFileTarget(const ELogBufferedFileTarget&) = delete;
     ELogBufferedFileTarget(ELogBufferedFileTarget&&) = delete;
 
     ~ELogBufferedFileTarget() final {}
-
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() final;
 
 protected:
     /** @brief Log a formatted message. */
@@ -59,6 +59,9 @@ protected:
 
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget() final;
 
 private:
     std::string m_filePath;

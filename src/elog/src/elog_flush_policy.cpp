@@ -166,7 +166,7 @@ bool ELogCountFlushPolicy::load(const std::string& logTargetCfg,
 
 bool ELogCountFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     uint64_t logCount = m_currentLogCount.fetch_add(1, std::memory_order_relaxed);
-    return (logCount % m_logCountLimit == 0);
+    return ((logCount + 1) % m_logCountLimit == 0);
 }
 
 bool ELogSizeFlushPolicy::load(const std::string& logTargetCfg,

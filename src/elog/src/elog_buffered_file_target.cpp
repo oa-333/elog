@@ -12,6 +12,9 @@ ELogBufferedFileTarget::ELogBufferedFileTarget(const char* filePath, uint32_t bu
       m_filePath(filePath),
       m_fileHandle(nullptr),
       m_shouldClose(false) {
+    if (useLock) {
+        setNativelyThreadSafe();
+    }
     setAddNewLine(true);
 }
 
@@ -44,12 +47,12 @@ bool ELogBufferedFileTarget::stopLogTarget() {
 }
 
 void ELogBufferedFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
-    if (m_fileWriter.logMsg(formattedLogMsg)) {
-        addBytesWritten(formattedLogMsg.length());
+    if (!m_fileWriter.logMsg(formattedLogMsg)) {
+        ELOG_REPORT_TRACE("Failed to write formatted log message to buffered file writer");
     }
 }
 
-void ELogBufferedFileTarget::flush() {
+void ELogBufferedFileTarget::flushLogTarget() {
     if (fflush(m_fileHandle) == EOF) {
         int errCode = errno;
         ELOG_REPORT_ERROR("Failed to flush file: error code %d", errCode);

@@ -25,16 +25,6 @@ public:
         : ELogAsyncTarget(logTarget), m_stop(false), m_writeCount(0), m_readCount(0) {}
     ~ELogDeferredTarget() override {}
 
-    /** @brief Sends a log record to a log target. */
-    void log(const ELogRecord& logRecord) override;
-
-    /**
-     * @brief Orders a buffered log target to flush it log messages. Note that flush policy is
-     * already managed by the deferred log target. If you wish to enforce flush from outside, then
-     * use this call.
-     */
-    void flush() override;
-
     /** @brief Queries whether the log target has written all pending messages. */
     bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) final {
         writeCount = m_writeCount.load(std::memory_order_relaxed);
@@ -59,13 +49,19 @@ protected:
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
 
+    /** @brief Sends a log record to a log target. */
+    uint32_t writeLogRecord(const ELogRecord& logRecord) override;
+
+    /** @brief Order the log target to flush. */
+    void flushLogTarget() override;
+
     void logThread();
 
     bool shouldStop();
 
     virtual void waitQueue(std::unique_lock<std::mutex>& lock);
 
-    void logQueueMsgs(LogQueue& logQueue, bool flushOnEmptyMsg);
+    void logQueueMsgs(LogQueue& logQueue, bool disregardFlushRequests);
 
     void stopLogThread();
 };

@@ -40,9 +40,6 @@ public:
 
     ~ELogSegmentedFileTarget() final;
 
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush() final;
-
 protected:
     /** @brief Log a formatted message. */
     void logFormattedMsg(const std::string& formattedLogMsg) final;
@@ -52,6 +49,9 @@ protected:
 
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
+
+    /** @brief Orders a buffered log target to flush it log messages. */
+    void flushLogTarget() final;
 
 private:
     std::string m_logPath;

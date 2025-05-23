@@ -4,6 +4,8 @@
 
 #include "elog_system.h"
 
+#define ELOG_FLUSH_REQUEST ((void*)-1)
+
 namespace elog {
 
 bool ELogDeferredTarget::startLogTarget() {
@@ -19,21 +21,24 @@ bool ELogDeferredTarget::stopLogTarget() {
     return getEndLogTarget()->stop();
 }
 
-void ELogDeferredTarget::log(const ELogRecord& logRecord) {
-    if (shouldLog(logRecord)) {
-        m_writeCount.fetch_add(1, std::memory_order_relaxed);
-        std::unique_lock<std::mutex> lock(m_lock);
-        m_logQueue.push_back(std::make_pair(logRecord, logRecord.m_logMsg));
-        m_cv.notify_one();
-    }
+uint32_t ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord) {
+    m_writeCount.fetch_add(1, std::memory_order_relaxed);
+    std::unique_lock<std::mutex> lock(m_lock);
+    m_logQueue.push_back(std::make_pair(logRecord, logRecord.m_logMsg));
+    m_cv.notify_one();
+    // asynchronous log targets do not report byte count
+    return 0;
 }
 
-void ELogDeferredTarget::flush() {
+void ELogDeferredTarget::flushLogTarget() {
     // log empty message, which designated a flush request
     // NOTE: there is no waiting for flush to complete
-    ELogRecord dummy;
-    dummy.m_logMsg = "";
-    log(dummy);
+    ELogRecord flushRecord;
+    flushRecord.m_logMsg = "";
+    flushRecord.m_reserved = ELOG_FLUSH_REQUEST;
+    std::unique_lock<std::mutex> lock(m_lock);
+    m_logQueue.push_back(std::make_pair(flushRecord, flushRecord.m_logMsg));
+    m_cv.notify_one();
 }
 
 void ELogDeferredTarget::logThread() {
@@ -79,17 +84,17 @@ void ELogDeferredTarget::waitQueue(std::unique_lock<std::mutex>& lock) {
     m_cv.wait(lock, [this] { return m_stop || !m_logQueue.empty(); });
 }
 
-void ELogDeferredTarget::logQueueMsgs(LogQueue& logQueue, bool flushOnEmptyMsg) {
+void ELogDeferredTarget::logQueueMsgs(LogQueue& logQueue, bool disregardFlushRequests) {
     LogQueue::iterator itr = logQueue.begin();
     while (itr != logQueue.end()) {
-        std::string& logMsg = itr->second;
-        if (logMsg.empty()) {
+        ELogRecord& logRecord = itr->first;
+        if (logRecord.m_reserved == ELOG_FLUSH_REQUEST) {
             // empty log message signifies flush request (ignored during last time)
-            if (flushOnEmptyMsg) {
+            if (!disregardFlushRequests) {
                 getEndLogTarget()->flush();
             }
         } else {
-            ELogRecord& logRecord = itr->first;
+            std::string& logMsg = itr->second;
             logRecord.m_logMsg = itr->second.c_str();
             getEndLogTarget()->log(logRecord);
             m_readCount.fetch_add(1, std::memory_order_relaxed);

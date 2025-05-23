@@ -42,6 +42,9 @@ struct ELOG_API ELogRecord {
     /** @var Formatted log message. */
     const char* m_logMsg;
 
+    /** @var Reserved for internal use. */
+    void* m_reserved;
+
     /** @brief Default constructor. */
     ELogRecord()
         : m_logRecordId(0),
@@ -49,7 +52,8 @@ struct ELOG_API ELogRecord {
           m_threadId(0),
           m_sourceId(0),
           m_logLevel(ELEVEL_INFO),
-          m_logMsg(nullptr) {}
+          m_logMsg(nullptr),
+          m_reserved(nullptr) {}
 
     /** @brief Default copy constructor. */
     ELogRecord(const ELogRecord&) = default;

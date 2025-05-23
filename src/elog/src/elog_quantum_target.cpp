@@ -12,6 +12,9 @@
 #define CPU_RELAX
 #endif
 
+#define ELOG_FLUSH_REQUEST ((void*)-1)
+#define ELOG_STOP_REQUEST ((void*)-2)
+
 namespace elog {
 
 ELogQuantumTarget::ELogQuantumTarget(
@@ -36,8 +39,9 @@ bool ELogQuantumTarget::startLogTarget() {
 bool ELogQuantumTarget::stopLogTarget() {
     // send a poison pill to the log thread
     ELogRecord poison;
-    poison.m_logMsg = (const char*)-1;
-    log(poison);
+    poison.m_logMsg = "";
+    poison.m_reserved = ELOG_STOP_REQUEST;
+    writeLogRecord(poison);
 
     // now wait for log thread to finish
     m_logThread.join();
@@ -46,11 +50,7 @@ bool ELogQuantumTarget::stopLogTarget() {
     return getEndLogTarget()->stop();
 }
 
-void ELogQuantumTarget::log(const ELogRecord& logRecord) {
-    if (!shouldLog(logRecord)) {
-        return;
-    }
-
+uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
     uint32_t writePos = m_writePos.fetch_add(1, std::memory_order_acquire);
     uint32_t readPos = m_readPos.load(std::memory_order_relaxed);
 
@@ -71,20 +71,24 @@ void ELogQuantumTarget::log(const ELogRecord& logRecord) {
 
     recordData.m_entryState.store(ES_WRITING, std::memory_order_seq_cst);
     recordData.m_logRecord = logRecord;
-    if (logRecord.m_logMsg != (const char*)-1) {
-        // make a copy of the log message and update pointer to point to msg copy
-        recordData.m_logMsg = logRecord.m_logMsg;
-        recordData.m_logRecord.m_logMsg = recordData.m_logMsg.c_str();
-    }
+    // if (logRecord.m_logMsg != (const char*)-1) {
+    //  make a copy of the log message and update pointer to point to msg copy
+    recordData.m_logMsg = logRecord.m_logMsg;
+    recordData.m_logRecord.m_logMsg = recordData.m_logMsg.c_str();
+    //}
     recordData.m_entryState.store(ES_READY, std::memory_order_release);
+
+    // NOTE: asynchronous loggers do not report bytes written
+    return 0;
 }
 
-void ELogQuantumTarget::flush() {
+void ELogQuantumTarget::flushLogTarget() {
     // log empty message, which designated a flush request
     // NOTE: there is no waiting for flush to complete
-    ELogRecord dummy;
-    dummy.m_logMsg = nullptr;
-    log(dummy);
+    ELogRecord flushRecord;
+    flushRecord.m_logMsg = "";
+    flushRecord.m_reserved = ELOG_FLUSH_REQUEST;
+    writeLogRecord(flushRecord);
 }
 
 void ELogQuantumTarget::logThread() {
@@ -120,17 +124,17 @@ void ELogQuantumTarget::logThread() {
             }
 
             // log record, flush or terminate
-            if (recordData.m_logRecord.m_logMsg == (const char*)-1) {
+            if (recordData.m_logRecord.m_reserved == ELOG_STOP_REQUEST) {
                 done = true;
-            } else if (recordData.m_logRecord.m_logMsg == nullptr) {
+            } else if (recordData.m_logRecord.m_reserved == ELOG_FLUSH_REQUEST) {
                 getEndLogTarget()->flush();
             } else {
                 getEndLogTarget()->log(recordData.m_logRecord);
-                m_readPos.fetch_add(1, std::memory_order_relaxed);
             }
 
             // change state back to vacant and update read pos
             recordData.m_entryState.store(ES_VACANT, std::memory_order_relaxed);
+            m_readPos.fetch_add(1, std::memory_order_relaxed);
         } else {
             /*if (spinCount > SPIN_COUNT_MAX) {
                 // yield processor

@@ -19,21 +19,23 @@ public:
     virtual ~ELogFieldReceptor() {}
 
     /** @brief Receives a string log record field. */
-    virtual void receiveStringField(const std::string& field, int justify) = 0;
+    virtual void receiveStringField(uint32_t typeId, const std::string& value, int justify) = 0;
 
     /** @brief Receives an integer log record field. */
-    virtual void receiveIntField(uint64_t field, int justify) = 0;
+    virtual void receiveIntField(uint32_t typeId, uint64_t value, int justify) = 0;
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
-    virtual void receiveTimeField(const SYSTEMTIME& sysTime, const char* timeStr, int justify) = 0;
+    virtual void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
+                                  int justify) = 0;
 #else
     /** @brief Receives a time log record field. */
-    virtual void receiveTimeField(const timeval& sysTime, const char* timeStr, int justify) = 0;
+    virtual void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
+                                  int justify) = 0;
 #endif
 
     /** @brief Receives a log level log record field. */
-    virtual void receiveLogLevelField(ELogLevel logLevel, int justify) = 0;
+    virtual void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) = 0;
 
 protected:
     ELogFieldReceptor() {}
