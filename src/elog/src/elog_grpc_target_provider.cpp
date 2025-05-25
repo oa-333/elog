@@ -48,7 +48,7 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(
     }
 
     // for async callback stream, it is also possible to specify grpc_max_inflight_calls
-    uint32_t maxInflightCalls = 0;
+    uint32_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS;
     itr = targetSpec.m_props.find("grpc_max_inflight_calls");
     if (itr != targetSpec.m_props.end()) {
         if (!parseIntProp("grpc_max_inflight_calls", logTargetCfg, itr->second, maxInflightCalls,

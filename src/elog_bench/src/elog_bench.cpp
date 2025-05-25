@@ -484,7 +484,7 @@ void testGRPCSimple() {
         "${msg})";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+    runSingleThreadedTest("gRPC (unary)", cfg, msgPerf, ioPerf);
 
     server->Shutdown();
     t.join();
@@ -505,7 +505,7 @@ void testGRPCStream() {
         "${msg})&grpc_client_mode=stream";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+    runSingleThreadedTest("gRPC (stream)", cfg, msgPerf, ioPerf);
 
     server->Shutdown();
     t.join();
@@ -527,7 +527,7 @@ void testGRPCAsync() {
         "${msg})&grpc_client_mode=async";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+    runSingleThreadedTest("gRPC (async)", cfg, msgPerf, ioPerf);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -550,7 +550,7 @@ void testGRPCAsyncCallbackUnary() {
         "${msg})&grpc_client_mode=async_callback_unary";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+    runSingleThreadedTest("gRPC (async callback unary)", cfg, msgPerf, ioPerf);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -569,10 +569,11 @@ void testGRPCAsyncCallbackStream() {
 
     const char* cfg =
         "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
-        "${msg})&grpc_client_mode=async_callback_stream&flush_policy=count&flush_count=10&deferred";
+        "${msg})&grpc_client_mode=async_callback_stream&grpc_max_inflight_calls=20000&flush_policy="
+        "count&flush_count=1024";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC", cfg, msgPerf, ioPerf);
+    runSingleThreadedTest("gRPC (async callback stream)", cfg, msgPerf, ioPerf);
 
     // test is over, order server to shut down
     server->Shutdown();

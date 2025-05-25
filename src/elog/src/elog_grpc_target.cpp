@@ -14,6 +14,9 @@
 #define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
 #endif
 
+#define ELOG_INVALID_REQUEST_ID ((uint64_t)-1)
+#define ELOG_FLUSH_REQUEST_ID ((uint64_t)-2)
+
 namespace elog {
 
 void ELogGRPCFieldReceptor::receiveStringField(uint32_t typeId, const std::string& value,
@@ -92,33 +95,46 @@ uint32_t ELogReactor::writeLogRecord(const ELogRecord& logRecord) {
 
     ReactorState state = m_state.load(std::memory_order_acquire);
     if (state == ReactorState::RS_INIT) {
-        // at this point no OnWriteDone() or onDone() can arrive concurrently (as there is
-        // no inflight message)
+        // NOTE: there is no race with other write request (all writes and flush request are
+        // serialized, either using a mutex or a queue)
         if (!m_state.compare_exchange_strong(state, ReactorState::RS_BATCH,
                                              std::memory_order_release)) {
             assert(false);
         }
+
+        // at this point no OnWriteDone() or onDone() can arrive concurrently (as there is
+        // no inflight message)
         ELOG_REPORT_TRACE("*** INIT --> BATCH, adding HOLD ***");
+        // NOTE: we need to add hold since there is a write flow that is outside of the reactor
+        // (see documentation at
+        // https://grpc.github.io/grpc/cpp/classgrpc_1_1_client_bidi_reactor.html)
         AddHold();
+        // NOTE: there is no race here with other writes or flush, so we can safely change
+        // in-flight and in-flight request id without the risk of facing any race conditions
         m_inFlight.store(true, std::memory_order_relaxed);
         m_inFlightRequestId.store(
             callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed),
             std::memory_order_relaxed);
         StartWrite(callData->m_logRecordMsg);
-        StartCall();  // this actually marks the start of a new stream
-    } else if (state == ReactorState::RS_BATCH) {
+        StartCall();  // this actually marks the start of a new RPC stream
+    }
+
+    // check other states
+    else if (state == ReactorState::RS_BATCH) {
         bool inFlight = false;
         if (m_inFlight.compare_exchange_strong(inFlight, true, std::memory_order_acquire)) {
             // no message in flight, so we can just write it
             // NOTE: there is no race with other writers or flush, but rather only with
-            // OnWriteDone() but inflight is false, so OnWriteDone for last message has already
-            // executed and reset the inflight flag to false
+            // OnWriteDone(), but here we know that inflight is false, which means that
+            // OnWriteDone() for previous message has already executed and reset the inflight flag
+            // to false
             m_inFlightRequestId.store(
                 callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed),
                 std::memory_order_release);
             StartWrite(callData->m_logRecordMsg);
         } else {
             // need to push on request queue and wait until in flight write request finishes
+            // NOTE: we may have a race here with OnWriteDone() so we must use a lock
             std::unique_lock<std::mutex> lock(m_lock);
             m_pendingWriteRequests.push_front(
                 callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed));
@@ -137,46 +153,63 @@ void ELogReactor::flush() {
     ELOG_REPORT_TRACE("*** FLUSH ***");
     // move to state flush
     // from this point until flush is done, no incoming requests are allowed
+    // NOTE: move to state DONE will take place only after onDone() is called by gRPC
     setStateFlush();
 
     // we are in race here with gRPC notifications, so use a lock
-    std::unique_lock<std::mutex> lock(m_lock);
-    bool inFlight = m_inFlight.load(std::memory_order_relaxed);
-    if (inFlight) {
-        // flush request must be put in the queue, because there is in-flight message
-        ELOG_REPORT_TRACE("*** FLUSH request submitted (in-flight=%s)", inFlight ? "yes" : "no");
-        m_pendingWriteRequests.push_front(-2);
-        return;
+    {
+        std::unique_lock<std::mutex> lock(m_lock);
+        bool inFlight = m_inFlight.load(std::memory_order_relaxed);
+        if (inFlight || !m_pendingWriteRequests.empty()) {
+            // flush request must be put in the queue, because there is in-flight message
+            ELOG_REPORT_TRACE("*** FLUSH request submitted (in-flight=%s)",
+                              inFlight ? "yes" : "no");
+            m_pendingWriteRequests.push_front(ELOG_FLUSH_REQUEST_ID);
+            return;
+        }
     }
+    // NOTE: from this point onward we can safely say that there are no in-flight messages, the
+    // pending queue is empty, and no message will be submitted to this stream (concurrent write
+    // requests are blocked on ELogTarget's mutex, or are pending in some external queue, and by the
+    // time they are served a new stream writer will be established), so don't need a lock here
 
-    // neither in-flight message nor previous flush is still in-flight, so we can make the call
-    // NOTE: move to state DONE will take place only after onDone() is called by gRPC
     ELOG_REPORT_TRACE("*** FLUSH request starting, removing HOLD");
+    // NOTE: it is ok to call these two concurrently with OnWriteDone()
     StartWritesDone();
+    // NOTE: since log target access is thread-safe, we can tell there will be no concurrent write
+    // request until the reactor is regenerated, so we can remove the hold
     RemoveHold();
 }
 
-void ELogReactor::waitFlushDone() {
+bool ELogReactor::waitFlushDone() {
     std::unique_lock<std::mutex> lock(m_lock);
     m_cv.wait(lock, [this] {
         ReactorState state = m_state.load(std::memory_order_relaxed);
         return state == ReactorState::RS_DONE || state == ReactorState::RS_INIT;
     });
+    return m_status.ok();
 }
 
 void ELogReactor::OnWriteDone(bool ok) {
+    // TODO: what if ok is false? currently we still continue, but we should at least issue some
+    // trace
+    if (!ok) {
+        ELOG_REPORT_TRACE("Single message stream write failed");
+        // TODO: now what?
+    }
+
     // reset in-flight flag (allow others to write new messages)
     bool inFlight = m_inFlight.load(std::memory_order_acquire);
     assert(inFlight);  // this must be the case!
 
-    // get call data and free it
+    // get call data and free it (now it is safe to do so according to gRPC documentation)
     uint64_t requestId = m_inFlightRequestId.load(std::memory_order_relaxed);
     CallData* callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
     callData->clear();
 
     // in order to maintain correct order, we do not reset yet the inflight flag,
     // but first, we check the pending queue
-    requestId = -1;
+    requestId = ELOG_INVALID_REQUEST_ID;
     {
         std::unique_lock<std::mutex> lock(m_lock);
         if (!m_pendingWriteRequests.empty()) {
@@ -184,17 +217,24 @@ void ELogReactor::OnWriteDone(bool ok) {
             m_pendingWriteRequests.pop_back();
         }
     }
-    // TODO: verify we can do this out of lock scope
-    if (requestId == -2) {
+
+    // NOTE: following code is thread-safe, see explanation in each case
+    if (requestId == ELOG_FLUSH_REQUEST_ID) {
         // now we can end the batch (delayed flush execution)
         ELOG_REPORT_TRACE("*** Delayed FLUSH request starting, removing HOLD");
+        // these calls to gRPC are thread safe, since we use Holds
+        // (See Q. 7 at best practices here: https://grpc.io/docs/languages/cpp/best_practices/)
         StartWritesDone();
         RemoveHold();
-    } else if (requestId != -1) {
+    } else if (requestId != ELOG_INVALID_REQUEST_ID) {
+        // access to call data array is thread-safe from anywhere
         callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
+        // start write can be called outside reactor flow, since holds are used
         StartWrite(callData->m_logRecordMsg);
         // keep in-flight raised
     } else {
+        // NOTE: access to in-flight flag IS thread-safe, because this is the only places where it
+        // is set to false, so racing writers will see it as true, until it is set to false here
         if (!m_inFlight.compare_exchange_strong(inFlight, false, std::memory_order_release)) {
             // must succeed
             assert(false);
@@ -202,14 +242,21 @@ void ELogReactor::OnWriteDone(bool ok) {
     }
 }
 
-void ELogReactor::OnDone(const grpc::Status& s) {
+void ELogReactor::OnDone(const grpc::Status& status) {
+    if (!status.ok()) {
+        ELOG_REPORT_TRACE("gRPC message stream RPC call ended with error: %s",
+                          status.error_message().c_str());
+    }
+
     // in order to avoid newcomers writing messages before the ones that needed to wait during
     // state FLUSH, we avoid moving to state INIT yet, until we check the queue state
     ReactorState state = m_state.load(std::memory_order_acquire);
     assert(state == ReactorState::RS_FLUSH);
+    assert(m_inFlight.load(std::memory_order_relaxed) == false);
 
     // verify the queue is empty
     std::unique_lock<std::mutex> lock(m_lock);
+    m_status = status;
     assert(m_pendingWriteRequests.empty());
     if (!m_state.compare_exchange_strong(state, ReactorState::RS_DONE, std::memory_order_release)) {
         assert(false);
@@ -278,42 +325,54 @@ bool ELogGRPCTarget::startLogTarget() {
     }
 
     // create channel to server
-    // TODO: are there any exceptions?
-    // TODO: what about timeouts?
     std::shared_ptr<grpc::Channel> channel =
         grpc::CreateChannel(m_server.c_str(), grpc::InsecureChannelCredentials());
 
     // get the stub
     m_serviceStub = elog_grpc::ELogGRPCService::NewStub(channel);
 
+    // stream mode requires more initialization
     if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM) {
-        m_clientWriter = m_serviceStub->StreamLogRecords(&m_streamContext, &m_streamStatus);
+        if (!createStreamContext()) {
+            return false;
+        }
+        if (!createStreamWriter()) {
+            destroyStreamContext();
+            return false;
+        }
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
-        m_reactor = new (std::nothrow)
-            ELogReactor(m_serviceStub.get(), getRpcFormatter(), m_maxInflightCalls);
-        m_serviceStub->async()->StreamLogRecords(&m_streamContext, &m_streamStatus, m_reactor);
+        if (!createStreamContext()) {
+            return false;
+        }
+        if (!createReactor()) {
+            destroyStreamContext();
+            return false;
+        }
     }
 
     return true;
 }
 
 bool ELogGRPCTarget::stopLogTarget() {
-    // just delete the stub object
-    // TODO: are there any exceptions?
-    // TODO: what about shutdown timeouts?
-    if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM ||
-        m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
-        // first flush all remaining messages
-        flush();
-    }
-    m_serviceStub.reset();
-    if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
-        if (m_reactor != nullptr) {
-            m_reactor->waitFlushDone();
-            delete m_reactor;
-            m_reactor = nullptr;
+    // for streaming clients we first flush all remaining messages
+    // NOTE: we call directly flush code to bypass ELogTarget::flush()'s mutex since we already own
+    // the lock
+    if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM) {
+        if (!flushStreamWriter()) {
+            return false;
         }
+        destroyStreamWriter();
+        destroyStreamContext();
+    } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
+        if (!flushReactor()) {
+            return false;
+        }
+        destroyReactor();
+        destroyStreamContext();
     }
+
+    // delete the stub
+    m_serviceStub.reset();
     return true;
 }
 
@@ -322,184 +381,277 @@ uint32_t ELogGRPCTarget::writeLogRecord(const ELogRecord& logRecord) {
 
     // send message to gRPC server
     if (m_clientMode == ELogGRPCClientMode::GRPC_CM_UNARY) {
-        // NOTE: receptor must live until message sending, because it holds value strings
-        ELogGRPCFieldReceptor receptor;
-        elog_grpc::ELogGRPCRecordMsg msg;
-        receptor.setLogRecordMsg(&msg);
-        fillInParams(logRecord, &receptor);
-
-        grpc::ClientContext context;
-        if (m_deadlineTimeoutMillis != 0) {
-            setDeadline(context);
-        }
-        elog_grpc::ELogGRPCStatus status;
-        grpc::Status callStatus = m_serviceStub->SendLogRecord(&context, msg, &status);
-        if (!callStatus.ok()) {
-            ELOG_REPORT_TRACE("Failed to send log record over gRPC: %s",
-                              callStatus.error_message().c_str());
-            // TODO: what now?
-            return 0;
-        } else {
-            return msg.ByteSizeLong();
-        }
+        return writeLogRecordUnary(logRecord);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM) {
-        // NOTE: receptor must live until message sending, because it holds value strings
-        ELogGRPCFieldReceptor receptor;
-        elog_grpc::ELogGRPCRecordMsg msg;
-        receptor.setLogRecordMsg(&msg);
-        fillInParams(logRecord, &receptor);
-
-        // TODO: this is wrong, we need a context per call, since each has his own distinct deadline
-        /*if (m_deadlineTimeoutMillis != 0) {
-            setDeadline(m_streamContext);
-        }*/
-        // write next message in current batch
-        if (!m_clientWriter->Write(msg)) {
-            ELOG_REPORT_TRACE("Failed to stream log record over gRPC");
-            // TODO: what now?
-            return 0;
-        } else {
-            // TODO: fix this: we need to separate submitted/written counters
-            return msg.ByteSizeLong();
-        }
+        return writeLogRecordStream(logRecord);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC) {
-        // NOTE: receptor must live until message sending, because it holds value strings
-        ELogGRPCFieldReceptor receptor;
-        elog_grpc::ELogGRPCRecordMsg msg;
-        receptor.setLogRecordMsg(&msg);
-        fillInParams(logRecord, &receptor);
-
-        grpc::ClientContext context;
-        if (m_deadlineTimeoutMillis != 0) {
-            setDeadline(context);
-        }
-        std::unique_ptr<grpc::ClientAsyncResponseReader<elog_grpc::ELogGRPCStatus>> rpc =
-            m_serviceStub->AsyncSendLogRecord(&context, msg, &m_cq);
-        elog_grpc::ELogGRPCStatus status;
-        grpc::Status callStatus;
-        rpc->Finish(&status, &callStatus, (void*)1);
-        void* tag = nullptr;
-        bool ok = false;
-        if (!m_cq.Next(&tag, &ok) || !ok) {
-            ELOG_REPORT_TRACE("Failed to get completion queue response in asynchronous mode gRPC");
-            // TODO: what now?
-            return 0;
-        } else if (tag != (void*)1) {
-            ELOG_REPORT_TRACE("Unexpected response tag in asynchronous mode gRPC");
-            return 0;
-        } else if (!callStatus.ok()) {
-            ELOG_REPORT_TRACE("Asynchronous mode gRPC call ended with status FAIL: %s",
-                              callStatus.error_message().c_str());
-            return 0;
-        } else {
-            return msg.ByteSizeLong();
-        }
+        return writeLogRecordAsync(logRecord);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_UNARY) {
-        // NOTE: receptor must live until message sending, because it holds value strings
-        ELogGRPCFieldReceptor receptor;
-        elog_grpc::ELogGRPCRecordMsg msg;
-        receptor.setLogRecordMsg(&msg);
-        fillInParams(logRecord, &receptor);
-
-        grpc::ClientContext context;
-        if (m_deadlineTimeoutMillis != 0) {
-            setDeadline(context);
-        }
-        // should we wait until response arrives before sending the next log record?
-        // this is the same question as with async completion queue
-        // for this we need to add pipeline mode, both for async and for async unary, but that is
-        // what streaming is doing anyway, right?
-        // NOTE: we need to wait for the result otherwise the callback will access on-stack local
-        // objects that will already be invalid at the callback invocation time, which may cause
-        // core dump, or even worse, memory overwrite
-        elog_grpc::ELogGRPCStatus status;
-        std::mutex responseLock;
-        std::condition_variable responseCV;
-        bool done = false;
-        bool result = false;
-        m_serviceStub->async()->SendLogRecord(
-            &context, &msg, &status,
-            [&responseLock, &responseCV, &done, &result](grpc::Status status) {
-                if (status.ok()) {
-                    result = true;
-                }
-                std::lock_guard<std::mutex> lock(responseLock);
-                done = true;
-                responseCV.notify_one();
-            });
-        std::unique_lock<std::mutex> lock(responseLock);
-        responseCV.wait(lock, [&done] { return done; });
-        if (result) {
-            return msg.ByteSizeLong();
-        } else {
-            return 0;
-        }
+        return writeLogRecordAsyncCallbackUnary(logRecord);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
-        // should we wait until response arrives before sending the next log record?
-        // this is the same question as with async completion queue
-        // for this we need to add pipeline mode, both for async and for async unary, but that is
-        // what streaming is doing anyway, right? so what's the point?
-        // NOTE: we need to wait for the result otherwise the callback will access on-stack local
-        // objects that will already be invalid at the callback invocation time, which may cause
-        // core dump, or even worse, memory overwrite (See solution below)
-        return m_reactor->writeLogRecord(logRecord);
-        // TODO: we need to generate on-heap call data with members:
-        // - dedicated context (since each has a different deadline!)
-        // - message being sent (so we keep the receptor in the call data)
-        // - protocol status response
-        // - grpc status object
-        // - perhaps mutex/condition variable for notification
-        // the reactor interface does not provide any option for passing user-data/tag so we need to
-        // put somewhere the call data, and when flush or log is called we can poll for pending
-        // outgoing request status (can use a completion queue instead, so we don't need a mutex and
-        // cv, and the call data can be put as a tag in the completion queue) this is actually a
-        // poor choice, we already have a custom reactor, so we don't need a queue. instead pass the
-        // call data to the reactor. once the call is complete, the reactor can delete the call data
-        // (we can use a new reactor each time to avoid locking).
-        //
-        // in essence we have the following events:
-        // - write log record (ext):
-        //      if not in batch then start a batch (with AddHold/StartCall)
-        //      generate call data and put somewhere
-        //      if write is in-flight
-        //          push on incoming request queue
-        //      else
-        //          call StartWrite
-        //          raise in-flight flag
-        // - on write done (int)
-        //      locate call data and release it
-        //      check incoming request queue for pending request
-        // - flush log record (ext)
-        // - on done (int)
+        return writeLogRecordAsyncCallbackStream(logRecord);
     }
+
+    ELOG_REPORT_ERROR("Invalid gRPC client mode: %u", (unsigned)m_clientMode);
+    return 0;
 }
 
 void ELogGRPCTarget::flushLogTarget() {
-    // nothing here now
+    // for non=streaming client no further operation is required
+
     if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM) {
-        m_clientWriter->WritesDone();
-        grpc::Status callStatus = m_clientWriter->Finish();
-        if (!callStatus.ok()) {
-            ELOG_REPORT_TRACE("Failed to finish log record stream sending over gRPC: %s",
-                              callStatus.error_message().c_str());
+        if (!flushStreamWriter()) {
+            // TODO: what now?
         }
-        m_clientWriter.reset();
+        destroyStreamWriter();
+        destroyStreamContext();
 
-        // regenerate client writer for next messages
-        new (&m_streamContext) grpc::ClientContext();
-        m_clientWriter = m_serviceStub->StreamLogRecords(&m_streamContext, &m_streamStatus);
+        // regenerate context and client writer for next messages
+        if (!createStreamContext()) {
+            // TODO: sub-sequent writes will crash
+            return;
+        }
+        if (!createStreamWriter()) {
+            destroyStreamContext();
+            // TODO: sub-sequent writes will crash (consider bad_alloc or even marking top-level
+            // ELogTarget as unusable due ot unrecoverable error)
+            return;
+        }
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
-        m_reactor->flush();
-        // we must for flush to finish properly, then regenerate reactor
-        m_reactor->waitFlushDone();
+        if (!flushReactor()) {
+            // TODO: what now, should we modify flush() interface?
+        }
+        destroyReactor();
+        destroyStreamContext();
 
-        // regenerate reactor for next messages
-        delete m_reactor;
-        m_reactor = new ELogReactor(m_serviceStub.get(), getRpcFormatter(), m_maxInflightCalls);
-        m_streamContext.~ClientContext();
-        new (&m_streamContext) grpc::ClientContext();
-        m_serviceStub->async()->StreamLogRecords(&m_streamContext, &m_streamStatus, m_reactor);
+        // regenerate context and reactor for next messages
+        if (!createStreamContext()) {
+            // TODO: sub-sequent writes will crash
+            return;
+        }
+        if (!createReactor()) {
+            destroyStreamContext();
+            // TODO: sub-sequent writes will crash, this requires a uniform strategy (bad_alloc?)
+            return;
+        }
         ELOG_REPORT_TRACE("Reactor regenerated at %p", m_reactor);
+    }
+}
+
+uint32_t ELogGRPCTarget::writeLogRecordUnary(const ELogRecord& logRecord) {
+    // prepare log record message
+    // NOTE: receptor must live until message sending, because it holds value strings
+    ELogGRPCFieldReceptor receptor;
+    elog_grpc::ELogGRPCRecordMsg msg;
+    receptor.setLogRecordMsg(&msg);
+    fillInParams(logRecord, &receptor);
+
+    // prepare context and set RPC call deadline
+    grpc::ClientContext context;
+    if (m_deadlineTimeoutMillis != 0) {
+        setDeadline(context);
+    }
+
+    // send the message
+    elog_grpc::ELogGRPCStatus status;
+    grpc::Status callStatus = m_serviceStub->SendLogRecord(&context, msg, &status);
+    if (!callStatus.ok()) {
+        ELOG_REPORT_TRACE("Failed to send log record over gRPC: %s",
+                          callStatus.error_message().c_str());
+        // TODO: what now?
+        return 0;
+    } else {
+        return msg.ByteSizeLong();
+    }
+}
+
+uint32_t ELogGRPCTarget::writeLogRecordStream(const ELogRecord& logRecord) {
+    // prepare log record message
+    // NOTE: receptor must live until message sending, because it holds value strings
+    ELogGRPCFieldReceptor receptor;
+    elog_grpc::ELogGRPCRecordMsg msg;
+    receptor.setLogRecordMsg(&msg);
+    fillInParams(logRecord, &receptor);
+
+    // NOTE: deadline already set once during stream construction
+
+    // make sure we have a valid writer
+    if (m_clientWriter.get() == nullptr) {
+        // previous flush failed, we just silently drop the request
+        return 0;
+    }
+
+    // write next message in current RPC stream
+    if (!m_clientWriter->Write(msg)) {
+        ELOG_REPORT_TRACE("Failed to stream log record over gRPC");
+        // TODO: what now?
+        return 0;
+    } else {
+        // TODO: fix this: we need to separate submitted/written counters
+        return msg.ByteSizeLong();
+    }
+}
+
+uint32_t ELogGRPCTarget::writeLogRecordAsync(const ELogRecord& logRecord) {
+    // prepare log record message
+    // NOTE: receptor must live until message sending, because it holds value strings
+    ELogGRPCFieldReceptor receptor;
+    elog_grpc::ELogGRPCRecordMsg msg;
+    receptor.setLogRecordMsg(&msg);
+    fillInParams(logRecord, &receptor);
+
+    // prepare context and set RPC call deadline
+    grpc::ClientContext context;
+    if (m_deadlineTimeoutMillis != 0) {
+        setDeadline(context);
+    }
+
+    // send a single async message
+    std::unique_ptr<grpc::ClientAsyncResponseReader<elog_grpc::ELogGRPCStatus>> rpc =
+        m_serviceStub->AsyncSendLogRecord(&context, msg, &m_cq);
+    elog_grpc::ELogGRPCStatus status;
+    grpc::Status callStatus;
+    rpc->Finish(&status, &callStatus, (void*)1);
+
+    // wait for message to finish
+    // NOTE: although gRPC example do not clearly show that, it seems that the API implies we can
+    // push more messages concurrently to the queue before response arrives. Nevertheless, the extra
+    // effort is avoided, since this result is already achieved by the asynchronous callback stream
+    // API, which is recommended by gRPC.
+    void* tag = nullptr;
+    bool ok = false;
+    if (!m_cq.Next(&tag, &ok) || !ok) {
+        ELOG_REPORT_TRACE("Failed to get completion queue response in asynchronous mode gRPC");
+        // TODO: what now?
+        return 0;
+    } else if (tag != (void*)1) {
+        ELOG_REPORT_TRACE("Unexpected response tag in asynchronous mode gRPC");
+        return 0;
+    } else if (!callStatus.ok()) {
+        ELOG_REPORT_TRACE("Asynchronous mode gRPC call ended with status FAIL: %s",
+                          callStatus.error_message().c_str());
+        return 0;
+    } else {
+        return msg.ByteSizeLong();
+    }
+}
+
+uint32_t ELogGRPCTarget::writeLogRecordAsyncCallbackUnary(const ELogRecord& logRecord) {
+    // NOTE: receptor must live until message sending, because it holds value strings
+    ELogGRPCFieldReceptor receptor;
+    elog_grpc::ELogGRPCRecordMsg msg;
+    receptor.setLogRecordMsg(&msg);
+    fillInParams(logRecord, &receptor);
+
+    // set call deadline
+    grpc::ClientContext context;
+    if (m_deadlineTimeoutMillis != 0) {
+        setDeadline(context);
+    }
+
+    // should we wait until response arrives before sending the next log record?
+    // this is the same question as with async completion queue
+    // for this we need to add some pipeline mode, both for async queue and for async unary, but
+    // that is what streaming is doing anyway, right? so what's the point?
+
+    // NOTE: we need to wait for the result otherwise
+    // the callback will access on-stack local objects that will already be invalid at the callback
+    // invocation time, which may cause core dump, or even worse, memory overwrite
+    elog_grpc::ELogGRPCStatus status;
+    std::mutex responseLock;
+    std::condition_variable responseCV;
+    bool done = false;
+    bool result = false;
+    m_serviceStub->async()->SendLogRecord(
+        &context, &msg, &status, [&responseLock, &responseCV, &done, &result](grpc::Status status) {
+            if (status.ok()) {
+                result = true;
+            }
+            std::lock_guard<std::mutex> lock(responseLock);
+            done = true;
+            responseCV.notify_one();
+        });
+    std::unique_lock<std::mutex> lock(responseLock);
+    responseCV.wait(lock, [&done] { return done; });
+    if (result) {
+        return msg.ByteSizeLong();
+    } else {
+        return 0;
+    }
+}
+
+uint32_t ELogGRPCTarget::writeLogRecordAsyncCallbackStream(const ELogRecord& logRecord) {
+    // make sure we have a valid reactor
+    if (m_reactor == nullptr) {
+        // previous flush failed, we just silently drop the request
+        return 0;
+    }
+
+    // NOTE: deadline already set once during stream construction
+
+    // just pass on to the reactor to deal with it
+    return m_reactor->writeLogRecord(logRecord);
+}
+
+bool ELogGRPCTarget::createStreamContext() {
+    m_streamContext = new (std::nothrow) grpc::ClientContext();
+    if (m_streamContext == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate gRPC stream context, out of memory");
+        return false;
+    }
+    setDeadline(*m_streamContext);
+    return true;
+}
+
+void ELogGRPCTarget::destroyStreamContext() {
+    if (m_streamContext == nullptr) {
+        delete m_streamContext;
+        m_streamContext = nullptr;
+    }
+}
+
+bool ELogGRPCTarget::createStreamWriter() {
+    m_clientWriter = m_serviceStub->StreamLogRecords(m_streamContext, &m_streamStatus);
+    if (m_clientWriter.get() == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create gRPC synchronous streaming client writer");
+        return false;
+    }
+    return m_clientWriter.get() != nullptr;
+}
+
+bool ELogGRPCTarget::flushStreamWriter() {
+    m_clientWriter->WritesDone();
+    grpc::Status callStatus = m_clientWriter->Finish();
+    if (!callStatus.ok()) {
+        ELOG_REPORT_TRACE("Failed to finish log record stream sending over gRPC: %s",
+                          callStatus.error_message().c_str());
+        return false;
+    }
+    return true;
+}
+
+void ELogGRPCTarget::destroyStreamWriter() { m_clientWriter.reset(nullptr); }
+
+bool ELogGRPCTarget::createReactor() {
+    m_reactor = new ELogReactor(m_serviceStub.get(), getRpcFormatter(), m_maxInflightCalls);
+    if (m_reactor == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate gRPC reactor, out of memory");
+        return false;
+    }
+    m_serviceStub->async()->StreamLogRecords(m_streamContext, &m_streamStatus, m_reactor);
+    return true;
+}
+
+bool ELogGRPCTarget::flushReactor() {
+    m_reactor->flush();
+    // we must for flush to finish properly, then regenerate reactor
+    return !m_reactor->waitFlushDone();
+}
+
+void ELogGRPCTarget::destroyReactor() {
+    if (m_reactor != nullptr) {
+        delete m_reactor;
+        m_reactor = nullptr;
     }
 }
 
