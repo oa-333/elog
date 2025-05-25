@@ -25,6 +25,13 @@ static bool initDbTargetProvider(ELogDbSchemaHandler* schemaHandler, const char*
     return true;
 }
 
+ELogDbSchemaHandler::~ELogDbSchemaHandler() {
+    for (auto& entry : m_providerMap) {
+        delete entry.second;
+    }
+    m_providerMap.clear();
+}
+
 bool ELogDbSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR

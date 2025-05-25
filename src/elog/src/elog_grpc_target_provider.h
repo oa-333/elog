@@ -11,10 +11,10 @@ namespace elog {
 
 class ELogGRPCTargetProvider : public ELogRpcTargetProvider {
 public:
-    ELogGRPCTargetProvider() {}
+    ELogGRPCTargetProvider();
     ELogGRPCTargetProvider(const ELogGRPCTargetProvider&) = delete;
     ELogGRPCTargetProvider(ELogGRPCTargetProvider&&) = delete;
-    ~ELogGRPCTargetProvider() final {}
+    ~ELogGRPCTargetProvider() final;
 
     ELogRpcTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
                               const std::string& server, const std::string& host, int port,

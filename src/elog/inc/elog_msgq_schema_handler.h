@@ -16,7 +16,7 @@ public:
     ELogMsgQSchemaHandler(ELogMsgQSchemaHandler&&) = default;
 
     /** @brief Destructor. */
-    ~ELogMsgQSchemaHandler() final {}
+    ~ELogMsgQSchemaHandler() final;
 
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;

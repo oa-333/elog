@@ -25,6 +25,13 @@ static bool initAsyncTargetProvider(ELogAsyncSchemaHandler* schemaHandler, const
     return true;
 }
 
+ELogAsyncSchemaHandler::~ELogAsyncSchemaHandler() {
+    for (auto& entry : m_providerMap) {
+        delete entry.second;
+    }
+    m_providerMap.clear();
+}
+
 bool ELogAsyncSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
     if (!initAsyncTargetProvider<ELogDeferredTargetProvider>(this, "deferred")) {

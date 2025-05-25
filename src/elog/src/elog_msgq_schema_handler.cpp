@@ -23,6 +23,13 @@ static bool initMsgQTargetProvider(ELogMsgQSchemaHandler* schemaHandler, const c
     return true;
 }
 
+ELogMsgQSchemaHandler::~ELogMsgQSchemaHandler() {
+    for (auto& entry : m_providerMap) {
+        delete entry.second;
+    }
+    m_providerMap.clear();
+}
+
 bool ELogMsgQSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR

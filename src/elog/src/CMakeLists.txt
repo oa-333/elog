@@ -22,7 +22,6 @@ target_sources(elog PRIVATE
     ./elog_flush_policy.cpp
     ./elog_formatter.cpp
     ./elog_grpc_target_provider.cpp
-    ./elog_grpc_target.cpp
     ./elog_kafka_msgq_target.cpp
     ./elog_kafka_msgq_target_provider.cpp
     ./elog_level.cpp

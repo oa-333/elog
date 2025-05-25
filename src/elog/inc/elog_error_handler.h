@@ -16,8 +16,17 @@ public:
 
     virtual void onTrace(const char* msg) = 0;
 
+    /** @brief Configures elog tracing. */
+    inline void setTraceMode(bool enableTrace = true) { m_isTraceEnabled = enableTrace; }
+
+    /** @brief Queries whether trace mode is enabled. */
+    inline bool isTraceEnabled() { return m_isTraceEnabled; }
+
 protected:
-    ELogErrorHandler() {}
+    ELogErrorHandler(bool enableTrace = false) : m_isTraceEnabled(enableTrace) {}
+
+private:
+    bool m_isTraceEnabled;
 };
 
 }  // namespace elog

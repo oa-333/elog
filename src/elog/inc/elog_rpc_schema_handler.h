@@ -16,7 +16,7 @@ public:
     ELogRpcSchemaHandler(ELogRpcSchemaHandler&&) = default;
 
     /** @brief Destructor. */
-    ~ELogRpcSchemaHandler() final {}
+    ~ELogRpcSchemaHandler() final;
 
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;

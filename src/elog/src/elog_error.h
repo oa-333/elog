@@ -13,6 +13,9 @@ public:
     /** @brief Installs an error handler. */
     static void setErrorHandler(ELogErrorHandler* errorHandler);
 
+    /** @brief Retrieves the installed an error handler. */
+    static ELogErrorHandler* getErrorHandler();
+
     /** @brief Configures elog tracing. */
     static void setTraceMode(bool enableTrace = true);
 

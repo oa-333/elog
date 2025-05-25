@@ -6,14 +6,93 @@
 #include "elog_error.h"
 #include "elog_grpc_target.h"
 
+#define ELOG_MAX_GRPC_TARGETS 10
+
 namespace elog {
+
+// register default implementation
+DECLARE_ELOG_GRPC_TARGET(elog_grpc::ELogGRPCService, elog_grpc::ELogGRPCRecordMsg,
+                         elog_grpc::ELogGRPCStatus, elog)
+
+struct ELogGRPCTargetNameConstructor {
+    const char* m_name;
+    ELogGRPCBaseTargetConstructor* m_ctor;
+};
+
+static ELogGRPCTargetNameConstructor sTargetConstructors[ELOG_MAX_GRPC_TARGETS] = {};
+static uint32_t sTargetConstructorsCount = 0;
+
+typedef std::unordered_map<std::string, ELogGRPCBaseTargetConstructor*>
+    ELogGRPCTargetConstructorMap;
+
+static ELogGRPCTargetConstructorMap sTargetConstructorMap;
+
+void registerGRPCTargetConstructor(const char* name,
+                                   ELogGRPCBaseTargetConstructor* targetConstructor) {
+    // due to c runtime issues we delay access to unordered map
+    if (sTargetConstructorsCount >= ELOG_MAX_GRPC_TARGETS) {
+        ELOG_REPORT_ERROR("Cannot register GRPC target constructor, no space: %s", name);
+        exit(1);
+    } else {
+        sTargetConstructors[sTargetConstructorsCount++] = {name, targetConstructor};
+    }
+}
+
+static bool applyGRPCTargetConstructorRegistration() {
+    for (uint32_t i = 0; i < sTargetConstructorsCount; ++i) {
+        ELogGRPCTargetNameConstructor& nameCtorPair = sTargetConstructors[i];
+        if (!sTargetConstructorMap
+                 .insert(ELogGRPCTargetConstructorMap::value_type(nameCtorPair.m_name,
+                                                                  nameCtorPair.m_ctor))
+                 .second) {
+            ELOG_REPORT_ERROR("Duplicate GRPC target constructor identifier: %s",
+                              nameCtorPair.m_name);
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool initGRPCTargetConstructors() { return applyGRPCTargetConstructorRegistration(); }
+
+static void termGRPCTargetConstructors() { sTargetConstructorMap.clear(); }
+
+ELogRpcTarget* constructGRPCTarget(const char* name, const std::string& server,
+                                   const std::string& params, ELogGRPCClientMode clientMode,
+                                   uint32_t deadlineTimeoutMillis, uint32_t maxInflightCalls) {
+    ELogGRPCTargetConstructorMap::iterator itr = sTargetConstructorMap.find(name);
+    if (itr == sTargetConstructorMap.end()) {
+        ELOG_REPORT_ERROR("Invalid gPRC target provider type name '%s': not found", name);
+        return nullptr;
+    }
+
+    ELogGRPCBaseTargetConstructor* constructor = itr->second;
+    ELogRpcTarget* logTarget =
+        constructor->createLogTarget(ELogError::getErrorHandler(), server, params, clientMode,
+                                     deadlineTimeoutMillis, maxInflightCalls);
+    if (logTarget == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create gRPC target by name '%s', out of memory", name);
+    }
+    return logTarget;
+}
+
+ELogGRPCTargetProvider::ELogGRPCTargetProvider() { initGRPCTargetConstructors(); }
+
+ELogGRPCTargetProvider::~ELogGRPCTargetProvider() { termGRPCTargetConstructors(); }
 
 ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(
     const std::string& logTargetCfg, const ELogTargetSpec& targetSpec, const std::string& server,
     const std::string& host, int port, const std::string& functionName, const std::string& params) {
+    // a provider type may be specified (if none, then default implementation is used)
+    std::string providerType = "elog";
+    ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("grpc_provider_type");
+    if (itr != targetSpec.m_props.end()) {
+        providerType = itr->second;
+    }
+
     // a deadline may also be specified
     uint32_t deadlineTimeoutMillis = -1;
-    ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("grpc_deadline_timeout_millis");
+    itr = targetSpec.m_props.find("grpc_deadline_timeout_millis");
     if (itr != targetSpec.m_props.end()) {
         if (!parseIntProp("grpc_deadline_timeout_millis", logTargetCfg, itr->second,
                           deadlineTimeoutMillis, true)) {
@@ -60,12 +139,9 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(
         }
     }
 
-    ELogGRPCTarget* target = new (std::nothrow)
-        ELogGRPCTarget(server, params, clientMode, deadlineTimeoutMillis, maxInflightCalls);
-    if (target == nullptr) {
-        ELOG_REPORT_ERROR("Failed to allocate gRPC message queue log target, out of memory");
-    }
-    return target;
+    // search for the provider type and construct the specialized log target
+    return constructGRPCTarget(providerType.c_str(), server, params, clientMode,
+                               deadlineTimeoutMillis, maxInflightCalls);
 }
 
 }  // namespace elog

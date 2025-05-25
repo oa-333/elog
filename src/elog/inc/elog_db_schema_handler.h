@@ -16,7 +16,7 @@ public:
     ELogDbSchemaHandler(ELogDbSchemaHandler&&) = default;
 
     /** @brief Destructor. */
-    ~ELogDbSchemaHandler() final {}
+    ~ELogDbSchemaHandler() final;
 
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;

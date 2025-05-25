@@ -16,7 +16,7 @@ public:
     ELogAsyncSchemaHandler(ELogAsyncSchemaHandler&&) = default;
 
     /** @brief Destructor. */
-    ~ELogAsyncSchemaHandler() final {}
+    ~ELogAsyncSchemaHandler() final;
 
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;

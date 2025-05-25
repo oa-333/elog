@@ -26,6 +26,13 @@ static bool initRpcTargetProvider(ELogRpcSchemaHandler* schemaHandler, const cha
     return true;
 }
 
+ELogRpcSchemaHandler::~ELogRpcSchemaHandler() {
+    for (auto& entry : m_providerMap) {
+        delete entry.second;
+    }
+    m_providerMap.clear();
+}
+
 bool ELogRpcSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR

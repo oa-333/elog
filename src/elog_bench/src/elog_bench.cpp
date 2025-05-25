@@ -26,7 +26,7 @@ static void testGRPCAsyncCallbackStream();
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                                   double& ioThroughput);
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
-                               bool privateLogger = true);
+                               bool privateLogger = true, uint32_t maxThreads = MAX_THREAD_COUNT);
 static void printMermaidChart(const char* name, std::vector<double>& msgThroughput,
                               std::vector<double>& byteThroughput);
 static void printMarkdownTable(const char* name, std::vector<double>& msgThroughput,
@@ -485,6 +485,7 @@ void testGRPCSimple() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (unary)", cfg, msgPerf, ioPerf);
+    runMultiThreadTest("gRPC (unary)", "elog_bench_grpc_unary", cfg, true, 4);
 
     server->Shutdown();
     t.join();
@@ -506,6 +507,7 @@ void testGRPCStream() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (stream)", cfg, msgPerf, ioPerf);
+    runMultiThreadTest("gRPC (stream)", "elog_bench_grpc_stream", cfg, true, 4);
 
     server->Shutdown();
     t.join();
@@ -528,6 +530,7 @@ void testGRPCAsync() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (async)", cfg, msgPerf, ioPerf);
+    runMultiThreadTest("gRPC (async)", "elog_bench_grpc_async", cfg, true, 4);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -551,6 +554,8 @@ void testGRPCAsyncCallbackUnary() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (async callback unary)", cfg, msgPerf, ioPerf);
+    runMultiThreadTest("gRPC (async callback unary)", "elog_bench_grpc_async_cb_unary", cfg, true,
+                       4);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -574,6 +579,7 @@ void testGRPCAsyncCallbackStream() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (async callback stream)", cfg, msgPerf, ioPerf);
+    runMultiThreadTest("gRPC (async callback stream)", "elog_bench_grpc_async_cb_stream", cfg);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -622,7 +628,8 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
 }
 
 void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
-                        bool privateLogger /* = true */) {
+                        bool privateLogger /* = true */,
+                        uint32_t maxThreads /* = MAX_THREAD_COUNT */) {
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to init %s test, aborting\n", title);
@@ -635,7 +642,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
     std::vector<double> accumThroughput;
     elog::ELogLogger* sharedLogger =
         privateLogger ? nullptr : elog::ELogSystem::getSharedLogger("");
-    for (uint32_t threadCount = MIN_THREAD_COUNT; threadCount <= MAX_THREAD_COUNT; ++threadCount) {
+    for (uint32_t threadCount = MIN_THREAD_COUNT; threadCount <= maxThreads; ++threadCount) {
         // fprintf(stderr, "Running %u threads test\n", threadCount);
         ELOG_INFO("Running %u Thread Test", threadCount);
         std::vector<std::thread> threads;

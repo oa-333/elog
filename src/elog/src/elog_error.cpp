@@ -29,15 +29,22 @@ public:
     }
 };
 
-static bool sTraceEnabled = false;
 static ELogDefaultErrorHandler sDefaultErrorHandler;
-static ELogErrorHandler* sErrorHandler = nullptr;
+static ELogErrorHandler* sErrorHandler = &sDefaultErrorHandler;
 
-void ELogError::setErrorHandler(ELogErrorHandler* errorHandler) { sErrorHandler = errorHandler; }
+void ELogError::setErrorHandler(ELogErrorHandler* errorHandler) {
+    if (errorHandler != nullptr) {
+        sErrorHandler = errorHandler;
+    } else {
+        sErrorHandler = &sDefaultErrorHandler;
+    }
+}
 
-void ELogError::setTraceMode(bool enableTrace) { sTraceEnabled = enableTrace; }
+ELogErrorHandler* ELogError::getErrorHandler() { return sErrorHandler; }
 
-bool ELogError::isTraceEnabled() { return sTraceEnabled; }
+void ELogError::setTraceMode(bool enableTrace) { sErrorHandler->setTraceMode(enableTrace); }
+
+bool ELogError::isTraceEnabled() { return sErrorHandler->isTraceEnabled(); }
 
 void ELogError::reportError(const char* errorMsgFmt, ...) {
     va_list ap;
@@ -66,7 +73,7 @@ void ELogError::reportSysErrorCode(const char* sysCall, int errCode, const char*
 }
 
 void ELogError::reportTrace(const char* fmt, ...) {
-    if (sTraceEnabled) {
+    if (sErrorHandler->isTraceEnabled()) {
         va_list ap;
         va_start(ap, fmt);
 
@@ -80,8 +87,7 @@ void ELogError::reportTrace(const char* fmt, ...) {
         vsnprintf(traceMsg, requiredBytes, fmt, ap);
 
         // report error
-        ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
-        errorHandler->onTrace(traceMsg);
+        sErrorHandler->onTrace(traceMsg);
         free(traceMsg);
         va_end(apCopy);
 
@@ -117,7 +123,7 @@ void ELogError::win32FreeErrorStr(char* errStr) { LocalFree(errStr); }
 void ELogError::initError() {
     if (getenv("ELOG_TRACE") != nullptr) {
         if (strcmp(getenv("ELOG_TRACE"), "TRUE") == 0) {
-            sTraceEnabled = true;
+            setTraceMode(true);
         }
     }
 }

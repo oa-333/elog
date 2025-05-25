@@ -11,6 +11,7 @@
 
 #include "elog.grpc.pb.h"
 #include "elog.pb.h"
+#include "elog_error_handler.h"
 #include "elog_rpc_target.h"
 
 #define ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS 1024
@@ -41,47 +42,58 @@ enum class ELogGRPCClientMode : uint32_t {
     GRPC_CM_ASYNC_CALLBACK_STREAM
 };
 
-class ELogGRPCFieldReceptor : public ELogFieldReceptor {
+template <typename MessageType = elog_grpc::ELogGRPCRecordMsg>
+class ELogGRPCBaseReceptor : public ELogFieldReceptor {
 public:
-    ELogGRPCFieldReceptor() : m_logRecordMsg(nullptr) {}
-    ~ELogGRPCFieldReceptor() final {}
+    ELogGRPCBaseReceptor() : m_logRecordMsg(nullptr) {}
+    ~ELogGRPCBaseReceptor() override {}
 
     /** @brief Provide from outside a log record message to be filled-in by the field receptor. */
-    inline void setLogRecordMsg(elog_grpc::ELogGRPCRecordMsg* logRecordMsg) {
-        m_logRecordMsg = logRecordMsg;
-    }
+    inline void setLogRecordMsg(MessageType* logRecordMsg) { m_logRecordMsg = logRecordMsg; }
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& value, int justify) final;
+    void receiveStringField(uint32_t typeId, const std::string& value, int justify) override;
 
     /** @brief Receives an integer log record field. */
-    void receiveIntField(uint32_t typeId, uint64_t value, int justify) final;
+    void receiveIntField(uint32_t typeId, uint64_t value, int justify) override;
 
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
-                          int justify) final;
+                          int justify) override {
+        FILETIME fileTime;
+        SystemTimeToFileTime(&sysTime, fileTime);
+        uint64_t utcTimeMillis = (uint64_t)FILETIME_TO_UNIXTIME(fileTime);
+        m_logRecordMsg->set_timeutcmillis(utcTimeMillis);
+    }
 #else
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
-                          int justify) final;
+                          int justify) override;
 #endif
 
     /** @brief Receives a log level log record field. */
-    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) final;
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) override;
 
 private:
-    elog_grpc::ELogGRPCRecordMsg* m_logRecordMsg;
+    MessageType* m_logRecordMsg;
 };
+
+typedef ELogGRPCBaseReceptor<> ELogGRPCReceptor;
 
 // the client write reactor used with asynchronous callback streaming
 // unfortunately, in order to make this code (mostly) lock-free, the implementation had to be a bit
 // complex
-class ELogReactor final : public grpc::ClientWriteReactor<elog_grpc::ELogGRPCRecordMsg> {
+template <typename StubType = elog_grpc::ELogGRPCService::Stub,
+          typename MessageType = elog_grpc::ELogGRPCRecordMsg,
+          typename ReceptorType = ELogGRPCReceptor>
+class ELogGRPCBaseReactor final : public grpc::ClientWriteReactor<MessageType> {
 public:
-    ELogReactor(elog_grpc::ELogGRPCService::Stub* stub, ELogRpcFormatter* rpcFormatter,
-                uint32_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS)
-        : m_stub(stub),
+    ELogGRPCBaseReactor(ELogErrorHandler* errorHandler, StubType* stub,
+                        ELogRpcFormatter* rpcFormatter,
+                        uint32_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS)
+        : m_errorHandler(errorHandler),
+          m_stub(stub),
           m_rpcFormatter(rpcFormatter),
           m_state(ReactorState::RS_INIT),
           m_inFlight(false),
@@ -93,7 +105,7 @@ public:
         }
         m_inFlightRequests.resize(maxInflightCalls);
     }
-    ~ELogReactor() {}
+    ~ELogGRPCBaseReactor() {}
 
     /**
      * @brief Writes a log record through the reactor (outside reactor flow).
@@ -125,9 +137,10 @@ public:
     void OnDone(const grpc::Status& status) override;
 
 private:
+    ELogErrorHandler* m_errorHandler;
     grpc::ClientContext m_context;
     grpc::Status m_status;
-    elog_grpc::ELogGRPCService::Stub* m_stub;
+    StubType* m_stub;
     ELogRpcFormatter* m_rpcFormatter;
     std::mutex m_lock;
     std::condition_variable m_cv;
@@ -135,6 +148,8 @@ private:
     std::atomic<ReactorState> m_state;
     std::atomic<bool> m_inFlight;
     std::atomic<uint64_t> m_inFlightRequestId;
+
+    typedef grpc::ClientWriteReactor<MessageType> BaseClass;
 
     template <typename T>
     struct atomic_wrapper {
@@ -155,15 +170,19 @@ private:
     struct CallData {
         atomic_wrapper<uint64_t> m_requestId;
         atomic_wrapper<bool> m_isUsed;
-        elog_grpc::ELogGRPCRecordMsg* m_logRecordMsg;
-        ELogGRPCFieldReceptor m_receptor;
+        MessageType* m_logRecordMsg;
+        ReceptorType m_receptor;
 
         CallData() : m_requestId(0), m_isUsed(false), m_logRecordMsg(nullptr) {}
 
-        void init(uint64_t requestId) {
+        bool init(uint64_t requestId) {
             m_requestId.m_atomicValue.store(requestId, std::memory_order_relaxed);
-            m_logRecordMsg = new (std::nothrow) elog_grpc::ELogGRPCRecordMsg();
+            m_logRecordMsg = new (std::nothrow) MessageType();
+            if (m_logRecordMsg == nullptr) {
+                return false;
+            }
             m_receptor.setLogRecordMsg(m_logRecordMsg);
+            return true;
         }
 
         void clear() {
@@ -184,16 +203,22 @@ private:
     CallData* allocCallData();
 
     bool setStateFlush();
-
-    void setStateInit();
 };
 
-class ELOG_API ELogGRPCTarget : public ELogRpcTarget {
+typedef ELogGRPCBaseReactor<> ELogGRPCReactor;
+
+template <typename ServiceType = elog_grpc::ELogGRPCService, typename StubType = ServiceType::Stub,
+          typename MessageType = elog_grpc::ELogGRPCRecordMsg,
+          typename ResponseType = elog_grpc::ELogGRPCStatus,
+          typename ReceptorType = ELogGRPCReceptor>
+class ELOG_API ELogGRPCBaseTarget : public ELogRpcTarget {
 public:
-    ELogGRPCTarget(const std::string& server, const std::string& params,
-                   ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
-                   uint32_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
+    ELogGRPCBaseTarget(ELogErrorHandler* errorHandler, const std::string& server,
+                       const std::string& params,
+                       ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
+                       uint32_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
         : ELogRpcTarget(server.c_str(), "", 0, ""),
+          m_errorHandler(errorHandler),
           m_params(params),
           m_clientMode(clientMode),
           m_deadlineTimeoutMillis(deadlineTimeoutMillis),
@@ -201,9 +226,9 @@ public:
           m_streamContext(nullptr),
           m_reactor(nullptr) {}
 
-    ELogGRPCTarget(const ELogGRPCTarget&) = delete;
-    ELogGRPCTarget(ELogGRPCTarget&&) = delete;
-    ~ELogGRPCTarget() final {}
+    ELogGRPCBaseTarget(const ELogGRPCBaseTarget&) = delete;
+    ELogGRPCBaseTarget(ELogGRPCBaseTarget&&) = delete;
+    ~ELogGRPCBaseTarget() final {}
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */
@@ -220,24 +245,25 @@ protected:
 
 private:
     // configuration
+    ELogErrorHandler* m_errorHandler;
     std::string m_params;
     ELogGRPCClientMode m_clientMode;
     uint32_t m_deadlineTimeoutMillis;
     uint32_t m_maxInflightCalls;
 
     // the stub
-    std::unique_ptr<elog_grpc::ELogGRPCService::Stub> m_serviceStub;
+    std::unique_ptr<StubType> m_serviceStub;
 
     // synchronous stream mode members
     grpc::ClientContext* m_streamContext;
-    elog_grpc::ELogGRPCStatus m_streamStatus;
-    std::unique_ptr<grpc::ClientWriter<elog_grpc::ELogGRPCRecordMsg>> m_clientWriter;
+    ResponseType m_streamStatus;
+    std::unique_ptr<grpc::ClientWriter<MessageType>> m_clientWriter;
 
     // asynchronous unary mode members
     grpc::CompletionQueue m_cq;
 
     // the reactor used for asynchronous callback streaming mode
-    ELogReactor* m_reactor;
+    ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>* m_reactor;
 
     /** @brief Sends a log record to a log target. */
     uint32_t writeLogRecordUnary(const ELogRecord& logRecord);
@@ -265,6 +291,101 @@ private:
     void destroyReactor();
 };
 
+/** @typedef Define the default GRPC log target type, using ELog protocol types. */
+typedef ELogGRPCBaseTarget<> ELogGRPCTarget;
+
+/** @brief Helper class for constructing specialized GRPC log target (used in target factory). */
+class ELOG_API ELogGRPCBaseTargetConstructor {
+public:
+    virtual ~ELogGRPCBaseTargetConstructor() {}
+
+    virtual ELogRpcTarget* createLogTarget(ELogErrorHandler* errorHandler,
+                                           const std::string& server, const std::string& params,
+                                           ELogGRPCClientMode clientMode,
+                                           uint32_t deadlineTimeoutMillis,
+                                           uint32_t maxInflightCalls) = 0;
+
+protected:
+    ELogGRPCBaseTargetConstructor() {}
+};
+
+/**
+ * @brief Helper function for registering GRPC target constructors.
+ * @param name The name under which the target constructor is to be registered. This name is the
+ * name to be used as the provider type in the log target configuration string.
+ * @param targetConstructor The target constructor to register.
+ */
+extern void ELOG_API
+registerGRPCTargetConstructor(const char* name, ELogGRPCBaseTargetConstructor* targetConstructor);
+
+template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
+          typename ReceptorType>
+class ELOG_API ELogGRPCTargetConstructor : public ELogGRPCBaseTargetConstructor {
+public:
+    ELogGRPCTargetConstructor() {}
+    ~ELogGRPCTargetConstructor() final {}
+
+    ELogRpcTarget* createLogTarget(ELogErrorHandler* errorHandler, const std::string& server,
+                                   const std::string& params, ELogGRPCClientMode clientMode,
+                                   uint32_t deadlineTimeoutMillis,
+                                   uint32_t maxInflightCalls) final {
+        return new ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
+                                      ReceptorType>(errorHandler, server, params, clientMode,
+                                                    deadlineTimeoutMillis, maxInflightCalls);
+    }  // namespace elog
+};
+
+template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
+          typename ReceptorType = ELogGRPCReceptor>
+class ELogGRPCTargetConstructorRegisterHelper {
+public:
+    ELogGRPCTargetConstructorRegisterHelper(const char* name) {
+        registerGRPCTargetConstructor(name, &m_constructor);
+    }
+    ~ELogGRPCTargetConstructorRegisterHelper() {}
+
+private:
+    ELogGRPCTargetConstructor<ServiceType, StubType, MessageType, ResponseType, ReceptorType>
+        m_constructor;
+};
+
+#define DECLARE_ELOG_GRPC_TARGET(ServiceType, MessageType, ResponseType, Name)                  \
+    static ELogGRPCTargetConstructorRegisterHelper<ServiceType, ServiceType::Stub, MessageType, \
+                                                   ResponseType>                                \
+        Name##Register(#Name);
+
+#define DECLARE_ELOG_GRPC_TARGET_EX(ServiceType, StubType, MessageType, ResponseType,  \
+                                    ReceptorType, Name)                                \
+    static ELogGRPCTargetConstructorRegisterHelper<ServiceType, StubType, MessageType, \
+                                                   ResponseType, ReceptorType>         \
+        Name##Register(#Name);
+
+// actual usage scenarios:
+// 1. using ELog gRPC as is, implementing server side as is like benchmark code
+// for this use case we might consider adding server-side code fo easy integration
+// 2. using ELog gRPC as part of another protocol. this requires adding protocol parts into user's
+// protocol definition file. this also requires using templates on ELog's side, for the following
+// types: stub, log record message, response status
+// template classes:
+//
+// template <typename M = elog_grpc::ELogGRPCRecordMsg> class ELogGRPCBaseReceptor
+// template <typename S = elog_grpc::ELogGRPCService::Stub, typename M =
+// elog_grpc::ELogGRPCRecordMsg, typename R = elog_grpc::ELogGRPCStatus> class ELogGRPCBaseReactor
+// template <typename S = elog_grpc::ELogGRPCService::Stub, typename M =
+// elog_grpc::ELogGRPCRecordMsg, typename R = elog_grpc::ELogGRPCStatus> class ELogGRPCBaseTarget
+//
+// also the target provider will become a template.
+// the default implementation over ELog predefined types will be registered in code (see macros).
+//
+// Now in case of completely different message, a new receptor should be written, to pass the fields
+// into the message. Also if extra fields are used, then user should derive from receptor and handle
+// extra fields. THIS SHOULD BE FIXED FOR ALL PLACES WHERE RECEPTOR IS USED
+//
+// finally, the log target should be registered, and this requires more infra code in the gRPC
+// target provider, so it can register a specific implementation with a compile-time fixed name, and
+// all this can be wrapped up in a single macro:
+// ELOG_DECLARE_GRPC_TARGET(Stub, Message, Status, Name)
+
 // TODO: asynchronous callback stream is by far the fastest (22K msg.sec vs at most 7k msg/sec)
 // but it needs more fixes:
 // [DONE] 1. use static CallData and avoid allocating on heap, just allocate once and use vacant
@@ -277,8 +398,12 @@ private:
 // beyond that the logging application will block
 // [DONE] 5. looks like deferred target with gRPC target gets stuck (spin on CPU)
 
+// IMPLEMENTATION
+
 }  // namespace elog
 
-#endif  // ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+#endif  // ELOG_ENABLE_GRPC_CONNECTOR
 
-#endif  // __ELOG_KAFKA_MSGQ_TARGET_H__
+#endif  // __ELOG_GRPC_TARGET_H__
+
+#include "elog_grpc_target.inl"
