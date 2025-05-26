@@ -45,11 +45,55 @@ enum class ELogGRPCClientMode : uint32_t {
 template <typename MessageType = elog_grpc::ELogGRPCRecordMsg>
 class ELogGRPCBaseReceptor : public ELogFieldReceptor {
 public:
-    ELogGRPCBaseReceptor() : m_logRecordMsg(nullptr) {}
+    ELogGRPCBaseReceptor()
+        : ELogFieldReceptor(ELogFieldReceptor::ReceiveStyle::RS_BY_NAME), m_logRecordMsg(nullptr) {}
     ~ELogGRPCBaseReceptor() override {}
 
     /** @brief Provide from outside a log record message to be filled-in by the field receptor. */
     inline void setLogRecordMsg(MessageType* logRecordMsg) { m_logRecordMsg = logRecordMsg; }
+
+    /** @brief Receives any static text found outside of log record field references. */
+    virtual void receiveStaticText(uint32_t typeId, const std::string& text, int justify);
+
+    /** @brief Receives the log record id. */
+    virtual void receiveRecordId(uint32_t typeId, uint64_t recordId, int justify);
+
+    /** @brief Receives the host name. */
+    virtual void receiveHostName(uint32_t typeId, const std::string& hostName, int justify);
+
+    /** @brief Receives the user name. */
+    virtual void receiveUserName(uint32_t typeId, const std::string& userName, int justify);
+
+    /** @brief Receives the program name. */
+    virtual void receiveProgramName(uint32_t typeId, const std::string& programName, int justify);
+
+    /** @brief Receives the process id. */
+    virtual void receiveProcessId(uint32_t typeId, uint64_t processId, int justify);
+
+    /** @brief Receives the thread id. */
+    virtual void receiveThreadId(uint32_t typeId, uint64_t threadId, int justify);
+
+    /** @brief Receives the thread name. */
+    virtual void receiveThreadName(uint32_t typeId, const std::string& threadName, int justify);
+
+    /** @brief Receives the log source name. */
+    virtual void receiveLogSourceName(uint32_t typeId, const std::string& logSourceName,
+                                      int justify);
+
+    /** @brief Receives the module name. */
+    virtual void receiveModuleName(uint32_t typeId, const std::string& moduleName, int justify);
+
+    /** @brief Receives the file name. */
+    virtual void receiveFileName(uint32_t typeId, const std::string& fileName, int justify);
+
+    /** @brief Receives the logging line. */
+    virtual void receiveLineNumber(uint32_t typeId, uint64_t lineNumber, int justify);
+
+    /** @brief Receives the function name. */
+    virtual void receiveFunctionName(uint32_t typeId, const std::string& functionName, int justify);
+
+    /** @brief Receives the log msg. */
+    virtual void receiveLogMsg(uint32_t typeId, const std::string& logMsg, int justify);
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const std::string& value, int justify) override;
@@ -60,12 +104,7 @@ public:
 #ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
-                          int justify) override {
-        FILETIME fileTime;
-        SystemTimeToFileTime(&sysTime, fileTime);
-        uint64_t utcTimeMillis = (uint64_t)FILETIME_TO_UNIXTIME(fileTime);
-        m_logRecordMsg->set_timeutcmillis(utcTimeMillis);
-    }
+                          int justify) override;
 #else
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,

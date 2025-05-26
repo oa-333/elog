@@ -18,27 +18,97 @@
 namespace elog {
 
 template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveStaticText(uint32_t typeId, const std::string& text,
+                                                          int justify) {
+    // static text is not used, just discard it
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveRecordId(uint32_t typeId, uint64_t recordId,
+                                                        int justify) {
+    m_logRecordMsg->set_recordid(recordId);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveHostName(uint32_t typeId,
+                                                        const std::string& hostName, int justify) {
+    m_logRecordMsg->set_hostname(hostName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveUserName(uint32_t typeId,
+                                                        const std::string& userName, int justify) {
+    m_logRecordMsg->set_username(userName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveProgramName(uint32_t typeId,
+                                                           const std::string& programName,
+                                                           int justify) {
+    m_logRecordMsg->set_programname(programName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveProcessId(uint32_t typeId, uint64_t processId,
+                                                         int justify) {
+    m_logRecordMsg->set_processid(processId);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveThreadId(uint32_t typeId, uint64_t threadId,
+                                                        int justify) {
+    m_logRecordMsg->set_threadid(threadId);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveThreadName(uint32_t typeId,
+                                                          const std::string& threadName,
+                                                          int justify) {
+    m_logRecordMsg->set_threadname(threadName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveLogSourceName(uint32_t typeId,
+                                                             const std::string& logSourceName,
+                                                             int justify) {
+    m_logRecordMsg->set_logsourcename(logSourceName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveModuleName(uint32_t typeId,
+                                                          const std::string& moduleName,
+                                                          int justify) {
+    m_logRecordMsg->set_modulename(moduleName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveFileName(uint32_t typeId,
+                                                        const std::string& fileName, int justify) {
+    m_logRecordMsg->set_file(fileName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveLineNumber(uint32_t typeId, uint64_t lineNumber,
+                                                          int justify) {
+    m_logRecordMsg->set_line((uint32_t)lineNumber);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveFunctionName(uint32_t typeId,
+                                                            const std::string& functionName,
+                                                            int justify) {
+    m_logRecordMsg->set_functionname(functionName);
+}
+
+template <typename MessageType>
+void ELogGRPCBaseReceptor<MessageType>::receiveLogMsg(uint32_t typeId, const std::string& logMsg,
+                                                      int justify) {
+    m_logRecordMsg->set_logmsg(logMsg);
+}
+
+template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveStringField(uint32_t typeId,
                                                            const std::string& value, int justify) {
-    if (typeId == ELogHostNameSelector::getTypeId()) {
-        m_logRecordMsg->set_hostname(value);
-    } else if (typeId == ELogUserNameSelector::getTypeId()) {
-        m_logRecordMsg->set_username(value);
-    } else if (typeId == ELogProgramNameSelector::getTypeId()) {
-        m_logRecordMsg->set_programname(value);
-    } else if (typeId == ELogThreadNameSelector::getTypeId()) {
-        m_logRecordMsg->set_threadname(value);
-    } else if (typeId == ELogSourceSelector::getTypeId()) {
-        m_logRecordMsg->set_logsourcename(value);
-    } else if (typeId == ELogModuleSelector::getTypeId()) {
-        m_logRecordMsg->set_modulename(value);
-    } else if (typeId == ELogFileSelector::getTypeId()) {
-        m_logRecordMsg->set_file(value);
-    } else if (typeId == ELogFunctionSelector::getTypeId()) {
-        m_logRecordMsg->set_functionname(value);
-    } else if (typeId == ELogMsgSelector::getTypeId()) {
-        m_logRecordMsg->set_logmsg(value);
-    }
     // if external fields are used, then derive from the receptor and transfer the extra fields into
     // the log message
 }
@@ -46,15 +116,6 @@ void ELogGRPCBaseReceptor<MessageType>::receiveStringField(uint32_t typeId,
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveIntField(uint32_t typeId, uint64_t value,
                                                         int justify) {
-    if (typeId == ELogRecordIdSelector::getTypeId()) {
-        m_logRecordMsg->set_recordid(value);
-    } else if (typeId == ELogProcessIdSelector::getTypeId()) {
-        m_logRecordMsg->set_processid(value);
-    } else if (typeId == ELogThreadIdSelector::getTypeId()) {
-        m_logRecordMsg->set_threadid(value);
-    } else if (typeId == ELogLineSelector::getTypeId()) {
-        m_logRecordMsg->set_line((uint32_t)value);
-    }
     // if external fields are used, then derive from the receptor and transfer the extra fields into
     // the log message
 }
