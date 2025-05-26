@@ -253,12 +253,16 @@ template <typename ServiceType = elog_grpc::ELogGRPCService, typename StubType =
 class ELOG_API ELogGRPCBaseTarget : public ELogRpcTarget {
 public:
     ELogGRPCBaseTarget(ELogErrorHandler* errorHandler, const std::string& server,
-                       const std::string& params,
+                       const std::string& params, const std::string& serverCA,
+                       const std::string& clientCA, const std::string& clientKey,
                        ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
                        uint32_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
         : ELogRpcTarget(server.c_str(), "", 0, ""),
           m_errorHandler(errorHandler),
           m_params(params),
+          m_serverCA(serverCA),
+          m_clientCA(clientCA),
+          m_clientKey(clientKey),
           m_clientMode(clientMode),
           m_deadlineTimeoutMillis(deadlineTimeoutMillis),
           m_maxInflightCalls(maxInflightCalls),
@@ -286,6 +290,9 @@ private:
     // configuration
     ELogErrorHandler* m_errorHandler;
     std::string m_params;
+    std::string m_serverCA;
+    std::string m_clientCA;
+    std::string m_clientKey;
     ELogGRPCClientMode m_clientMode;
     uint32_t m_deadlineTimeoutMillis;
     uint32_t m_maxInflightCalls;
@@ -340,6 +347,8 @@ public:
 
     virtual ELogRpcTarget* createLogTarget(ELogErrorHandler* errorHandler,
                                            const std::string& server, const std::string& params,
+                                           const std::string& serverCA, const std::string& clientCA,
+                                           const std::string& clientKey,
                                            ELogGRPCClientMode clientMode,
                                            uint32_t deadlineTimeoutMillis,
                                            uint32_t maxInflightCalls) = 0;
@@ -365,11 +374,13 @@ public:
     ~ELogGRPCTargetConstructor() final {}
 
     ELogRpcTarget* createLogTarget(ELogErrorHandler* errorHandler, const std::string& server,
-                                   const std::string& params, ELogGRPCClientMode clientMode,
-                                   uint32_t deadlineTimeoutMillis,
+                                   const std::string& params, const std::string& serverCA,
+                                   const std::string& clientCA, const std::string& clientKey,
+                                   ELogGRPCClientMode clientMode, uint32_t deadlineTimeoutMillis,
                                    uint32_t maxInflightCalls) final {
         return new ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                                      ReceptorType>(errorHandler, server, params, clientMode,
+                                      ReceptorType>(errorHandler, server, params, serverCA,
+                                                    clientCA, clientKey, clientMode,
                                                     deadlineTimeoutMillis, maxInflightCalls);
     }  // namespace elog
 };

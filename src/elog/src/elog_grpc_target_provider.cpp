@@ -2,6 +2,9 @@
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
 
+#include <fstream>
+#include <sstream>
+
 #include "elog_common.h"
 #include "elog_error.h"
 #include "elog_grpc_target.h"
@@ -26,6 +29,18 @@ typedef std::unordered_map<std::string, ELogGRPCBaseTargetConstructor*>
     ELogGRPCTargetConstructorMap;
 
 static ELogGRPCTargetConstructorMap sTargetConstructorMap;
+
+static bool readFile(const std::string& path, std::string& contents) {
+    std::ifstream f(path);
+    if (!f) {
+        ELOG_REPORT_ERROR("Failed to open file for reading: %s", path.c_str());
+        return false;
+    }
+    std::stringstream s;
+    s << f.rdbuf();
+    contents = s.str();
+    return true;
+}
 
 void registerGRPCTargetConstructor(const char* name,
                                    ELogGRPCBaseTargetConstructor* targetConstructor) {
@@ -57,9 +72,12 @@ static bool initGRPCTargetConstructors() { return applyGRPCTargetConstructorRegi
 
 static void termGRPCTargetConstructors() { sTargetConstructorMap.clear(); }
 
-ELogRpcTarget* constructGRPCTarget(const char* name, const std::string& server,
-                                   const std::string& params, ELogGRPCClientMode clientMode,
-                                   uint32_t deadlineTimeoutMillis, uint32_t maxInflightCalls) {
+static ELogRpcTarget* constructGRPCTarget(const char* name, const std::string& server,
+                                          const std::string& params, const std::string& serverCA,
+                                          const std::string& clientCA, const std::string& clientKey,
+                                          ELogGRPCClientMode clientMode,
+                                          uint32_t deadlineTimeoutMillis,
+                                          uint32_t maxInflightCalls) {
     ELogGRPCTargetConstructorMap::iterator itr = sTargetConstructorMap.find(name);
     if (itr == sTargetConstructorMap.end()) {
         ELOG_REPORT_ERROR("Invalid gPRC target provider type name '%s': not found", name);
@@ -67,9 +85,9 @@ ELogRpcTarget* constructGRPCTarget(const char* name, const std::string& server,
     }
 
     ELogGRPCBaseTargetConstructor* constructor = itr->second;
-    ELogRpcTarget* logTarget =
-        constructor->createLogTarget(ELogError::getErrorHandler(), server, params, clientMode,
-                                     deadlineTimeoutMillis, maxInflightCalls);
+    ELogRpcTarget* logTarget = constructor->createLogTarget(
+        ELogError::getErrorHandler(), server, params, serverCA, clientCA, clientKey, clientMode,
+        deadlineTimeoutMillis, maxInflightCalls);
     if (logTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create gRPC target by name '%s', out of memory", name);
     }
@@ -139,9 +157,49 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(
         }
     }
 
+    // check for security members
+    std::string serverCA;
+    itr = targetSpec.m_props.find("grpc_server_ca_path");
+    if (itr != targetSpec.m_props.end()) {
+        const std::string& serverCAPath = itr->second;
+        if (!readFile(serverCAPath, serverCA)) {
+            ELOG_REPORT_ERROR(
+                "Invalid log target specification, could not read gRPC server certificate "
+                "authority file from path '%s': %s",
+                serverCAPath.c_str(), logTargetCfg.c_str());
+            return nullptr;
+        }
+    }
+
+    std::string clientCA;
+    itr = targetSpec.m_props.find("grpc_client_ca_path");
+    if (itr != targetSpec.m_props.end()) {
+        const std::string& clientCAPath = itr->second;
+        if (!readFile(clientCAPath, clientCA)) {
+            ELOG_REPORT_ERROR(
+                "Invalid log target specification, could not read gRPC client certificate "
+                "authority file from path '%s': %s",
+                clientCAPath.c_str(), logTargetCfg.c_str());
+            return nullptr;
+        }
+    }
+
+    std::string clientKey;
+    itr = targetSpec.m_props.find("grpc_client_key_path");
+    if (itr != targetSpec.m_props.end()) {
+        const std::string& clientKeyPath = itr->second;
+        if (!readFile(clientKeyPath, clientKey)) {
+            ELOG_REPORT_ERROR(
+                "Invalid log target specification, could not read gRPC client key file from path "
+                "'%s': %s",
+                clientKeyPath.c_str(), logTargetCfg.c_str());
+            return nullptr;
+        }
+    }
+
     // search for the provider type and construct the specialized log target
-    return constructGRPCTarget(providerType.c_str(), server, params, clientMode,
-                               deadlineTimeoutMillis, maxInflightCalls);
+    return constructGRPCTarget(providerType.c_str(), server, params, serverCA, clientCA, clientKey,
+                               clientMode, deadlineTimeoutMillis, maxInflightCalls);
 }
 
 }  // namespace elog

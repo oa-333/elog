@@ -414,8 +414,18 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     }
 
     // create channel to server
-    std::shared_ptr<grpc::Channel> channel =
-        grpc::CreateChannel(m_server.c_str(), grpc::InsecureChannelCredentials());
+    std::shared_ptr<grpc::Channel> channel;
+    if (!m_serverCA.empty()) {
+        grpc::SslCredentialsOptions sslOptions;
+        sslOptions.pem_root_certs = m_serverCA;
+        if (!m_clientCA.empty() && !m_clientKey.empty()) {
+            sslOptions.pem_private_key = m_clientKey;
+            sslOptions.pem_cert_chain = m_clientCA;
+        }
+        channel = grpc::CreateChannel(m_server.c_str(), grpc::SslCredentials(sslOptions));
+    } else {
+        channel = grpc::CreateChannel(m_server.c_str(), grpc::InsecureChannelCredentials());
+    }
 
     // get the stub
     m_serviceStub = ServiceType::NewStub(channel);
