@@ -123,9 +123,9 @@ void ELogGRPCBaseReceptor<MessageType>::receiveIntField(uint32_t typeId, uint64_
 #ifdef ELOG_MSVC
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime,
-                                                         const char* timeStr, int justify) final {
+                                                         const char* timeStr, int justify) {
     FILETIME fileTime;
-    SystemTimeToFileTime(&sysTime, fileTime);
+    SystemTimeToFileTime(&sysTime, &fileTime);
     uint64_t utcTimeMillis = (uint64_t)FILETIME_TO_UNIXTIME(fileTime);
     m_logRecordMsg->set_timeutcmillis(utcTimeMillis);
 }
@@ -356,17 +356,17 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnDone(const grpc
 }
 
 template <typename StubType, typename MessageType, typename ReceptorType>
-ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::CallData*
+typename ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::CallData*
 ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::allocCallData() {
     uint64_t requestId = m_nextRequestId.fetch_add(1, std::memory_order_relaxed);
     CallData* callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
-    bool isUsed = callData->m_isUsed.m_atomicValue.load(std::memory_order::relaxed);
+    bool isUsed = callData->m_isUsed.m_atomicValue.load(std::memory_order_relaxed);
     if (isUsed) {
         while (isUsed || !callData->m_isUsed.m_atomicValue.compare_exchange_strong(
                              isUsed, true, std::memory_order_seq_cst)) {
             // wait
             std::this_thread::yield();
-            isUsed = callData->m_isUsed.m_atomicValue.load(std::memory_order::relaxed);
+            isUsed = callData->m_isUsed.m_atomicValue.load(std::memory_order_relaxed);
         }
     }
     if (!callData->init(requestId)) {

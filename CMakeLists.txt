@@ -22,11 +22,6 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
     # enable connector in code
     add_compile_definitions(-DELOG_ENABLE_GRPC_CONNECTOR)
 
-    # apparently gRPC on Windows/MSVC requires windows headers define _WIN32_WINNT=0x600
-    if(MSVC)
-        add_definitions(-D_WIN32_WINNT=0x600)
-    endif()
-
     # Find Protobuf installation
     # Looks for protobuf-config.cmake file installed by Protobuf's cmake installation.
     option(protobuf_MODULE_COMPATIBLE TRUE)
@@ -74,6 +69,9 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
 
     # add generated sources to library and test bench
     target_sources(elog PRIVATE ${elog_proto_srcs} ${elog_grpc_srcs})
+    if (MSVC)
+        target_sources(elog_bench PRIVATE ${elog_proto_srcs} ${elog_grpc_srcs})
+    endif()
 
     # make sure elog is linked against required libraries
     target_link_libraries(elog
