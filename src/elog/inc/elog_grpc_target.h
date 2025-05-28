@@ -3,7 +3,6 @@
 
 #include "elog_def.h"
 
-#define ELOG_ENABLE_GRPC_CONNECTOR
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
 
 #include <grpc/grpc.h>

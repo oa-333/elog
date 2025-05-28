@@ -102,8 +102,12 @@ char* ELogError::sysErrorToStr(int sysErrorCode) {
     (void)strerror_s(buf, BUF_LEN, sysErrorCode);
     return buf;
 #else
+#if (_POSIX_C_SOURCE >= 200112L) && !_GNU_SOURCE
     (void)strerror_r(sysErrorCode, buf, BUF_LEN);
     return buf;
+#else
+    return strerror_r(sysErrorCode, buf, BUF_LEN);
+#endif
 #endif
 }
 

@@ -3,9 +3,11 @@
 #include <fstream>
 #include <thread>
 
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
 #include "absl/log/initialize.h"
 #include "elog.grpc.pb.h"
 #include "elog.pb.h"
+#endif
 #include "elog_system.h"
 
 static const uint64_t MSG_COUNT = 10000;
@@ -17,12 +19,14 @@ static elog::ELogTarget* initElog(const char* cfg = DEFAULT_CFG);
 static void termELog();
 static void testPerfPrivateLog();
 static void testPerfSharedLogger();
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
 static void testGRPC();
 static void testGRPCSimple();
 static void testGRPCStream();
 static void testGRPCAsync();
 static void testGRPCAsyncCallbackUnary();
 static void testGRPCAsyncCallbackStream();
+#endif
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                                   double& ioThroughput);
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
@@ -66,7 +70,7 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
                                 std::vector<double>& ioThroughput);
 
 // TODO: check rdtsc for percentile tests
-
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
 #include <grpc/grpc.h>
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server.h>
@@ -75,7 +79,7 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
 
 static std::mutex coutLock;
 static void handleLogRecord(const elog_grpc::ELogGRPCRecordMsg* msg) {
-    return;
+    // return;
     std::stringstream s;
     uint32_t fieldCount = 0;
     s << "Received log record: [";
@@ -322,6 +326,7 @@ public:
         return new StreamReactor();
     }
 };
+#endif
 
 // plots:
 // file flush count values
@@ -333,7 +338,9 @@ public:
 int main(int argc, char* argv[]) {
     testPerfPrivateLog();
     testPerfSharedLogger();
-    // testGRPC();
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
+    testGRPC();
+#endif
     testPerfFileFlushPolicy();
     testPerfBufferedFile();
     testPerfDeferredFile();
@@ -459,6 +466,7 @@ void testPerfSharedLogger() {
     termELog();
 }
 
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
 void testGRPC() {
     testGRPCSimple();
     testGRPCStream();
@@ -585,6 +593,7 @@ void testGRPCAsyncCallbackStream() {
     server->Shutdown();
     t.join();
 }
+#endif
 
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput) {

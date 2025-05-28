@@ -324,8 +324,9 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
     ELogLevel logLevel = ELEVEL_INFO;
     ELogSource::PropagateMode propagateMode = ELogSource::PropagateMode::PM_NONE;
 
-    const char* suffix = ".log_level";
-    uint32_t suffixLen = strlen(suffix);
+    const char* suffix1 = ".log_level";  // for configuration files
+    const char* suffix2 = "_log_level";  // for environment variables
+    uint32_t suffixLen = strlen(suffix1);
 
     for (const ELogProperty& prop : props) {
         // check if this is root log level
@@ -353,9 +354,9 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
         // NOTE: when definining log sources, we must first define all log sources, then set log
         // level to configured level and apply log level propagation. If we apply propagation
         // before child log sources are defined, then propagation is lost.
-        if (prop.first.ends_with(suffix)) {
+        if (prop.first.ends_with(suffix1) || prop.first.ends_with(suffix2)) {
             const std::string& key = prop.first;
-            // shave off trailing ".log_level" (that includes last dot)
+            // shave off trailing ".log_level/_log_level" (that includes dot/underscore)
             std::string sourceName = key.substr(0, key.size() - suffixLen);
             ELogSource* logSource = defineLogSources
                                         ? defineLogSource(sourceName.c_str(), defineMissingPath)
@@ -910,7 +911,11 @@ void ELogSystem::log(const ELogRecord& logRecord) {
 
     // by default, if no log target is defined yet, log is redirected to stderr
     if (!logged) {
-        sDefaultLogTarget->log(logRecord);
+        if (sDefaultLogTarget != nullptr) {
+            sDefaultLogTarget->log(logRecord);
+        } else {
+            fprintf(stderr, "%s\n", logRecord.m_logMsg);
+        }
     }
 }
 
