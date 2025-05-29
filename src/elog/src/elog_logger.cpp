@@ -181,6 +181,7 @@ void ELogLogger::appendMsgV(const char* fmt, va_list ap) {
     if (recordBuilder.ensureBufferLength(requiredBytes)) {
         recordBuilder.appendV(fmt, ap);
     }
+    va_end(apCopy);
 }
 
 void ELogLogger::appendMsg(const char* msg) {

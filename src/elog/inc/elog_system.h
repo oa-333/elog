@@ -505,6 +505,35 @@ public:
      */
     static void log(const ELogRecord& logRecord);
 
+    /**
+     * @brief Prints stack trace to log with the given log level.
+     * @param logLevel The log level.
+     * @param title The title to print (will be followed by a colon).
+     * @param skip The number of frames to skip.
+     */
+    static void logStackTrace(ELogLevel logLevel, const char* title, int skip);
+
+    /**
+     * @brief Prints stack trace to log with the given log level. Context is either captured by
+     * calling thread, or is passed by OS through an exception/signal handler.
+     * @param context[opt] OS-specific thread context. Pass null to log current thread call stack.
+     * @param logLevel The log level.
+     * @param title The title to print (will be followed by a colon).
+     * @param skip The number of frames to skip.
+     * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
+     */
+    static void logStackTraceContext(void* context, ELogLevel logLevel, const char* title,
+                                     int skip);
+
+    /**
+     * @brief Prints stack trace of all running threads to log with the given log level.
+     * @param logLevel The log level.
+     * @param title The title to print (will be followed by a colon).
+     * @param skip The number of frames to skip.
+     * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
+     */
+    static void logAppStackTrace(ELogLevel logLevel, const char* title, int skip);
+
     /** @brief Converts system error code to string. */
     static char* sysErrorToStr(int sysErrorCode);
 
@@ -878,6 +907,66 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
     ELOG_WIN32_ERROR_NUM(syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
 
 #endif  // ELOG_WINDOWS
+
+/**
+ * @brief Logs the stack trace of the current thread.
+ * @param logger The logger used to log.
+ * @param level The log level.
+ * @param title A title that may be put before the stack trace (can pass nullptr if not required).
+ * @param skip The number of stack frames to skip.
+ * @param fmt The log message format string, that will be printed to log before the stack trace.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
+    if (logger != nullptr && logger->canLog(level)) {             \
+        ELOG_EX(logger, level, fmt, ##__VA_ARGS__);               \
+        elog::ELogSystem::logStackTrace(level, title, skip);      \
+    }
+
+/**
+ * @brief Logs the stack trace of all running threads in the application.
+ * @param logger The logger used to log.
+ * @param level The log level.
+ * @param title A title that may be put before the stack trace of each thread (can pass nullptr if
+ * not required).
+ * @param skip The number of stack frames to skip.
+ * @param fmt The log message format string, that will be printed to log before the stack trace.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
+    if (logger != nullptr && logger->canLog(level)) {                 \
+        ELOG_EX(logger, level, fmt, ##__VA_ARGS__);                   \
+        elog::ELogSystem::logAppStackTrace(level, title, skip);       \
+    }
+
+/**
+ * @brief Logs the stack trace of the current thread (using default logger).
+ * @param level The log level.
+ * @param title A title that may be put before the stack trace (can pass nullptr if not required).
+ * @param skip The number of stack frames to skip.
+ * @param fmt The log message format string, that will be printed to log before the stack trace.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_STACK_TRACE(level, title, skip, fmt, ...)                       \
+    {                                                                        \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();     \
+        ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
+    }
+
+/**
+ * @brief Logs the stack trace of all running threads in the application (using default logger).
+ * @param level The log level.
+ * @param title A title that may be put before the stack trace of each thread (can pass nullptr if
+ * not required).
+ * @param skip The number of stack frames to skip.
+ * @param fmt The log message format string, that will be printed to log before the stack trace.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_APP_STACK_TRACE(level, title, skip, fmt, ...)                       \
+    {                                                                            \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();         \
+        ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
+    }
 
 /** @brief Utility macro for importing frequent names. */
 #define ELOG_USING()           \

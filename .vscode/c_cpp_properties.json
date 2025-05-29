@@ -4,7 +4,7 @@
             "name": "Win32-gcc",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3\\include\\**"
+                "${workspaceFolder}/../dbgutil/**"
             ],
             "defines": [
                 "_DEBUG",
@@ -21,7 +21,9 @@
         {
             "name": "Win32-msvc",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/../dbgutil/**",
+                "C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3\\include\\**"
             ],
             "defines": [
                 "_DEBUG",

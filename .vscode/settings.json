@@ -77,7 +77,8 @@
         "ranges": "cpp",
         "any": "cpp",
         "forward_list": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "*.inc": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

@@ -108,6 +108,20 @@ else()
     target_compile_features(elog_bench PRIVATE cxx_std_23)
 endif()
 
+# add dbg util dependency
+if (MSVC OR MINGW)
+    target_include_directories(elog PRIVATE "C:\\install\\dbgutil\\include")
+    target_include_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\include")
+    target_link_directories(elog PRIVATE "C:\\install\\dbgutil\\lib")
+    target_link_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\lib")
+else()
+    target_include_directories(elog PRIVATE ~/install/dbgutil/include)
+    target_include_directories(elog_bench PRIVATE ~/install/dbgutil/include)
+    target_link_directories(elog PRIVATE ~/install/dbgutil/lib)
+    target_link_directories(elog_bench PRIVATE ~/install/dbgutil/lib)
+endif()
+target_link_libraries(elog dbgutil)
+
 # some optimizations for MSVC release builds that cmake does not by default set
 # this options come out of the box in Visual Studio C++ for Release build
 # we also add /Ob2 (since cmake uses /Ob1 thus restricting inlining)
@@ -242,3 +256,10 @@ add_subdirectory(src/elog/inc)
 # install header in install dir
 install(TARGETS elog FILE_SET publicheaders)
 install(TARGETS elog_bench)
+
+# common install dir
+if (MSVC OR MINGW)
+    install(TARGETS elog RUNTIME DESTINATION "C:\\install\\bin")
+else()
+    install(TARGETS elog RUNTIME DESTINATION "/home/oren/install/bin")
+endif()
