@@ -1066,11 +1066,26 @@ public:
     LogStackEntryPrinter(ELogLevel logLevel, const char* title)
         : m_logLevel(logLevel), m_title(title) {}
     void onBeginStackTrace(dbgutil::os_thread_id_t threadId) override {
+        // std::string threadName;
+        // getThreadName(threadId, threadName);
+        std::string threadName = getThreadNameField(threadId);
         if (m_title.empty()) {
-            ELOG_BEGIN(m_logLevel, "[Thread %" PRItid " stack trace]\n", threadId);
+            if (threadName.empty()) {
+                ELOG_BEGIN(m_logLevel, "[Thread %" PRItid " (0x%" PRItidx ") stack trace]\n",
+                           threadId, threadId);
+            } else {
+                ELOG_BEGIN(m_logLevel, "[Thread %" PRItid " (0x%" PRItidx ") <%s> stack trace]\n",
+                           threadId, threadId, threadName.c_str());
+            }
         } else {
-            ELOG_BEGIN(m_logLevel, "%s:\n[Thread %" PRItid " stack trace]\n", m_title.c_str(),
-                       threadId);
+            if (threadName.empty()) {
+                ELOG_BEGIN(m_logLevel, "%s:\n[Thread %" PRItid " (0x%" PRItidx ") stack trace]\n",
+                           m_title.c_str(), threadId, threadId);
+            } else {
+                ELOG_BEGIN(m_logLevel,
+                           "%s:\n[Thread %" PRItid " (0x%" PRItidx ") <%s> stack trace]\n",
+                           m_title.c_str(), threadId, threadId, threadName.c_str());
+            }
         }
     }
     void onEndStackTrace() override { ELOG_END(); }

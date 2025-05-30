@@ -35,6 +35,26 @@ static char userName[LOGIN_NAME_MAX];
 static char progName[PROG_NAME_MAX];
 static thread_local char sThreadName[THREAD_NAME_MAX] = {};
 
+#ifdef ELOG_ENABLE_STACK_TRACE
+typedef std::unordered_map<dbgutil::os_thread_id_t, std::string> ThreadNameMap;
+static ThreadNameMap sThreadNameMap;
+static std::mutex sLock;
+
+static void addThreadNameField(const char* threadName) {
+    std::unique_lock<std::mutex> lock(sLock);
+    sThreadNameMap.insert(ThreadNameMap::value_type(dbgutil::getCurrentThreadId(), threadName));
+}
+
+const char* getThreadNameField(dbgutil::os_thread_id_t threadId) {
+    std::unique_lock<std::mutex> lock(sLock);
+    ThreadNameMap::iterator itr = sThreadNameMap.find(threadId);
+    if (itr == sThreadNameMap.end()) {
+        return "";
+    }
+    return itr->second.c_str();
+}
+#endif
+
 #ifdef ELOG_WINDOWS
 static DWORD pid = 0;
 #else
@@ -224,6 +244,9 @@ const char* getProgramName() { return progName; }
 
 void setCurrentThreadNameField(const char* threadName) {
     strncpy(sThreadName, threadName, THREAD_NAME_MAX);
+#ifdef ELOG_ENABLE_STACK_TRACE
+    addThreadNameField(threadName);
+#endif
 }
 
 const char* getCurrentThreadNameField() { return sThreadName; }
