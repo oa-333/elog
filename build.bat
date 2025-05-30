@@ -13,6 +13,7 @@ REM set default values
 SET PLATFORM=WINDOWS
 SET BUILD_TYPE=Debug
 SET INSTALL_DIR=C:\install\elog
+SET STACK_TRACE=0
 
 SET CONN_INDEX=0
 SET CONNS[0]=tmp
@@ -27,6 +28,8 @@ IF /I "%1" == "-r" SET BUILD_TYPE=Release
 IF /I "%1" == "--release" SET BUILD_TYPE=Release
 IF /I "%1" == "-w" SET BUILD_TYPE=RelWithDebInfo
 IF /I "%1" == "--rel-with-debug-info" SET BUILD_TYPE=RelWithDebInfo
+IF /I "%1" == "--stack-trace" SET STACK_TRACE=1
+IF /I "%1" == "-s" SET STACK_TRACE=1
 IF /I "%1" == "-c" SET CONNS[!CONN_INDEX!]=%2 & SET /A CONN_INDEX+=1 & shift
 IF /I "%1" == "--conn" SET CONNS[!CONN_INDEX!]=%2 & SET /A CONN_INDEX+=1 & shift
 IF /I "%1" == "-i" SET INSTALL_DIR=%2 & shift
@@ -44,6 +47,7 @@ echo [INFO] Build type: $BUILD_TYPE
 echo [INFO] Install dir: $INSTALL_DIR
 SET OPTS=-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR%
 IF "%VERBOSE%" == "1" SET OPTS=%OPTS% -DCMAKE_VERBOSE_MAKEFILE=ON
+IF "%STACK_TRACE%" == "1" SET OPTS=%OPTS% -DELOG_ENABLE_STACK_TRACE=ON
 echo [DEBUG] Current options: %OPTS%
 
 REM add optional connectors
@@ -52,13 +56,12 @@ echo [DEBUG] Parsing %CONN_INDEX% connectors
 set /A CONN_COUNT=%CONN_INDEX-1
 for /l %%n in (0,1,%CONN_COUNT%) do (
     set conn=!CONNS[%%n]!
-    echo [DEBUG] Adding connector !conn! to OPTS %OPTS%
-    IF "!conn!" == "mysql" echo "MySQL Found"
-    IF "!CONNS[%%n]!" == "sqlite" SET OPTS=!OPTS! -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON
-    IF "!CONNS[%%n]!" == "mysql" SET OPTS=%OPTS% -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON
-    IF "!CONNS[%%n]!" == "postgresql" SET OPTS=!OPTS! -DELOG_ENABLE_POSTGRESQL_DB_CONNECTOR=ON
-    IF "!CONNS[%%n]!" == "kafka" SET OPTS=!OPTS! -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON
-    IF "!CONNS[%%n]!" == "grpc" SET OPTS=!OPTS! -DELOG_ENABLE_GRPC_CONNECTOR=ON
+    echo [DEBUG] Adding connector --!conn!-- to OPTS %OPTS%
+    IF "!conn!" == "sqlite" SET OPTS=!OPTS! -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON
+    IF "!conn!" == "mysql" SET OPTS=%OPTS% -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON
+    IF "!conn!" == "postgresql" SET OPTS=!OPTS! -DELOG_ENABLE_POSTGRESQL_DB_CONNECTOR=ON
+    IF "!conn!" == "kafka" SET OPTS=!OPTS! -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON
+    IF "!conn!" == "grpc " SET OPTS=!OPTS! -DELOG_ENABLE_GRPC_CONNECTOR=ON
 )
 echo [DEBUG] Parsed connections
 echo [DEBUG] Current options: %OPTS%

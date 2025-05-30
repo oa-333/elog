@@ -11,6 +11,10 @@
 #include "elog_source.h"
 #include "elog_target.h"
 
+#ifdef ELOG_ENABLE_STACK_TRACE
+#include "dbg_stack_trace.h"
+#endif
+
 namespace elog {
 
 /** @typedef Log target identifier type. */
@@ -505,34 +509,40 @@ public:
      */
     static void log(const ELogRecord& logRecord);
 
+#ifdef ELOG_ENABLE_STACK_TRACE
     /**
      * @brief Prints stack trace to log with the given log level.
-     * @param logLevel The log level.
-     * @param title The title to print (will be followed by a colon).
-     * @param skip The number of frames to skip.
+     * @param logLevel[opt] The log level.
+     * @param title[opt] The title to print before each thread stack trace.
+     * @param skip[opt] The number of frames to skip.
+     * @param formatter[opt] Optional stack entry formatter. Pass null to use default formatting.
      */
-    static void logStackTrace(ELogLevel logLevel, const char* title, int skip);
+    static void logStackTrace(ELogLevel logLevel = ELEVEL_INFO, const char* title = "",
+                              int skip = 0, dbgutil::StackEntryFormatter* formatter = nullptr);
 
     /**
      * @brief Prints stack trace to log with the given log level. Context is either captured by
      * calling thread, or is passed by OS through an exception/signal handler.
      * @param context[opt] OS-specific thread context. Pass null to log current thread call stack.
-     * @param logLevel The log level.
-     * @param title The title to print (will be followed by a colon).
-     * @param skip The number of frames to skip.
+     * @param logLevel[opt] The log level.
+     * @param title[opt] The title to print before each thread stack trace.
+     * @param skip[opt] The number of frames to skip.
      * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
      */
-    static void logStackTraceContext(void* context, ELogLevel logLevel, const char* title,
-                                     int skip);
+    static void logStackTraceContext(void* context = nullptr, ELogLevel logLevel = ELEVEL_INFO,
+                                     const char* title = "", int skip = 0,
+                                     dbgutil::StackEntryFormatter* formatter = nullptr);
 
     /**
      * @brief Prints stack trace of all running threads to log with the given log level.
-     * @param logLevel The log level.
-     * @param title The title to print (will be followed by a colon).
-     * @param skip The number of frames to skip.
+     * @param logLevel[opt] The log level.
+     * @param title[opt] The title to print before each thread stack trace.
+     * @param skip[opt] The number of frames to skip.
      * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
      */
-    static void logAppStackTrace(ELogLevel logLevel, const char* title, int skip);
+    static void logAppStackTrace(ELogLevel logLevel = ELEVEL_INFO, const char* title = "",
+                                 int skip = 0, dbgutil::StackEntryFormatter* formatter = nullptr);
+#endif
 
     /** @brief Converts system error code to string. */
     static char* sysErrorToStr(int sysErrorCode);
@@ -908,11 +918,13 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
 
 #endif  // ELOG_WINDOWS
 
+#ifdef ELOG_ENABLE_STACK_TRACE
 /**
  * @brief Logs the stack trace of the current thread.
  * @param logger The logger used to log.
  * @param level The log level.
- * @param title A title that may be put before the stack trace (can pass nullptr if not required).
+ * @param title A title that may be put before the stack trace (can pass nullptr or empty string if
+ * not required).
  * @param skip The number of stack frames to skip.
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
@@ -927,8 +939,8 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @brief Logs the stack trace of all running threads in the application.
  * @param logger The logger used to log.
  * @param level The log level.
- * @param title A title that may be put before the stack trace of each thread (can pass nullptr if
- * not required).
+ * @param title A title that may be put before the stack trace of each thread (can pass nullptr or
+ * empty string if not required).
  * @param skip The number of stack frames to skip.
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
@@ -942,7 +954,8 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
 /**
  * @brief Logs the stack trace of the current thread (using default logger).
  * @param level The log level.
- * @param title A title that may be put before the stack trace (can pass nullptr if not required).
+ * @param title A title that may be put before the stack trace (can pass nullptr or empty string if
+ * not required).
  * @param skip The number of stack frames to skip.
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
@@ -956,8 +969,8 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
 /**
  * @brief Logs the stack trace of all running threads in the application (using default logger).
  * @param level The log level.
- * @param title A title that may be put before the stack trace of each thread (can pass nullptr if
- * not required).
+ * @param title A title that may be put before the stack trace of each thread (can pass nullptr or
+ * empty string if not required).
  * @param skip The number of stack frames to skip.
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
@@ -967,6 +980,7 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();         \
         ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
     }
+#endif
 
 /** @brief Utility macro for importing frequent names. */
 #define ELOG_USING()           \

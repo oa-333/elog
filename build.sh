@@ -17,9 +17,10 @@ if [ "$OS" = "Msys" ]; then
 else
     INSTALL_DIR=~/install/elog
 fi
+STACK_TRACE=0
 
 # parse options
-TEMP=$(getopt -o vdrwc:i: -l verbose,debug,release,rel-with-debug-info,conn:,install-dir: -- "$@")
+TEMP=$(getopt -o vdrwsc:i: -l verbose,debug,release,rel-with-debug-info,stack-trace,conn:,install-dir: -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -29,6 +30,7 @@ while true; do
     -d | --debug ) BUILD_TYPE=Debug; shift ;;
     -r | --release ) BUILD_TYPE=Release; shift ;;
     -w | --rel-with-debug-info ) BUILD_TYPE=RelWithDebInfo; shift ;;
+    -s | --stack-trace ) STACK_TRACE=1; shift ;;
     -c | --conn ) CONNS+=($2); shift 2 ;;
     -i | --install-dir) INSTALL_DIR="$2"; shift 2 ;;
     -- ) shift; break ;;
@@ -39,9 +41,13 @@ done
 # set normal options
 echo "[INFO] Build type: $BUILD_TYPE"
 echo "[INFO] Install dir: $INSTALL_DIR"
+echo "[INFO] Stack trace: $STACK_TRACE"
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
-if [ $VERBOSE==1 ]; then
+if [ "$VERBOSE" -eq "1" ]; then
     OPTS+=" -DCMAKE_VERBOSE_MAKEFILE=ON"
+fi
+if [ "$STACK_TRACE" -eq "1" ]; then
+    OPTS+=" -DELOG_ENABLE_STACK_TRACE=ON"
 fi
 
 # add optional connectors
@@ -82,6 +88,7 @@ pushd $BUILD_DIR > /dev/null
 
 # configure phase
 echo "[INFO] Configuring project"
+echo "[INFO] Using options: $OPTS"
 cmake $OPTS $* ../../
 if [ $? -ne 0 ]; then
     echo "[ERROR] Configure phase failed, see errors above, aborting"

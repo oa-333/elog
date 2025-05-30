@@ -9,8 +9,6 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "dbg_stack_trace.h"
-#include "dbg_util.h"
 #include "elog_buffered_file_target.h"
 #include "elog_common.h"
 #include "elog_config_loader.h"
@@ -27,6 +25,10 @@
 #include "elog_syslog_target.h"
 #include "elog_target_spec.h"
 
+#ifdef ELOG_ENABLE_STACK_TRACE
+#include "dbg_util.h"
+#endif
+
 namespace elog {
 
 /** @brief Log level configuration used for delayed log level propagation. */
@@ -34,8 +36,10 @@ struct ELogLevelCfg {
     ELogSource* m_logSource;
     ELogLevel m_logLevel;
     ELogSource::PropagateMode m_propagationMode;
+    uint32_t m_dbgUtilLoggerId;
 };
 
+#ifdef ELOG_ENABLE_STACK_TRACE
 inline ELogLevel severityToLogLevel(dbgutil::LogSeverity severity) {
     // values are aligned (on purpose), so direct cast can be used
     return (ELogLevel)severity;
@@ -83,13 +87,29 @@ public:
                 ELOG_REPORT_ERROR("Invalid dbgutil source %s log level: %s",
                                   qualifiedLoggerName.c_str(), envVarValue);
             } else {
-                m_logLevelCfg.push_back({logSource, logLevel, propagateMode});
+                m_logLevelCfg.push_back({logSource, logLevel, propagateMode, loggerId});
             }
 
             severity = logLevelToSeverity(logLevel);
         }
 
         return severity;
+    }
+
+    void onUnregisterLogger(uint32_t loggerId) final {
+        if (loggerId < sDbgUtilLoggers.size()) {
+            sDbgUtilLoggers[loggerId] = nullptr;
+            uint32_t maxLoggerId = 0;
+            for (int i = sDbgUtilLoggers.size() - 1; i >= 0; --i) {
+                if (sDbgUtilLoggers[i] != nullptr) {
+                    maxLoggerId = i;
+                    break;
+                }
+            }
+            if (maxLoggerId + 1 < sDbgUtilLoggers.size()) {
+                sDbgUtilLoggers.resize(maxLoggerId + 1);
+            }
+        }
     }
 
     /**
@@ -119,6 +139,7 @@ public:
                               cfg.m_logSource->getQualifiedName(), elogLevelToStr(cfg.m_logLevel),
                               (uint32_t)cfg.m_propagationMode);
             cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
+            dbgutil::setLoggerSeverity(cfg.m_dbgUtilLoggerId, logLevelToSeverity(cfg.m_logLevel));
         }
     }
 
@@ -127,6 +148,7 @@ private:
 };
 
 static ELogDbgUtilLogHandler sDbgUtilLogHandler;
+#endif
 
 static ELogFilter* sGlobalFilter = nullptr;
 static std::vector<ELogTarget*> sLogTargets;
@@ -206,6 +228,7 @@ bool ELogSystem::initGlobals() {
         return false;
     }
 
+#ifdef ELOG_ENABLE_STACK_TRACE
     // connect to debug util library
     dbgutil::DbgUtilErr rc = dbgutil::initDbgUtil(&sDbgUtilLogHandler, dbgutil::LS_INFO);
     if (rc != DBGUTIL_ERR_OK) {
@@ -214,6 +237,7 @@ bool ELogSystem::initGlobals() {
         return false;
     }
     sDbgUtilLogHandler.applyLogLevelCfg();
+#endif
 
     return true;
 }
@@ -227,10 +251,12 @@ void ELogSystem::termGlobals() {
     }
     sLogTargets.clear();
 
+#ifdef ELOG_ENABLE_STACK_TRACE
     dbgutil::DbgUtilErr rc = dbgutil::termDbgUtil();
     if (rc != DBGUTIL_ERR_OK) {
         // TODO: what now?
     }
+#endif
 
     setLogFormatter(nullptr);
     setLogFilter(nullptr);
@@ -467,7 +493,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
                 ELOG_REPORT_ERROR("Invalid global log level: %s", prop.second.c_str());
                 return false;
             }
-            logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode});
+            logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode, 0});
             continue;
         }
 
@@ -1033,6 +1059,7 @@ bool ELogSystem::filterLogMsg(const ELogRecord& logRecord) {
     return res;
 }
 
+#ifdef ELOG_ENABLE_STACK_TRACE
 /** @brief Stack entry printer to log. */
 class LogStackEntryPrinter : public dbgutil::StackEntryPrinter {
 public:
@@ -1054,21 +1081,24 @@ private:
     ELogLevel m_logLevel;
 };
 
-void ELogSystem::logStackTrace(ELogLevel logLevel, const char* title, int skip) {
+void ELogSystem::logStackTrace(ELogLevel logLevel, const char* title, int skip,
+                               dbgutil::StackEntryFormatter* formatter) {
     LogStackEntryPrinter printer(logLevel, title == nullptr ? "" : title);
-    dbgutil::printStackTrace(skip, &printer);
+    dbgutil::printStackTrace(skip, &printer, formatter);
 }
 
 void ELogSystem::logStackTraceContext(void* context, ELogLevel logLevel, const char* title,
-                                      int skip) {
+                                      int skip, dbgutil::StackEntryFormatter* formatter) {
     LogStackEntryPrinter printer(logLevel, title == nullptr ? "" : title);
-    dbgutil::printStackTraceContext(context, skip, &printer);
+    dbgutil::printStackTraceContext(context, skip, &printer, formatter);
 }
 
-void ELogSystem::logAppStackTrace(ELogLevel logLevel, const char* title, int skip) {
+void ELogSystem::logAppStackTrace(ELogLevel logLevel, const char* title, int skip,
+                                  dbgutil::StackEntryFormatter* formatter) {
     LogStackEntryPrinter printer(logLevel, title == nullptr ? "" : title);
-    dbgutil::printAppStackTrace(skip, &printer);
+    dbgutil::printAppStackTrace(skip, &printer, formatter);
 }
+#endif
 
 void ELogSystem::log(const ELogRecord& logRecord) {
     bool logged = false;

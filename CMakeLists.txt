@@ -15,6 +15,24 @@ option(ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR "ELog PostgreSQL database connector" 
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
 option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF)
 option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
+option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
+
+if (ELOG_ENABLE_STACK_TRACE)
+    add_compile_definitions(-DELOG_ENABLE_STACK_TRACE)
+    # add dbg util dependency
+    if (MSVC OR MINGW)
+        target_include_directories(elog PRIVATE "C:\\install\\dbgutil\\include")
+        target_include_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\include")
+        target_link_directories(elog PRIVATE "C:\\install\\dbgutil\\lib")
+        target_link_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\lib")
+    else()
+        target_include_directories(elog PRIVATE ~/install/dbgutil/include)
+        target_include_directories(elog_bench PRIVATE ~/install/dbgutil/include)
+        target_link_directories(elog PRIVATE ~/install/dbgutil/lib)
+        target_link_directories(elog_bench PRIVATE ~/install/dbgutil/lib)
+    endif()
+    target_link_libraries(elog dbgutil)
+endif()
 
 # if gRPC is enabled we need to generate protocol headers# Proto file
 # NOTE: all definitions here are adapted from the gRPC C++ client example in grpc.io
@@ -107,20 +125,6 @@ else()
     target_compile_features(elog PRIVATE cxx_std_23)
     target_compile_features(elog_bench PRIVATE cxx_std_23)
 endif()
-
-# add dbg util dependency
-if (MSVC OR MINGW)
-    target_include_directories(elog PRIVATE "C:\\install\\dbgutil\\include")
-    target_include_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\include")
-    target_link_directories(elog PRIVATE "C:\\install\\dbgutil\\lib")
-    target_link_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\lib")
-else()
-    target_include_directories(elog PRIVATE ~/install/dbgutil/include)
-    target_include_directories(elog_bench PRIVATE ~/install/dbgutil/include)
-    target_link_directories(elog PRIVATE ~/install/dbgutil/lib)
-    target_link_directories(elog_bench PRIVATE ~/install/dbgutil/lib)
-endif()
-target_link_libraries(elog dbgutil)
 
 # some optimizations for MSVC release builds that cmake does not by default set
 # this options come out of the box in Visual Studio C++ for Release build
