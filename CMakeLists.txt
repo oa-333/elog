@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.23)
+include(FetchContent)
 project(ELog VERSION 1.0 DESCRIPTION "ELog Error Logging Library" LANGUAGES CXX)
 #CMAKE_CXX_STANDARD=23
 
@@ -15,6 +16,7 @@ option(ELOG_ENABLE_POSTGRESQL_DB_CONNECTOR "ELog PostgreSQL database connector" 
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
 option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF)
 option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
+option(ELOG_ENABLE_GRAFANA_CONNECTOR "ELog Grafana connector" OFF)
 option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
 
 if (ELOG_ENABLE_STACK_TRACE)
@@ -45,10 +47,12 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
     option(protobuf_MODULE_COMPATIBLE TRUE)
     find_package(Protobuf CONFIG REQUIRED)
     message(STATUS "Using protobuf ${Protobuf_VERSION}")
+    message(STATUS "Using protobuf include dir at ${Protobuf_INCLUDE_DIR}")
 
     set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
     set(_REFLECTION gRPC::grpc++_reflection)
     set(_PROTOBUF_PROTOC $<TARGET_FILE:protobuf::protoc>)
+    message(STATUS "Using protoc at ${_PROTOBUF_PROTOC}")
 
     # Find gRPC installation
     # Looks for gRPCConfig.cmake file installed by gRPC's cmake installation.
@@ -107,6 +111,18 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
         ${_REFLECTION}
         ${_GRPC_GRPCPP}
         ${_PROTOBUF_LIBPROTOBUF})
+endif()
+
+if (ELOG_ENABLE_GRAFANA_CONNECTOR)
+    add_compile_definitions(-DELOG_ENABLE_GRAFANA_CONNECTOR)
+    message("Getting httplib")
+    FetchContent_Declare(httplib SYSTEM
+        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
+        GIT_TAG 3af7f2c16147f3fbc6e4d717032daf505dc1652c # v0.20.1
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(httplib)
+
+    target_link_libraries(elog httplib)
 endif()
 
 # add dependency from elog_bench to elog to enforce correct build order

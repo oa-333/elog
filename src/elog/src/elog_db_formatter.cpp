@@ -9,14 +9,14 @@ bool ELogDbFormatter::handleText(const std::string& text) {
     return true;
 }
 
-bool ELogDbFormatter::handleField(const char* fieldName, int justify) {
+bool ELogDbFormatter::handleField(const ELogFieldSpec& fieldSpec) {
     if (m_queryStyle == QueryStyle::QS_QMARK) {
         m_processedStatement += "?";
     } else {
         m_processedStatement += "$";
         m_processedStatement += std::to_string(m_fieldNum++);
     }
-    return ELogBaseFormatter::handleField(fieldName, justify);
+    return ELogBaseFormatter::handleField(fieldSpec);
 }
 
 void ELogDbFormatter::getParamTypes(std::vector<ParamType>& paramTypes) const {

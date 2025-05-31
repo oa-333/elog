@@ -19,128 +19,123 @@ namespace elog {
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveStaticText(uint32_t typeId, const std::string& text,
-                                                          int justify) {
+                                                          const ELogFieldSpec& fieldSpec) {
     // static text is not used, just discard it
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveRecordId(uint32_t typeId, uint64_t recordId,
-                                                        int justify) {
+                                                        const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_recordid(recordId);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveHostName(uint32_t typeId,
-                                                        const std::string& hostName, int justify) {
+                                                        const std::string& hostName,
+                                                        const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_hostname(hostName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveUserName(uint32_t typeId,
-                                                        const std::string& userName, int justify) {
+                                                        const std::string& userName,
+                                                        const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_username(userName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveProgramName(uint32_t typeId,
                                                            const std::string& programName,
-                                                           int justify) {
+                                                           const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_programname(programName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveProcessId(uint32_t typeId, uint64_t processId,
-                                                         int justify) {
+                                                         const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_processid(processId);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveThreadId(uint32_t typeId, uint64_t threadId,
-                                                        int justify) {
+                                                        const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_threadid(threadId);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveThreadName(uint32_t typeId,
                                                           const std::string& threadName,
-                                                          int justify) {
+                                                          const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_threadname(threadName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveLogSourceName(uint32_t typeId,
                                                              const std::string& logSourceName,
-                                                             int justify) {
+                                                             const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_logsourcename(logSourceName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveModuleName(uint32_t typeId,
                                                           const std::string& moduleName,
-                                                          int justify) {
+                                                          const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_modulename(moduleName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveFileName(uint32_t typeId,
-                                                        const std::string& fileName, int justify) {
+                                                        const std::string& fileName,
+                                                        const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_file(fileName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveLineNumber(uint32_t typeId, uint64_t lineNumber,
-                                                          int justify) {
+                                                          const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_line((uint32_t)lineNumber);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveFunctionName(uint32_t typeId,
                                                             const std::string& functionName,
-                                                            int justify) {
+                                                            const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_functionname(functionName);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveLogMsg(uint32_t typeId, const std::string& logMsg,
-                                                      int justify) {
+                                                      const ELogFieldSpec& fieldSpec) {
     m_logRecordMsg->set_logmsg(logMsg);
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveStringField(uint32_t typeId,
-                                                           const std::string& value, int justify) {
+                                                           const std::string& value,
+                                                           const ELogFieldSpec& fieldSpec) {
     // if external fields are used, then derive from the receptor and transfer the extra fields into
     // the log message
 }
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveIntField(uint32_t typeId, uint64_t value,
-                                                        int justify) {
+                                                        const ELogFieldSpec& fieldSpec) {
     // if external fields are used, then derive from the receptor and transfer the extra fields into
     // the log message
 }
 
-#ifdef ELOG_MSVC
 template <typename MessageType>
-void ELogGRPCBaseReceptor<MessageType>::receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime,
-                                                         const char* timeStr, int justify) {
-    FILETIME fileTime;
-    SystemTimeToFileTime(&sysTime, &fileTime);
-    uint64_t utcTimeMillis = (uint64_t)FILETIME_TO_UNIXTIME(fileTime);
-    m_logRecordMsg->set_timeutcmillis(utcTimeMillis);
+void ELogGRPCBaseReceptor<MessageType>::receiveTimeField(uint32_t typeId, const ELogTime& logTime,
+                                                         const char* timeStr,
+                                                         const ELogFieldSpec& fieldSpec) {
+    auto epochMillis =
+        std::chrono::duration_cast<std::chrono::milliseconds>(logTime.time_since_epoch());
+    m_logRecordMsg->set_timeutcmillis(epochMillis.count());
 }
-#else
-template <typename MessageType>
-void ELogGRPCBaseReceptor<MessageType>::receiveTimeField(uint32_t typeId, const timeval& sysTime,
-                                                         const char* timeStr, int justify) {
-    uint64_t utcTimeMillis = sysTime.tv_sec * 1000 + sysTime.tv_usec / 1000;
-    m_logRecordMsg->set_timeutcmillis(utcTimeMillis);
-}
-#endif
 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
-                                                             int justify) {
+                                                             const ELogFieldSpec& fieldSpec) {
     const char* logLevelStr = elogLevelToStr(logLevel);
     m_logRecordMsg->set_loglevel((uint32_t)logLevel);
 }

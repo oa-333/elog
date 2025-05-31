@@ -5,7 +5,7 @@
 #include <mutex>
 #include <thread>
 
-#include "elog_msgq_formatter.h"
+#include "elog_props_formatter.h"
 #include "elog_target.h"
 
 namespace elog {
@@ -25,18 +25,16 @@ protected:
      * @param headers The headers to parse.
      * @return true If succeeded, otherwise false.
      */
-    inline bool parseHeaders(const std::string& headers) {
-        return m_formatter.parseHeaders(headers);
-    }
+    inline bool parseHeaders(const std::string& headers) { return m_formatter.parseProps(headers); }
 
     inline const std::string& getHeaderNameAt(uint32_t index) const {
-        return m_formatter.getHeaderNameAt(index);
+        return m_formatter.getPropNameAt(index);
     }
 
-    inline uint32_t getHeaderCount() const { return m_formatter.getHeaderCount(); }
+    inline uint32_t getHeaderCount() const { return m_formatter.getPropCount(); }
 
     inline const std::vector<std::string>& getHeaderNames() const {
-        return m_formatter.getHeaderNames();
+        return m_formatter.getPropNames();
     }
 
     /**
@@ -47,11 +45,11 @@ protected:
      */
     inline void fillInHeaders(const elog::ELogRecord& logRecord,
                               elog::ELogFieldReceptor* receptor) {
-        m_formatter.fillInHeaders(logRecord, receptor);
+        m_formatter.fillInProps(logRecord, receptor);
     }
 
 private:
-    ELogMsgQFormatter m_formatter;
+    ELogPropsFormatter m_formatter;
 };
 
 }  // namespace elog

@@ -78,7 +78,11 @@
         "any": "cpp",
         "forward_list": "cpp",
         "set": "cpp",
-        "*.inc": "cpp"
+        "*.inc": "cpp",
+        "csignal": "cpp",
+        "future": "cpp",
+        "valarray": "cpp",
+        "version": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

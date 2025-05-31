@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "elog_system.h"
+
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -29,7 +31,35 @@ public:
     }
 };
 
+class ELogSelfErrorHandler : public ELogErrorHandler {
+public:
+    ELogSelfErrorHandler() : m_logSource(nullptr), m_logger(nullptr) {}
+    ~ELogSelfErrorHandler() final {}
+
+    void init() {
+        m_logSource = ELogSystem::defineLogSource("elog");
+        if (m_logSource != nullptr) {
+            m_logger = m_logSource->createSharedLogger();
+        }
+    }
+
+    virtual void setTraceMode(bool enableTrace) {
+        m_logSource->setLogLevel(enableTrace ? ELEVEL_TRACE : ELEVEL_INFO,
+                                 ELogSource::PropagateMode::PM_SET);
+        ELogErrorHandler::setTraceMode(enableTrace);
+    }
+
+    void onError(const char* msg) final { ELOG_ERROR_EX(m_logger, msg); }
+
+    void onTrace(const char* msg) final { ELOG_TRACE_EX(m_logger, msg); }
+
+private:
+    ELogSource* m_logSource;
+    ELogLogger* m_logger;
+};
+
 static ELogDefaultErrorHandler sDefaultErrorHandler;
+static ELogSelfErrorHandler sSelfErrorHandler;
 static ELogErrorHandler* sErrorHandler = &sDefaultErrorHandler;
 
 void ELogError::setErrorHandler(ELogErrorHandler* errorHandler) {
@@ -125,6 +155,13 @@ void ELogError::win32FreeErrorStr(char* errStr) { LocalFree(errStr); }
 #endif
 
 void ELogError::initError() {
+    if (getenv("ELOG_SINK") != nullptr) {
+        ELOG_REPORT_TRACE("Setting Log sink: %s", getenv("ELOG_SINK"));
+        if (strcmp(getenv("ELOG_SINK"), "logger") == 0) {
+            sSelfErrorHandler.init();
+            setErrorHandler(&sSelfErrorHandler);
+        }
+    }
     if (getenv("ELOG_TRACE") != nullptr) {
         if (strcmp(getenv("ELOG_TRACE"), "TRUE") == 0) {
             setTraceMode(true);

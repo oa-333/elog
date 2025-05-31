@@ -22,6 +22,7 @@
 
 #include <climits>
 #include <cstring>
+#include <format>
 #include <iomanip>
 #include <unordered_map>
 
@@ -119,15 +120,16 @@ static bool applyFieldSelectorConstructorRegistration() {
     return true;
 }
 
-ELogFieldSelector* constructFieldSelector(const char* name, int justify) {
-    ELogFieldSelectorConstructorMap::iterator itr = sFieldSelectorConstructorMap.find(name);
+ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec) {
+    ELogFieldSelectorConstructorMap::iterator itr =
+        sFieldSelectorConstructorMap.find(fieldSpec.m_name);
     if (itr == sFieldSelectorConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid field selector %s: not found", name);
+        ELOG_REPORT_ERROR("Invalid field selector %s: not found", fieldSpec.m_name.c_str());
         return nullptr;
     }
 
     ELogFieldSelectorConstructor* constructor = itr->second;
-    ELogFieldSelector* fieldSelector = constructor->constructFieldSelector(justify);
+    ELogFieldSelector* fieldSelector = constructor->constructFieldSelector(fieldSpec);
     if (fieldSelector == nullptr) {
         ELOG_REPORT_ERROR("Failed to create field selector, out of memory");
     }
@@ -253,84 +255,71 @@ const char* getCurrentThreadNameField() { return sThreadName; }
 
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveStaticText(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text, m_justify);
+        receptor->receiveStaticText(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text, m_fieldSpec);
     } else {
-        receptor->receiveStringField(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text, m_justify);
+        receptor->receiveStringField(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text, m_fieldSpec);
     }
 }
 
 void ELogRecordIdSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveRecordId(getTypeId(), record.m_logRecordId, m_justify);
+        receptor->receiveRecordId(getTypeId(), record.m_logRecordId, m_fieldSpec);
     } else {
-        receptor->receiveIntField(getTypeId(), record.m_logRecordId, m_justify);
+        receptor->receiveIntField(getTypeId(), record.m_logRecordId, m_fieldSpec);
     }
 }
 
 void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    const uint32_t bufSize = 64;
-    char buffer[bufSize];
-#ifdef ELOG_MSVC
-    std::size_t offset = snprintf(
-        buffer, bufSize, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u", record.m_logTime.wYear,
-        record.m_logTime.wMonth, record.m_logTime.wDay, record.m_logTime.wHour,
-        record.m_logTime.wMinute, record.m_logTime.wSecond, record.m_logTime.wMilliseconds);
-    receptor->receiveTimeField(getTypeId(), record.m_logTime, buffer, m_justify);
-#else
-    time_t timer = record.m_logTime.tv_sec;
-    struct tm* tm_info = localtime(&timer);
-    std::size_t offset = strftime(buffer, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
-    offset += snprintf(buffer + offset, bufSize - offset, "%.3u",
-                       (unsigned)(record.m_logTime.tv_usec / 1000));
-    receptor->receiveTimeField(getTypeId(), record.m_logTime, buffer, m_justify);
-#endif
+    auto timePoint = std::chrono::time_point_cast<std::chrono::milliseconds>(record.m_logTime);
+    std::string timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", timePoint);
+    receptor->receiveTimeField(getTypeId(), record.m_logTime, timeStr.c_str(), m_fieldSpec);
 }
 
 void ELogHostNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveHostName(getTypeId(), hostName, m_justify);
+        receptor->receiveHostName(getTypeId(), hostName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), hostName, m_justify);
+        receptor->receiveStringField(getTypeId(), hostName, m_fieldSpec);
     }
 }
 
 void ELogUserNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveUserName(getTypeId(), userName, m_justify);
+        receptor->receiveUserName(getTypeId(), userName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), userName, m_justify);
+        receptor->receiveStringField(getTypeId(), userName, m_fieldSpec);
     }
 }
 
 void ELogProgramNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveProgramName(getTypeId(), progName, m_justify);
+        receptor->receiveProgramName(getTypeId(), progName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), progName, m_justify);
+        receptor->receiveStringField(getTypeId(), progName, m_fieldSpec);
     }
 }
 
 void ELogProcessIdSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveProcessId(getTypeId(), pid, m_justify);
+        receptor->receiveProcessId(getTypeId(), pid, m_fieldSpec);
     } else {
-        receptor->receiveIntField(getTypeId(), pid, m_justify);
+        receptor->receiveIntField(getTypeId(), pid, m_fieldSpec);
     }
 }
 
 void ELogThreadIdSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveThreadId(getTypeId(), record.m_threadId, m_justify);
+        receptor->receiveThreadId(getTypeId(), record.m_threadId, m_fieldSpec);
     } else {
-        receptor->receiveIntField(getTypeId(), record.m_threadId, m_justify);
+        receptor->receiveIntField(getTypeId(), record.m_threadId, m_fieldSpec);
     }
 }
 
 void ELogThreadNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveThreadName(getTypeId(), sThreadName, m_justify);
+        receptor->receiveThreadName(getTypeId(), sThreadName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), sThreadName, m_justify);
+        receptor->receiveStringField(getTypeId(), sThreadName, m_fieldSpec);
     }
 }
 
@@ -341,9 +330,9 @@ void ELogSourceSelector::selectField(const ELogRecord& record, ELogFieldReceptor
         logSourceName = logSource->getQualifiedName();
     }
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveLogSourceName(getTypeId(), logSourceName, m_justify);
+        receptor->receiveLogSourceName(getTypeId(), logSourceName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), logSourceName, m_justify);
+        receptor->receiveStringField(getTypeId(), logSourceName, m_fieldSpec);
     }
 }
 
@@ -354,45 +343,45 @@ void ELogModuleSelector::selectField(const ELogRecord& record, ELogFieldReceptor
         moduleName = logSource->getModuleName();
     }
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveModuleName(getTypeId(), moduleName, m_justify);
+        receptor->receiveModuleName(getTypeId(), moduleName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), moduleName, m_justify);
+        receptor->receiveStringField(getTypeId(), moduleName, m_fieldSpec);
     }
 }
 
 void ELogFileSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveFileName(getTypeId(), record.m_file, m_justify);
+        receptor->receiveFileName(getTypeId(), record.m_file, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), record.m_file, m_justify);
+        receptor->receiveStringField(getTypeId(), record.m_file, m_fieldSpec);
     }
 }
 
 void ELogLineSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveLineNumber(getTypeId(), record.m_line, m_justify);
+        receptor->receiveLineNumber(getTypeId(), record.m_line, m_fieldSpec);
     } else {
-        receptor->receiveIntField(getTypeId(), record.m_line, m_justify);
+        receptor->receiveIntField(getTypeId(), record.m_line, m_fieldSpec);
     }
 }
 
 void ELogFunctionSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveFunctionName(getTypeId(), record.m_function, m_justify);
+        receptor->receiveFunctionName(getTypeId(), record.m_function, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), record.m_function, m_justify);
+        receptor->receiveStringField(getTypeId(), record.m_function, m_fieldSpec);
     }
 }
 
 void ELogLevelSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    receptor->receiveLogLevelField(getTypeId(), record.m_logLevel, m_justify);
+    receptor->receiveLogLevelField(getTypeId(), record.m_logLevel, m_fieldSpec);
 }
 
 void ELogMsgSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveLogMsg(getTypeId(), record.m_logMsg, m_justify);
+        receptor->receiveLogMsg(getTypeId(), record.m_logMsg, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), record.m_logMsg, m_justify);
+        receptor->receiveStringField(getTypeId(), record.m_logMsg, m_fieldSpec);
     }
 }
 

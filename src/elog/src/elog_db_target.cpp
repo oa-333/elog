@@ -202,7 +202,7 @@ bool ELogDbTarget::initConnection(int& slotId) {
     }
 
     if (!connectDb(slot.m_dbData)) {
-        ELOG_REPORT_ERROR("Failed to connect to %s", m_name.c_str());
+        ELOG_REPORT_ERROR("Failed to connect to %s", m_dbName.c_str());
         freeDbData(slot.m_dbData);
         slot.m_dbData = nullptr;
         freeSlot(slotId);

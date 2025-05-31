@@ -4,6 +4,7 @@
 #include "elog_db_schema_handler.h"
 #include "elog_error.h"
 #include "elog_file_schema_handler.h"
+#include "elog_mon_schema_handler.h"
 #include "elog_msgq_schema_handler.h"
 #include "elog_rpc_schema_handler.h"
 #include "elog_sys_schema_handler.h"
@@ -40,7 +41,8 @@ bool ELogSchemaManager::initSchemaHandlers() {
         !initSchemaHandler<ELogDbSchemaHandler>("db") ||
         !initSchemaHandler<ELogMsgQSchemaHandler>("msgq") ||
         !initSchemaHandler<ELogAsyncSchemaHandler>("async") ||
-        !initSchemaHandler<ELogRpcSchemaHandler>("rpc")) {
+        !initSchemaHandler<ELogRpcSchemaHandler>("rpc") ||
+        !initSchemaHandler<ELogMonSchemaHandler>("mon")) {
         return false;
     }
     return true;

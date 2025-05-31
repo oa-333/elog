@@ -9,7 +9,9 @@
 #include <sys/time.h>
 #endif
 
+#include "elog_field_spec.h"
 #include "elog_level.h"
+#include "elog_record.h"
 
 namespace elog {
 
@@ -50,75 +52,87 @@ public:
      */
 
     /** @brief Receives any static text found outside of log record field references. */
-    virtual void receiveStaticText(uint32_t typeId, const std::string& text, int justify) {
-        return receiveStringField(typeId, text, justify);
+    virtual void receiveStaticText(uint32_t typeId, const std::string& text,
+                                   const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, text, fieldSpec);
     }
 
     /** @brief Receives the log record id. */
-    virtual void receiveRecordId(uint32_t typeId, uint64_t recordId, int justify) {
-        return receiveIntField(typeId, recordId, justify);
+    virtual void receiveRecordId(uint32_t typeId, uint64_t recordId,
+                                 const ELogFieldSpec& fieldSpec) {
+        return receiveIntField(typeId, recordId, fieldSpec);
     }
 
     /** @brief Receives the host name. */
-    virtual void receiveHostName(uint32_t typeId, const std::string& hostName, int justify) {
-        return receiveStringField(typeId, hostName, justify);
+    virtual void receiveHostName(uint32_t typeId, const std::string& hostName,
+                                 const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, hostName, fieldSpec);
     }
 
     /** @brief Receives the user name. */
-    virtual void receiveUserName(uint32_t typeId, const std::string& userName, int justify) {
-        return receiveStringField(typeId, userName, justify);
+    virtual void receiveUserName(uint32_t typeId, const std::string& userName,
+                                 const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, userName, fieldSpec);
     }
 
     /** @brief Receives the program name. */
-    virtual void receiveProgramName(uint32_t typeId, const std::string& programName, int justify) {
-        return receiveStringField(typeId, programName, justify);
+    virtual void receiveProgramName(uint32_t typeId, const std::string& programName,
+                                    const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, programName, fieldSpec);
     }
 
     /** @brief Receives the process id. */
-    virtual void receiveProcessId(uint32_t typeId, uint64_t processId, int justify) {
-        return receiveIntField(typeId, processId, justify);
+    virtual void receiveProcessId(uint32_t typeId, uint64_t processId,
+                                  const ELogFieldSpec& fieldSpec) {
+        return receiveIntField(typeId, processId, fieldSpec);
     }
 
     /** @brief Receives the thread id. */
-    virtual void receiveThreadId(uint32_t typeId, uint64_t threadId, int justify) {
-        return receiveIntField(typeId, threadId, justify);
+    virtual void receiveThreadId(uint32_t typeId, uint64_t threadId,
+                                 const ELogFieldSpec& fieldSpec) {
+        return receiveIntField(typeId, threadId, fieldSpec);
     }
 
     /** @brief Receives the thread name. */
-    virtual void receiveThreadName(uint32_t typeId, const std::string& threadName, int justify) {
-        return receiveStringField(typeId, threadName, justify);
+    virtual void receiveThreadName(uint32_t typeId, const std::string& threadName,
+                                   const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, threadName, fieldSpec);
     }
 
     /** @brief Receives the log source name. */
     virtual void receiveLogSourceName(uint32_t typeId, const std::string& logSourceName,
-                                      int justify) {
-        return receiveStringField(typeId, logSourceName, justify);
+                                      const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, logSourceName, fieldSpec);
     }
 
     /** @brief Receives the module name. */
-    virtual void receiveModuleName(uint32_t typeId, const std::string& moduleName, int justify) {
-        return receiveStringField(typeId, moduleName, justify);
+    virtual void receiveModuleName(uint32_t typeId, const std::string& moduleName,
+                                   const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, moduleName, fieldSpec);
     }
 
     /** @brief Receives the file name. */
-    virtual void receiveFileName(uint32_t typeId, const std::string& fileName, int justify) {
-        return receiveStringField(typeId, fileName, justify);
+    virtual void receiveFileName(uint32_t typeId, const std::string& fileName,
+                                 const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, fileName, fieldSpec);
     }
 
     /** @brief Receives the logging line. */
-    virtual void receiveLineNumber(uint32_t typeId, uint64_t lineNumber, int justify) {
-        return receiveIntField(typeId, lineNumber, justify);
+    virtual void receiveLineNumber(uint32_t typeId, uint64_t lineNumber,
+                                   const ELogFieldSpec& fieldSpec) {
+        return receiveIntField(typeId, lineNumber, fieldSpec);
     }
 
     /** @brief Receives the function name. */
     virtual void receiveFunctionName(uint32_t typeId, const std::string& functionName,
-                                     int justify) {
-        return receiveStringField(typeId, functionName, justify);
+                                     const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, functionName, fieldSpec);
     }
 
     /** @brief Receives the log msg. */
-    virtual void receiveLogMsg(uint32_t typeId, const std::string& logMsg, int justify) {
-        return receiveStringField(typeId, logMsg, justify);
+    virtual void receiveLogMsg(uint32_t typeId, const std::string& logMsg,
+                               const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, logMsg, fieldSpec);
     }
 
     /**
@@ -126,23 +140,20 @@ public:
      */
 
     /** @brief Receives a string log record field. */
-    virtual void receiveStringField(uint32_t typeId, const std::string& value, int justify) = 0;
+    virtual void receiveStringField(uint32_t typeId, const std::string& value,
+                                    const ELogFieldSpec& fieldSpec) = 0;
 
     /** @brief Receives an integer log record field. */
-    virtual void receiveIntField(uint32_t typeId, uint64_t value, int justify) = 0;
+    virtual void receiveIntField(uint32_t typeId, uint64_t value,
+                                 const ELogFieldSpec& fieldSpec) = 0;
 
-#ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
-    virtual void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
-                                  int justify) = 0;
-#else
-    /** @brief Receives a time log record field. */
-    virtual void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
-                                  int justify) = 0;
-#endif
+    virtual void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
+                                  const ELogFieldSpec& fieldSpec) = 0;
 
     /** @brief Receives a log level log record field. */
-    virtual void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) = 0;
+    virtual void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
+                                      const ELogFieldSpec& fieldSpec) = 0;
 
 protected:
     ELogFieldReceptor(ReceiveStyle receiveStyle = ReceiveStyle::RS_BY_TYPE)

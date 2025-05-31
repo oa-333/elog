@@ -169,8 +169,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                             const ELogTargetNestedSpec& targetNestedSpec) {
     // first make sure there ar no log target sub-specs
     if (targetNestedSpec.m_subSpec.find("log_target") != targetNestedSpec.m_subSpec.end()) {
-        ELOG_REPORT_ERROR("Message queue log target cannot have sub-targets: %s",
-                          logTargetCfg.c_str());
+        ELOG_REPORT_ERROR("Database log target cannot have sub-targets: %s", logTargetCfg.c_str());
         return nullptr;
     }
 

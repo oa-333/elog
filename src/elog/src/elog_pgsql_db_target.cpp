@@ -16,31 +16,25 @@ public:
     ~ELogPGSQLDbFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& field, int justify) {
+    void receiveStringField(uint32_t typeId, const std::string& field,
+                            const ELogFieldSpec& fieldSpec) {
         m_stringCache.push_back(field);
     }
 
     /** @brief Receives an integer log record field. */
-    void receiveIntField(uint32_t typeId, uint64_t field, int justify) final {
+    void receiveIntField(uint32_t typeId, uint64_t field, const ELogFieldSpec& fieldSpec) final {
         m_stringCache.push_back(std::to_string(field));
     }
 
-#ifdef ELOG_MSVC
     /** @brief Receives a time log record field. */
-    void receiveTimeField(uint32_t typeId, const SYSTEMTIME& sysTime, const char* timeStr,
-                          int justify) final {
+    void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
+                          const ELogFieldSpec& fieldSpec) final {
         m_stringCache.push_back(timeStr);
     }
-#else
-    /** @brief Receives a time log record field. */
-    void receiveTimeField(uint32_t typeId, const timeval& sysTime, const char* timeStr,
-                          int justify) final {
-        m_stringCache.push_back(timeStr);
-    }
-#endif
 
     /** @brief Receives a log level log record field. */
-    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, int justify) final {
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
+                              const ELogFieldSpec& fieldSpec) final {
         const char* logLevelStr = elogLevelToStr(logLevel);
         m_stringCache.push_back(logLevelStr);
     }

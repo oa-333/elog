@@ -40,6 +40,8 @@ protected:
 
     bool parseFormatSpec(const std::string& formatSpec);
 
+    bool parseFieldSpec(const std::string& fieldSpecStr, ELogFieldSpec& fieldSpec);
+
     /**
      * @brief Select log record fields into a receptor.
      * @param logRecord The log record to format.
@@ -53,7 +55,7 @@ protected:
     // determined by derived classes
     virtual bool handleText(const std::string& text);
 
-    virtual bool handleField(const char* fieldName, int justify);
+    virtual bool handleField(const ELogFieldSpec& fieldSpec);
 
     std::vector<ELogFieldSelector*> m_fieldSelectors;
 };

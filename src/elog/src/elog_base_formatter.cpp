@@ -36,22 +36,12 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
             ELOG_REPORT_ERROR("Missing closing brace in log line format specification");
             return false;
         }
-        std::string fieldName = formatSpec.substr(pos + 2, closePos - pos - 2);
-
-        int justify = 0;
-        std::string::size_type colonPos = fieldName.find(':');
-        if (colonPos != std::string::npos) {
-            try {
-                justify = std::stoi(fieldName.substr(colonPos + 1).c_str());
-            } catch (std::exception& e) {
-                ELOG_REPORT_ERROR(
-                    "WARN: Invalid justification number encountered, while parsing field selector "
-                    "%s",
-                    fieldName.c_str());
-            }
-            fieldName = fieldName.substr(0, colonPos);
+        std::string fieldSpecStr = formatSpec.substr(pos + 2, closePos - pos - 2);
+        ELogFieldSpec fieldSpec;
+        if (!parseFieldSpec(fieldSpecStr, fieldSpec)) {
+            return false;
         }
-        if (!handleField(fieldName.c_str(), justify)) {
+        if (!handleField(fieldSpec)) {
             return false;
         }
 
@@ -63,6 +53,23 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
             return false;
         }
     }
+    return true;
+}
+
+bool ELogBaseFormatter::parseFieldSpec(const std::string& fieldSpecStr, ELogFieldSpec& fieldSpec) {
+    fieldSpec.m_justify = 0;
+    std::string::size_type colonPos = fieldSpecStr.find(':');
+    if (colonPos != std::string::npos) {
+        try {
+            fieldSpec.m_justify = std::stoi(fieldSpecStr.substr(colonPos + 1).c_str());
+        } catch (std::exception& e) {
+            ELOG_REPORT_ERROR(
+                "WARN: Invalid justification number encountered, while parsing field selector %s",
+                fieldSpecStr.c_str());
+            return false;
+        }
+    }
+    fieldSpec.m_name = fieldSpecStr.substr(0, colonPos);
     return true;
 }
 
@@ -78,8 +85,8 @@ bool ELogBaseFormatter::handleText(const std::string& text) {
     return true;
 }
 
-bool ELogBaseFormatter::handleField(const char* fieldName, int justify) {
-    ELogFieldSelector* fieldSelector = constructFieldSelector(fieldName, justify);
+bool ELogBaseFormatter::handleField(const ELogFieldSpec& fieldSpec) {
+    ELogFieldSelector* fieldSelector = constructFieldSelector(fieldSpec);
     if (fieldSelector == nullptr) {
         return false;
     }

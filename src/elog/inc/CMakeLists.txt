@@ -25,17 +25,22 @@ target_sources(
             elog_filter.h
             elog_flush_policy.h
             elog_formatter.h
+            elog_grafana_json_target.h
+            elog_grafana_target.h
             elog_grpc_target.h
             elog_kafka_msgq_target.h
             elog_level.h
             elog_logger.h
-            elog_msgq_formatter.h
+            elog_mon_schema_handler.h
+            elog_mon_target_provider.h
+            elog_mon_target.h
             elog_msgq_schema_handler.h
             elog_msgq_target.h
             elog_msgq_target_provider.h
             elog_mysql_db_target.h
             elog_pgsql_db_target.h
             elog_private_logger.h
+            elog_props_formatter.h
             elog_props.h
             elog_quantum_target.h
             elog_queued_target.h

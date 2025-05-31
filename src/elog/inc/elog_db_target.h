@@ -39,13 +39,13 @@ public:
     };
 
 protected:
-    ELogDbTarget(const char* name, const char* rawInsertStatement,
+    ELogDbTarget(const char* dbName, const char* rawInsertStatement,
                  ELogDbFormatter::QueryStyle queryStyle,
                  ThreadModel threadModel = ThreadModel::TM_LOCK,
                  uint32_t maxThreads = ELOG_DB_MAX_THREADS,
                  uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
         : ELogTarget("db"),
-          m_name(name),
+          m_dbName(dbName),
           m_formatter(queryStyle),
           m_rawInsertStatement(rawInsertStatement),
           m_insertStatementParsed(false),
@@ -116,7 +116,7 @@ protected:
 
 private:
     // identification
-    std::string m_name;
+    std::string m_dbName;
 
     // insert statement parsing members
     ELogDbFormatter m_formatter;

@@ -164,11 +164,7 @@ void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
     logRecord.m_file = file;
     logRecord.m_line = line;
     logRecord.m_function = function;
-#ifdef ELOG_MSVC
-    ::GetSystemTime(&logRecord.m_logTime);
-#else
-    gettimeofday(&logRecord.m_logTime, NULL);
-#endif
+    logRecord.m_logTime = std::chrono::system_clock::now();
     logRecord.m_threadId = getCurrentThreadId();
     logRecord.m_sourceId = m_logSource->getId();
 }

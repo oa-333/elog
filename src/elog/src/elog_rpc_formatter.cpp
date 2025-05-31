@@ -18,16 +18,16 @@ bool ELogRpcFormatter::handleText(const std::string& text) {
     return true;
 }
 
-bool ELogRpcFormatter::handleField(const char* fieldName, int justify) {
+bool ELogRpcFormatter::handleField(const ELogFieldSpec& fieldSpec) {
     // we expect alternating header name and field, so verify that
     if (m_lastFieldType == FieldType::FT_FIELD) {
         ELOG_REPORT_ERROR(
             "Invalid RPC parameter specification, expected comma between parameters: %s",
-            fieldName);
+            fieldSpec.m_name.c_str());
         return false;
     }
     m_lastFieldType = FieldType::FT_FIELD;
-    return ELogBaseFormatter::handleField(fieldName, justify);
+    return ELogBaseFormatter::handleField(fieldSpec);
 }
 
 }  // namespace elog

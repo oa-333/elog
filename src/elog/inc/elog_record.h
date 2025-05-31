@@ -1,6 +1,7 @@
 #ifndef __ELOG_RECORD_H__
 #define __ELOG_RECORD_H__
 
+#include <chrono>
 #include <cstdint>
 #include <ctime>
 
@@ -8,16 +9,14 @@
 
 namespace elog {
 
+typedef std::chrono::system_clock::time_point ELogTime;
+
 struct ELOG_API ELogRecord {
     /** @var Log record id. */
     uint64_t m_logRecordId;
 
     /** @var Log time. */
-#ifdef ELOG_MSVC
-    SYSTEMTIME m_logTime;
-#else
-    struct timeval m_logTime;
-#endif
+    ELogTime m_logTime;
 
     // NOTE: host name, user name and process id do not require a field
 
@@ -48,7 +47,7 @@ struct ELOG_API ELogRecord {
     /** @brief Default constructor. */
     ELogRecord()
         : m_logRecordId(0),
-          m_logTime({0, 0}),
+          m_logTime(std::chrono::system_clock::now()),
           m_threadId(0),
           m_sourceId(0),
           m_logLevel(ELEVEL_INFO),

@@ -168,7 +168,7 @@ static ELogFormatter* sGlobalFormatter = nullptr;
 static ELogFlushPolicy* sFlushPolicy = nullptr;
 
 bool ELogSystem::initGlobals() {
-    ELogError::initError();
+    // ELogError::initError();
     if (!initFieldSelectors()) {
         ELOG_REPORT_ERROR("Failed to initialize field selectors");
         return false;
@@ -238,6 +238,8 @@ bool ELogSystem::initGlobals() {
     }
     sDbgUtilLogHandler.applyLogLevelCfg();
 #endif
+
+    ELogError::initError();
 
     return true;
 }

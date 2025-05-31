@@ -21,17 +21,21 @@ target_sources(elog PRIVATE
     ./elog_filter.cpp
     ./elog_flush_policy.cpp
     ./elog_formatter.cpp
+    ./elog_grafana_json_target.cpp
+    ./elog_grafana_target_provider.cpp
+    ./elog_grafana_target.cpp
     ./elog_grpc_target_provider.cpp
     ./elog_kafka_msgq_target.cpp
     ./elog_kafka_msgq_target_provider.cpp
     ./elog_level.cpp
     ./elog_logger.cpp
-    ./elog_msgq_formatter.cpp
+    ./elog_mon_schema_handler.cpp
     ./elog_msgq_schema_handler.cpp
     ./elog_mysql_db_target.cpp
     ./elog_mysql_db_target_provider.cpp
     ./elog_pgsql_db_target.cpp
     ./elog_pgsql_db_target_provider.cpp
+    ./elog_props_formatter.cpp
     ./elog_quantum_target.cpp
     ./elog_quantum_target_provider.cpp
     ./elog_queued_target.cpp

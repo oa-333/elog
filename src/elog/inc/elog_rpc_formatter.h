@@ -21,7 +21,7 @@ public:
 protected:
     bool handleText(const std::string& text) override;
 
-    bool handleField(const char* fieldName, int justify) override;
+    bool handleField(const ELogFieldSpec& fieldSpec) override;
 
 private:
     enum class FieldType : uint32_t { FT_NONE, FT_COMMA, FT_FIELD };
