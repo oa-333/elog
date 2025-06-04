@@ -68,7 +68,7 @@ do
         OPTS+=" -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON"
     elif [ "$conn" == "postgresql" ]; then
         echo "[INFO] Adding PostgreSQL connector"
-        OPTS+=" -DELOG_ENABLE_POSTGRESQL_DB_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_PGSQL_DB_CONNECTOR=ON"
     elif [ "$conn" == "kafka" ]; then
         echo "[INFO] Adding Kafka connector"
         OPTS+=" -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON"
@@ -81,7 +81,7 @@ do
     elif [ "$conn" == "all" ]; then
         echo "[INFO] Enabling all connectors"
         OPTS+=" -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON"
-        OPTS+=" -DELOG_ENABLE_POSTGRESQL_DB_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_PGSQL_DB_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_GRPC_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_GRAFANA_CONNECTOR=ON"
@@ -109,7 +109,7 @@ fi
 
 # build phase
 echo "[INFO] Building target elog"
-cmake --build . -j
+cmake --build . -j --verbose
 if [ $? -ne 0 ]; then
     echo "[ERROR] Build phase failed, see errors above, aborting"
     popd > /dev/null

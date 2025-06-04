@@ -10,11 +10,12 @@ The ELog library provides the following notable features:
     - Allowing for multiple log targets (i.e. "log appenders"), including file, syslog, stderr, stdout
 - Flexible and rich in features
     - Configurable logger hierarchy, log line format, flush policies, filtering, rate limiting, compound log targets and more
+    - **Supports dumping to log call stack (current thread or all threads) with file and line number, voluntarily or due to unhandled signal**
 - High performance
     - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free, scalable in multi-threaded scenarios)
     - Check out the [benchmarks](#Benchmarks) below
 - Connectivity to external systems
-    - **Kafka, PostgreSQL**, SQLite, MySQL
+    - **Grafana Loki, Kafka, PostgreSQL**, SQLite, MySQL
 - Multiple platform support
     - **Linux, Windows, MinGW**
 - Designed for external extendibility
@@ -35,10 +36,11 @@ Additional features:
 
 Planned Features:
 
+- Connectivity to SEntry, Kibana and other monitoring/observability tools
 - Connectivity to Windows Event Log
 - Connectivity to SMTP
 - Support on MacOS
-- Optional handling of signals (configurable) with full call stack dumping (including files and lines)
+- Optional handling of signals
 - Going fully configurable from file or properties array
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)

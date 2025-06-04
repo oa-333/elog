@@ -116,4 +116,4 @@ ELogMonTarget* ELogGrafanaTargetProvider::loadTarget(const std::string& logTarge
 
 }  // namespace elog
 
-#endif  // ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+#endif  // ELOG_ENABLE_GRAFANA_CONNECTOR

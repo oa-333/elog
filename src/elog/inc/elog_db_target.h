@@ -57,6 +57,12 @@ protected:
 
     ~ELogDbTarget() override {}
 
+    /**
+     * @brief Notifies the log target that it has turned thread-safe. Derived class may take
+     * special measures. The DB log target removes all threading considerations in this case.
+     */
+    void onThreadSafe() override { m_threadModel = ThreadModel::TM_NONE; }
+
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() override;
 
@@ -109,6 +115,7 @@ protected:
     /** @brief Initializes database access object. */
     virtual bool connectDb(void* dbData) = 0;
 
+    /** @brief Terminates database access object. */
     virtual bool disconnectDb(void* dbData) = 0;
 
     /** @brief Sends a log record to a log target. */

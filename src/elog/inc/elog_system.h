@@ -17,12 +17,6 @@
 
 namespace elog {
 
-/** @typedef Log target identifier type. */
-typedef uint32_t ELogTargetId;
-
-/** @def Invalid log target identifier value. */
-#define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
-
 // forward declaration
 class ELOG_API ELogSpecTokenizer;
 
@@ -361,6 +355,11 @@ public:
     static ELogTarget* getLogTarget(const char* logTargetName);
 
     /**
+     * @brief Retrieves a log target id by name. Returns @ref ELOG_INVALID_TARGET_ID if not found.
+     */
+    static ELogTargetId getLogTargetId(const char* logTargetName);
+
+    /**
      * @brief Removes an existing log target.
      * @note This API call is not thread-safe, and is recommended to take place during application
      * termination phase.
@@ -506,8 +505,10 @@ public:
     /**
      * @brief Logs a log record. In essence to log record is sent to all registered log targets.
      * @param logRecord The lgo record to process.
+     * @param logTargetId Optionally restricts the message to be directed to a specific log target.
      */
-    static void log(const ELogRecord& logRecord);
+    static void log(const ELogRecord& logRecord,
+                    ELogTargetId restrictTargetId = ELOG_INVALID_TARGET_ID);
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     /**
@@ -734,8 +735,11 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @note The error code for the system call is obtained through @ref errno. If you wish to provide
  * another error code then consider calling @ref ELOG_SYS_ERROR_NUM() instead.
  */
-#define ELOG_SYS_ERROR_EX(logger, syscall, fmt, ...) \
-    ELOG_SYS_ERROR_NUM_EX(logger, syscall, errno, fmt, ##__VA_ARGS__)
+#define ELOG_SYS_ERROR_EX(logger, syscall, fmt, ...)                        \
+    {                                                                       \
+        int sysErr = errno;                                                 \
+        ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
 
 #ifdef ELOG_WINDOWS
 /**
@@ -889,7 +893,11 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @note The error code for the system call is obtained through @ref errno. If you wish to provide
  * another error code then consider calling @ref ELOG_SYS_ERROR_NUM() instead.
  */
-#define ELOG_SYS_ERROR(syscall, fmt, ...) ELOG_SYS_ERROR_NUM(syscall, errno, fmt, ##__VA_ARGS__)
+#define ELOG_SYS_ERROR(syscall, fmt, ...)                        \
+    {                                                            \
+        int sysErr = errno;                                      \
+        ELOG_SYS_ERROR_NUM(syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
 
 #ifdef ELOG_WINDOWS
 /**

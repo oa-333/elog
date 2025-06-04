@@ -82,6 +82,12 @@ public:
     /** @brief Queries whether the logger can issue log message with the given level. */
     inline bool canLog(ELogLevel logLevel) const { return m_logSource->canLog(logLevel); }
 
+    /** @brief Retrieves the controlling log source. */
+    inline ELogSource* getLogSource() { return m_logSource; }
+
+    /** @brief Retrieves the controlling log source. */
+    inline ELogSource* getLogSource() const { return m_logSource; }
+
 protected:
     /**
      * @brief Constructor
@@ -94,6 +100,12 @@ protected:
 
     /** @brief Retrieves the underlying log record builder. */
     virtual const ELogRecordBuilder& getRecordBuilder() const = 0;
+
+    /** @brief Push current builder on builder stack and open a new builder. */
+    virtual void pushRecordBuilder() = 0;
+
+    /** @brief Pop current builder from builder stack and restore previous builder. */
+    virtual void popRecordBuilder() = 0;
 
 private:
     /** @var The originating log source. */

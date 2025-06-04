@@ -26,6 +26,11 @@ public:
      */
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr)
         : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
+        if (fileHandle == stderr) {
+            setName("stderr");
+        } else if (fileHandle == stdout) {
+            setName("stdout");
+        }
         setNativelyThreadSafe();
         setAddNewLine(true);
     }

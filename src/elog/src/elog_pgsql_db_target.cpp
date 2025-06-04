@@ -73,15 +73,17 @@ bool ELogPGSQLDbTarget::connectDb(void* dbData) {
                           m_connString.c_str());
         return false;
     }
+    ELOG_REPORT_TRACE("Connected to PG");
 
     // check connection state
     if (PQstatus(pgsqlDbData->m_conn) != CONNECTION_OK) {
-        ELOG_REPORT_ERROR("Failed to open PostgreSQL db connection with connection string%s: %s",
+        ELOG_REPORT_ERROR("Failed to open PostgreSQL db connection with connection string '%s': %s",
                           m_connString.c_str(), PQerrorMessage(pgsqlDbData->m_conn));
         PQfinish(pgsqlDbData->m_conn);
         pgsqlDbData->m_conn = nullptr;
         return false;
     }
+    ELOG_REPORT_TRACE("PG connection status is OK");
 
     // prepare statement
     // NOTE: according to libpq documentation, PGresult can return null, so we must be cautious
@@ -100,6 +102,7 @@ bool ELogPGSQLDbTarget::connectDb(void* dbData) {
         return false;
     }
     PQclear(res);
+    ELOG_REPORT_TRACE("PG connection and prepared statement are ready");
     return true;
 }
 
@@ -154,7 +157,14 @@ bool ELogPGSQLDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
             "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
             statusStr, logMsg.c_str());
         PQclear(res);
-        return false;
+        // NOTE: returning false here will cause the DB connection to be dropped and trigger
+        // reconnection, so unless we are sure that the database connection is dead we should avoid
+        // returning false here
+        ConnStatusType connStatus = PQstatus(pgsqlDbData->m_conn);
+        if (connStatus == CONNECTION_BAD) {
+            return false;
+        }
+        return true;
     }
     PQclear(res);
     return true;
@@ -308,12 +318,12 @@ ELogPGSQLDbTarget::PGSQLDbData* ELogPGSQLDbTarget::validateConnectionState(void*
     if (shouldBeConnected && pgsqlDbData->m_conn == nullptr) {
         ELOG_REPORT_ERROR(
             "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
-            "connection object is null)");
+            "PG connection is null)");
         return nullptr;
     } else if (!shouldBeConnected && pgsqlDbData->m_conn != nullptr) {
         ELOG_REPORT_ERROR(
             "Cannot connect to PostgreSQL database, invalid connection state (internal error, "
-            "connection object is not null)");
+            "PG connection is NOT null as expected)");
         return nullptr;
     }
     return pgsqlDbData;
@@ -321,4 +331,4 @@ ELogPGSQLDbTarget::PGSQLDbData* ELogPGSQLDbTarget::validateConnectionState(void*
 
 }  // namespace elog
 
-#endif  // ELOG_ENABLE_MYSQL_DB_CONNECTOR
+#endif  // ELOG_ENABLE_PGSQL_DB_CONNECTOR

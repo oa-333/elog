@@ -12,6 +12,7 @@ target_sources(
             elog_buffer.h
             elog_buffered_file_target.h
             elog_buffered_file_writer.h
+            elog_common_def.h
             elog_db_formatter.h
             elog_db_schema_handler.h
             elog_db_target.h
@@ -21,6 +22,7 @@ target_sources(
             elog_error_handler.h
             elog_field_receptor.h
             elog_field_selector.h
+            elog_field_spec.h
             elog_file_target.h
             elog_filter.h
             elog_flush_policy.h

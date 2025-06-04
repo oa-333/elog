@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "elog_common_def.h"
 #include "elog_record.h"
 
 namespace elog {
@@ -79,6 +80,7 @@ public:
     inline void setExternallyThreadSafe() {
         m_isExternallyThreadSafe = true;
         m_requiresLock = false;
+        onThreadSafe();
     }
 
     /** @brief Order the log target to start (required for threaded targets). */
@@ -176,10 +178,17 @@ protected:
     inline void setNativelyThreadSafe() {
         m_isNativelyThreadSafe = true;
         m_requiresLock = false;
+        onThreadSafe();
     }
 
     /** @brief Queries whether the log target is exected in a thread safe environment. */
     inline bool isExternallyThreadSafe() const { return m_isExternallyThreadSafe; }
+
+    /**
+     * @brief Notifies the log target that it has turned thread-safe. Derived class may take
+     * special measures.
+     */
+    virtual void onThreadSafe() {}
 
     /** @brief Order the log target to start (thread-safe). */
     virtual bool startLogTarget() = 0;

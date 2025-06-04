@@ -1,5 +1,6 @@
 #include "elog_error.h"
 
+#include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -14,6 +15,8 @@
 #endif
 
 namespace elog {
+
+static std::atomic<ELogTargetId> sStderrTargetId = ELOG_INVALID_TARGET_ID;
 
 class ELogDefaultErrorHandler : public ELogErrorHandler {
 public:
@@ -41,21 +44,50 @@ public:
         if (m_logSource != nullptr) {
             m_logger = m_logSource->createSharedLogger();
         }
+        // NOTE: it is too soon to restrict this logger to stderr, so we postpone it to a later
+        // phase
     }
 
-    virtual void setTraceMode(bool enableTrace) {
+    void setTraceMode(bool enableTrace) final {
         m_logSource->setLogLevel(enableTrace ? ELEVEL_TRACE : ELEVEL_INFO,
                                  ELogSource::PropagateMode::PM_SET);
         ELogErrorHandler::setTraceMode(enableTrace);
     }
 
-    void onError(const char* msg) final { ELOG_ERROR_EX(m_logger, msg); }
+    void onError(const char* msg) final {
+        if (restrictToStdErr()) {
+            ELOG_ERROR_EX(m_logger, msg);
+        }
+    }
 
-    void onTrace(const char* msg) final { ELOG_TRACE_EX(m_logger, msg); }
+    void onTrace(const char* msg) final {
+        if (restrictToStdErr()) {
+            ELOG_TRACE_EX(m_logger, msg);
+        }
+    }
 
 private:
     ELogSource* m_logSource;
     ELogLogger* m_logger;
+
+    inline bool restrictToStdErr() {
+        ELogTargetId logTargetId = sStderrTargetId.load(std::memory_order_relaxed);
+        if (logTargetId == ELOG_INVALID_TARGET_ID) {
+            ELogTargetId stderrTargetId = ELogSystem::getLogTargetId("stderr");
+            if (stderrTargetId != ELOG_INVALID_TARGET_ID) {
+                if (sStderrTargetId.compare_exchange_strong(logTargetId, stderrTargetId,
+                                                            std::memory_order_seq_cst)) {
+                    fprintf(stderr, "stderr target id = %u\n", stderrTargetId);
+                    m_logSource->restrictToLogTarget(stderrTargetId);
+                    logTargetId = stderrTargetId;
+                }
+                // if we failed to CAS it is possible that that the thread that made CAS will
+                // experience context switch before actually restricting the log source, so this
+                // thread must wait for next round
+            }
+        }
+        return (logTargetId != ELOG_INVALID_TARGET_ID);
+    }
 };
 
 static ELogDefaultErrorHandler sDefaultErrorHandler;
@@ -103,7 +135,9 @@ void ELogError::reportSysErrorCode(const char* sysCall, int errCode, const char*
 }
 
 void ELogError::reportTrace(const char* fmt, ...) {
-    if (sErrorHandler->isTraceEnabled()) {
+    static thread_local bool isTracing = false;
+    if (sErrorHandler->isTraceEnabled() && !isTracing) {
+        isTracing = true;
         va_list ap;
         va_start(ap, fmt);
 
@@ -122,6 +156,7 @@ void ELogError::reportTrace(const char* fmt, ...) {
         va_end(apCopy);
 
         va_end(ap);
+        isTracing = false;
     }
 }
 

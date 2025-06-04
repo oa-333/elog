@@ -63,6 +63,6 @@ private:
 
 }  // namespace elog
 
-#endif  // ELOG_ENABLE_MYSQL_DB_CONNECTOR
+#endif  // ELOG_ENABLE_PGSQL_DB_CONNECTOR
 
 #endif  // __ELOG_PGSQL_DB_TARGET_H__

@@ -12,7 +12,7 @@ namespace elog {
 
 class ELogSysLogTarget : public ELogTarget {
 public:
-    ELogSysLogTarget() : ELogTarget("syslog") {}
+    ELogSysLogTarget() : ELogTarget("syslog") { setName("syslog"); }
     ELogSysLogTarget(const ELogSysLogTarget&) = delete;
     ELogSysLogTarget(ELogSysLogTarget&&) = delete;
 

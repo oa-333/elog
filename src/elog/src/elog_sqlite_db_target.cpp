@@ -89,6 +89,7 @@ bool ELogSQLiteDbTarget::connectDb(void* dbData) {
                           sqlite3_errstr(res));
         return false;
     }
+    ELOG_REPORT_TRACE("Connected to SQLite3");
 
     const std::string& processedInsertStatement = getProcessedInsertStatement();
     res =
@@ -101,6 +102,7 @@ bool ELogSQLiteDbTarget::connectDb(void* dbData) {
         sqliteDbData->m_connection = nullptr;
         return false;
     }
+    ELOG_REPORT_TRACE("SQLite3 connection and prepared statement are ready");
     return true;
 }
 

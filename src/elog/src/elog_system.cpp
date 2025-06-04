@@ -36,7 +36,10 @@ struct ELogLevelCfg {
     ELogSource* m_logSource;
     ELogLevel m_logLevel;
     ELogSource::PropagateMode m_propagationMode;
+#ifdef ELOG_ENABLE_STACK_TRACE
     uint32_t m_dbgUtilLoggerId;
+    dbgutil::LogSeverity m_severity;
+#endif
 };
 
 #ifdef ELOG_ENABLE_STACK_TRACE
@@ -87,7 +90,13 @@ public:
                 ELOG_REPORT_ERROR("Invalid dbgutil source %s log level: %s",
                                   qualifiedLoggerName.c_str(), envVarValue);
             } else {
-                m_logLevelCfg.push_back({logSource, logLevel, propagateMode, loggerId});
+                // we first set logger severity (in the end we will deal with propagation)
+                ELOG_REPORT_TRACE("Setting %s initial log level to %s (no propagation)",
+                                  logSource->getQualifiedName(), elogLevelToStr(logLevel),
+                                  (uint32_t)propagateMode);
+                logSource->setLogLevel(logLevel, propagateMode);
+                dbgutil::setLoggerSeverity(loggerId, severity);
+                m_logLevelCfg.push_back({logSource, logLevel, propagateMode, loggerId, severity});
             }
 
             severity = logLevelToSeverity(logLevel);
@@ -128,6 +137,9 @@ public:
             ELogLevel logLevel = severityToLogLevel(severity);
             if (logger->canLog(logLevel)) {
                 logger->logFormat(logLevel, "", 0, "", msg);
+            } else {
+                ELOG_TRACE("Discarded dbgutil log source %s message %s, severity %u",
+                           logger->getLogSource()->getQualifiedName(), msg, (unsigned)severity);
             }
         }
     }
@@ -139,7 +151,7 @@ public:
                               cfg.m_logSource->getQualifiedName(), elogLevelToStr(cfg.m_logLevel),
                               (uint32_t)cfg.m_propagationMode);
             cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
-            dbgutil::setLoggerSeverity(cfg.m_dbgUtilLoggerId, logLevelToSeverity(cfg.m_logLevel));
+            dbgutil::setLoggerSeverity(cfg.m_dbgUtilLoggerId, cfg.m_severity);
         }
     }
 
@@ -228,6 +240,8 @@ bool ELogSystem::initGlobals() {
         return false;
     }
 
+    ELogError::initError();
+
 #ifdef ELOG_ENABLE_STACK_TRACE
     // connect to debug util library
     dbgutil::DbgUtilErr rc = dbgutil::initDbgUtil(&sDbgUtilLogHandler, dbgutil::LS_INFO);
@@ -238,8 +252,6 @@ bool ELogSystem::initGlobals() {
     }
     sDbgUtilLogHandler.applyLogLevelCfg();
 #endif
-
-    ELogError::initError();
 
     return true;
 }
@@ -495,7 +507,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
                 ELOG_REPORT_ERROR("Invalid global log level: %s", prop.second.c_str());
                 return false;
             }
-            logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode, 0});
+            logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode});
             continue;
         }
 
@@ -830,6 +842,16 @@ ELogTarget* ELogSystem::getLogTarget(const char* logTargetName) {
     return nullptr;
 }
 
+ELogTargetId ELogSystem::getLogTargetId(const char* logTargetName) {
+    for (uint32_t logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
+        ELogTarget* logTarget = sLogTargets[logTargetId];
+        if (strcmp(logTarget->getName(), logTargetName) == 0) {
+            return logTargetId;
+        }
+    }
+    return ELOG_INVALID_TARGET_ID;
+}
+
 void ELogSystem::removeLogTarget(ELogTargetId targetId) {
     // be careful, if this is the last log target, we must put back stderr
     if (targetId >= sLogTargets.size()) {
@@ -1117,11 +1139,15 @@ void ELogSystem::logAppStackTrace(ELogLevel logLevel, const char* title, int ski
 }
 #endif
 
-void ELogSystem::log(const ELogRecord& logRecord) {
+void ELogSystem::log(const ELogRecord& logRecord,
+                     ELogTargetId restrictTargetId /* = ELOG_INVALID_TARGET_ID */) {
     bool logged = false;
-    for (ELogTarget* logTarget : sLogTargets) {
-        logTarget->log(logRecord);
-        logged = true;
+    for (uint32_t logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
+        ELogTarget* logTarget = sLogTargets[logTargetId];
+        if (restrictTargetId == ELOG_INVALID_TARGET_ID || logTargetId == restrictTargetId) {
+            logTarget->log(logRecord);
+            logged = true;
+        }
     }
 
     // by default, if no log target is defined yet, log is redirected to stderr

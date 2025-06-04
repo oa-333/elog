@@ -6,15 +6,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "elog_common_def.h"
 #include "elog_level.h"
 
 namespace elog {
 
+// forward declaration
 class ELogLogger;
-
-typedef uint32_t ELogSourceId;
-
-#define ELOG_INVALID_SOURCE_ID ((ELogSourceId) - 1)
 
 /**
  * @brief A log source represents a logical module with a designated log level, and managed loggers.
@@ -110,6 +108,12 @@ public:
         return static_cast<int>(logLevel) <= static_cast<int>(m_logLevel);
     }
 
+    /** @brief Restricts this log source to a specific log target. */
+    inline void restrictToLogTarget(ELogTargetId logTargetId) { m_logTargetId = logTargetId; }
+
+    /** @brief Retrieves the id of the log target to which this log source is restricted. */
+    inline ELogTargetId getRestrictLogTargetId() const { return m_logTargetId; }
+
     /**
      * @brief Obtains a logger that may be invoked by more than one thread. The logger is managed
      * by the log source and should not be deleted by the caller.
@@ -132,6 +136,7 @@ private:
     typedef std::unordered_map<std::string, ELogSource*> ChildMap;
     ChildMap m_children;
     std::unordered_set<ELogLogger*> m_loggers;
+    ELogTargetId m_logTargetId;
 
     ELogSource(ELogSourceId sourceId, const char* name, ELogSource* parent = nullptr,
                ELogLevel logLevel = ELEVEL_INFO);

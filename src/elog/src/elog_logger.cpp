@@ -45,67 +45,44 @@ void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const
                            const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    if (!isLogging()) {
-        startLogRecord(logLevel, file, line, function);
-        appendMsgV(fmt, ap);
-        finishLog();
-    } else {
-        fprintf(stderr,
-                "Attempt to log message while previous start-log call has not finished yet: ");
-        vfprintf(stderr, fmt, ap);
-        fputs("\n", stderr);
-        fflush(stderr);
+    if (isLogging()) {
+        pushRecordBuilder();
     }
+    startLogRecord(logLevel, file, line, function);
+    appendMsgV(fmt, ap);
+    finishLog();
     va_end(ap);
 }
 
 void ELogLogger::logNoFormat(ELogLevel logLevel, const char* file, int line, const char* function,
                              const char* msg) {
-    if (!isLogging()) {
-        startLogRecord(logLevel, file, line, function);
-        appendMsg(msg);
-        finishLog();
-    } else {
-        fprintf(stderr,
-                "Attempt to log unformatted message while previous start-log call has not finished "
-                "yet: ");
-        fputs(msg, stderr);
-        fputs("\n", stderr);
-        fflush(stderr);
+    if (isLogging()) {
+        pushRecordBuilder();
     }
+    startLogRecord(logLevel, file, line, function);
+    appendMsg(msg);
+    finishLog();
 }
 
 void ELogLogger::startLog(ELogLevel logLevel, const char* file, int line, const char* function,
                           const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    if (!isLogging()) {
-        startLogRecord(logLevel, file, line, function);
-        appendMsgV(fmt, ap);
-    } else {
-        fprintf(
-            stderr,
-            "Attempt to start log message while previous start-log call has not finished yet: ");
-        vfprintf(stderr, fmt, ap);
-        fputs("\n", stderr);
-        fflush(stderr);
+    if (isLogging()) {
+        pushRecordBuilder();
     }
+    startLogRecord(logLevel, file, line, function);
+    appendMsgV(fmt, ap);
     va_end(ap);
 }
 
 void ELogLogger::startLogNoFormat(ELogLevel logLevel, const char* file, int line,
                                   const char* function, const char* msg) {
-    if (!isLogging()) {
-        startLogRecord(logLevel, file, line, function);
-        appendMsg(msg);
-    } else {
-        fprintf(stderr,
-                "Attempt to start log unformatted message while previous start-log call has not "
-                "finished yet: ");
-        fputs(msg, stderr);
-        fputs("\n", stderr);
-        fflush(stderr);
+    if (isLogging()) {
+        pushRecordBuilder();
     }
+    startLogRecord(logLevel, file, line, function);
+    appendMsg(msg);
 }
 
 void ELogLogger::appendLog(const char* fmt, ...) {
@@ -144,11 +121,12 @@ void ELogLogger::finishLog() {
         // send to log targets
         const ELogRecord& logRecord = recordBuilder.getLogRecord();
         if (ELogSystem::filterLogMsg(logRecord)) {
-            ELogSystem::log(logRecord);
+            ELogSystem::log(logRecord, m_logSource->getRestrictLogTargetId());
         }
 
         // reset log record data
         recordBuilder.reset();
+        popRecordBuilder();
     } else {
         ELOG_REPORT_ERROR("attempt to end log message without start-log being issued first\n");
     }

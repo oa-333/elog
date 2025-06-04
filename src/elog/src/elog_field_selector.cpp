@@ -271,7 +271,8 @@ void ELogRecordIdSelector::selectField(const ELogRecord& record, ELogFieldRecept
 
 void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     auto timePoint = std::chrono::time_point_cast<std::chrono::milliseconds>(record.m_logTime);
-    std::string timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", timePoint);
+    std::chrono::zoned_time<std::chrono::milliseconds> zt(std::chrono::current_zone(), timePoint);
+    std::string timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", zt.get_local_time());
     receptor->receiveTimeField(getTypeId(), record.m_logTime, timeStr.c_str(), m_fieldSpec);
 }
 

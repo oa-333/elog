@@ -11,13 +11,14 @@ namespace elog {
 /** @brief Helper class for the ELogLogger. */
 class ELOG_API ELogRecordBuilder {
 public:
-    ELogRecordBuilder() : m_offset(0), m_bufferFull(false) {}
+    ELogRecordBuilder(ELogRecordBuilder* next = nullptr)
+        : m_offset(0), m_bufferFull(false), m_next(next) {}
     ~ELogRecordBuilder() {}
 
     inline const ELogRecord& getLogRecord() const { return m_logRecord; }
     inline ELogRecord& getLogRecord() { return m_logRecord; }
-
     inline uint32_t getOffset() const { return m_offset; }
+    inline ELogRecordBuilder* getNext() { return m_next; }
 
     /** @brief Finalizes the log record. */
     inline void finalize() {
@@ -62,6 +63,7 @@ private:
     uint32_t m_offset;
     bool m_bufferFull;
     ELogRecord m_logRecord;
+    ELogRecordBuilder* m_next;
 
     uint32_t elog_strncpy(char* dest, const char* src, uint32_t dest_len);
 };

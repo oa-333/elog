@@ -114,6 +114,7 @@
         "msgq",
         "MSVC",
         "MSYSTEM",
+        "PGSQL",
         "tname"
     ]
 }

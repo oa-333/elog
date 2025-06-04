@@ -3,7 +3,6 @@
 
 #include "elog_def.h"
 
-#define ELOG_ENABLE_GRAFANA_CONNECTOR
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 
 #include <nlohmann/json.hpp>

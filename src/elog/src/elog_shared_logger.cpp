@@ -1,5 +1,7 @@
 #include "elog_shared_logger.h"
 
+#include <cassert>
+
 namespace elog {
 
 // ATTENTION: the following thread local variables cannot be class members, because these causes
@@ -8,10 +10,32 @@ namespace elog {
 // some thread when thread exits, the destructor of the TLS variable runs with an object whose
 // contents is dead-land and the application crashes)
 
-static thread_local ELogRecordBuilder sRecordData;
+static thread_local ELogRecordBuilder sRecordBuilderHead;
+static thread_local ELogRecordBuilder* sRecordBuilder = &sRecordBuilderHead;
 
-ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() { return sRecordData; }
+ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() {
+    assert(sRecordBuilder != nullptr);
+    return *sRecordBuilder;
+}
 
-const ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() const { return sRecordData; }
+const ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() const {
+    assert(sRecordBuilder != nullptr);
+    return *sRecordBuilder;
+}
+
+void ELogSharedLogger::pushRecordBuilder() {
+    ELogRecordBuilder* recordBuilder = new (std::nothrow) ELogRecordBuilder(sRecordBuilder);
+    if (recordBuilder != nullptr) {
+        sRecordBuilder = recordBuilder;
+    }
+}
+
+void ELogSharedLogger::popRecordBuilder() {
+    if (sRecordBuilder != &sRecordBuilderHead) {
+        ELogRecordBuilder* next = sRecordBuilder->getNext();
+        delete sRecordBuilder;
+        sRecordBuilder = next;
+    }
+}
 
 }  // namespace elog

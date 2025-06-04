@@ -11,7 +11,8 @@ ELogSource::ELogSource(ELogSourceId sourceId, const char* name, ELogSource* pare
       m_name(name),
       m_moduleName(name),
       m_parent(parent),
-      m_logLevel(logLevel) {
+      m_logLevel(logLevel),
+      m_logTargetId(ELOG_INVALID_TARGET_ID) {
     if (parent != nullptr) {
         const char* parentQName = parent->getQualifiedName();
         if (*parentQName == 0) {
