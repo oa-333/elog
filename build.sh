@@ -8,6 +8,9 @@ PLATFORM=$(uname -s)
 # -w|--rel-with-debug-info
 # -c|--conn sqlite|mysql|postgresql|kafka
 # -i|--install-dir <INSTALL_DIR>
+# -l|--clean
+# -r|--rebuild (no reconfigure)
+# -g|--reconfigure
 
 # set default values
 BUILD_TYPE=Debug
@@ -18,9 +21,13 @@ else
     INSTALL_DIR=~/install/elog
 fi
 STACK_TRACE=0
+VERBOSE=0
+CLEAN=0
+REBUILD=0
+RE_CONFIG=0
 
 # parse options
-TEMP=$(getopt -o vdrwsfc:i: -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir: -- "$@")
+TEMP=$(getopt -o vdrwsfc:i:lrg -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -34,6 +41,9 @@ while true; do
     -f | --full ) FULL=1; shift;;
     -c | --conn ) CONNS+=($2); shift 2 ;;
     -i | --install-dir) INSTALL_DIR="$2"; shift 2 ;;
+    -l | --clean) CLEAN=1; shift ;;
+    -r | --rebuild) REBUILD=1; CLEAN=1; shift ;;
+    -g | --reconfigure) RE_CONFIG=1; REBUILD=1; CLEAN=1; shift ;;
     -- ) shift; break ;;
     * ) echo "[ERROR] Invalid option $1, aborting"; exit 1; break ;;
   esac
@@ -96,6 +106,26 @@ BUILD_DIR=cmake_build/${PLATFORM}-${BUILD_TYPE}
 echo "[INFO] Using build directory: '$BUILD_DIR'"
 mkdir -p $BUILD_DIR
 pushd $BUILD_DIR > /dev/null
+
+if [ $CLEAN -eq 1 ]; then
+    echo "[INFO] Running target clean"
+    cmake --build . -j --verbose --target clean
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] Clean failed, see errors above, aborting"
+        popd > /dev/null
+        exit 1
+    fi
+    if [ $REBUILD -eq 0 ]; then
+        popd > /dev/null
+        exit 0
+    fi
+fi
+
+# Run fresh if re-configure is requested
+if [ $RE_CONFIG -eq 1 ]; then 
+    echo "[INFO] Forcing fresh configuration"
+    OPTS="--fresh $OPTS"
+fi
 
 # configure phase
 echo "[INFO] Configuring project"

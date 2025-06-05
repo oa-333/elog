@@ -10,12 +10,18 @@ REM -s|--stack-trace
 REM -f|--full
 REM -c|--conn sqlite|mysql|postgresql|kafka
 REM -i|--install-dir <INSTALL_DIR>
+REM -l|--clean
+REM -r|--rebuild (no reconfigure)
+REM -g|--reconfigure
 
 REM set default values
 SET PLATFORM=WINDOWS
 SET BUILD_TYPE=Debug
 SET INSTALL_DIR=C:\install\elog
 SET STACK_TRACE=0
+SET CLEAN=0
+SET REBUILD=0
+SET RE_CONFIG=0
 
 SET CONN_INDEX=0
 SET CONNS[0]=tmp
@@ -38,6 +44,12 @@ IF /I "%1" == "-c" SET CONNS[!CONN_INDEX!]=%2 & SET /A CONN_INDEX+=1 & shift
 IF /I "%1" == "--conn" SET CONNS[!CONN_INDEX!]=%2 & SET /A CONN_INDEX+=1 & shift
 IF /I "%1" == "-i" SET INSTALL_DIR=%2 & shift
 IF /I "%1" == "--install-dir" SET INSTALL_DIR=%2 & shift
+IF /I "%1" == "-l" SET CLEAN=1
+IF /I "%1" == "--clean" SET CLEAN=1
+IF /I "%1" == "-r" SET REBUILD=1 & SET CLEAN=1
+IF /I "%1" == "--rebuild" SET REBUILD=1 & SET CLEAN=1
+IF /I "%1" == "-g" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1
+IF /I "%1" == "--reconfigure" SET RE_CONFIG=1 & SET REBUILD=1  & SET CLEAN=1
 REM TODO: not checking for illegal parameters
 shift
 IF "%1" == "--" GOTO SET_OPTS
@@ -133,6 +145,26 @@ pushd %BUILD_DIR% > NUL
 REM print cmake info
 echo [INFO] CMake version:
 cmake --version
+
+IF "%CLEAN%" == "1" (
+    echo [INFO] Running target clean
+    cmake --build . -j --verbose --target clean
+    if errorlevel 1 (
+        echo [ERROR] Clean failed, see errors above, aborting
+        popd > NUL
+        GOTO HANDLE_ERROR
+    )
+    IF "%REBUILD%" == "0" (
+        popd > NUL
+        exit /b 0
+    )
+)
+
+REM Run fresh if re-configure is requested
+IF "%RE_CONFIG%" == "1" (
+    echo [INFO] Forcing fresh configuration
+    OPTS=--fresh %OPTS%
+)
 
 REM configure phase
 echo [INFO]  Executing build command cmake %OPTS% ..\..\
