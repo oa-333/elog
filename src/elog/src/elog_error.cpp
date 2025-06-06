@@ -77,8 +77,9 @@ private:
             if (stderrTargetId != ELOG_INVALID_TARGET_ID) {
                 if (sStderrTargetId.compare_exchange_strong(logTargetId, stderrTargetId,
                                                             std::memory_order_seq_cst)) {
-                    fprintf(stderr, "stderr target id = %u\n", stderrTargetId);
-                    m_logSource->restrictToLogTarget(stderrTargetId);
+                    ELogTargetAffinityMask mask = 0;
+                    ELOG_ADD_TARGET_AFFINITY_MASK(mask, stderrTargetId);
+                    m_logSource->setLogTargetAffinity(mask);
                     logTargetId = stderrTargetId;
                 }
                 // if we failed to CAS it is possible that that the thread that made CAS will

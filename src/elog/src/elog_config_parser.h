@@ -12,6 +12,8 @@ public:
     static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                               ELogSource::PropagateMode& propagateMode);
 
+    static bool parseLogAffinityList(const char* affinityListStr, ELogTargetAffinityMask& mask);
+
     static bool parseLogTargetSpec(const std::string& logTargetCfg,
                                    ELogTargetNestedSpec& logTargetNestedSpec,
                                    ELogTargetSpecStyle& specStyle);

@@ -27,4 +27,14 @@
 #error "Unsupported platform"
 #endif
 
+// define strcasecmp for MSVC
+#ifdef ELOG_MSVC
+#ifdef strncasecmp
+#define strncasecmp _strnicmp
+#endif
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#endif
+
 #endif  // __ELOG_DEF_H__

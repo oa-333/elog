@@ -12,7 +12,7 @@ ELogSource::ELogSource(ELogSourceId sourceId, const char* name, ELogSource* pare
       m_moduleName(name),
       m_parent(parent),
       m_logLevel(logLevel),
-      m_logTargetId(ELOG_INVALID_TARGET_ID) {
+      m_logTargetAffinityMask(ELOG_ALL_TARGET_AFFINITY_MASK) {
     if (parent != nullptr) {
         const char* parentQName = parent->getQualifiedName();
         if (*parentQName == 0) {

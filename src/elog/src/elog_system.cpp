@@ -473,9 +473,13 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
     ELogLevel logLevel = ELEVEL_INFO;
     ELogSource::PropagateMode propagateMode = ELogSource::PropagateMode::PM_NONE;
 
-    const char* suffix1 = ".log_level";  // for configuration files
-    const char* suffix2 = "_log_level";  // for environment variables
-    uint32_t suffixLen = strlen(suffix1);
+    const char* logLevelSuffix1 = ".log_level";  // for configuration files
+    const char* logLevelSuffix2 = "_log_level";  // for environment variables
+    uint32_t logLevelSuffixLen = strlen(logLevelSuffix1);
+
+    const char* logAffinitySuffix1 = ".log_affinity";  // for configuration files
+    const char* logAffinitySuffix2 = "_log_affinity";  // for environment variables
+    uint32_t logAffinitySuffixLen = strlen(logAffinitySuffix1);
 
     // get configuration also from env
     ELogPropertySequence envProps;
@@ -487,6 +491,11 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
             std::string envVarName = envVar.substr(0, equalPos);
             std::string envVarValue = envVar.substr(equalPos + 1);
             if (envVarName.ends_with("log_level")) {
+                ELOG_REPORT_TRACE("Adding prop %s = %s from env", envVarName.c_str(),
+                                  envVarValue.c_str());
+                envProps.push_back({envVarName, envVarValue});
+            }
+            if (envVarName.ends_with("log_affinity")) {
                 ELOG_REPORT_TRACE("Adding prop %s = %s from env", envVarName.c_str(),
                                   envVarValue.c_str());
                 envProps.push_back({envVarName, envVarValue});
@@ -514,6 +523,8 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
         // check for log target
         if (prop.first.compare("log_target") == 0) {
             // configure log target
+            // TODO: what about multi-line spec? shouldn't we just transition to json and avoid all
+            // this parsing mess? but this requires enhancing json with env vars (we can do that)
             if (!configureLogTarget(prop.second)) {
                 return false;
             }
@@ -525,10 +536,10 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
         // NOTE: when definining log sources, we must first define all log sources, then set log
         // level to configured level and apply log level propagation. If we apply propagation
         // before child log sources are defined, then propagation is lost.
-        if (prop.first.ends_with(suffix1) || prop.first.ends_with(suffix2)) {
+        if (prop.first.ends_with(logLevelSuffix1) || prop.first.ends_with(logLevelSuffix2)) {
             const std::string& key = prop.first;
             // shave off trailing ".log_level/_log_level" (that includes dot/underscore)
-            std::string sourceName = key.substr(0, key.size() - suffixLen);
+            std::string sourceName = key.substr(0, key.size() - logLevelSuffixLen);
             ELogSource* logSource = defineLogSources
                                         ? defineLogSource(sourceName.c_str(), defineMissingPath)
                                         : getLogSource(sourceName.c_str());
@@ -543,6 +554,27 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
                 return false;
             }
             logLevelCfg.push_back({logSource, logLevel, propagateMode});
+        }
+
+        // configure log affinity of log sources
+        if (prop.first.ends_with(logAffinitySuffix1) || prop.first.ends_with(logAffinitySuffix2)) {
+            const std::string& key = prop.first;
+            // shave off trailing ".log_level/_log_level" (that includes dot/underscore)
+            std::string sourceName = key.substr(0, key.size() - logLevelSuffixLen);
+            ELogSource* logSource = defineLogSources
+                                        ? defineLogSource(sourceName.c_str(), defineMissingPath)
+                                        : getLogSource(sourceName.c_str());
+            if (logSource == nullptr) {
+                ELOG_REPORT_ERROR("Invalid log source name: %s", sourceName.c_str());
+                return false;
+            }
+            ELogTargetAffinityMask mask = 0;
+            if (!ELogConfigParser::parseLogAffinityList(prop.second.c_str(), mask)) {
+                ELOG_REPORT_ERROR("Invalid source %s log affinity specification: %s",
+                                  sourceName.c_str(), prop.second.c_str());
+                return false;
+            }
+            logSource->setLogTargetAffinity(mask);
         }
     }
 
@@ -685,7 +717,11 @@ ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const ch
 }
 
 ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
+    // TODO: should we guard against duplicate names (they are used in search by name and in log
+    // affinity mask building) - this will require API change (returning at least bool)
+    ELOG_REPORT_TRACE("Adding log target: %s", logTarget->getName());
     if (!logTarget->start()) {
+        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -693,12 +729,14 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
     for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
         if (sLogTargets[i] == nullptr) {
             sLogTargets[i] = logTarget;
+            ELOG_REPORT_TRACE("Added log target %s with id %u", logTarget->getName(), i);
             return i;
         }
     }
 
     // otherwise add a new slot
     sLogTargets.push_back(logTarget);
+    ELOG_REPORT_TRACE("Added log target %s with id %u", logTarget->getName(), sLogTargets.size());
     return (ELogTargetId)(sLogTargets.size() - 1);
 }
 
@@ -1139,12 +1177,14 @@ void ELogSystem::logAppStackTrace(ELogLevel logLevel, const char* title, int ski
 }
 #endif
 
-void ELogSystem::log(const ELogRecord& logRecord,
-                     ELogTargetId restrictTargetId /* = ELOG_INVALID_TARGET_ID */) {
+void ELogSystem::log(
+    const ELogRecord& logRecord,
+    ELogTargetAffinityMask logTargetAffinityMask /* = ELOG_ALL_TARGET_AFFINITY_MASK */) {
     bool logged = false;
-    for (uint32_t logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
+    for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
-        if (restrictTargetId == ELOG_INVALID_TARGET_ID || logTargetId == restrictTargetId) {
+        if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY ||
+            ELOG_HAS_TARGET_AFFINITY_MASK(logTargetAffinityMask, logTargetId + 1)) {
             logTarget->log(logRecord);
             logged = true;
         }

@@ -108,11 +108,31 @@ public:
         return static_cast<int>(logLevel) <= static_cast<int>(m_logLevel);
     }
 
-    /** @brief Restricts this log source to a specific log target. */
-    inline void restrictToLogTarget(ELogTargetId logTargetId) { m_logTargetId = logTargetId; }
+    /** @brief Sets log target affinity. */
+    inline void setLogTargetAffinity(ELogTargetAffinityMask logTargetAffinityMask) {
+        m_logTargetAffinityMask = logTargetAffinityMask;
+    }
 
-    /** @brief Retrieves the id of the log target to which this log source is restricted. */
-    inline ELogTargetId getRestrictLogTargetId() const { return m_logTargetId; }
+    /** @brief Adds a log target to the log target affinity mask of the log source. */
+    inline bool addLogTargetAffinity(ELogTargetId logTargetId) {
+        if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY) {
+            return false;
+        }
+        ELOG_ADD_TARGET_AFFINITY_MASK(m_logTargetAffinityMask, logTargetId);
+        return true;
+    }
+
+    /** @brief Removes a log target from the log target affinity mask of the log source. */
+    inline bool removeLogTargetAffinity(ELogTargetId logTargetId) {
+        if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY) {
+            return false;
+        }
+        ELOG_REMOVE_TARGET_AFFINITY_MASK(m_logTargetAffinityMask, logTargetId);
+        return true;
+    }
+
+    /** @brief Retrieves the log target affinity mask configured for this log source. */
+    inline ELogTargetId getLogTargetAffinityMask() const { return m_logTargetAffinityMask; }
 
     /**
      * @brief Obtains a logger that may be invoked by more than one thread. The logger is managed
@@ -136,7 +156,7 @@ private:
     typedef std::unordered_map<std::string, ELogSource*> ChildMap;
     ChildMap m_children;
     std::unordered_set<ELogLogger*> m_loggers;
-    ELogTargetId m_logTargetId;
+    ELogTargetAffinityMask m_logTargetAffinityMask;
 
     ELogSource(ELogSourceId sourceId, const char* name, ELogSource* parent = nullptr,
                ELogLevel logLevel = ELEVEL_INFO);

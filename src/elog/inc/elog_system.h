@@ -505,10 +505,11 @@ public:
     /**
      * @brief Logs a log record. In essence to log record is sent to all registered log targets.
      * @param logRecord The lgo record to process.
-     * @param logTargetId Optionally restricts the message to be directed to a specific log target.
+     * @param logTargetAffinityMask Optionally restricts the message to be directed to a specific
+     * log target.
      */
     static void log(const ELogRecord& logRecord,
-                    ELogTargetId restrictTargetId = ELOG_INVALID_TARGET_ID);
+                    ELogTargetAffinityMask logTargetAffinityMask = ELOG_ALL_TARGET_AFFINITY_MASK);
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     /**

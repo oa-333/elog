@@ -59,6 +59,9 @@ fi
 echo "[INFO] Build type: $BUILD_TYPE"
 echo "[INFO] Install dir: $INSTALL_DIR"
 echo "[INFO] Stack trace: $STACK_TRACE"
+echo "[INFO] Clean: $CLEAN"
+echo "[INFO] Rebuild: $REBUILD"
+echo "[INFO] Reconfigure: $RE_CONFIG"
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 if [ "$VERBOSE" == "1" ]; then
     OPTS+=" -DCMAKE_VERBOSE_MAKEFILE=ON"

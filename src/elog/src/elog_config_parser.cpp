@@ -6,6 +6,7 @@
 #include "elog_common.h"
 #include "elog_error.h"
 #include "elog_schema_manager.h"
+#include "elog_system.h"
 
 namespace elog {
 
@@ -44,6 +45,48 @@ bool ELogConfigParser::parseLogLevel(const char* logLevelStr, ELogLevel& logLeve
         }
     }
 
+    return true;
+}
+
+bool ELogConfigParser::parseLogAffinityList(const char* affinityListStr,
+                                            ELogTargetAffinityMask& mask) {
+    // tokenize target names by comma
+    mask = 0;
+    ELogSpecTokenizer tokenizer(affinityListStr);
+    ELogTokenType prevTokenType = ELogTokenType::TT_COMMA;
+    while (tokenizer.hasMoreTokens()) {
+        ELogTokenType tokenType = ELogTokenType::TT_TOKEN;
+        std::string token;
+        uint32_t tokenPos = 0;
+        if (!tokenizer.nextToken(tokenType, token, tokenPos)) {
+            ELOG_REPORT_ERROR("Failed to parse log target list: %s",
+                              tokenizer.getErrLocStr(tokenPos).c_str());
+            return false;
+        }
+        if (tokenType != ELogTokenType::TT_TOKEN && tokenType != ELogTokenType::TT_COMMA) {
+            ELOG_REPORT_ERROR(
+                "Unexpected token '%s' in log target list, should be either log target name or "
+                "comma",
+                token.c_str());
+            return false;
+        }
+        if (tokenType == prevTokenType) {
+            if (tokenType == ELogTokenType::TT_TOKEN) {
+                ELOG_REPORT_ERROR("Missing comma in log target list: %s",
+                                  tokenizer.getErrLocStr(tokenPos));
+            } else {
+                ELOG_REPORT_ERROR("Duplicate comma in log target list: %s",
+                                  tokenizer.getErrLocStr(tokenPos));
+            }
+            return false;
+        }
+        ELogTargetId logTargetId = ELogSystem::getLogTargetId(token.c_str());
+        if (logTargetId == ELOG_INVALID_TARGET_ID) {
+            ELOG_REPORT_ERROR("Invalid log target list, unknown log target '%s", token.c_str());
+            return false;
+        }
+        ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTargetId);
+    }
     return true;
 }
 

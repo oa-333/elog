@@ -17,6 +17,7 @@ public:
 
 protected:
     ELogAsyncTarget(ELogTarget* endTarget) : ELogTarget("async"), m_endTarget(endTarget) {
+        setNativelyThreadSafe();
         m_endTarget->setExternallyThreadSafe();
     }
 
