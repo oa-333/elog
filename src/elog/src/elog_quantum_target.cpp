@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "elog_common.h"
+#include "elog_error.h"
 #include "elog_system.h"
 
 #ifdef ELOG_GCC
@@ -21,15 +23,28 @@ ELogQuantumTarget::ELogQuantumTarget(
     ELogTarget* logTarget, uint32_t bufferSize,
     CongestionPolicy congestionPolicy /* = CongestionPolicy::CP_WAIT */)
     : ELogAsyncTarget(logTarget),
+      m_ringBuffer(nullptr),
+      m_ringBufferSize(bufferSize),
       m_writePos(0),
       m_readPos(0),
       m_congestionPolicy(congestionPolicy),
-      m_stop(false) {
-    m_ringBuffer.resize(bufferSize);
-}
+      m_stop(false) {}
 
 bool ELogQuantumTarget::startLogTarget() {
-    if (!getEndLogTarget()->start()) {
+    if (m_ringBuffer == nullptr) {
+        m_ringBuffer = new (std::nothrow) ELogRecordData[m_ringBufferSize];
+        if (m_ringBuffer == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to allocate ring buffer of %u elements for quantum log target",
+                m_ringBufferSize);
+            return false;
+        }
+        // reserve in advance some space to avoid penalty on first round
+        for (uint32_t i = 0; i < m_ringBufferSize; ++i) {
+            m_ringBuffer[i].m_logMsg.reserve(ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE);
+        }
+    }
+    if (!m_endTarget->start()) {
         return false;
     }
     m_logThread = std::thread(&ELogQuantumTarget::logThread, this);
@@ -47,7 +62,15 @@ bool ELogQuantumTarget::stopLogTarget() {
     m_logThread.join();
     uint32_t writePos = m_writePos.load(std::memory_order_relaxed);
     uint32_t readPos = m_readPos.load(std::memory_order_relaxed);
-    return getEndLogTarget()->stop();
+    if (!m_endTarget->stop()) {
+        ELOG_REPORT_ERROR("Quantum log target failed to stop underlying log target");
+        return false;
+    }
+    if (m_ringBuffer != nullptr) {
+        delete[] m_ringBuffer;
+        m_ringBuffer = nullptr;
+    }
+    return true;
 }
 
 uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
@@ -55,11 +78,11 @@ uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
     uint32_t readPos = m_readPos.load(std::memory_order_relaxed);
 
     // wait until there is no other writer contending for the same entry
-    while (writePos - readPos >= m_ringBuffer.size()) {
+    while (writePos - readPos >= m_ringBufferSize) {
         CPU_RELAX;
         readPos = m_readPos.load(std::memory_order_relaxed);
     }
-    ELogRecordData& recordData = m_ringBuffer[writePos % m_ringBuffer.size()];
+    ELogRecordData& recordData = m_ringBuffer[writePos % m_ringBufferSize];
     EntryState entryState = recordData.m_entryState.load(std::memory_order_seq_cst);
 
     // now wait for entry to become vacant
@@ -104,7 +127,7 @@ void ELogQuantumTarget::logThread() {
         // check if there is a new log record
         if (writePos > readPos) {
             // wait until record is ready for reading
-            ELogRecordData& recordData = m_ringBuffer[readPos % m_ringBuffer.size()];
+            ELogRecordData& recordData = m_ringBuffer[readPos % m_ringBufferSize];
             EntryState entryState = recordData.m_entryState.load(std::memory_order_relaxed);
             // uint32_t localSpinCount = SPIN_COUNT_INIT;
             while (entryState != ES_READY) {
@@ -127,9 +150,9 @@ void ELogQuantumTarget::logThread() {
             if (recordData.m_logRecord.m_reserved == ELOG_STOP_REQUEST) {
                 done = true;
             } else if (recordData.m_logRecord.m_reserved == ELOG_FLUSH_REQUEST) {
-                getEndLogTarget()->flush();
+                m_endTarget->flush();
             } else {
-                getEndLogTarget()->log(recordData.m_logRecord);
+                m_endTarget->log(recordData.m_logRecord);
             }
 
             // change state back to vacant and update read pos
@@ -150,7 +173,7 @@ void ELogQuantumTarget::logThread() {
     }
 
     // do a final flush and terminate
-    getEndLogTarget()->flush();
+    m_endTarget->flush();
 }
 
 }  // namespace elog

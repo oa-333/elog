@@ -57,17 +57,26 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
 }
 
 bool ELogBaseFormatter::parseFieldSpec(const std::string& fieldSpecStr, ELogFieldSpec& fieldSpec) {
+    fieldSpec.m_justifyMode = ELogJustifyMode::JM_NONE;
     fieldSpec.m_justify = 0;
+    int32_t justify = 0;
     std::string::size_type colonPos = fieldSpecStr.find(':');
     if (colonPos != std::string::npos) {
         try {
-            fieldSpec.m_justify = std::stoi(fieldSpecStr.substr(colonPos + 1).c_str());
+            justify = std::stoi(fieldSpecStr.substr(colonPos + 1).c_str());
         } catch (std::exception& e) {
             ELOG_REPORT_ERROR(
                 "WARN: Invalid justification number encountered, while parsing field selector %s",
                 fieldSpecStr.c_str());
             return false;
         }
+    }
+    if (justify > 0) {
+        fieldSpec.m_justify = justify;
+        fieldSpec.m_justifyMode = ELogJustifyMode::JM_LEFT;
+    } else if (justify < 0) {
+        fieldSpec.m_justify = -justify;
+        fieldSpec.m_justifyMode = ELogJustifyMode::JM_RIGHT;
     }
     fieldSpec.m_name = fieldSpecStr.substr(0, colonPos);
     return true;

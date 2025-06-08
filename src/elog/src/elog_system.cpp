@@ -180,26 +180,36 @@ static ELogFormatter* sGlobalFormatter = nullptr;
 static ELogFlushPolicy* sFlushPolicy = nullptr;
 
 bool ELogSystem::initGlobals() {
-    // ELogError::initError();
+    // init the error log so we can have trace messages as early as possible
+    ELogError::initError();
+
+    ELOG_REPORT_TRACE("Starting ELog initialization sequence");
     if (!initFieldSelectors()) {
         ELOG_REPORT_ERROR("Failed to initialize field selectors");
         return false;
     }
+    ELOG_REPORT_TRACE("Field selectors initialized");
+
     if (!ELogSchemaManager::initSchemaHandlers()) {
         ELOG_REPORT_ERROR("Failed to initialize schema handlers");
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Schema manager initialized");
+
     if (!initFlushPolicies()) {
         ELOG_REPORT_ERROR("Failed to initialize flush policies");
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Flush policies initialized");
+
     if (!initFilters()) {
         ELOG_REPORT_ERROR("Failed to initialize filters");
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Filters initialized");
 
     // root logger has no name
     // NOTE: this is the only place where we cannot use logging macros
@@ -209,6 +219,7 @@ bool ELogSystem::initGlobals() {
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Root log source initialized");
 
     // add to global map
     bool res =
@@ -220,6 +231,7 @@ bool ELogSystem::initGlobals() {
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Root log source added to global log source map");
 
     sDefaultLogger = sRootLogSource->createSharedLogger();
     if (sDefaultLogger == nullptr) {
@@ -227,20 +239,23 @@ bool ELogSystem::initGlobals() {
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Default logger initialized");
+
     sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr);
     if (sDefaultLogTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create default log target, out of memory");
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Default log target initialized");
+
     sGlobalFormatter = new (std::nothrow) ELogFormatter();
     if (!sGlobalFormatter->initialize()) {
         ELOG_REPORT_ERROR("Failed to initialize log formatter");
         termGlobals();
         return false;
     }
-
-    ELogError::initError();
+    ELOG_REPORT_TRACE("Global formatter initialized");
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     // connect to debug util library
@@ -251,8 +266,10 @@ bool ELogSystem::initGlobals() {
         return false;
     }
     sDbgUtilLogHandler.applyLogLevelCfg();
+    ELOG_REPORT_TRACE("Debug utility library logging initialized");
 #endif
 
+    ELOG_REPORT_TRACE("ELog initialized successfully");
     return true;
 }
 

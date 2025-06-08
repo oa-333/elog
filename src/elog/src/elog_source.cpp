@@ -9,7 +9,7 @@ ELogSource::ELogSource(ELogSourceId sourceId, const char* name, ELogSource* pare
                        ELogLevel logLevel /* = ELEVEL_INFO */)
     : m_sourceId(sourceId),
       m_name(name),
-      m_moduleName(name),
+      m_moduleName(""),
       m_parent(parent),
       m_logLevel(logLevel),
       m_logTargetAffinityMask(ELOG_ALL_TARGET_AFFINITY_MASK) {
@@ -22,6 +22,11 @@ ELogSource::ELogSource(ELogSourceId sourceId, const char* name, ELogSource* pare
         }
     } else {
         m_qname = name;
+    }
+
+    // set default module name
+    if (!m_qname.empty()) {
+        m_moduleName = m_qname.substr(0, m_qname.find('.'));
     }
 }
 

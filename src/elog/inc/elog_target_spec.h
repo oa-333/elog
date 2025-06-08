@@ -3,6 +3,7 @@
 
 #include <cstdint>
 
+#include "elog_def.h"
 #include "elog_props.h"
 
 namespace elog {

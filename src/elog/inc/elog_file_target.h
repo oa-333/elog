@@ -24,16 +24,8 @@ public:
      * @param flushPolicy Optional flush policy to use.
      * @see @ref ELofBufferedFileWriter.
      */
-    ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr)
-        : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
-        if (fileHandle == stderr) {
-            setName("stderr");
-        } else if (fileHandle == stdout) {
-            setName("stdout");
-        }
-        setNativelyThreadSafe();
-        setAddNewLine(true);
-    }
+    ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr);
+
     ELogFileTarget(const ELogFileTarget&) = delete;
     ELogFileTarget(ELogFileTarget&&) = delete;
 

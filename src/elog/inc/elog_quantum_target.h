@@ -101,7 +101,8 @@ private:
     };
 
     typedef std::vector<ELogRecordData> LogRingBuffer;
-    LogRingBuffer m_ringBuffer;
+    ELogRecordData* m_ringBuffer;
+    uint32_t m_ringBufferSize;
     // we put the write/read pos each in its own cache line to avoid false sharing
     // alignas(std::hardware_destructive_interference_size) std::atomic<uint64_t> m_writePos;
     // alignas(std::hardware_destructive_interference_size) std::atomic<uint64_t> m_readPos;

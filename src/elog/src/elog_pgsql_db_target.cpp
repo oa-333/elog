@@ -16,8 +16,8 @@ public:
     ~ELogPGSQLDbFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& field,
-                            const ELogFieldSpec& fieldSpec) {
+    void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
+                            size_t length) {
         m_stringCache.push_back(field);
     }
 
@@ -257,7 +257,7 @@ bool ELogPGSQLDbTarget::stop() {
 }
 
 void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
-    if (!shouldLog(logRecord)) {
+    if (!canLog(logRecord)) {
         return;
     }
 

@@ -19,8 +19,8 @@ public:
     ~ELogKafkaMsgQFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& field,
-                            const ELogFieldSpec& fieldSpec) {
+    void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
+                            size_t length) {
         m_headerValues.push_back(field);
     }
 

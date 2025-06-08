@@ -10,7 +10,7 @@ fi
 export INSTALL_DIR
 
 # build elog
-./build.sh --rel-with-debug-info --verbose --conn grpc
+./build.sh --rel-with-debug-info --verbose
 if [ $? -ne 0 ]; then
     echo "ERROR: Build failed"
     exit 1
@@ -20,12 +20,16 @@ fi
 DEV_DIR=`readlink -f .`
 
 # exec benchmark
-pushd $INSTALL_DIR/bin
+if [ "$OS" = "Msys" ]; then
+    pushd $INSTALL_DIR/bin/Windows_mingw-RelWithDebInfo
+else
+    pushd $INSTALL_DIR/bin/Linux-RelWithDebInfo
+fi
 
 mkdir -p bench_data
 rm -f bench_data/*
-cp $INSTALL_DIR/elog/bin/* .
-cp $INSTALL_DIR/elog/lib/* .
+#cp $INSTALL_DIR/elog/bin/* .
+#cp $INSTALL_DIR/elog/lib/* .
 if [ "$OS" = "Msys" ]; then
     ./elog_bench_mingw.exe
 else

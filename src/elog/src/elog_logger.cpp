@@ -33,7 +33,7 @@ namespace elog {
 
 static std::atomic<uint64_t> sNextRecordId = 0;
 
-static uint64_t getCurrentThreadId() {
+inline uint64_t getCurrentThreadId() {
 #ifdef ELOG_WINDOWS
     return GetCurrentThreadId();
 #else
@@ -132,8 +132,6 @@ void ELogLogger::finishLog() {
     }
 }
 
-bool ELogLogger::isLogging() const { return getRecordBuilder().getOffset() > 0; }
-
 void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
                                 const char* function) {
     ELogRecord& logRecord = getRecordBuilder().getLogRecord();
@@ -142,9 +140,18 @@ void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
     logRecord.m_file = file;
     logRecord.m_line = line;
     logRecord.m_function = function;
+#ifdef ELOG_TIME_USE_CHRONO
     logRecord.m_logTime = std::chrono::system_clock::now();
+#else
+#ifdef ELOG_MSVC
+    GetSystemTimeAsFileTime(&logRecord.m_logTime);
+#else
+    // NOTE: gettimeofday is obsolete, instead clock_gettime() should be used
+    clock_gettime(CLOCK_REALTIME, &logRecord.m_logTime);
+#endif
+#endif
     logRecord.m_threadId = getCurrentThreadId();
-    logRecord.m_sourceId = m_logSource->getId();
+    logRecord.m_logger = this;
 }
 
 void ELogLogger::appendMsgV(const char* fmt, va_list ap) {

@@ -5,6 +5,7 @@
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_error.h"
+#include "elog_target.h"
 
 namespace elog {
 

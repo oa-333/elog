@@ -216,8 +216,8 @@ private:
 
 class ELOG_API ELogRecordTimeFilter : public ELogCmpFilter {
 public:
-    ELogRecordTimeFilter(ELogTime logTime = std::chrono::system_clock::now(),
-                         ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_GE)
+    ELogRecordTimeFilter() : ELogCmpFilter(ELogCmpOp::CMP_OP_GE) {}
+    ELogRecordTimeFilter(ELogTime logTime, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_GE)
         : ELogCmpFilter(cmpOp), m_logTime(logTime) {}
     ~ELogRecordTimeFilter() override {}
 

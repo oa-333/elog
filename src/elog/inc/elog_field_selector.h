@@ -42,7 +42,7 @@ public:
     inline ELogFieldType getFieldType() const { return m_fieldType; }
 
 protected:
-    ELogFieldSelector(ELogFieldType fieldType, const ELogFieldSpec& fieldSpec)
+    ELogFieldSelector(ELogFieldType fieldType, const ELogFieldSpec& fieldSpec = ELogFieldSpec())
         : m_fieldType(fieldType), m_fieldSpec(fieldSpec) {}
 
     ELogFieldType m_fieldType;
@@ -119,7 +119,7 @@ public:                                                                         
 class ELOG_API ELogStaticTextSelector : public ELogFieldSelector {
 public:
     ELogStaticTextSelector(const char* text)
-        : ELogFieldSelector(ELogFieldType::FT_TEXT, {"", 0}), m_text(text) {}
+        : ELogFieldSelector(ELogFieldType::FT_TEXT), m_text(text) {}
     ~ELogStaticTextSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;

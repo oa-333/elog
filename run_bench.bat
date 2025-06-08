@@ -14,7 +14,7 @@ IF errorlevel 1 (
 echo INFO: Build success
 
 REM exec benchmark
-pushd %INSTALL_DIR%\bin
+pushd %INSTALL_DIR%\bin\Windows-RelWithDebInfo
 
 echo INFO: Creating bench_data directory
 IF NOT EXIST bench_data (
@@ -26,7 +26,7 @@ echo INFO: Purging bench_data directory from previous run results
 del /Q bench_data\*
 
 echo INFO: Executing benchmark
-xcopy /Y %INSTALL_DIR%\elog\bin\* .
+REM xcopy /Y %INSTALL_DIR%\elog\bin\* .
 .\elog_bench.exe
 
 REM TODO: plot this with mingw gnuplot

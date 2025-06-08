@@ -17,6 +17,8 @@
 #define WHT "\x1B[37m"
 #define RESET "\x1B[0m"
 
+#define ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE 256
+
 namespace elog {
 
 /** @brief Helper function for retrieving a property from a sequence */

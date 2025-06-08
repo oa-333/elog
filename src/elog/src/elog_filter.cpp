@@ -129,7 +129,7 @@ inline bool compareLogLevel(ELogCmpOp cmpOp, ELogLevel lhs, ELogLevel rhs) {
 }
 
 inline bool compareTime(ELogCmpOp cmpOp, ELogTime lhs, ELogTime rhs) {
-    return compareInt(cmpOp, lhs.time_since_epoch().count(), rhs.time_since_epoch().count());
+    return compareInt(cmpOp, elogTimeToUTCNanos(lhs), elogTimeToUTCNanos(rhs));
 }
 
 ELogNegateFilter::~ELogNegateFilter() {
@@ -350,19 +350,9 @@ bool ELogRecordTimeFilter::load(const std::string& logTargetCfg,
     }
 
     // parse time
-    std::istringstream iss(itr->second);
-#if __cpp_lib_chrono >= 201907L
-    iss >> std::chrono::parse("%Y-%m-%d %H:%M:%S", m_logTime);
-#else
-    std::tm tm = {};
-    iss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-    m_logTime = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-#endif
-    if (iss.fail()) {
-        ELOG_REPORT_ERROR(
-            "Record time filter specification is invalid, record_time value '%s' is not a valid "
-            "time specification: %s",
-            itr->second.c_str(), logTargetCfg.c_str());
+    if (!elogTimeFromString(itr->second.c_str(), m_logTime)) {
+        ELOG_REPORT_ERROR("Time specification %s for record time filter is invalid: %s",
+                          itr->second.c_str(), logTargetCfg.c_str());
         return false;
     }
 
@@ -477,12 +467,9 @@ bool ELogSourceFilter::load(const std::string& logTargetCfg,
 }
 
 bool ELogSourceFilter::filterLogRecord(const ELogRecord& logRecord) {
-    ELogSource* logSource = ELogSystem::getLogSource(logRecord.m_sourceId);
-    if (logSource == nullptr) {
-        // this should not happen, we silently allow the message to pass...
-        return true;
-    }
-    return compareString(m_cmpOp, logSource->getQualifiedName(), m_logSourceName.c_str());
+    size_t logSourceNameLength = 0;
+    const char* logSourceName = getLogSourceName(logRecord, logSourceNameLength);
+    return compareString(m_cmpOp, logSourceName, m_logSourceName.c_str());
 }
 
 bool ELogModuleFilter::load(const std::string& logTargetCfg,
@@ -504,12 +491,9 @@ bool ELogModuleFilter::load(const std::string& logTargetCfg,
 }
 
 bool ELogModuleFilter::filterLogRecord(const ELogRecord& logRecord) {
-    ELogSource* logSource = ELogSystem::getLogSource(logRecord.m_sourceId);
-    if (logSource == nullptr) {
-        // this should not happen, we silently allow the message to pass...
-        return true;
-    }
-    return compareString(m_cmpOp, logSource->getModuleName(), m_logModuleName.c_str());
+    size_t moduleNameLength = 0;
+    const char* moduleName = getLogModuleName(logRecord, moduleNameLength);
+    return compareString(m_cmpOp, moduleName, m_logModuleName.c_str());
 }
 
 bool ELogFileNameFilter::load(const std::string& logTargetCfg,

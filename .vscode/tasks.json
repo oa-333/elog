@@ -11,7 +11,7 @@
                 "-where",
                 "${workspaceFolder}",
                 "-c",
-                "./build.sh --conn grafana"
+                "./build.sh"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
@@ -36,7 +36,7 @@
                 "-where",
                 "${workspaceFolder}",
                 "-c",
-                "make -j -f Makefile clean"
+                "./build.sh --clean"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
@@ -54,7 +54,7 @@
             "type": "cppbuild",
             "label": "Build all (MSVC)",
             "command": "build.bat",
-            "args": ["--full"],
+            "args": [],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -69,8 +69,10 @@
         {
             "type": "cppbuild",
             "label": "Clean (MSVC)",
-            "command": "vcclean.bat",
-            "args": [],
+            "command": "build.bat",
+            "args": [
+                "--clean"
+            ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },

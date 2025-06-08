@@ -62,6 +62,9 @@ public:
     /** @brief Retrieves the qualified name (from root) of the log source. */
     inline const char* getQualifiedName() const { return m_qname.c_str(); }
 
+    /** @brief Retrieves the qualified name length of the log source. */
+    inline size_t getQualifiedNameLength() const { return m_qname.length(); }
+
     /**
      * @brief Sets a semantic module name that is associated with the log source (used for logging,
      * and is accessible by the ${module} log line format specifier).
@@ -70,6 +73,9 @@ public:
 
     /** @brief Retrieves the module name associated with the log source. */
     inline const char* getModuleName() const { return m_moduleName.c_str(); }
+
+    /** @brief Retrieves the length of the module name associated with the log source. */
+    inline size_t getModuleNameLength() const { return m_moduleName.length(); }
 
     /**
      * @brief Retrieves the parent log source of this log source. The root log source has no

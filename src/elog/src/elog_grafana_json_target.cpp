@@ -13,8 +13,8 @@ public:
     ~ELogGrafanaJsonReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& field,
-                            const ELogFieldSpec& fieldSpec) {
+    void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
+                            size_t length) {
         m_propValues.push_back(field);
     }
 
@@ -136,9 +136,8 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
     auto& values = m_logEntry["streams"][0]["values"];
     uint32_t logLineCount = values.size();
     auto& logLine = values[logLineCount];
-    logLine[0] = std::to_string(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(logRecord.m_logTime.time_since_epoch())
-            .count());
+    logLine[0] =
+        std::to_string(std::chrono::nanoseconds(elogTimeToUTCNanos(logRecord.m_logTime)).count());
 
     // log line
     std::string logMsg;

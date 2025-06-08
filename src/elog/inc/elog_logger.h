@@ -77,7 +77,7 @@ public:
     void finishLog();
 
     /** @brief Queries whether a multi-part log message is being constructed. */
-    bool isLogging() const;
+    inline bool isLogging() const { return getRecordBuilder().getOffset() > 0; }
 
     /** @brief Queries whether the logger can issue log message with the given level. */
     inline bool canLog(ELogLevel logLevel) const { return m_logSource->canLog(logLevel); }

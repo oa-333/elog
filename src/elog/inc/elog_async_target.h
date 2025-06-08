@@ -8,22 +8,13 @@ namespace elog {
 /** @brief Abstract parent class for asynchronous log targets. */
 class ELOG_API ELogAsyncTarget : public ELogTarget {
 public:
-    ~ELogAsyncTarget() override {
-        if (m_endTarget != nullptr) {
-            delete m_endTarget;
-            m_endTarget = nullptr;
-        }
-    }
+    ~ELogAsyncTarget() override;
+
+    ELogTarget* getEndLogTarget() override { return m_endTarget; }
 
 protected:
-    ELogAsyncTarget(ELogTarget* endTarget) : ELogTarget("async"), m_endTarget(endTarget) {
-        setNativelyThreadSafe();
-        m_endTarget->setExternallyThreadSafe();
-    }
+    ELogAsyncTarget(ELogTarget* endTarget);
 
-    ELogTarget* getEndLogTarget() { return m_endTarget; }
-
-private:
     ELogTarget* m_endTarget;
 };
 

@@ -52,64 +52,64 @@ public:
     inline void setLogRecordMsg(MessageType* logRecordMsg) { m_logRecordMsg = logRecordMsg; }
 
     /** @brief Receives any static text found outside of log record field references. */
-    virtual void receiveStaticText(uint32_t typeId, const std::string& text,
-                                   const ELogFieldSpec& fieldSpec);
+    void receiveStaticText(uint32_t typeId, const std::string& text,
+                           const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the log record id. */
-    virtual void receiveRecordId(uint32_t typeId, uint64_t recordId,
-                                 const ELogFieldSpec& fieldSpec);
+    void receiveRecordId(uint32_t typeId, uint64_t recordId,
+                         const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the host name. */
-    virtual void receiveHostName(uint32_t typeId, const std::string& hostName,
-                                 const ELogFieldSpec& fieldSpec);
+    void receiveHostName(uint32_t typeId, const char* hostName,
+                         const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the user name. */
-    virtual void receiveUserName(uint32_t typeId, const std::string& userName,
-                                 const ELogFieldSpec& fieldSpec);
+    void receiveUserName(uint32_t typeId, const char* userName,
+                         const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the program name. */
-    virtual void receiveProgramName(uint32_t typeId, const std::string& programName,
-                                    const ELogFieldSpec& fieldSpec);
+    void receiveProgramName(uint32_t typeId, const char* programName,
+                            const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the process id. */
-    virtual void receiveProcessId(uint32_t typeId, uint64_t processId,
-                                  const ELogFieldSpec& fieldSpec);
+    void receiveProcessId(uint32_t typeId, uint64_t processId,
+                          const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the thread id. */
-    virtual void receiveThreadId(uint32_t typeId, uint64_t threadId,
-                                 const ELogFieldSpec& fieldSpec);
+    void receiveThreadId(uint32_t typeId, uint64_t threadId,
+                         const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the thread name. */
-    virtual void receiveThreadName(uint32_t typeId, const std::string& threadName,
-                                   const ELogFieldSpec& fieldSpec);
+    void receiveThreadName(uint32_t typeId, const char* threadName,
+                           const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the log source name. */
-    virtual void receiveLogSourceName(uint32_t typeId, const std::string& logSourceName,
-                                      const ELogFieldSpec& fieldSpec);
+    void receiveLogSourceName(uint32_t typeId, const char* logSourceName,
+                              const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the module name. */
-    virtual void receiveModuleName(uint32_t typeId, const std::string& moduleName,
-                                   const ELogFieldSpec& fieldSpec);
+    void receiveModuleName(uint32_t typeId, const char* moduleName,
+                           const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the file name. */
-    virtual void receiveFileName(uint32_t typeId, const std::string& fileName,
-                                 const ELogFieldSpec& fieldSpec);
+    void receiveFileName(uint32_t typeId, const char* fileName,
+                         const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the logging line. */
-    virtual void receiveLineNumber(uint32_t typeId, uint64_t lineNumber,
-                                   const ELogFieldSpec& fieldSpec);
+    void receiveLineNumber(uint32_t typeId, uint64_t lineNumber,
+                           const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the function name. */
-    virtual void receiveFunctionName(uint32_t typeId, const std::string& functionName,
-                                     const ELogFieldSpec& fieldSpec);
+    void receiveFunctionName(uint32_t typeId, const char* functionName,
+                             const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives the log msg. */
-    virtual void receiveLogMsg(uint32_t typeId, const std::string& logMsg,
-                               const ELogFieldSpec& fieldSpec);
+    void receiveLogMsg(uint32_t typeId, const char* logMsg,
+                       const ELogFieldSpec& fieldSpec) override;
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& value,
-                            const ELogFieldSpec& fieldSpec) override;
+    void receiveStringField(uint32_t typeId, const char* value, const ELogFieldSpec& fieldSpec,
+                            size_t length) override;
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint32_t typeId, uint64_t value, const ELogFieldSpec& fieldSpec) override;
@@ -134,7 +134,7 @@ typedef ELogGRPCBaseReceptor<> ELogGRPCReceptor;
 template <typename StubType = elog_grpc::ELogGRPCService::Stub,
           typename MessageType = elog_grpc::ELogGRPCRecordMsg,
           typename ReceptorType = ELogGRPCReceptor>
-class ELogGRPCBaseReactor final : public grpc::ClientWriteReactor<MessageType> {
+class ELogGRPCBaseReactor : public grpc::ClientWriteReactor<MessageType> {
 public:
     ELogGRPCBaseReactor(ELogErrorHandler* errorHandler, StubType* stub,
                         ELogRpcFormatter* rpcFormatter,

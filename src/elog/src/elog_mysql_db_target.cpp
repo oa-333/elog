@@ -12,8 +12,8 @@ public:
     ~ELogMySqlDbFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& field,
-                            const ELogFieldSpec& fieldSpec) {
+    void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
+                            size_t length) {
         m_stmt->setString(m_fieldNum++, field);
     }
 
@@ -152,7 +152,7 @@ bool ELogMySqlDbTarget::stop() {
 }
 
 void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
-    if (!shouldLog(logRecord)) {
+    if (!canLog(logRecord)) {
         return;
     }
 

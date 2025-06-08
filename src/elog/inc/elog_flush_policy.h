@@ -9,10 +9,12 @@
 #include <thread>
 #include <vector>
 
-#include "elog_target.h"
 #include "elog_target_spec.h"
 
 namespace elog {
+
+// forward declaration
+class ELOG_API ELogTarget;
 
 /**
  * @brief Flush policy. As some log targets are buffered, a flush policy should be defined to govern

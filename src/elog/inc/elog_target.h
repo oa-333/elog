@@ -7,40 +7,20 @@
 #include <vector>
 
 #include "elog_common_def.h"
+#include "elog_flush_policy.h"
 #include "elog_record.h"
 
 namespace elog {
 
 class ELOG_API ELogFilter;
 class ELOG_API ELogFormatter;
-class ELOG_API ELogFlushPolicy;
 
-// TODO: VERY IMPORTNAT: define clearly semantics of thread safety when using log target.
-// currently it is inconsistent. file log target is thread safe due to use of fwrite/fflush etc.
-// but other log writers (e.g. Kafka, PostgreSQL, gRPC) are NOT thread safe, and normally should be
-// put behind a queue
-// The correct way to do this is to have the log target DECLARE whether it is natively thread-safe
-// or not, so that the caller may be able to tell dynamically whether a lock is required.
-// In addition, the user should be able to order the log target to take measures against concurrent
-// access.
-// Another important point is that with active flush policy (i.e. ones that have a background thread
-// that calls flush, just as in timed flush policy), the call to ELogTarget::flush() is BY
-// DEFINITION not thread safe, unless the log target is by nature thread safe.
-// so the proposed API is:
-// virtual bool isNativelyThreadSafe() { return false; } //  by default NOT
-// virtual void enforceThreadSafeSemantics();  // default implementation uses a mutex
-// put this in a separate commit, since it may affect performance
-// BY DEFAULT, if the log target is not natively thread safe, then enforce thread safety should be
-// used, without any user configuration, so user actually only needs to configure if they can assure
-// thread-safe log target access, such as in the case of asynchronous log target.
-// this behavior is enforced by introducing mandatory constructor parameter to ELogTarget,
-// specifying whether the log target is natively thread-safe.
-// ALSO interface methods log/flush cannot be virtual, so we can enforce thread-safety
-
-// add statistics reporting API:
+// add statistics reporting API so the full pipeline status can be tracked in real time:
 // messages submitted
+// messages collected
 // messages written
 // bytes submitted
+// bytes collected
 // bytes written
 
 // this way when messages submitted == written we know that the log target is "caught-up" (need a
@@ -141,9 +121,14 @@ public:
 
     /**
      * @brief Sets the flush policy for the log target. Derived classes should take into
-     * consideration the configured flush policy and override global policy configuration.
+     * consideration the configured flush policy and override global policy configuration. If no
+     * flush policy is set the the log target will not be flushed at all, which is ok in some
+     * situations (e.g. buffered file already takes care by itself of occasional flush).
      */
     void setFlushPolicy(ELogFlushPolicy* flushPolicy);
+
+    /** @brief Retrieve the installed flush policy. */
+    inline ELogFlushPolicy* getFlushPolicy() { return m_flushPolicy; }
 
     /** @brief As log target may be chained as in a list. This retrieves the final log target. */
     virtual ELogTarget* getEndLogTarget() { return this; }
@@ -211,6 +196,9 @@ protected:
     /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
     virtual void logFormattedMsg(const std::string& logMsg) {}
 
+    /** @brief Helper method for querying whether the log record can be written to log. */
+    inline bool canLog(const ELogRecord& logRecord) { return logRecord.m_logLevel <= m_logLevel; }
+
 private:
     std::string m_typeName;
     std::string m_name;
@@ -229,11 +217,10 @@ private:
     bool stopNoLock();
     void logNoLock(const ELogRecord& logRecord);
 
-    /** @brief Helper method for querying whether the log record should be written to log. */
-    bool shouldLog(const ELogRecord& logRecord);
-
     /** @brief Helper method for querying whether the log target should be flushed. */
-    bool shouldFlush(uint32_t bytesWritten);
+    inline bool shouldFlush(uint32_t bytesWritten) {
+        return m_flushPolicy != nullptr && m_flushPolicy->shouldFlush(bytesWritten);
+    }
 
     /** @brief Helper method for reporting bytes written to log target. */
     inline void addBytesWritten(uint64_t bytes) {

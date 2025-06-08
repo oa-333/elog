@@ -1,6 +1,7 @@
 target_sources(elog PRIVATE
     ./elog_async_schema_handler.cpp
     ./elog_async_target_provider.cpp
+    ./elog_async_target.cpp
     ./elog_base_formatter.cpp
     ./elog_buffer.cpp
     ./elog_buffered_file_target.cpp
@@ -42,6 +43,7 @@ target_sources(elog PRIVATE
     ./elog_queued_target_provider.cpp
     ./elog_rate_limiter.cpp
     ./elog_record_builder.cpp
+    ./elog_record.cpp
     ./elog_rpc_formatter.cpp
     ./elog_rpc_schema_handler.cpp
     ./elog_schema_manager.cpp
@@ -52,6 +54,7 @@ target_sources(elog PRIVATE
     ./elog_sqlite_db_target.cpp
     ./elog_sqlite_db_target_provider.cpp
     ./elog_string_stream_receptor.cpp
+    ./elog_string_receptor.cpp
     ./elog_sys_schema_handler.cpp
     ./elog_syslog_target.cpp
     ./elog_system.cpp

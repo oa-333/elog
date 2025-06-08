@@ -1,15 +1,31 @@
 #ifndef __ELOG_RECORD_H__
 #define __ELOG_RECORD_H__
 
-#include <chrono>
 #include <cstdint>
-#include <ctime>
+#include <cstring>
+
+#ifdef ELOG_TIME_USE_CHRONO
+#include <chrono>
+#else
+#include <time.h>
+#endif
 
 #include "elog_level.h"
 
 namespace elog {
 
+#ifdef ELOG_TIME_USE_CHRONO
 typedef std::chrono::system_clock::time_point ELogTime;
+#else
+#ifdef ELOG_MSVC
+typedef FILETIME ELogTime;
+#else
+typedef timespec ELogTime;
+#endif
+#endif
+
+// forward declaration
+class ELOG_API ELogLogger;
 
 struct ELOG_API ELogRecord {
     /** @var Log record id. */
@@ -23,8 +39,8 @@ struct ELOG_API ELogRecord {
     /** @var Issuing thread id. */
     uint64_t m_threadId;
 
-    /** @var Issuing source id. */
-    uint32_t m_sourceId;
+    /** @var Issuing logger. */
+    ELogLogger* m_logger;
 
     /** @var Log level. */
     ELogLevel m_logLevel;
@@ -41,18 +57,25 @@ struct ELOG_API ELogRecord {
     /** @var Formatted log message. */
     const char* m_logMsg;
 
+    /** @var Formatted log message length (assist in buffer requirement estimation). */
+    uint32_t m_logMsgLen;
+
     /** @var Reserved for internal use. */
     void* m_reserved;
 
     /** @brief Default constructor. */
     ELogRecord()
         : m_logRecordId(0),
+#ifdef ELOG_TIME_USE_CHRONO
           m_logTime(std::chrono::system_clock::now()),
+#endif
           m_threadId(0),
-          m_sourceId(0),
+          m_logger(nullptr),
           m_logLevel(ELEVEL_INFO),
           m_logMsg(nullptr),
-          m_reserved(nullptr) {}
+          m_logMsgLen(0),
+          m_reserved(nullptr) {
+    }
 
     /** @brief Default copy constructor. */
     ELogRecord(const ELogRecord&) = default;
@@ -66,6 +89,54 @@ struct ELOG_API ELogRecord {
         return m_logRecordId == logRecord.m_logRecordId;
     }
 };
+
+#ifdef ELOG_MSVC
+#define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
+#define UNIXTIME_TO_FILETIME(ut, ft) (*(LONGLONG*)&(ft) = (ut) * 10000000LL + 116444736000000000LL)
+#endif
+
+inline uint64_t elogTimeToUTCNanos(ELogTime logTime) {
+#ifdef ELOG_TIME_USE_CHRONO
+    auto epochNanos =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(logTime.time_since_epoch());
+    uint64_t utcTimeNanos = epochMillis.count();
+    return utcTimeNanos;
+#else
+#ifdef ELOG_MSVC
+    FILETIME fileTime;
+    // SystemTimeToFileTime(&logTime, &fileTime);
+    uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME(logTime);
+    return utcTimeNanos;
+#else
+    uint64_t utcTimeNanos = logTime.tv_sec * 1000000000ULL + logTime.tv_nsec;
+    return utcTimeNanos;
+#endif
+#endif
+}
+
+/**
+ * @brief Converts time string to ELog time type.
+ * @param timeStr The input time string, expected in the format "YYYY-mm-dd HH::MM::SS"
+ * @param[out] logTime The resulting log time.
+ * @return True if conversion was successful, otherwise false.
+ */
+extern ELOG_API bool elogTimeFromString(const char* timeStr, ELogTime& logTime);
+
+/**
+ * @brief Get the log source name form the log record.
+ * @param logRecord The input log record.
+ * @param[out] length The resulting length of the log source name.
+ * @return The log source name.
+ */
+extern ELOG_API const char* getLogSourceName(const ELogRecord& logRecord, size_t& length);
+
+/**
+ * @brief Get the log module name form the log record.
+ * @param logRecord The input log record.
+ * @param[out] length The resulting length of the log module name.
+ * @return The log module name.
+ */
+extern ELOG_API const char* getLogModuleName(const ELogRecord& logRecord, size_t& length);
 
 }  // namespace elog
 

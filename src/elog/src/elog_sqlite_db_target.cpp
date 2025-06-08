@@ -31,10 +31,9 @@ public:
     inline int getRes() const { return m_res; }
 
     /** @brief Receives a string log record field. */
-    void receiveStringField(uint32_t typeId, const std::string& field,
-                            const ELogFieldSpec& fieldSpec) {
-        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, field.c_str(), field.length(),
-                                    SQLITE_TRANSIENT);
+    void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
+                            size_t length) {
+        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, field, length, SQLITE_TRANSIENT);
         if (m_res == 0) {
             m_res = res;
         }
@@ -227,7 +226,7 @@ bool ELogSQLiteDbTarget::stop() {
 }
 
 void ELogSQLiteDbTarget::log(const ELogRecord& logRecord) {
-    if (!shouldLog(logRecord)) {
+    if (!canLog(logRecord)) {
         return;
     }
 

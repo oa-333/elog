@@ -27,6 +27,7 @@ public:
             m_buffer.getRef()[m_buffer.size() - 1] = 0;
         }
         m_logRecord.m_logMsg = m_buffer.getRef();
+        m_logRecord.m_logMsgLen = m_offset;
     }
 
     /** @brief Resets the log record. */

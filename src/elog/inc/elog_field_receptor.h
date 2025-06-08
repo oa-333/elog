@@ -54,7 +54,7 @@ public:
     /** @brief Receives any static text found outside of log record field references. */
     virtual void receiveStaticText(uint32_t typeId, const std::string& text,
                                    const ELogFieldSpec& fieldSpec) {
-        return receiveStringField(typeId, text, fieldSpec);
+        return receiveStringField(typeId, text.c_str(), fieldSpec);
     }
 
     /** @brief Receives the log record id. */
@@ -64,19 +64,19 @@ public:
     }
 
     /** @brief Receives the host name. */
-    virtual void receiveHostName(uint32_t typeId, const std::string& hostName,
+    virtual void receiveHostName(uint32_t typeId, const char* hostName,
                                  const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, hostName, fieldSpec);
     }
 
     /** @brief Receives the user name. */
-    virtual void receiveUserName(uint32_t typeId, const std::string& userName,
+    virtual void receiveUserName(uint32_t typeId, const char* userName,
                                  const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, userName, fieldSpec);
     }
 
     /** @brief Receives the program name. */
-    virtual void receiveProgramName(uint32_t typeId, const std::string& programName,
+    virtual void receiveProgramName(uint32_t typeId, const char* programName,
                                     const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, programName, fieldSpec);
     }
@@ -94,25 +94,25 @@ public:
     }
 
     /** @brief Receives the thread name. */
-    virtual void receiveThreadName(uint32_t typeId, const std::string& threadName,
+    virtual void receiveThreadName(uint32_t typeId, const char* threadName,
                                    const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, threadName, fieldSpec);
     }
 
     /** @brief Receives the log source name. */
-    virtual void receiveLogSourceName(uint32_t typeId, const std::string& logSourceName,
+    virtual void receiveLogSourceName(uint32_t typeId, const char* logSourceName,
                                       const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, logSourceName, fieldSpec);
     }
 
     /** @brief Receives the module name. */
-    virtual void receiveModuleName(uint32_t typeId, const std::string& moduleName,
+    virtual void receiveModuleName(uint32_t typeId, const char* moduleName,
                                    const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, moduleName, fieldSpec);
     }
 
     /** @brief Receives the file name. */
-    virtual void receiveFileName(uint32_t typeId, const std::string& fileName,
+    virtual void receiveFileName(uint32_t typeId, const char* fileName,
                                  const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, fileName, fieldSpec);
     }
@@ -124,13 +124,13 @@ public:
     }
 
     /** @brief Receives the function name. */
-    virtual void receiveFunctionName(uint32_t typeId, const std::string& functionName,
+    virtual void receiveFunctionName(uint32_t typeId, const char* functionName,
                                      const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, functionName, fieldSpec);
     }
 
     /** @brief Receives the log msg. */
-    virtual void receiveLogMsg(uint32_t typeId, const std::string& logMsg,
+    virtual void receiveLogMsg(uint32_t typeId, const char* logMsg,
                                const ELogFieldSpec& fieldSpec) {
         return receiveStringField(typeId, logMsg, fieldSpec);
     }
@@ -140,8 +140,8 @@ public:
      */
 
     /** @brief Receives a string log record field. */
-    virtual void receiveStringField(uint32_t typeId, const std::string& value,
-                                    const ELogFieldSpec& fieldSpec) = 0;
+    virtual void receiveStringField(uint32_t typeId, const char* value,
+                                    const ELogFieldSpec& fieldSpec, size_t length = 0) = 0;
 
     /** @brief Receives an integer log record field. */
     virtual void receiveIntField(uint32_t typeId, uint64_t value,

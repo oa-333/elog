@@ -6,6 +6,7 @@
 #include <io.h>
 #include <windows.h>
 #else
+#include <stdio.h>
 #include <sys/stat.h>
 #endif
 
@@ -51,6 +52,17 @@ ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolic
       m_filePath(filePath),
       m_fileHandle(nullptr),
       m_shouldClose(false) {
+    setNativelyThreadSafe();
+    setAddNewLine(true);
+}
+
+ELogFileTarget::ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy /* = nullptr */)
+    : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
+    if (fileHandle == stderr) {
+        setName("stderr");
+    } else if (fileHandle == stdout) {
+        setName("stdout");
+    }
     setNativelyThreadSafe();
     setAddNewLine(true);
 }
@@ -115,8 +127,21 @@ void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
     // gcc documentations states that: "POSIX standard requires that C stdio FILE* operations are
     // atomic. POSIX-conforming C libraries (e.g, on Solaris and GNU/Linux) have an internal mutex
     // to serialize operations on FILE*s."
-    // therefore no lock is required here
-    fputs(formattedLogMsg.c_str(), m_fileHandle);
+    // therefore no lock is required here when NOT running in thread-safe conditions
+    if (isExternallyThreadSafe()) {
+        // unlocked stdio is available only if _GNU_SOURCE is defined, regardless of Unix/Linux
+        // platform/flavor
+#ifdef _GNU_SOURCE
+        fputs_unlocked(formattedLogMsg.c_str(), m_fileHandle);
+#else
+        // On Windows/MinGW platforms we do not have the stdio unlocked API, and implementing it
+        // here directly (through the file descriptor) will bypass internal buffering offered by
+        // fputs. Therefore on these platforms it is advised to use buffered file target instead.
+        fputs(formattedLogMsg.c_str(), m_fileHandle);
+#endif
+    } else {
+        fputs(formattedLogMsg.c_str(), m_fileHandle);
+    }
 }
 
 void ELogFileTarget::flushLogTarget() {

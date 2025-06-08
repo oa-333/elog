@@ -257,7 +257,8 @@ void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldRece
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
         receptor->receiveStaticText(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text, m_fieldSpec);
     } else {
-        receptor->receiveStringField(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text, m_fieldSpec);
+        receptor->receiveStringField(ELOG_INVALID_FIELD_SELECTOR_TYPE_ID, m_text.c_str(),
+                                     m_fieldSpec, m_text.length());
     }
 }
 
@@ -269,11 +270,117 @@ void ELogRecordIdSelector::selectField(const ELogRecord& record, ELogFieldRecept
     }
 }
 
+inline uint64_t getDigitCount(uint64_t num) {
+    // the numbers we work with are small, so we should avoid using division operator
+    if (num == 0) {
+        return 0;
+    } else if (num < 10) {
+        return 1;
+    } else if (num < 100) {
+        return 2;
+    } else if (num < 1000) {
+        return 3;
+    } else if (num < 10000) {
+        return 4;
+    } else {
+        uint64_t digits = 0;
+        while (num > 0) {
+            ++digits;
+            num /= 10;
+        }
+        return digits;
+    }
+}
+
+inline uint64_t formatInt(char* buf, uint64_t num, uint64_t width) {
+    const char fill = '0';
+    uint64_t pos = 0;
+    uint64_t digits = getDigitCount(num);
+    if (digits < width) {
+        uint64_t fillCount = width - digits;
+        for (uint64_t i = 0; i < fillCount; ++i) {
+            buf[pos++] = fill;
+        }
+    }
+
+    while (num > 0) {
+        buf[pos + digits - 1] = (num % 10) + '0';
+        num /= 10;
+        digits--;
+    }
+    return width;
+}
+
+#ifdef ELOG_MSVC
+static uint64_t win32ELogFormatTime(char* buf, SYSTEMTIME* sysTime) {
+    // convert year to string
+    uint64_t pos = formatInt(buf, sysTime->wYear, 4);
+    buf[pos++] = '-';
+    pos += formatInt(buf + pos, sysTime->wMonth, 2);
+    buf[pos++] = '-';
+    pos += formatInt(buf + pos, sysTime->wDay, 2);
+    buf[pos++] = ' ';
+    pos += formatInt(buf + pos, sysTime->wHour, 2);
+    buf[pos++] = ':';
+    pos += formatInt(buf + pos, sysTime->wMinute, 2);
+    buf[pos++] = ':';
+    pos += formatInt(buf + pos, sysTime->wSecond, 2);
+    buf[pos++] = '.';
+    pos += formatInt(buf + pos, sysTime->wMilliseconds, 3);
+    buf[pos] = 0;
+    return pos;
+}
+#else
+static uint64_t unixELogFormatTime(char* buf, struct tm* tm_info) {
+    // convert year to string
+    uint64_t pos = formatInt(buf, tm_info->tm_year, 4);
+    buf[pos++] = '-';
+    pos += formatInt(buf + pos, tm_info->tm_mon, 2);
+    buf[pos++] = '-';
+    pos += formatInt(buf + pos, tm_info->tm_mday, 2);
+    buf[pos++] = ' ';
+    pos += formatInt(buf + pos, tm_info->tm_hour, 2);
+    buf[pos++] = ':';
+    pos += formatInt(buf + pos, tm_info->tm_min, 2);
+    buf[pos++] = ':';
+    pos += formatInt(buf + pos, tm_info->tm_sec, 2);
+    buf[pos] = 0;
+    return pos;
+}
+#endif
+
 void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+#ifdef ELOG_TIME_USE_CHRONO
     auto timePoint = std::chrono::time_point_cast<std::chrono::milliseconds>(record.m_logTime);
     std::chrono::zoned_time<std::chrono::milliseconds> zt(std::chrono::current_zone(), timePoint);
     std::string timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", zt.get_local_time());
     receptor->receiveTimeField(getTypeId(), record.m_logTime, timeStr.c_str(), m_fieldSpec);
+#else
+    // this requires exactly 23 chars
+    const size_t BUF_SIZE = 64;
+    char timeStr[BUF_SIZE];
+#ifdef ELOG_MSVC
+    FILETIME localFileTime;
+    SYSTEMTIME sysTime;
+    if (FileTimeToLocalFileTime(&record.m_logTime, &localFileTime) &&
+        FileTimeToSystemTime(&localFileTime, &sysTime)) {
+        // it appears that this snprintf is very costly, so we revert to internal implementation
+        /*size_t offset = snprintf(timeStr, BUF_SIZE, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u",
+                                 sysTime.wYear, sysTime.wMonth, sysTime.wDay, sysTime.wHour,
+                                 sysTime.wMinute, sysTime.wSecond, sysTime.wMilliseconds);*/
+        size_t offset = win32ELogFormatTime(timeStr, &sysTime);
+        receptor->receiveTimeField(getTypeId(), record.m_logTime, timeStr, m_fieldSpec);
+    }
+#else
+    time_t timer = record.m_logTime.tv_sec;
+    struct tm* tm_info = localtime(&timer);
+    size_t offset = strftime(timeStr, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
+    // size_t offset = unixELogFormatTime(timeStr, tm_info);
+    offset += snprintf(timeStr + offset, BUF_SIZE - offset, "%.3u",
+                       (unsigned)(record.m_logTime.tv_nsec / 1000000L));
+    receptor->receiveTimeField(getTypeId(), record.m_logTime, timeStr, m_fieldSpec);
+#endif
+#endif
 }
 
 void ELogHostNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
@@ -325,28 +432,22 @@ void ELogThreadNameSelector::selectField(const ELogRecord& record, ELogFieldRece
 }
 
 void ELogSourceSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
-    const char* logSourceName = "N/A";
-    if (logSource != nullptr && (*logSource->getQualifiedName() != 0)) {
-        logSourceName = logSource->getQualifiedName();
-    }
+    size_t logSourceNameLength = 0;
+    const char* logSourceName = getLogSourceName(record, logSourceNameLength);
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
         receptor->receiveLogSourceName(getTypeId(), logSourceName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), logSourceName, m_fieldSpec);
+        receptor->receiveStringField(getTypeId(), logSourceName, m_fieldSpec, logSourceNameLength);
     }
 }
 
 void ELogModuleSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    ELogSource* logSource = ELogSystem::getLogSource(record.m_sourceId);
-    const char* moduleName = "N/A";
-    if (logSource != nullptr && (*logSource->getModuleName() != 0)) {
-        moduleName = logSource->getModuleName();
-    }
+    size_t moduleNameLength = 0;
+    const char* moduleName = getLogModuleName(record, moduleNameLength);
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
         receptor->receiveModuleName(getTypeId(), moduleName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), moduleName, m_fieldSpec);
+        receptor->receiveStringField(getTypeId(), moduleName, m_fieldSpec, moduleNameLength);
     }
 }
 
@@ -382,7 +483,7 @@ void ELogMsgSelector::selectField(const ELogRecord& record, ELogFieldReceptor* r
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
         receptor->receiveLogMsg(getTypeId(), record.m_logMsg, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), record.m_logMsg, m_fieldSpec);
+        receptor->receiveStringField(getTypeId(), record.m_logMsg, m_fieldSpec, record.m_logMsgLen);
     }
 }
 

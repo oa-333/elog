@@ -4,5 +4,17 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        {
+        "name": "Build and Debug elog_bench (MSVC)",
+        "type": "cppvsdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}\\cmake_build\\Windows-Debug\\elog_bench.exe",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}\\cmake_build\\Windows-Debug",
+        "environment": [],
+        "console": "internalConsole",
+        "preLaunchTask": "Build all (MSVC)"
+        }
     ]
 }

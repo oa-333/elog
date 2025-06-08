@@ -1,5 +1,6 @@
 #include "elog_target.h"
 
+#include "elog_common.h"
 #include "elog_filter.h"
 #include "elog_flush_policy.h"
 #include "elog_formatter.h"
@@ -53,7 +54,7 @@ void ELogTarget::log(const ELogRecord& logRecord) {
 }
 
 void ELogTarget::logNoLock(const ELogRecord& logRecord) {
-    if (shouldLog(logRecord)) {
+    if (canLog(logRecord)) {
         uint32_t bytesWritten = writeLogRecord(logRecord);
         // update statistics counter
         // NOTE: asynchronous log targets return zero here, but log flushing of the end target will
@@ -71,7 +72,10 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
 uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     // default implementation - format log message and write to log
     // this might not suite all targets, as formatting might take place on a later phase
-    std::string logMsg;
+    // NOTE: this is a naive attempt to reuse a pre-allocated string buffer for better performance
+    static thread_local std::string logMsg(ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE, 0);
+    logMsg.clear();  // does this deallocate??
+    assert(logMsg.capacity() > 0);
     formatLogMsg(logRecord, logMsg);
     logFormattedMsg(logMsg);
     return logMsg.length();
@@ -107,10 +111,6 @@ void ELogTarget::setFlushPolicy(ELogFlushPolicy* flushPolicy) {
     m_flushPolicy = flushPolicy;
 }
 
-bool ELogTarget::shouldLog(const ELogRecord& logRecord) {
-    return logRecord.m_logLevel <= m_logLevel && ELogSystem::filterLogMsg(logRecord);
-}
-
 void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
     if (m_logFormatter != nullptr) {
         m_logFormatter->formatLogMsg(logRecord, logMsg);
@@ -120,10 +120,6 @@ void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) 
     if (m_addNewLine) {
         logMsg += "\n";
     }
-}
-
-bool ELogTarget::shouldFlush(uint32_t bytesWritten) {
-    return m_flushPolicy == nullptr || m_flushPolicy->shouldFlush(bytesWritten);
 }
 
 bool ELogCombinedTarget::startLogTarget() {
