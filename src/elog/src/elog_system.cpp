@@ -540,8 +540,6 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
         // check for log target
         if (prop.first.compare("log_target") == 0) {
             // configure log target
-            // TODO: what about multi-line spec? shouldn't we just transition to json and avoid all
-            // this parsing mess? but this requires enhancing json with env vars (we can do that)
             if (!configureLogTarget(prop.second)) {
                 return false;
             }

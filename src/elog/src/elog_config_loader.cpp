@@ -13,6 +13,13 @@
 
 namespace elog {
 
+inline void appendMultiLine(std::string& multiLine, const std::string& line) {
+    if (!multiLine.empty()) {
+        multiLine += " ";
+    }
+    multiLine += line;
+}
+
 bool ELogConfigLoader::loadFileProperties(const char* configPath, ELogPropertySequence& props) {
     // use simple format
     std::ifstream cfgFile(configPath);
@@ -22,13 +29,54 @@ bool ELogConfigLoader::loadFileProperties(const char* configPath, ELogPropertySe
         return false;
     }
 
+    uint32_t lineNumber = 0;
     std::string line;
+    uint32_t openBraceCount = 0;
+    uint32_t closeBraceCount = 0;
+    std::string multiLine;
     while (std::getline(cfgFile, line)) {
-        // skip comment lines
-        if (trim(line)[0] == '#') {
+        ++lineNumber;
+        line = trim(line);
+
+        // remove comment part (could be whole line or just end of line)
+        std::string::size_type poundPos = line.find('#');
+        if (poundPos != std::string::npos) {
+            line = line.substr(0, poundPos);
+            line = trim(line);  // trim again (perhaps there is white space at end of line)
+        }
+
+        // skip empty lines
+        if (line.empty()) {
             continue;
         }
-        // parse line
+
+        // first check for multi-line chars
+        openBraceCount += std::count(line.begin(), line.end(), '{');
+        closeBraceCount += std::count(line.begin(), line.end(), '}');
+
+        // check for ill-formed braces
+        if (openBraceCount < closeBraceCount) {
+            ELOG_REPORT_ERROR(
+                "Invalid multiline nested log target specification, ill-formed braces: %s (line "
+                "%u)",
+                line.c_str(), lineNumber);
+            return false;
+        }
+
+        // check if starting or continuing multi-line
+        if (openBraceCount > closeBraceCount) {
+            appendMultiLine(multiLine, line);
+            continue;
+        }
+
+        // check if finished multi0line
+        if (openBraceCount == closeBraceCount && !multiLine.empty()) {
+            appendMultiLine(multiLine, line);
+            line = multiLine;
+            multiLine.clear();
+        }
+
+        // now parse line
         std::istringstream is_line(line);
         std::string key;
         if (std::getline(is_line, key, '=')) {
@@ -41,7 +89,6 @@ bool ELogConfigLoader::loadFileProperties(const char* configPath, ELogPropertySe
         }
     }
 
-    // TODO: support multiline spec
     return true;
 }
 
