@@ -29,32 +29,36 @@ SET CONN_INDEX=0
 SET CONNS[0]=tmp
 echo [DEBUG] Parsing args
 :GET_OPTS
-echo [DEBUG] processing option "%1" "%2"
-IF /I "%1" == "-v" SET VERBOSE=1 & GOTO CHECK_OPTS
-IF /I "%1" == "--verbose" SET VERBOSE=1 & GOTO CHECK_OPTS
-IF /I "%1" == "-d" SET BUILD_TYPE=Debug & GOTO CHECK_OPTS
-IF /I "%1" == "--debug" SET BUILD_TYPE=Debug & GOTO CHECK_OPTS
-IF /I "%1" == "-r" SET BUILD_TYPE=Release & GOTO CHECK_OPTS
-IF /I "%1" == "--release" SET BUILD_TYPE=Release & GOTO CHECK_OPTS
-IF /I "%1" == "-w" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
-IF /I "%1" == "--rel-with-debug-info" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
-IF /I "%1" == "-s" SET STACK_TRACE=1 & GOTO CHECK_OPTS
-IF /I "%1" == "--stack-trace" SET STACK_TRACE=1 & GOTO CHECK_OPTS
-IF /I "%1" == "-f" SET FULL=1 & GOTO CHECK_OPTS
-IF /I "%1" == "--full" SET FULL=1 & GOTO CHECK_OPTS
-IF /I "%1" == "-c" SET CONNS[!CONN_INDEX!]=%2 & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
-IF /I "%1" == "--conn" SET CONNS[!CONN_INDEX!]=%2 & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
-IF /I "%1" == "-i" SET INSTALL_DIR=%2 & shift & GOTO CHECK_OPTS
-IF /I "%1" == "--install-dir" SET INSTALL_DIR=%2 & shift & GOTO CHECK_OPTS
-IF /I "%1" == "-l" SET CLEAN=1 & GOTO CHECK_OPTS
-IF /I "%1" == "--clean" SET CLEAN=1 & GOTO CHECK_OPTS
-IF /I "%1" == "-r" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
-IF /I "%1" == "--rebuild" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
-IF /I "%1" == "-g" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
-IF /I "%1" == "--reconfigure" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
+SET ARG1=%1
+SET ARG1=%ARG1: =%
+SET ARG2=%2
+SET ARG2=%ARG2: =%
+echo [DEBUG] processing option "%ARG1%" "%ARG2%"
+IF /I "%ARG1%" == "-v" SET VERBOSE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--verbose" SET VERBOSE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-d" SET BUILD_TYPE=Debug & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--debug" SET BUILD_TYPE=Debug & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-r" SET BUILD_TYPE=Release & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--release" SET BUILD_TYPE=Release & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-w" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--rel-with-debug-info" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-s" SET STACK_TRACE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--stack-trace" SET STACK_TRACE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-f" SET FULL=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--full" SET FULL=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-c" SET CONNS[!CONN_INDEX!]=%ARG2% & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--conn" SET CONNS[!CONN_INDEX!]=%ARG2% & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-i" SET INSTALL_DIR=%ARG2% & shift & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--install-dir" SET INSTALL_DIR=%ARG2% & shift & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-l" SET CLEAN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--clean" SET CLEAN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-r" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--rebuild" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-g" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--reconfigure" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 
 REM handle invalid option
-echo [ERROR] Invalid option: %1
+echo [ERROR] Invalid option: %ARG1%
 GOTO HANDLE_ERROR
 
 :CHECK_OPTS
@@ -95,37 +99,38 @@ echo [DEBUG] Parsing %CONN_INDEX% connectors
 set /A CONN_COUNT=%CONN_INDEX-1
 for /l %%n in (0,1,%CONN_COUNT%) do (
     set conn=!CONNS[%%n]!
+    set conn=!conn: =!
     echo [DEBUG] Adding connector --!conn!-- to OPTS %OPTS%
-    IF "!conn!" == "sqlite " (
+    IF "!conn!" == "sqlite" (
         SET OPTS=!OPTS! -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON
         vcpkg add port sqlite3
     )
-    IF "!conn!" == "mysql " (
-        IF "%MYSQL_ROOT%"=="" SET MYSQL_ROOT="C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
-        SET OPTS=!OPTS! -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON -DMYSQL_ROOT=%MYSQL_ROOT%
-        REM NOTE: usage of vcpkg is still not working well, see CMakeLists.txt for more details
+    IF "!conn!" == "mysql" (
+        IF "%MYSQL_ROOT%" == "" SET MYSQL_ROOT="C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
+        SET OPTS=!OPTS! -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON -DMYSQL_ROOT=!MYSQL_ROOT!
+        REM NOTE: usage of vcpkg for MySQL is still not working well, see CMakeLists.txt for more details
         REM vcpkg add port mysql-connector-cpp
     )
-    IF "!conn!" == "postgresql " (
+    IF "!conn!" == "postgresql" (
         SET OPTS=!OPTS! -DELOG_ENABLE_PGSQL_DB_CONNECTOR=ON
         vcpkg add port libpqxx
     )
-    IF "!conn!" == "kafka " (
+    IF "!conn!" == "kafka" (
         SET OPTS=!OPTS! -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON
         vcpkg add port librdkafka
     )
-    IF "!conn!" == "grpc " (
+    IF "!conn!" == "grpc" (
         SET OPTS=!OPTS! -DELOG_ENABLE_GRPC_CONNECTOR=ON
         vcpkg add port grpc
     )
-    IF "!conn!" == "grafana " (
+    IF "!conn!" == "grafana" (
         SET OPTS=!OPTS! -DELOG_ENABLE_GRAFANA_CONNECTOR=ON
         vcpkg add port cpp-httplib
         vcpkg add port nlohmann-json
     )
     IF "!conn!" == "all" (
         echo [INFO]  Enabling all connectors
-        IF "%MYSQL_ROOT%"=="" SET MYSQL_ROOT="C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
+        IF "%MYSQL_ROOT%" == "" SET MYSQL_ROOT="C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
         SET OPTS=!OPTS! -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON -DMYSQL_ROOT=!MYSQL_ROOT!
         SET OPTS=!OPTS! -DELOG_ENABLE_PGSQL_DB_CONNECTOR=ON
