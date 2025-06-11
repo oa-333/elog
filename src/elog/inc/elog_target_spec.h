@@ -27,7 +27,7 @@ struct ELOG_API ELogTargetSpec {
 };
 
 /** @brief Target specification style constants. */
-enum ELOG_API ELogTargetSpecStyle {
+enum class ELogTargetSpecStyle : uint32_t {
     /**
      * @brief URL target specification style (properties may contain asynchronous logging
      * specification).

@@ -10,7 +10,7 @@ namespace elog {
 class ELogConfigParser {
 public:
     static bool parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
-                              ELogSource::PropagateMode& propagateMode);
+                              ELogPropagateMode& propagateMode);
 
     static bool parseLogAffinityList(const char* affinityListStr, ELogTargetAffinityMask& mask);
 

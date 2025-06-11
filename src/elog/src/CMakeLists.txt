@@ -12,6 +12,7 @@ target_sources(elog PRIVATE
     ./elog_db_formatter.cpp
     ./elog_db_schema_handler.cpp
     ./elog_db_target.cpp
+    ./elog_dbg_util_log_handler.cpp
     ./elog_deferred_target.cpp
     ./elog_deferred_target_provider.cpp
     ./elog_error.cpp

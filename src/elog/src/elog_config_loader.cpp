@@ -108,7 +108,7 @@ ELogTarget* ELogConfigLoader::loadLogTarget(const std::string& logTargetCfg,
         // in case of nested style, there no need to apply compound target, the schema handler
         // already loads it nested (this is actually done in recursive manner, schema handler calls
         // configureLogTarget for each sub target, which in turn activates the schema handler again)
-        if (specStyle == ELOG_STYLE_URL) {
+        if (specStyle == ELogTargetSpecStyle::ELOG_STYLE_URL) {
             // apply compound target
             bool errorOccurred = false;
             ELogTarget* compoundTarget = applyCompoundTarget(

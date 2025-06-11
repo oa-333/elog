@@ -17,9 +17,6 @@
 
 namespace elog {
 
-// forward declaration
-class ELOG_API ELogSpecTokenizer;
-
 /** @brief The elog module facade. */
 class ELOG_API ELogSystem {
 public:

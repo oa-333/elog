@@ -48,6 +48,31 @@ typedef uint64_t ELogTargetAffinityMask;
 #define ELOG_HAS_TARGET_AFFINITY_MASK(mask, logTargetId) \
     ((mask) & ELOG_TARGET_ID_TO_AFFINITY_MASK(logTargetId))
 
+/** @enum Log level propagation mode constants. */
+enum class ELogPropagateMode : uint32_t {
+    /** @brief Designates that log level should not be propagated to child log sources. */
+    PM_NONE,
+
+    /** @brief Designates that log level should be propagated to child log sources as is. */
+    PM_SET,
+
+    /**
+     * @brief Designates that log level should be propagated to child log sources such that
+     * child log sources are to be restricted not to have looser log level than that of their
+     * parent.
+     * @note Strict log level have lower log level value.
+     */
+    PM_RESTRICT,
+
+    /**
+     * @brief Designates that log level should be propagated to child log sources such that the
+     * log level of child log sources should be loosened, if necessary, to ensure that it is at
+     * least as loose as the log level of the parent.
+     * @note Strict log level have lower log level value.
+     */
+    PM_LOOSE
+};
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

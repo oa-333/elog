@@ -11,7 +11,7 @@
 namespace elog {
 
 bool ELogConfigParser::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
-                                     ELogSource::PropagateMode& propagateMode) {
+                                     ELogPropagateMode& propagateMode) {
     const char* ptr = nullptr;
     if (!elogLevelFromStr(logLevelStr, logLevel, &ptr)) {
         ELOG_REPORT_ERROR("Invalid log level: %s", logLevelStr);
@@ -19,7 +19,7 @@ bool ELogConfigParser::parseLogLevel(const char* logLevelStr, ELogLevel& logLeve
     }
 
     // parse optional propagation sign if there is any
-    propagateMode = ELogSource::PropagateMode::PM_NONE;
+    propagateMode = ELogPropagateMode::PM_NONE;
     uint32_t parseLen = ptr - logLevelStr;
     uint32_t len = strlen(logLevelStr);
     if (parseLen < len) {
@@ -31,11 +31,11 @@ bool ELogConfigParser::parseLogLevel(const char* logLevelStr, ELogLevel& logLeve
                 logLevelStr);
             return false;
         } else if (*ptr == '*') {
-            propagateMode = ELogSource::PropagateMode::PM_SET;
+            propagateMode = ELogPropagateMode::PM_SET;
         } else if (*ptr == '-') {
-            propagateMode = ELogSource::PropagateMode::PM_RESTRICT;
+            propagateMode = ELogPropagateMode::PM_RESTRICT;
         } else if (*ptr == '+') {
-            propagateMode = ELogSource::PropagateMode::PM_LOOSE;
+            propagateMode = ELogPropagateMode::PM_LOOSE;
         } else {
             ELOG_REPORT_ERROR(
                 "Invalid excess chars at global log level: %s (only one character is allowed: '*', "
@@ -93,13 +93,13 @@ bool ELogConfigParser::parseLogAffinityList(const char* affinityListStr,
 bool ELogConfigParser::parseLogTargetSpec(const std::string& logTargetCfg,
                                           ELogTargetNestedSpec& logTargetNestedSpec,
                                           ELogTargetSpecStyle& specStyle) {
-    specStyle = ELOG_STYLE_URL;
+    specStyle = ELogTargetSpecStyle::ELOG_STYLE_URL;
     if (logTargetCfg.starts_with("{") || logTargetCfg.starts_with("[")) {
         if (!parseLogTargetNestedSpec(logTargetCfg, logTargetNestedSpec)) {
             ELOG_REPORT_ERROR("Invalid log target specification: %s", logTargetCfg.c_str());
             return false;
         }
-        specStyle = ELOG_STYLE_NESTED;
+        specStyle = ELogTargetSpecStyle::ELOG_STYLE_NESTED;
     } else if (!parseLogTargetSpec(logTargetCfg, logTargetNestedSpec.m_spec)) {
         ELOG_REPORT_ERROR("Invalid log target specification: %s", logTargetCfg.c_str());
         return false;

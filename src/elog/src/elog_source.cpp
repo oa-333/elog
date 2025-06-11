@@ -58,9 +58,9 @@ void ELogSource::removeChild(const char* name) {
     }
 }
 
-void ELogSource::setLogLevel(ELogLevel logLevel, PropagateMode propagateMode) {
+void ELogSource::setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode) {
     m_logLevel = logLevel;
-    if (propagateMode == PropagateMode::PM_NONE) {
+    if (propagateMode == ELogPropagateMode::PM_NONE) {
         // no propagation at all
         return;
     }
@@ -71,18 +71,18 @@ void ELogSource::setLogLevel(ELogLevel logLevel, PropagateMode propagateMode) {
     }
 }
 
-void ELogSource::propagateLogLevel(ELogLevel logLevel, PropagateMode propagateMode) {
+void ELogSource::propagateLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode) {
     // adjust self log level
     switch (propagateMode) {
-        case PropagateMode::PM_SET:
+        case ELogPropagateMode::PM_SET:
             m_logLevel = logLevel;
             break;
 
-        case PropagateMode::PM_RESTRICT:
+        case ELogPropagateMode::PM_RESTRICT:
             m_logLevel = std::min(m_logLevel, logLevel);
             break;
 
-        case PropagateMode::PM_LOOSE:
+        case ELogPropagateMode::PM_LOOSE:
             m_logLevel = std::max(m_logLevel, logLevel);
             break;
 

@@ -54,7 +54,7 @@
             "type": "cppbuild",
             "label": "Build all (MSVC)",
             "command": "build.bat",
-            "args": [],
+            "args": ["--stack-trace"],
             "options": {
                 "cwd": "${workspaceFolder}"
             },

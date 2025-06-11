@@ -27,31 +27,6 @@ public:
     ELogSource(const ELogSource&) = delete;
     ELogSource(ELogSource&&) = delete;
 
-    /** @enum Log level propagation mode constants. */
-    enum class PropagateMode : uint32_t {
-        /** @brief Designates that log level should not be propagated to child log sources. */
-        PM_NONE,
-
-        /** @brief Designates that log level should be propagated to child log sources as is. */
-        PM_SET,
-
-        /**
-         * @brief Designates that log level should be propagated to child log sources such that
-         * child log sources are to be restricted not to have looser log level than that of their
-         * parent.
-         * @note Strict log level have lower log level value.
-         */
-        PM_RESTRICT,
-
-        /**
-         * @brief Designates that log level should be propagated to child log sources such that the
-         * log level of child log sources should be loosened, if necessary, to ensure that it is at
-         * least as loose as the log level of the parent.
-         * @note Strict log level have lower log level value.
-         */
-        PM_LOOSE
-    };
-
     // log source name/id
     /** @brief Retrieves the unique log source id. */
     inline ELogSourceId getId() const { return m_sourceId; }
@@ -107,7 +82,7 @@ public:
      * @param propagateMode Specifies how the log level should be propagated to child log sources,
      * if at all.
      */
-    void setLogLevel(ELogLevel logLevel, PropagateMode propagateMode);
+    void setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode);
 
     /** @brief Queries whether the log source can log a record with the given log level. */
     inline bool canLog(ELogLevel logLevel) {
@@ -168,7 +143,7 @@ private:
                ELogLevel logLevel = ELEVEL_INFO);
     ~ELogSource();
 
-    void propagateLogLevel(ELogLevel logLevel, PropagateMode propagateMode);
+    void propagateLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode);
 
     friend class ELogSystem;
 };

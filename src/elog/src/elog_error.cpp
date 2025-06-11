@@ -50,7 +50,7 @@ public:
 
     void setTraceMode(bool enableTrace) final {
         m_logSource->setLogLevel(enableTrace ? ELEVEL_TRACE : ELEVEL_INFO,
-                                 ELogSource::PropagateMode::PM_SET);
+                                 ELogPropagateMode::PM_SET);
         ELogErrorHandler::setTraceMode(enableTrace);
     }
 

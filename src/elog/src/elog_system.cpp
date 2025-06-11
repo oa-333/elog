@@ -13,152 +13,23 @@
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_config_parser.h"
+#include "elog_dbg_util_log_handler.h"
 #include "elog_error.h"
 #include "elog_field_selector_internal.h"
 #include "elog_file_target.h"
 #include "elog_filter_internal.h"
 #include "elog_flush_policy.h"
 #include "elog_flush_policy_internal.h"
+#include "elog_level_cfg.h"
 #include "elog_rate_limiter.h"
 #include "elog_schema_manager.h"
 #include "elog_segmented_file_target.h"
 #include "elog_syslog_target.h"
 #include "elog_target_spec.h"
 
-#ifdef ELOG_ENABLE_STACK_TRACE
-#include "dbg_util.h"
-#endif
-
 namespace elog {
 
-/** @brief Log level configuration used for delayed log level propagation. */
-struct ELogLevelCfg {
-    ELogSource* m_logSource;
-    ELogLevel m_logLevel;
-    ELogSource::PropagateMode m_propagationMode;
 #ifdef ELOG_ENABLE_STACK_TRACE
-    uint32_t m_dbgUtilLoggerId;
-    dbgutil::LogSeverity m_severity;
-#endif
-};
-
-#ifdef ELOG_ENABLE_STACK_TRACE
-inline ELogLevel severityToLogLevel(dbgutil::LogSeverity severity) {
-    // values are aligned (on purpose), so direct cast can be used
-    return (ELogLevel)severity;
-}
-
-inline dbgutil::LogSeverity logLevelToSeverity(ELogLevel logLevel) {
-    // values are aligned (on purpose), so direct cast can be used
-    return (dbgutil::LogSeverity)logLevel;
-}
-
-static std::vector<ELogLogger*> sDbgUtilLoggers;
-
-class ELogDbgUtilLogHandler : public dbgutil::LogHandler {
-public:
-    /**
-     * @brief Notifies that a logger has been registered.
-     * @param severity The log severity with which the logger was initialized.
-     * @param loggerName The name of the logger that was registered.
-     * @param loggerId The identifier used to refer to this logger.
-     * @return LogSeverity The desired severity for the logger. If not to be changed, then
-     * return the severity with which the logger was registered.
-     */
-    dbgutil::LogSeverity onRegisterLogger(dbgutil::LogSeverity severity, const char* loggerName,
-                                          uint32_t loggerId) final {
-        // define a log source
-        std::string qualifiedLoggerName = std::string("dbgutil.") + loggerName;
-        ELogSource* logSource = ELogSystem::defineLogSource(qualifiedLoggerName.c_str(), true);
-        logSource->setModuleName("dbgutil");
-        ELogLogger* logger = logSource->createSharedLogger();
-
-        // save logger in map (not thread-safe, but this takes place during init phase, so it is ok)
-        if (loggerId >= sDbgUtilLoggers.size()) {
-            sDbgUtilLoggers.resize(loggerId + 1);
-        }
-        sDbgUtilLoggers[loggerId] = logger;
-
-        // check for logger log level
-        std::string envVarName = qualifiedLoggerName + "_log_level";
-        std::replace(envVarName.begin(), envVarName.end(), '.', '_');
-        char* envVarValue = getenv(envVarName.c_str());
-        if (envVarValue != nullptr) {
-            ELogLevel logLevel = ELEVEL_INFO;
-            ELogSource::PropagateMode propagateMode = ELogSource::PropagateMode::PM_NONE;
-            if (!ELogConfigParser::parseLogLevel(envVarValue, logLevel, propagateMode)) {
-                ELOG_REPORT_ERROR("Invalid dbgutil source %s log level: %s",
-                                  qualifiedLoggerName.c_str(), envVarValue);
-            } else {
-                // we first set logger severity (in the end we will deal with propagation)
-                ELOG_REPORT_TRACE("Setting %s initial log level to %s (no propagation)",
-                                  logSource->getQualifiedName(), elogLevelToStr(logLevel),
-                                  (uint32_t)propagateMode);
-                logSource->setLogLevel(logLevel, propagateMode);
-                dbgutil::setLoggerSeverity(loggerId, severity);
-                m_logLevelCfg.push_back({logSource, logLevel, propagateMode, loggerId, severity});
-            }
-
-            severity = logLevelToSeverity(logLevel);
-        }
-
-        return severity;
-    }
-
-    void onUnregisterLogger(uint32_t loggerId) final {
-        if (loggerId < sDbgUtilLoggers.size()) {
-            sDbgUtilLoggers[loggerId] = nullptr;
-            uint32_t maxLoggerId = 0;
-            for (int i = sDbgUtilLoggers.size() - 1; i >= 0; --i) {
-                if (sDbgUtilLoggers[i] != nullptr) {
-                    maxLoggerId = i;
-                    break;
-                }
-            }
-            if (maxLoggerId + 1 < sDbgUtilLoggers.size()) {
-                sDbgUtilLoggers.resize(maxLoggerId + 1);
-            }
-        }
-    }
-
-    /**
-     * @brief Notifies a logger is logging a message.
-     * @param severity The log message severity.
-     * @param loggerId The identifier used to refer to this logger.
-     * @param msg The log message.
-     */
-    void onMsg(dbgutil::LogSeverity severity, uint32_t loggerId, const char* msg) final {
-        // locate logger by id
-        ELogLogger* logger = nullptr;
-        if (loggerId < sDbgUtilLoggers.size()) {
-            logger = sDbgUtilLoggers[loggerId];
-        }
-        if (logger != nullptr) {
-            ELogLevel logLevel = severityToLogLevel(severity);
-            if (logger->canLog(logLevel)) {
-                logger->logFormat(logLevel, "", 0, "", msg);
-            } else {
-                ELOG_TRACE("Discarded dbgutil log source %s message %s, severity %u",
-                           logger->getLogSource()->getQualifiedName(), msg, (unsigned)severity);
-            }
-        }
-    }
-
-    void applyLogLevelCfg() {
-        // now we can apply log level propagation
-        for (const ELogLevelCfg& cfg : m_logLevelCfg) {
-            ELOG_REPORT_TRACE("Setting %s log level to %s (propagate - %u)",
-                              cfg.m_logSource->getQualifiedName(), elogLevelToStr(cfg.m_logLevel),
-                              (uint32_t)cfg.m_propagationMode);
-            cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
-            dbgutil::setLoggerSeverity(cfg.m_dbgUtilLoggerId, cfg.m_severity);
-        }
-    }
-
-private:
-    std::vector<ELogLevelCfg> m_logLevelCfg;
-};
-
 static ELogDbgUtilLogHandler sDbgUtilLogHandler;
 #endif
 
@@ -177,7 +48,6 @@ static ELogSourceMap sLogSourceMap;
 static ELogLogger* sDefaultLogger = nullptr;
 static ELogTarget* sDefaultLogTarget = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
-static ELogFlushPolicy* sFlushPolicy = nullptr;
 
 bool ELogSystem::initGlobals() {
     // init the error log so we can have trace messages as early as possible
@@ -388,15 +258,8 @@ bool ELogSystem::registerSchemaHandler(const char* schemeName, ELogSchemaHandler
 
 bool ELogSystem::configureRateLimit(const std::string& rateLimitCfg) {
     uint32_t maxMsgPerSec = 0;
-    std::size_t pos = 0;
-    try {
-        maxMsgPerSec = std::stoul(rateLimitCfg, &pos);
-    } catch (std::exception& e) {
-        ELOG_REPORT_ERROR("Invalid log_rate_limit value %s: (%s)", rateLimitCfg.c_str(), e.what());
-        return false;
-    }
-    if (pos != rateLimitCfg.length()) {
-        ELOG_REPORT_ERROR("Excess characters at log_rate_limit value: %s", rateLimitCfg.c_str());
+    if (!parseIntProp("log_rate_limit", "", rateLimitCfg, maxMsgPerSec)) {
+        ELOG_REPORT_ERROR("Failed to parse rate limit configuration: ", rateLimitCfg.c_str());
         return false;
     }
     return setRateLimit(maxMsgPerSec);
@@ -432,7 +295,7 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
     //
     // in theory nesting level is not restricted, but it doesn't make sense to have more than 2
 
-    ELogTargetSpecStyle specStyle = ELOG_STYLE_URL;
+    ELogTargetSpecStyle specStyle = ELogTargetSpecStyle::ELOG_STYLE_URL;
     ELogTargetNestedSpec logTargetNestedSpec;
     if (!ELogConfigParser::parseLogTargetSpec(logTargetCfg, logTargetNestedSpec, specStyle)) {
         return false;
@@ -488,7 +351,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
 
     std::vector<ELogLevelCfg> logLevelCfg;
     ELogLevel logLevel = ELEVEL_INFO;
-    ELogSource::PropagateMode propagateMode = ELogSource::PropagateMode::PM_NONE;
+    ELogPropagateMode propagateMode = ELogPropagateMode::PM_NONE;
 
     const char* logLevelSuffix1 = ".log_level";  // for configuration files
     const char* logLevelSuffix2 = "_log_level";  // for environment variables
@@ -562,7 +425,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
                 ELOG_REPORT_ERROR("Invalid log source name: %s", sourceName.c_str());
                 return false;
             }
-            propagateMode = ELogSource::PropagateMode::PM_NONE;
+            propagateMode = ELogPropagateMode::PM_NONE;
             if (!ELogConfigParser::parseLogLevel(prop.second.c_str(), logLevel, propagateMode)) {
                 ELOG_REPORT_ERROR("Invalid source %s log level: %s", sourceName.c_str(),
                                   prop.second.c_str());
@@ -1024,7 +887,7 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
     if (envVarValue != nullptr) {
         ELogLevel logLevel = ELEVEL_INFO;
         if (elogLevelFromStr(envVarValue, logLevel)) {
-            logSource->setLogLevel(logLevel, ELogSource::PropagateMode::PM_NONE);
+            logSource->setLogLevel(logLevel, ELogPropagateMode::PM_NONE);
         }
     }
 

@@ -45,8 +45,8 @@ ELogTarget* ELogAsyncTargetProvider::loadNestedTarget(const std::string& logTarg
 
 ELogTarget* ELogAsyncTargetProvider::loadSingleSubTarget(const std::string& logTargetCfg,
                                                          const ELogTargetNestedSpec& targetSpec) {
-    ELogTarget* target =
-        ELogConfigLoader::loadLogTarget(logTargetCfg, targetSpec, ELOG_STYLE_NESTED);
+    ELogTarget* target = ELogConfigLoader::loadLogTarget(logTargetCfg, targetSpec,
+                                                         ELogTargetSpecStyle::ELOG_STYLE_NESTED);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to load nested log target by scheme: %s",
                           targetSpec.m_spec.m_scheme.c_str());
