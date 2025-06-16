@@ -7,7 +7,7 @@
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_error.h"
-#include "elog_spec_tokenizer.h"
+#include "elog_string_tokenizer.h"
 
 namespace elog {
 

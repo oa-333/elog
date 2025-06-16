@@ -52,7 +52,7 @@ target_sources(elog PRIVATE
     ./elog_segmented_file_target.cpp
     ./elog_shared_logger.cpp
     ./elog_source.cpp
-    ./elog_spec_tokenizer.cpp
+    ./elog_string_tokenizer.cpp
     ./elog_sqlite_db_target.cpp
     ./elog_sqlite_db_target_provider.cpp
     ./elog_string_stream_receptor.cpp

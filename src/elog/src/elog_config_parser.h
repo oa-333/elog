@@ -3,7 +3,7 @@
 
 #include "elog_config.h"
 #include "elog_source.h"
-#include "elog_spec_tokenizer.h"
+#include "elog_string_tokenizer.h"
 #include "elog_target_spec.h"
 
 namespace elog {
