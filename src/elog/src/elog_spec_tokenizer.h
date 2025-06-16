@@ -1,5 +1,5 @@
-#ifndef __ELOG_SPEC_TOKENIZER_H__
-#define __ELOG_SPEC_TOKENIZER_H__
+#ifndef __ELOG_STRING_TOKENIZER_H__
+#define __ELOG_STRING_TOKENIZER_H__
 
 #include <cstdint>
 #include <string>
@@ -38,20 +38,20 @@ enum class ELogTokenType : uint32_t {
 
 // TODO: rename to ELogStringTokenizer
 
-class ELogSpecTokenizer {
+class ELogStringTokenizer {
 public:
-    ELogSpecTokenizer(const std::string& spec);
-    ELogSpecTokenizer(const ELogSpecTokenizer&) = delete;
-    ELogSpecTokenizer(ELogSpecTokenizer&&) = delete;
-    ~ELogSpecTokenizer() {}
+    ELogStringTokenizer(const std::string& sourceStr);
+    ELogStringTokenizer(const ELogStringTokenizer&) = delete;
+    ELogStringTokenizer(ELogStringTokenizer&&) = delete;
+    ~ELogStringTokenizer() {}
 
-    inline bool hasMoreTokens() const { return m_pos < m_spec.length(); }
+    inline bool hasMoreTokens() const { return m_pos < m_sourceStr.length(); }
 
     inline uint32_t getPos() const { return m_pos; }
 
     inline void rewind(uint32_t pos) { m_pos = pos; }
 
-    inline const char* getSpec() const { return m_spec.c_str(); }
+    inline const char* getSourceStr() const { return m_sourceStr.c_str(); }
 
     std::string getErrLocStr(uint32_t tokenPos) const;
 
@@ -72,10 +72,10 @@ public:
                              const char* expectedStr2, const char* expectedStr3);
 
 private:
-    std::string m_spec;
+    std::string m_sourceStr;
     uint32_t m_pos;
 };
 
 }  // namespace elog
 
-#endif  // __ELOG_SPEC_TOKENIZER_H__
+#endif  // __ELOG_STRING_TOKENIZER_H__

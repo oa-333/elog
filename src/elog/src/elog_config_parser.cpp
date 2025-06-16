@@ -53,7 +53,7 @@ bool ELogConfigParser::parseLogAffinityList(const char* affinityListStr,
                                             ELogTargetAffinityMask& mask) {
     // tokenize target names by comma
     mask = 0;
-    ELogSpecTokenizer tokenizer(affinityListStr);
+    ELogStringTokenizer tokenizer(affinityListStr);
     ELogTokenType prevTokenType = ELogTokenType::TT_COMMA;
     while (tokenizer.hasMoreTokens()) {
         ELogTokenType tokenType = ELogTokenType::TT_TOKEN;
@@ -263,7 +263,7 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
     // 4. each nested call expected first char to be a curly open brace
 
     // it is much easier with a tokenizer, a token stream, and parse state machine...
-    ELogSpecTokenizer tok(logTargetCfg);
+    ELogStringTokenizer tok(logTargetCfg);
     if (!parseLogTargetNestedSpec(logTargetCfg, logTargetNestedSpec, tok)) {
         return false;
     }
@@ -278,7 +278,7 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
 
 bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
                                                 ELogTargetNestedSpec& logTargetNestedSpec,
-                                                ELogSpecTokenizer& tok) {
+                                                ELogStringTokenizer& tok) {
     std::string token;
 
     // first token must be open brace

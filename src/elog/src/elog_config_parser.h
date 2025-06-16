@@ -30,7 +30,7 @@ private:
 
     static bool parseLogTargetNestedSpec(const std::string& logTargetCfg,
                                          ELogTargetNestedSpec& logTargetNestedSpec,
-                                         ELogSpecTokenizer& tok);
+                                         ELogStringTokenizer& tok);
     static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                    const std::string& value);
     static void tryParsePathAsHostPort(const std::string& logTargetCfg,

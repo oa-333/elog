@@ -40,7 +40,7 @@ enum class ELogConfigMode : uint32_t {
     CM_CONSISTENT
 };
 
-static ELogConfigNode* parseConfigNode(ELogSpecTokenizer& tok,
+static ELogConfigNode* parseConfigNode(ELogStringTokenizer& tok,
                                        ELogConfigSourceContext* sourceContext,
                                        ELogConfigMode configMode = ELogConfigMode::CM_CONSISTENT);
 
@@ -348,7 +348,7 @@ bool ELogConfig::setSingleLineSourceContext(const char* line) {
 }
 
 ELogConfig* ELogConfig::load(const char* str, ELogConfigSourceContext* sourceContext) {
-    ELogSpecTokenizer tok(str);
+    ELogStringTokenizer tok(str);
     ELogConfigNode* rootNode = parseConfigNode(tok, sourceContext);
     if (rootNode == nullptr) {
         ELOG_REPORT_ERROR("Failed to load configuration from: %s", str);
@@ -423,7 +423,7 @@ ELogConfigValue* parseSimpleValue(const std::string& token, ELogConfigContext* c
     return res;
 }
 
-static ELogConfigValue* parseArrayValue(ELogSpecTokenizer& tok,
+static ELogConfigValue* parseArrayValue(ELogStringTokenizer& tok,
                                         ELogConfigSourceContext* sourceContext,
                                         ELogConfigMode configMode) {
     ELogConfigNode* node = parseConfigNode(tok, sourceContext, configMode);
@@ -458,7 +458,7 @@ static ELogConfigValue* parseArrayValue(ELogSpecTokenizer& tok,
     return value;
 }
 
-static ELogConfigValue* parseMapValue(ELogSpecTokenizer& tok,
+static ELogConfigValue* parseMapValue(ELogStringTokenizer& tok,
                                       ELogConfigSourceContext* sourceContext,
                                       ELogConfigMode configMode) {
     ELogConfigNode* node = parseConfigNode(tok, sourceContext, configMode);
@@ -493,7 +493,7 @@ static ELogConfigValue* parseMapValue(ELogSpecTokenizer& tok,
     return value;
 }
 
-static ELogConfigValue* parseConfigValue(ELogSpecTokenizer& tok,
+static ELogConfigValue* parseConfigValue(ELogStringTokenizer& tok,
                                          ELogConfigSourceContext* sourceContext,
                                          ELogConfigMode configMode) {
     std::string token;
@@ -545,7 +545,7 @@ enum ParseState {
     PS_DONE
 };
 
-ELogConfigNode* parseConfigNode(ELogSpecTokenizer& tok, ELogConfigSourceContext* sourceContext,
+ELogConfigNode* parseConfigNode(ELogStringTokenizer& tok, ELogConfigSourceContext* sourceContext,
                                 ELogConfigMode configMode /* = ELogConfigMode::CM_CONSISTENT */) {
     ELogConfigNode* res = nullptr;
     ELogConfigArrayNode* arrayRes = nullptr;
@@ -802,7 +802,7 @@ ELogConfigNode* parseConfigNode(ELogSpecTokenizer& tok, ELogConfigSourceContext*
 
     if (parseState != PS_DONE) {
         ELOG_REPORT_ERROR("Premature end of configuration stream at pos %u: %s", tokenPos,
-                          tok.getSpec());
+                          tok.getSourceStr());
         if (value != nullptr) {
             delete value;
             value = nullptr;
