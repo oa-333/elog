@@ -44,6 +44,10 @@ extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
 
 /** @brief Helper function for parsing an integer property */
 extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
+                         const std::string& prop, int64_t& value, bool issueError = true);
+
+/** @brief Helper function for parsing an integer property */
+extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
                          const std::string& prop, uint64_t& value, bool issueError = true);
 
 /** @brief Helper function for parsing a boolean property */

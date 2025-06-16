@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "elog_common.h"
+#include "elog_error.h"
 
 namespace elog {
 
@@ -39,6 +40,8 @@ bool ELogSpecTokenizer::nextToken(ELogTokenType& tokenType, std::string& token,
         tokenType = ELogTokenType::TT_COMMA;
     } else if (tokenChar == '=') {
         tokenType = ELogTokenType::TT_EQUAL_SIGN;
+    } else if (tokenChar == ':') {
+        tokenType = ELogTokenType::TT_COLON_SIGN;
     } else {
         // text token, parse until special char or white space, or end of stream
         while (m_pos < m_spec.length() && !std::isspace(m_spec[m_pos]) &&
@@ -52,8 +55,78 @@ bool ELogSpecTokenizer::nextToken(ELogTokenType& tokenType, std::string& token,
     return true;
 }
 
+ELogTokenType ELogSpecTokenizer::peekNextTokenType() {
+    ELogTokenType tokenType = ELogTokenType::TT_INVALID;
+    std::string token;
+    uint32_t tokenPos = 0;
+    if (nextToken(tokenType, token, tokenPos)) {
+        rewind(tokenPos);
+    }
+    return tokenType;
+}
+
 std::string ELogSpecTokenizer::getErrLocStr(uint32_t tokenPos) const {
     return m_spec.substr(0, tokenPos) + RED " | HERE ===>>> | " RESET + m_spec.substr(tokenPos);
+}
+
+bool ELogSpecTokenizer::parseExpectedToken(ELogTokenType expectedTokenType, std::string& token,
+                                           const char* expectedStr) {
+    uint32_t pos = 0;
+    ELogTokenType tokenType;
+    if (!hasMoreTokens() || !nextToken(tokenType, token, pos)) {
+        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
+        return false;
+    }
+    if (tokenType != expectedTokenType) {
+        ELOG_REPORT_ERROR(
+            "Invalid token in nested log target specification, expected %s, at pos %u: %s",
+            expectedStr, pos, getSpec());
+        ELOG_REPORT_ERROR("Error location: %s", getErrLocStr(pos).c_str());
+        return false;
+    }
+    return true;
+}
+
+bool ELogSpecTokenizer::parseExpectedToken2(ELogTokenType expectedTokenType1,
+                                            ELogTokenType expectedTokenType2,
+                                            ELogTokenType& tokenType, std::string& token,
+                                            uint32_t& tokenPos, const char* expectedStr1,
+                                            const char* expectedStr2) {
+    if (!hasMoreTokens() || !nextToken(tokenType, token, tokenPos)) {
+        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
+        return false;
+    }
+    if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2) {
+        ELOG_REPORT_ERROR(
+            "Invalid token in nested log target specification, expected either %s or %s, at pos "
+            "%u: %s",
+            expectedStr1, expectedStr2, tokenPos, getSpec());
+        ELOG_REPORT_ERROR("Error location: %s", getErrLocStr(tokenPos).c_str());
+        return false;
+    }
+    return true;
+}
+
+bool ELogSpecTokenizer::parseExpectedToken3(ELogTokenType expectedTokenType1,
+                                            ELogTokenType expectedTokenType2,
+                                            ELogTokenType expectedTokenType3,
+                                            ELogTokenType& tokenType, std::string& token,
+                                            uint32_t& tokenPos, const char* expectedStr1,
+                                            const char* expectedStr2, const char* expectedStr3) {
+    if (!hasMoreTokens() || !nextToken(tokenType, token, tokenPos)) {
+        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
+        return false;
+    }
+    if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2 &&
+        tokenType != expectedTokenType3) {
+        ELOG_REPORT_ERROR(
+            "Invalid token in nested log target specification, expected either %s, %s, or %s, at "
+            "pos %u: %s",
+            expectedStr1, expectedStr2, expectedStr3, tokenPos, getSpec());
+        ELOG_REPORT_ERROR("Error location: %s", getErrLocStr(tokenPos).c_str());
+        return false;
+    }
+    return true;
 }
 
 }  // namespace elog

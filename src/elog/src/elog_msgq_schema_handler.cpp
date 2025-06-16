@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "elog_config_loader.h"
 #include "elog_error.h"
 #include "elog_kafka_msgq_target_provider.h"
 
@@ -98,6 +99,41 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
     // implementation is identical to URL style
     return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
+}
+
+ELogTarget* ELogMsgQSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+    // the path represents the message queue provider type name
+    // current predefined types are supported:
+    // kafka
+    std::string msgQType;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "message queue", "path",
+                                                      msgQType)) {
+        return nullptr;
+    }
+
+    std::string topic;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "message queue", "msgq_topic",
+                                                      topic)) {
+        return nullptr;
+    }
+
+    std::string headers;
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "message queue",
+                                                              "msgq_headers", headers)) {
+        return nullptr;
+    }
+
+    ProviderMap::iterator providerItr = m_providerMap.find(msgQType);
+    if (providerItr != m_providerMap.end()) {
+        ELogMsgQTargetProvider* provider = providerItr->second;
+        return provider->loadTarget(logTargetCfg, topic, headers);
+    }
+
+    ELOG_REPORT_ERROR(
+        "Invalid message queue log target specification, unsupported message queue type %s "
+        "(context: %s)",
+        msgQType.c_str(), logTargetCfg->getFullContext());
+    return nullptr;
 }
 
 }  // namespace elog

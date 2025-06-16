@@ -1,6 +1,7 @@
 #ifndef __ELOG_SCHEMA_HANDLER_H__
 #define __ELOG_SCHEMA_HANDLER_H__
 
+#include "elog_config.h"
 #include "elog_target.h"
 #include "elog_target_spec.h"
 
@@ -35,6 +36,13 @@ public:
      */
     virtual ELogTarget* loadTarget(const std::string& logTargetCfg,
                                    const ELogTargetNestedSpec& targetNestedSpec) = 0;
+
+    /**
+     * @brief Loads a log target from a configuration object.
+     * @param logTargetCfg The log target configuration object.
+     * @return ELogTarget* The resulting log target or null if failed.
+     */
+    virtual ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) = 0;
 
 protected:
     ELogSchemaHandler() {}

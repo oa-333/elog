@@ -13,6 +13,7 @@ target_sources(
             elog_buffered_file_target.h
             elog_buffered_file_writer.h
             elog_common_def.h
+            elog_config.h
             elog_db_formatter.h
             elog_db_schema_handler.h
             elog_db_target.h

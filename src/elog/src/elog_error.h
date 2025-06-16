@@ -22,14 +22,17 @@ public:
     /** @brief Queries whether trace mode is enabled. */
     static bool isTraceEnabled();
 
-    /** @brief Reports an error (for internal use only). */
+    /** @brief Reports an error to enclosing application/library. */
     static void reportError(const char* errorMsgFmt, ...);
 
-    /** @brief Reports an error (for internal use only). */
+    /** @brief Reports a system call error to enclosing application/library. */
     static void reportSysError(const char* sysCall, const char* errorMsgFmt, ...);
 
-    /** @brief Reports an error (for internal use only). */
+    /** @brief Reports a system call error to enclosing application/library. */
     static void reportSysErrorCode(const char* sysCall, int errCode, const char* errorMsgFmt, ...);
+
+    /** @brief Report a warning message to enclosing application/library. */
+    static void reportWarn(const char* fmt, ...);
 
     /** @brief Trace a debug message. */
     static void reportTrace(const char* fmt, ...);
@@ -48,8 +51,10 @@ public:
 private:
     static void initError();
 
-    /** @brief Reports an error (for internal use only). */
-    static void reportErrorV(const char* errorMsgFmt, va_list ap);
+    enum ReportType { RT_ERROR, RT_WARN, RT_TRACE };
+
+    /** @brief Reports an error/warn/trace message. */
+    static void reportV(ReportType reportType, const char* msgFmt, va_list ap);
 
     friend class ELogSystem;
 };
@@ -83,6 +88,12 @@ private:
     ELOG_REPORT_WIN32_ERROR_NUM(sysCall, ::GetLastError(), fmt, ##__VA_ARGS__);
 
 #endif  // ELOG_WINDOWS
+
+/** @brief Report warnning message to enclosing application/library. */
+#define ELOG_REPORT_WARN(fmt, ...)                       \
+    if (elog::ELogError::isTraceEnabled()) {             \
+        elog::ELogError::reportWarn(fmt, ##__VA_ARGS__); \
+    }
 
 /** @brief Report error message to enclosing application/library. */
 #define ELOG_REPORT_TRACE(fmt, ...)                       \

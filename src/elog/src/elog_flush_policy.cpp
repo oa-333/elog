@@ -117,6 +117,58 @@ bool ELogCompoundFlushPolicy::load(const std::string& logTargetCfg,
     return true;
 }
 
+bool ELogCompoundFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
+    // we expect to find a nested property 'flush_policy_args' with one or more array item
+    const ELogConfigValue* cfgValue = flushPolicyCfg->getValue("flush_policy_args");
+    if (cfgValue == nullptr) {
+        ELOG_REPORT_ERROR(
+            "Missing 'flush_policy_args' property required for compound flush policy (context: %s)",
+            flushPolicyCfg->getFullContext());
+        return false;
+    }
+
+    // expected array type
+    if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE) {
+        ELOG_REPORT_ERROR(
+            "Invalid 'flush_policy_args' property type for compound flush policy, expecting array, "
+            "seeing instead %s (context: %s)",
+            configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
+        return false;
+    }
+    const ELogConfigArrayNode* arrayNode = ((const ELogConfigArrayValue*)cfgValue)->getArrayNode();
+
+    for (size_t i = 0; i < arrayNode->getValueCount(); ++i) {
+        const ELogConfigValue* value = arrayNode->getValueAt(i);
+        if (value->getValueType() != ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
+            ELOG_REPORT_ERROR(
+                "Invalid flush policy configuration value type, expecting map, seeing instead %s",
+                configValueTypeToString(value->getValueType()), value->getFullContext());
+            return false;
+        }
+        const ELogConfigMapNode* subFlushPolicyCfg =
+            ((const ELogConfigMapValue*)value)->getMapNode();
+        bool result = true;
+        ELogFlushPolicy* flushPolicy =
+            ELogConfigLoader::loadFlushPolicy(subFlushPolicyCfg, false, result);
+        if (!result) {
+            ELOG_REPORT_ERROR(
+                "Failed to load %zuth sub-flush-policy for compound flush policy: %s (see previous "
+                "errors)",
+                i, subFlushPolicyCfg->getFullContext());
+            return false;
+        }
+        if (flushPolicy == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to load %zuth sub-flush-policy for compound flush policy, policy "
+                "specification not found: %s",
+                i, subFlushPolicyCfg->getFullContext());
+            return false;
+        }
+        addFlushPolicy(flushPolicy);
+    }
+    return true;
+}
+
 bool ELogAndFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     // even through we can stop early, each flush policy may need to accumulate log message size in
     // order to make decisions
@@ -165,6 +217,24 @@ bool ELogCountFlushPolicy::load(const std::string& logTargetCfg,
     return true;
 }
 
+bool ELogCountFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
+    bool found = false;
+    int64_t count = 0;
+    if (!flushPolicyCfg->getIntValue("flush_count", found, count)) {
+        ELOG_REPORT_ERROR("Failed to configure count flush policy (context: %s)",
+                          flushPolicyCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, missing flush_count property (context: %s)",
+            flushPolicyCfg->getFullContext());
+        return false;
+    }
+    m_logCountLimit = (uint64_t)count;
+    return true;
+}
+
 bool ELogCountFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     uint64_t logCount = m_currentLogCount.fetch_add(1, std::memory_order_relaxed);
     return ((logCount + 1) % m_logCountLimit == 0);
@@ -187,6 +257,24 @@ bool ELogSizeFlushPolicy::load(const std::string& logTargetCfg,
             itr->second.c_str(), logTargetCfg.c_str());
         return false;
     }
+    return true;
+}
+
+bool ELogSizeFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
+    bool found = false;
+    int64_t size = 0;
+    if (!flushPolicyCfg->getIntValue("flush_size_bytes", found, size)) {
+        ELOG_REPORT_ERROR("Failed to configure size flush policy (context: %s)",
+                          flushPolicyCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, missing flush_size_bytes property (context: %s)",
+            flushPolicyCfg->getFullContext());
+        return false;
+    }
+    m_logSizeLimitBytes = (uint64_t)size;
     return true;
 }
 
@@ -231,6 +319,25 @@ bool ELogTimedFlushPolicy::load(const std::string& logTargetCfg,
         return false;
     }
     m_logTimeLimitMillis = Millis(logTimeLimitMillis);
+    return true;
+}
+
+bool ELogTimedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
+    bool found = false;
+    int64_t timeoutMillis = 0;
+    if (!flushPolicyCfg->getIntValue("flush_timeout_millis", found, timeoutMillis)) {
+        ELOG_REPORT_ERROR("Failed to configure timed flush policy (context: %s)",
+                          flushPolicyCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid flush policy configuration, missing flush_timeout_millis property (context: "
+            "%s)",
+            flushPolicyCfg->getFullContext());
+        return false;
+    }
+    m_logTimeLimitMillis = Millis(timeoutMillis);
     return true;
 }
 

@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include "elog_common.h"
+#include "elog_config_loader.h"
 #include "elog_error.h"
 #include "elog_grpc_target.h"
 
@@ -200,6 +201,104 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(
     // search for the provider type and construct the specialized log target
     return constructGRPCTarget(providerType.c_str(), server, params, serverCA, clientCA, clientKey,
                                clientMode, deadlineTimeoutMillis, maxInflightCalls);
+}
+
+ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
+                                                  const std::string& server,
+                                                  const std::string& host, int port,
+                                                  const std::string& functionName,
+                                                  const std::string& params) {
+    // a provider type may be specified (if none, then default implementation is used)
+    std::string providerType = "elog";
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "gRPC",
+                                                              "grpc_provider_type", providerType)) {
+        return nullptr;
+    }
+
+    // a deadline may also be specified
+    int64_t deadlineTimeoutMillis = -1;
+    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+            logTargetCfg, "gRPC", "grpc_deadline_timeout_millis", deadlineTimeoutMillis)) {
+        return nullptr;
+    }
+
+    // check for client type: simple, stream
+    std::string clientModeStr;
+    bool found = false;
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(
+            logTargetCfg, "gRPC", "grpc_client_mode", clientModeStr, &found)) {
+        return nullptr;
+    }
+    ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY;
+    if (found) {
+        if (clientModeStr.compare("unary") == 0) {
+            clientMode = ELogGRPCClientMode::GRPC_CM_UNARY;
+        } else if (clientModeStr.compare("stream") == 0) {
+            clientMode = ELogGRPCClientMode::GRPC_CM_STREAM;
+        } else if (clientModeStr.compare("async") == 0) {
+            clientMode = ELogGRPCClientMode::GRPC_CM_ASYNC;
+        } else if (clientModeStr.compare("async_callback_unary") == 0) {
+            clientMode = ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_UNARY;
+        } else if (clientModeStr.compare("async_callback_stream") == 0) {
+            clientMode = ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM;
+        } else {
+            ELOG_REPORT_ERROR(
+                "Invalid log target specification, invalid gRPC client mode value '%s' (context: "
+                "%s)",
+                clientModeStr.c_str(), logTargetCfg->getFullContext());
+            return nullptr;
+        }
+    }
+
+    // for async callback stream, it is also possible to specify grpc_max_inflight_calls
+    int64_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS;
+    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+            logTargetCfg, "gRPC", "grpc_max_inflight_calls", maxInflightCalls)) {
+        return nullptr;
+    }
+
+    // check for security members
+    std::string serverCA;
+    if (!loadFileProp(logTargetCfg, "grpc_server_ca_path", "server certificate authority",
+                      serverCA)) {
+        return nullptr;
+    }
+
+    std::string clientCA;
+    if (!loadFileProp(logTargetCfg, "grpc_client_ca_path", "client certificate authority",
+                      clientCA)) {
+        return nullptr;
+    }
+
+    std::string clientKey;
+    if (!loadFileProp(logTargetCfg, "grpc_client_key_path", "client key", clientKey)) {
+        return nullptr;
+    }
+
+    // search for the provider type and construct the specialized log target
+    return constructGRPCTarget(providerType.c_str(), server, params, serverCA, clientCA, clientKey,
+                               clientMode, deadlineTimeoutMillis, maxInflightCalls);
+}
+
+bool ELogGRPCTargetProvider::loadFileProp(const ELogConfigMapNode* logTargetCfg,
+                                          const char* propName, const char* description,
+                                          std::string& fileContents) {
+    std::string path;
+    bool found = false;
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "gRPC", propName, path,
+                                                              &found)) {
+        return false;
+    }
+    if (found) {
+        if (!readFile(path, fileContents)) {
+            ELOG_REPORT_ERROR(
+                "Invalid log target specification, could not read gRPC %s file from path '%s' "
+                "(context: %s)",
+                description, path.c_str(), logTargetCfg->getFullContext());
+            return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace elog

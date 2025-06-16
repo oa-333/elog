@@ -41,6 +41,13 @@ public:
     ELogTarget* loadTarget(const std::string& logTargetCfg,
                            const ELogTargetNestedSpec& targetNestedSpec) final;
 
+    /**
+     * @brief Loads a log target from a configuration object.
+     * @param logTargetCfg The log target configuration object.
+     * @return ELogTarget* The resulting log target or null if failed.
+     */
+    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
+
 private:
     typedef std::unordered_map<std::string, ELogAsyncTargetProvider*> ProviderMap;
     ProviderMap m_providerMap;

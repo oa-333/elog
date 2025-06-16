@@ -59,6 +59,65 @@ struct ELOG_API ELogTargetNestedSpec {
     SubSpecMap m_subSpec;
 };
 
+/** @struct A property value with source text position. */
+struct ELOG_API ELogPropertyPos {
+    std::string m_value;
+    uint32_t m_keyPos;
+    uint32_t m_valuePos;
+
+    ELogPropertyPos(const char* value = "", uint32_t keyPos = 0, uint32_t valuePos = 0)
+        : m_value(value), m_keyPos(keyPos), m_valuePos(valuePos) {}
+};
+
+/** @struct A property value with source text position. */
+struct ELOG_API ELogIntPropertyPos {
+    int m_value;
+    uint32_t m_keyPos;
+    uint32_t m_valuePos;
+
+    ELogIntPropertyPos(int value = 0, uint32_t keyPos = 0, uint32_t valuePos = 0)
+        : m_value(value), m_keyPos(keyPos), m_valuePos(valuePos) {}
+};
+
+/** @typedef Property map with source text position information. */
+typedef std::unordered_map<std::string, ELogPropertyPos> ELogPropertyPosMap;
+
+/** @struct Log Target URL specification (used for loading from configuration). */
+struct ELOG_API ELogTargetUrlSpec {
+    /** @brief The target scheme (sys, file, db, msgq, etc.) */
+    ELogPropertyPos m_scheme;
+
+    /** @brief The path. May be further divided to user, password, host and port. */
+    ELogPropertyPos m_path;
+
+    /** @brief The user name (optional). */
+    ELogPropertyPos m_user;
+
+    /** @brief The password (optional). */
+    ELogPropertyPos m_passwd;
+
+    /** @brief The server host name or address (optional). */
+    ELogPropertyPos m_host;
+
+    /** @brief The server port (optional). */
+    ELogIntPropertyPos m_port;
+
+    /** @brief Additional properties */
+    ELogPropertyPosMap m_props;
+
+    /** @brief A nested URL specification. */
+    ELogTargetUrlSpec* m_subUrlSpec;
+
+    ELogTargetUrlSpec() : m_subUrlSpec(nullptr) {}
+
+    ~ELogTargetUrlSpec() {
+        if (m_subUrlSpec != nullptr) {
+            delete m_subUrlSpec;
+            m_subUrlSpec = nullptr;
+        }
+    }
+};
+
 }  // namespace elog
 
 #endif  // __ELOG_TARGET_SPEC_H__

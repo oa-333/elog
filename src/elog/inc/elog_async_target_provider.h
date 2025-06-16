@@ -31,6 +31,13 @@ public:
     virtual ELogAsyncTarget* loadTarget(const std::string& logTargetCfg,
                                         const ELogTargetNestedSpec& targetSpec) = 0;
 
+    /**
+     * @brief Loads a target from configuration object.
+     * @param logTargetCfg The configuration object.
+     * @return ELogAsyncTarget* The resulting log target, or null if failed.
+     */
+    virtual ELogAsyncTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) = 0;
+
 protected:
     ELogAsyncTargetProvider() {}
 
@@ -39,6 +46,8 @@ protected:
 
     ELogTarget* loadSingleSubTarget(const std::string& logTargetCfg,
                                     const ELogTargetNestedSpec& targetSpec);
+
+    ELogTarget* loadNestedTarget(const ELogConfigMapNode* logTargetCfg);
 };
 
 }  // namespace elog

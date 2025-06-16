@@ -1,6 +1,7 @@
 #ifndef __ELOG_SYSTEM_H__
 #define __ELOG_SYSTEM_H__
 
+#include "elog_config.h"
 #include "elog_error_handler.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
@@ -126,6 +127,67 @@ public:
     static bool configureFromProperties(const ELogPropertySequence& props,
                                         bool defineLogSources = false,
                                         bool defineMissingPath = false);
+
+    /**
+     * @brief Configures the ELog System from a configuration file (see README for format).
+     * The following properties are recognized:
+     * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
+     * - log_filter: global log filter (including rate limiter).
+     *   Determines the global (root source) log level.
+     * - <qualified-source-name>.log_level: Log level of a log source.
+     * - log_target: expected log target URL.
+     * @note The top level configuration item should be a map.
+     * @param configPath The configuration file path.
+     * @param defineLogSources[opt] Optional parameter specifying whether each log source
+     * configuration item triggers creation of the log source.
+     * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
+     * all missing loggers along the name path. If not specified, and a logger on the path from root
+     * to leaf is missing, then the call fails.
+     * @return true If configuration succeeded, otherwise false.
+     */
+    static bool configureFromConfigFile(const char* configPath, bool defineLogSources = false,
+                                        bool defineMissingPath = false);
+
+    /**
+     * @brief Configures the ELog System from a configuration string (see README for format).
+     * The following properties are recognized:
+     * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
+     * - log_filter: global log filter (including rate limiter).
+     *   Determines the global (root source) log level.
+     * - <qualified-source-name>.log_level: Log level of a log source.
+     * - log_target: expected log target URL.
+     * @param configStr The configuration string.
+     * @param defineLogSources[opt] Optional parameter specifying whether each log source
+     * configuration item triggers creation of the log source.
+     * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
+     * all missing loggers along the name path. If not specified, and a logger on the path from root
+     * to leaf is missing, then the call fails.
+     * @return true If configuration succeeded, otherwise false.
+     */
+    static bool configureFromConfigStr(const char* configStr, bool defineLogSources = false,
+                                       bool defineMissingPath = false);
+
+    /**
+     * @brief Configures the ELog System from a configuration object.
+     * The following properties are recognized:
+     * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
+     * - log_filter: global log filter (including rate limiter).
+     *   Determines the global (root source) log level.
+     * - <qualified-source-name>.log_level: Log level of a log source.
+     * - log_target: expected log target URL.
+     * @param config The configuration object. Root node must be of map type (see @ref ELogConfig).
+     * @param defineLogSources[opt] Optional parameter specifying whether each log source
+     * configuration item triggers creation of the log source.
+     * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
+     * all missing loggers along the name path. If not specified, and a logger on the path from root
+     * to leaf is missing, then the call fails.
+     * @return true If configuration succeeded, otherwise false.
+     */
+    static bool configure(ELogConfig* config, bool defineLogSources = false,
+                          bool defineMissingPath = false);
 
     /**
      * Log Target Management Interface
@@ -560,6 +622,8 @@ private:
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
     static bool configureRateLimit(const std::string& rateLimitCfg);
     static bool configureLogTarget(const std::string& logTargetCfg);
+    static bool configureLogTarget(const ELogConfigMapNode* logTargetCfg);
+    static bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap);
 };
 
 /** @brief Queries whether the default logger can log a record with a given log level. */

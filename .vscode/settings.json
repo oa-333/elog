@@ -82,7 +82,8 @@
         "csignal": "cpp",
         "future": "cpp",
         "valarray": "cpp",
-        "version": "cpp"
+        "version": "cpp",
+        "xstring": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

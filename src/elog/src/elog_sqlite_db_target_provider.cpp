@@ -19,6 +19,20 @@ ELogDbTarget* ELogSQLiteDbTargetProvider::loadTarget(
     return target;
 }
 
+ELogDbTarget* ELogSQLiteDbTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
+                                                     const std::string& connString,
+                                                     const std::string& insertQuery,
+                                                     ELogDbTarget::ThreadModel threadModel,
+                                                     uint32_t maxThreads,
+                                                     uint32_t reconnectTimeoutMillis) {
+    ELogDbTarget* target = new (std::nothrow) ELogSQLiteDbTarget(
+        connString, insertQuery, threadModel, maxThreads, reconnectTimeoutMillis);
+    if (target == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate SQLite log target, out of memory");
+    }
+    return target;
+}
+
 }  // namespace elog
 
 #endif  // ELOG_ENABLE_SQLITE_DB_CONNECTOR

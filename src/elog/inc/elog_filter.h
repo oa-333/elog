@@ -1,6 +1,7 @@
 #ifndef __ELOG_FILTER_H__
 #define __ELOG_FILTER_H__
 
+#include "elog_config.h"
 #include "elog_record.h"
 #include "elog_target_spec.h"
 
@@ -15,6 +16,9 @@ public:
     virtual bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) {
         return true;
     }
+
+    /** @brief Loads filter from configuration. */
+    virtual bool load(const ELogConfigMapNode* filterCfg) { return true; }
 
     /**
      * @brief Filters a log record.
@@ -83,6 +87,9 @@ public:
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -116,6 +123,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -189,6 +199,11 @@ protected:
     ~ELogCmpFilter() override {}
 
     ELogCmpOp m_cmpOp;
+
+    bool loadStringFilter(const ELogConfigMapNode* filterCfg, const char* propertyName,
+                          const char* filterName, std::string& propertyValue);
+    bool loadIntFilter(const ELogConfigMapNode* filterCfg, const char* propertyName,
+                       const char* filterName, uint64_t& propertyValue);
 };
 
 class ELOG_API ELogRecordIdFilter : public ELogCmpFilter {
@@ -199,6 +214,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -211,7 +229,7 @@ public:
 private:
     uint64_t m_recordId;
 
-    ELOG_DECLARE_FILTER(ELogRecordIdFilter, record_id_filter);
+    ELOG_DECLARE_FILTER(ELogRecordIdFilter, record_id);
 };
 
 class ELOG_API ELogRecordTimeFilter : public ELogCmpFilter {
@@ -224,6 +242,9 @@ public:
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -235,7 +256,7 @@ public:
 private:
     ELogTime m_logTime;
 
-    ELOG_DECLARE_FILTER(ELogRecordTimeFilter, record_time_filter);
+    ELOG_DECLARE_FILTER(ELogRecordTimeFilter, record_time);
 };
 
 #if 0
@@ -248,6 +269,9 @@ public:
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -259,7 +283,7 @@ public:
 private:
     std::string m_hostName;
 
-    ELOG_DECLARE_FILTER(ELogHostNameFilter, host_name_filter);
+    ELOG_DECLARE_FILTER(ELogHostNameFilter, host_name);
 };
 
 class ELOG_API ELogUserNameFilter : public ELogCmpFilter {
@@ -270,6 +294,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -282,7 +309,7 @@ public:
 private:
     std::string m_userName;
 
-    ELOG_DECLARE_FILTER(ELogUserNameFilter, user_name_filter);
+    ELOG_DECLARE_FILTER(ELogUserNameFilter, user_name);
 };
 
 class ELOG_API ELogProgramNameFilter : public ELogCmpFilter {
@@ -293,6 +320,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -305,7 +335,7 @@ public:
 private:
     std::string m_programName;
 
-    ELOG_DECLARE_FILTER(ELogProgramNameFilter, program_name_filter);
+    ELOG_DECLARE_FILTER(ELogProgramNameFilter, program_name);
 };
 
 class ELOG_API ELogProcessIdFilter : public ELogCmpFilter {
@@ -316,6 +346,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -328,7 +361,7 @@ public:
 private:
     std::string m_processIdName;
 
-    ELOG_DECLARE_FILTER(ELogProcessIdFilter, process_id_name_filter);
+    ELOG_DECLARE_FILTER(ELogProcessIdFilter, process_id_name);
 };
 
 class ELOG_API ELogThreadIdFilter : public ELogCmpFilter {
@@ -339,6 +372,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -351,7 +387,7 @@ public:
 private:
     std::string m_threadIdName;
 
-    ELOG_DECLARE_FILTER(ELogThreadIdFilter, thread_id_name_filter);
+    ELOG_DECLARE_FILTER(ELogThreadIdFilter, thread_id_name);
 };
 #endif
 
@@ -364,6 +400,9 @@ public:
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -375,7 +414,7 @@ public:
 private:
     std::string m_threadName;
 
-    ELOG_DECLARE_FILTER(ELogThreadNameFilter, thread_name_filter);
+    ELOG_DECLARE_FILTER(ELogThreadNameFilter, thread_name);
 };
 
 class ELOG_API ELogSourceFilter : public ELogCmpFilter {
@@ -386,6 +425,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -398,7 +440,7 @@ public:
 private:
     std::string m_logSourceName;
 
-    ELOG_DECLARE_FILTER(ELogSourceFilter, log_source_filter);
+    ELOG_DECLARE_FILTER(ELogSourceFilter, log_source);
 };
 
 class ELOG_API ELogModuleFilter : public ELogCmpFilter {
@@ -409,6 +451,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -421,7 +466,7 @@ public:
 private:
     std::string m_logModuleName;
 
-    ELOG_DECLARE_FILTER(ELogModuleFilter, log_module_filter);
+    ELOG_DECLARE_FILTER(ELogModuleFilter, log_module);
 };
 
 class ELOG_API ELogFileNameFilter : public ELogCmpFilter {
@@ -433,18 +478,23 @@ public:
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
      * @return true If the log record is to be logged.
      * @return false If the log record is to be discarded.
+     * @note File name field may contain relative path, and searched path may be just bare name, so
+     * it is advised to use CONTAINS operator for this filter.
      */
     bool filterLogRecord(const ELogRecord& logRecord) final;
 
 private:
     std::string m_fileName;
 
-    ELOG_DECLARE_FILTER(ELogFileNameFilter, file_name_filter);
+    ELOG_DECLARE_FILTER(ELogFileNameFilter, file_name);
 };
 
 class ELOG_API ELogLineNumberFilter : public ELogCmpFilter {
@@ -455,6 +505,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -467,7 +520,7 @@ public:
 private:
     int m_lineNumber;
 
-    ELOG_DECLARE_FILTER(ELogLineNumberFilter, line_number_filter);
+    ELOG_DECLARE_FILTER(ELogLineNumberFilter, line_number);
 };
 
 class ELOG_API ELogFunctionNameFilter : public ELogCmpFilter {
@@ -479,18 +532,23 @@ public:
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
      * @return true If the log record is to be logged.
      * @return false If the log record is to be discarded.
+     * @note Function field can be very noisy, having parameter qualified type names and such, so it
+     * is advised to use CONTAINS operator for this filter.
      */
     bool filterLogRecord(const ELogRecord& logRecord) final;
 
 private:
     std::string m_functionName;
 
-    ELOG_DECLARE_FILTER(ELogFunctionNameFilter, function_name_filter);
+    ELOG_DECLARE_FILTER(ELogFunctionNameFilter, function_name);
 };
 
 class ELOG_API ELogLevelFilter : public ELogCmpFilter {
@@ -501,6 +559,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -513,7 +574,7 @@ public:
 private:
     ELogLevel m_logLevel;
 
-    ELOG_DECLARE_FILTER(ELogLevelFilter, log_level_filter);
+    ELOG_DECLARE_FILTER(ELogLevelFilter, log_level);
 };
 
 class ELOG_API ELogMsgFilter : public ELogCmpFilter {
@@ -524,6 +585,9 @@ public:
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
 
     /**
      * @brief Filters a log record.
@@ -536,7 +600,7 @@ public:
 private:
     std::string m_logMsg;
 
-    ELOG_DECLARE_FILTER(ELogMsgFilter, log_msg_filter);
+    ELOG_DECLARE_FILTER(ELogMsgFilter, log_msg);
 };
 
 }  // namespace elog

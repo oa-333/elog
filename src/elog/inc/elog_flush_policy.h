@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+#include "elog_config.h"
 #include "elog_target_spec.h"
 
 namespace elog {
@@ -25,10 +26,13 @@ class ELOG_API ELogFlushPolicy {
 public:
     virtual ~ELogFlushPolicy() {}
 
-    /** @brief Loads filter from configuration. */
+    /** @brief Loads flush policy from configuration. */
     virtual bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) {
         return true;
     }
+
+    /** @brief Loads flush policy from configuration. */
+    virtual bool load(const ELogConfigMapNode* flushPolicyCfg) { return true; }
 
     /**
      * @brief Queries whether this flush policy is active (i.e. has a background thread that
@@ -133,6 +137,9 @@ public:
     /** @brief Loads flush policy from configuration. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads flush policy from configuration. */
+    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
     inline void addFlushPolicy(ELogFlushPolicy* flushPolicy) {
         m_flushPolicies.push_back(flushPolicy);
         if (flushPolicy->isActive()) {
@@ -229,6 +236,9 @@ public:
     /** @brief Loads flush policy from configuration. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads flush policy from configuration. */
+    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
@@ -254,6 +264,9 @@ public:
     /** @brief Loads flush policy from configuration. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
+    /** @brief Loads flush policy from configuration. */
+    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
@@ -278,6 +291,9 @@ public:
 
     /** @brief Loads flush policy from configuration. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     bool start() final;

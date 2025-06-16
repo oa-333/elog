@@ -6,7 +6,7 @@ set INSTALL_DIR=C:\install
 set DEV_DIR=%~dp0
 
 REM build elog
-call .\build.bat --rel-with-debug-info --verbose
+call .\build.bat --rel-with-debug-info --reconfigure --verbose
 IF errorlevel 1 (
     echo ERROR: fBuild failed
     exit /b 1

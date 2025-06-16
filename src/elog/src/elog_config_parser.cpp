@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "elog_async_schema_handler.h"
 #include "elog_common.h"
 #include "elog_error.h"
 #include "elog_schema_manager.h"
@@ -107,6 +108,80 @@ bool ELogConfigParser::parseLogTargetSpec(const std::string& logTargetCfg,
     return true;
 }
 
+ELogConfig* ELogConfigParser::parseLogTargetConfig(const std::string& logTargetUrl) {
+    // first parse the url, then convert to configuration object
+    // NOTE: if asynchronous log target specification is embedded, it is now done through the
+    // fragment part of the URL (which can theoretically be repeated)
+    ELogTargetUrlSpec urlSpec;
+    if (!parseLogTargetUrl(logTargetUrl, urlSpec)) {
+        return nullptr;
+    }
+
+    // TODO: we need to prepare a configuration object
+    // normally this would be a simple single-level map node, but in case there is an asynchronous
+    // target specification (i.e. deferred, queued, quantum, etc.), in which case we get a two-level
+    // configuration object, so we first parse the URL as scheme://path?key=value&key=value...
+    // that is to say, a simple key/value map. Next we should check for asynchronous target keys,
+    // and if found, build a two-level configuration. the only caveat here is to allow for the async
+    // schema to infer by itself whether this is an asynchronous target URL
+    // since this design is complicated, not generic (what is async schema rules change?), it was
+    // decided to put any sub-log target specification in the fragment part of the URL. Although
+    // this is not an orthodox solution, this choice currently preferred
+
+    // each level should be converted to a map node, each sub-level should be linked to a log_target
+    // property, the process is iterative, descending as deep as needed. finally we link the top
+    // level map node as the root node for the configuration. The only thing we miss is property
+    // locations, so this needs to be embedded within the URL spec.
+
+    ELogConfig* config = new (std::nothrow) ELogConfig();
+    if (config == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration map value, out of memory");
+        return nullptr;
+    }
+    if (!config->setSingleLineSourceContext(logTargetUrl.c_str())) {
+        delete config;
+        return nullptr;
+    }
+
+    ELogConfigMapNode* mapNode = logTargetUrlToConfig(&urlSpec, config->getSourceContext());
+    if (mapNode == nullptr) {
+        delete config;
+        return nullptr;
+    }
+    ELogConfigMapNode* rootNode = mapNode;
+    config->setRootNode(rootNode);
+    ELogTargetUrlSpec* subUrl = urlSpec.m_subUrlSpec;
+    while (subUrl != nullptr) {
+        ELogConfigMapNode* subMapNode = logTargetUrlToConfig(subUrl, config->getSourceContext());
+        if (subMapNode == nullptr) {
+            delete config;
+            return nullptr;
+        }
+        ELogConfigContext* context = subMapNode->makeConfigContext(subMapNode->getParsePos());
+        if (context == nullptr) {
+            delete subMapNode;
+            delete config;
+            return nullptr;
+        }
+        ELogConfigMapValue* subMapValue =
+            new (std::nothrow) ELogConfigMapValue(context, subMapNode);
+        if (subMapValue == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate configuration map value, out of memory");
+            delete subMapNode;
+            delete config;
+            return nullptr;
+        }
+        if (!mapNode->addEntry("log_target", subMapValue)) {
+            delete subMapNode;
+            delete config;
+            return nullptr;
+        }
+        mapNode = subMapNode;
+        subUrl = subUrl->m_subUrlSpec;
+    }
+    return config;
+}
+
 bool ELogConfigParser::parseHostPort(const std::string& server, std::string& host, int& port) {
     std::string::size_type colonPos = server.find(':');
     if (colonPos == std::string::npos) {
@@ -201,71 +276,13 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
     return true;
 }
 
-static bool parseExpectedToken(ELogSpecTokenizer& tok, ELogTokenType expectedTokenType,
-                               std::string& token, const char* expectedStr) {
-    uint32_t pos = 0;
-    ELogTokenType tokenType;
-    if (!tok.hasMoreTokens() || !tok.nextToken(tokenType, token, pos)) {
-        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
-        return false;
-    }
-    if (tokenType != expectedTokenType) {
-        ELOG_REPORT_ERROR(
-            "Invalid token in nested log target specification, expected %s, at pos %u: %s",
-            expectedStr, pos, tok.getSpec());
-        ELOG_REPORT_ERROR("Error location: %s", tok.getErrLocStr(pos).c_str());
-        return false;
-    }
-    return true;
-}
-
-static bool parseExpectedToken2(ELogSpecTokenizer& tok, ELogTokenType expectedTokenType1,
-                                ELogTokenType expectedTokenType2, ELogTokenType& tokenType,
-                                std::string& token, uint32_t& tokenPos, const char* expectedStr1,
-                                const char* expectedStr2) {
-    if (!tok.hasMoreTokens() || !tok.nextToken(tokenType, token, tokenPos)) {
-        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
-        return false;
-    }
-    if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2) {
-        ELOG_REPORT_ERROR(
-            "Invalid token in nested log target specification, expected either %s or %s, at pos "
-            "%u: %s",
-            expectedStr1, expectedStr2, tokenPos, tok.getSpec());
-        ELOG_REPORT_ERROR("Error location: %s", tok.getErrLocStr(tokenPos).c_str());
-        return false;
-    }
-    return true;
-}
-
-static bool parseExpectedToken3(ELogSpecTokenizer& tok, ELogTokenType expectedTokenType1,
-                                ELogTokenType expectedTokenType2, ELogTokenType expectedTokenType3,
-                                ELogTokenType& tokenType, std::string& token, uint32_t& tokenPos,
-                                const char* expectedStr1, const char* expectedStr2,
-                                const char* expectedStr3) {
-    if (!tok.hasMoreTokens() || !tok.nextToken(tokenType, token, tokenPos)) {
-        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
-        return false;
-    }
-    if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2 &&
-        tokenType != expectedTokenType3) {
-        ELOG_REPORT_ERROR(
-            "Invalid token in nested log target specification, expected either %s, %s, or %s, at "
-            "pos %u: %s",
-            expectedStr1, expectedStr2, expectedStr3, tokenPos, tok.getSpec());
-        ELOG_REPORT_ERROR("Error location: %s", tok.getErrLocStr(tokenPos).c_str());
-        return false;
-    }
-    return true;
-}
-
 bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
                                                 ELogTargetNestedSpec& logTargetNestedSpec,
                                                 ELogSpecTokenizer& tok) {
     std::string token;
 
     // first token must be open brace
-    if (!parseExpectedToken(tok, ELogTokenType::TT_OPEN_BRACE, token, "'{'")) {
+    if (!tok.parseExpectedToken(ELogTokenType::TT_OPEN_BRACE, token, "'{'")) {
         return false;
     }
 
@@ -285,8 +302,8 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
         // parse state: INIT
         if (parseState == PS_INIT) {
             // either a key or a close brace
-            if (!parseExpectedToken2(tok, ELogTokenType::TT_TOKEN, ELogTokenType::TT_CLOSE_BRACE,
-                                     tokenType, key, tokenPos, "text", "'}'")) {
+            if (!tok.parseExpectedToken2(ELogTokenType::TT_TOKEN, ELogTokenType::TT_CLOSE_BRACE,
+                                         tokenType, key, tokenPos, "text", "'}'")) {
                 return false;
             }
             // move to next state
@@ -296,7 +313,7 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
         // parse state: KEY
         else if (parseState == PS_KEY) {
             // expecting equal sign
-            if (!parseExpectedToken(tok, ELogTokenType::TT_EQUAL_SIGN, token, "'='")) {
+            if (!tok.parseExpectedToken(ELogTokenType::TT_EQUAL_SIGN, token, "'='")) {
                 return false;
             }
             // move to state PS_EQUAL
@@ -306,9 +323,9 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
         // parse state: EQUAL
         else if (parseState == PS_EQUAL) {
             // expecting either value, open brace or open brackets
-            if (!parseExpectedToken3(tok, ELogTokenType::TT_TOKEN, ELogTokenType::TT_OPEN_BRACE,
-                                     ELogTokenType::TT_OPEN_BRACKET, tokenType, token, tokenPos,
-                                     "text", "'{'", "'['")) {
+            if (!tok.parseExpectedToken3(ELogTokenType::TT_TOKEN, ELogTokenType::TT_OPEN_BRACE,
+                                         ELogTokenType::TT_OPEN_BRACKET, tokenType, token, tokenPos,
+                                         "text", "'{'", "'['")) {
                 return false;
             }
             // if open brace, then make recursive parsing, after which move to state PS_VALUE
@@ -367,8 +384,8 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
         // parse state: BRACKET
         else if (parseState == PS_BRACKET) {
             // expected either a comma (followed by another sub-spec) or end bracket
-            if (!parseExpectedToken2(tok, ELogTokenType::TT_COMMA, ELogTokenType::TT_CLOSE_BRACKET,
-                                     tokenType, key, tokenPos, "','", "']'")) {
+            if (!tok.parseExpectedToken2(ELogTokenType::TT_COMMA, ELogTokenType::TT_CLOSE_BRACKET,
+                                         tokenType, key, tokenPos, "','", "']'")) {
                 return false;
             }
             // if close bracket then move to state PS_VALUE
@@ -398,8 +415,8 @@ bool ELogConfigParser::parseLogTargetNestedSpec(const std::string& logTargetCfg,
         // parse state: VALUE
         else if (parseState == PS_VALUE) {
             // expecting comma or close brace
-            if (!parseExpectedToken2(tok, ELogTokenType::TT_COMMA, ELogTokenType::TT_CLOSE_BRACE,
-                                     tokenType, key, tokenPos, "','", "'}'")) {
+            if (!tok.parseExpectedToken2(ELogTokenType::TT_COMMA, ELogTokenType::TT_CLOSE_BRACE,
+                                         tokenType, key, tokenPos, "','", "'}'")) {
                 return false;
             }
             // if close brace then exit
@@ -460,6 +477,276 @@ void ELogConfigParser::tryParsePathAsHostPort(const std::string& logTargetCfg,
         }
         logTargetSpec.m_host = logTargetSpec.m_path.substr(0, colonPos);
     }
+}
+
+bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
+                                         ELogTargetUrlSpec& logTargetUrlSpec,
+                                         uint32_t basePos /* = 0 */) {
+    // first parse the url, then convert to configuration object
+    // since we may need to specify a sub-target we use the fragment part to specify a sub-target
+    ELogTargetUrlSpec* subTargetUrlSpec = nullptr;
+    std::string::size_type hashPos = logTargetUrl.find('#');
+    if (hashPos != std::string::npos) {
+        if (!parseLogTargetUrl(logTargetUrl.substr(0, hashPos), logTargetUrlSpec, basePos)) {
+            ELOG_REPORT_ERROR("Failed to parse top-level log target RUL specification");
+            return false;
+        }
+        logTargetUrlSpec.m_subUrlSpec = new (std::nothrow) ELogTargetUrlSpec();
+        if (logTargetUrlSpec.m_subUrlSpec == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate log target URL object, out of memory");
+            return false;
+        }
+        if (!parseLogTargetUrl(logTargetUrl.substr(hashPos + 1), *logTargetUrlSpec.m_subUrlSpec,
+                               basePos + hashPos + 1)) {
+            ELOG_REPORT_ERROR("Failed to parse sub-log target URL specification");
+            delete logTargetUrlSpec.m_subUrlSpec;
+            logTargetUrlSpec.m_subUrlSpec = nullptr;
+            return false;
+        }
+        return true;
+    }
+
+    // find scheme separator
+    logTargetUrlSpec.m_subUrlSpec = nullptr;
+    std::string::size_type schemeSepPos = logTargetUrl.find(ELogSchemaManager::ELOG_SCHEMA_MARKER);
+    if (schemeSepPos == std::string::npos) {
+        ELOG_REPORT_ERROR(
+            "Invalid log target URL specification, missing scheme separator \'%s\': %s",
+            ELogSchemaManager::ELOG_SCHEMA_MARKER, logTargetUrl.c_str());
+        return false;
+    }
+    logTargetUrlSpec.m_scheme.m_value = logTargetUrl.substr(0, schemeSepPos);
+    logTargetUrlSpec.m_scheme.m_keyPos = basePos + schemeSepPos;
+    logTargetUrlSpec.m_scheme.m_valuePos = basePos + schemeSepPos;
+
+    // parse until first '?'
+    std::string::size_type pathPos = schemeSepPos + ELogSchemaManager::ELOG_SCHEMA_LEN;
+    logTargetUrlSpec.m_path.m_keyPos = basePos + pathPos;
+    logTargetUrlSpec.m_path.m_valuePos = basePos + pathPos;
+    std::string::size_type qmarkPos = logTargetUrl.find('?', pathPos);
+    if (qmarkPos == std::string::npos) {
+        logTargetUrlSpec.m_path.m_value = logTargetUrl.substr(pathPos);
+        return parseUrlPath(logTargetUrlSpec, basePos);
+    }
+
+    logTargetUrlSpec.m_path.m_value = logTargetUrl.substr(pathPos, qmarkPos - pathPos);
+    if (!parseUrlPath(logTargetUrlSpec, basePos)) {
+        return false;
+    }
+
+    // parse properties, separated by ampersand
+    std::string::size_type prevPos = qmarkPos + 1;
+    std::string::size_type sepPos = logTargetUrl.find('&', prevPos);
+    do {
+        // get property
+        std::string prop = (sepPos == std::string::npos)
+                               ? logTargetUrl.substr(prevPos)
+                               : logTargetUrl.substr(prevPos, sepPos - prevPos);
+        uint32_t keyPos = basePos + prevPos;
+
+        // parse to key=value and add to props map (could be there is no value specified)
+        std::string::size_type equalPos = prop.find('=');
+        if (equalPos != std::string::npos) {
+            std::string key = trim(prop.substr(0, equalPos));
+            std::string value = trim(prop.substr(equalPos + 1));
+            uint32_t valuePos = keyPos + equalPos + 1;
+            // take care of pre-defined properties: user, password, host port
+            if ((key.compare("user") == 0) || (key.compare("userName") == 0) ||
+                (key.compare("user_name") == 0)) {
+                logTargetUrlSpec.m_user.m_value = {value, keyPos, valuePos};
+            } else if ((key.compare("password") == 0) || (key.compare("passwd") == 0)) {
+                logTargetUrlSpec.m_passwd.m_value = {value, keyPos, valuePos};
+            } else if ((key.compare("host") == 0) || (key.compare("hostName") == 0) ||
+                       (key.compare("host_name") == 0)) {
+                logTargetUrlSpec.m_host.m_value = {value, keyPos, valuePos};
+            } else if ((key.compare("port") == 0) || (key.compare("portNumber") == 0) ||
+                       (key.compare("port_number") == 0)) {
+                if (!parseIntProp(key.c_str(), logTargetUrl, value, logTargetUrlSpec.m_port.m_value,
+                                  false)) {
+                    ELOG_REPORT_WARN(
+                        "Failed to parse log target URL specification property %s=%s as port "
+                        "number (context: %s)",
+                        key.c_str(), value.c_str(), logTargetUrl.c_str());
+                }
+                logTargetUrlSpec.m_port.m_keyPos = keyPos;
+                logTargetUrlSpec.m_port.m_valuePos = valuePos;
+            }
+            insertPropPosOverride(logTargetUrlSpec.m_props, key, value, keyPos, valuePos);
+        } else {
+            insertPropPosOverride(logTargetUrlSpec.m_props, trim(prop), "", keyPos, 0);
+        }
+
+        // find next token separator
+        if (sepPos != std::string::npos) {
+            prevPos = sepPos + 1;
+            sepPos = logTargetUrl.find('&', prevPos);
+        } else {
+            prevPos = sepPos;
+        }
+    } while (prevPos != std::string::npos);
+
+    return true;
+}
+
+bool ELogConfigParser::parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_t basePos) {
+    // the path may be specified as follows: authority/path
+    // the authority may be specified as follows: [userinfo "@"] host [":" port]
+    // and user info is: [user[:password]
+    // so we first search for a slash, and anything preceding it is the authority part
+    std::string::size_type slashPos = logTargetUrlSpec.m_path.m_value.find('/');
+    if (slashPos == std::string::npos || slashPos == 0) {
+        return true;
+    }
+
+    // user/password
+    std::string authority = logTargetUrlSpec.m_path.m_value.substr(0, slashPos);
+    logTargetUrlSpec.m_path.m_value = logTargetUrlSpec.m_path.m_value.substr(slashPos + 1);
+    std::string::size_type atPos = authority.find('@');
+    if (atPos != std::string::npos) {
+        std::string userPass = authority.substr(0, atPos);
+        logTargetUrlSpec.m_user.m_keyPos = basePos + slashPos;
+        logTargetUrlSpec.m_user.m_valuePos = basePos + slashPos;
+
+        // check for password
+        std::string::size_type colonPos = userPass.find(':');
+        logTargetUrlSpec.m_user.m_value = userPass.substr(0, colonPos);  // ok also if not found
+        if (colonPos != std::string::npos) {
+            logTargetUrlSpec.m_passwd.m_value = userPass.substr(colonPos + 1);
+            logTargetUrlSpec.m_passwd.m_keyPos = basePos + colonPos + 1;
+            logTargetUrlSpec.m_passwd.m_valuePos = basePos + colonPos + 1;
+        }
+    }
+
+    // host/port
+    std::string hostPort = (atPos != std::string::npos) ? authority.substr(atPos + 1) : authority;
+    logTargetUrlSpec.m_host.m_keyPos = (atPos != std::string::npos) ? basePos + atPos + 1 : 0;
+    logTargetUrlSpec.m_host.m_valuePos = logTargetUrlSpec.m_host.m_keyPos;
+    std::string::size_type colonPos = hostPort.find(':');
+    logTargetUrlSpec.m_host.m_value = hostPort.substr(0, colonPos);  // ok also if not found
+    if (colonPos != std::string::npos) {
+        std::string portStr = hostPort.substr(colonPos + 1);
+        if (!parseIntProp("", "", portStr, logTargetUrlSpec.m_port.m_value, false)) {
+            ELOG_REPORT_ERROR(
+                "Invalid port specification in log target URL, expecting integer, seeing instead "
+                "'%s' (context: %s)",
+                portStr.c_str(), authority);
+            return false;
+        }
+        logTargetUrlSpec.m_port.m_keyPos = basePos + atPos + colonPos + 1;
+        logTargetUrlSpec.m_port.m_valuePos = logTargetUrlSpec.m_port.m_keyPos;
+    }
+    return true;
+}
+
+void ELogConfigParser::insertPropPosOverride(ELogPropertyPosMap& props, const std::string& key,
+                                             const std::string& value, uint32_t keyPos,
+                                             uint32_t valuePos) {
+    std::pair<ELogPropertyPosMap::iterator, bool> itrRes =
+        props.insert(ELogPropertyPosMap::value_type(key, {value.c_str(), keyPos, valuePos}));
+    if (!itrRes.second) {
+        itrRes.first->second.m_value = value;
+        itrRes.first->second.m_keyPos = keyPos;
+        itrRes.first->second.m_valuePos = valuePos;
+    }
+}
+
+ELogConfigMapNode* ELogConfigParser::logTargetUrlToConfig(ELogTargetUrlSpec* urlSpec,
+                                                          ELogConfigSourceContext* sourceContext) {
+    // TODO: implement
+    ELogConfigContext* context =
+        new (std::nothrow) ELogConfigContext(sourceContext, urlSpec->m_scheme.m_keyPos, "");
+    if (context == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration context object, out of memory");
+        return nullptr;
+    }
+    ELogConfigMapNode* mapNode = new (std::nothrow) ELogConfigMapNode(context);
+    if (mapNode == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration map node object, out of memory");
+        delete context;
+        return nullptr;
+    }
+
+    // add special fields first
+    if (!urlSpec->m_user.m_value.empty()) {
+        if (addConfigProperty(mapNode, "user", urlSpec->m_user)) {
+            delete mapNode;
+            return nullptr;
+        }
+    }
+    if (!urlSpec->m_passwd.m_value.empty()) {
+        if (addConfigProperty(mapNode, "password", urlSpec->m_passwd)) {
+            delete mapNode;
+            return nullptr;
+        }
+    }
+    if (!urlSpec->m_host.m_value.empty()) {
+        if (addConfigProperty(mapNode, "host", urlSpec->m_host)) {
+            delete mapNode;
+            return nullptr;
+        }
+    }
+    if (urlSpec->m_port.m_value != 0) {
+        if (addConfigIntProperty(mapNode, "port", urlSpec->m_port)) {
+            delete mapNode;
+            return nullptr;
+        }
+    }
+
+    // now add all other properties
+    for (const auto& entry : urlSpec->m_props) {
+        const char* key = entry.first.c_str();
+        const ELogPropertyPos& prop = entry.second;
+        if (!addConfigProperty(mapNode, key, prop)) {
+            delete mapNode;
+            return nullptr;
+        }
+    }
+    return mapNode;
+}
+
+bool ELogConfigParser::addConfigProperty(ELogConfigMapNode* mapNode, const char* key,
+                                         const ELogPropertyPos& prop) {
+    // TODO: key pos is not used
+    ELogConfigContext* context = mapNode->makeConfigContext(prop.m_valuePos);
+    if (context == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create configuration context object, out of memory");
+        return false;
+    }
+    ELogConfigStringValue* value =
+        new (std::nothrow) ELogConfigStringValue(context, prop.m_value.c_str());
+    if (value == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate string configuration value, out of memory");
+        delete context;
+        return false;
+    }
+    if (!mapNode->addEntry(key, value)) {
+        ELOG_REPORT_WARN("Failed to add '%s' property to configuration object, duplicate key", key);
+        delete value;
+        return false;
+    }
+    return true;
+}
+
+bool ELogConfigParser::addConfigIntProperty(ELogConfigMapNode* mapNode, const char* key,
+                                            const ELogIntPropertyPos& prop) {
+    // TODO: key pos is not used
+    ELogConfigContext* context = mapNode->makeConfigContext(prop.m_valuePos);
+    if (context == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create configuration context object, out of memory");
+        return false;
+    }
+    ELogConfigIntValue* value = new (std::nothrow) ELogConfigIntValue(context, prop.m_value);
+    if (value == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate integer configuration value, out of memory");
+        delete context;
+        return false;
+    }
+    if (!mapNode->addEntry(key, value)) {
+        ELOG_REPORT_WARN("Failed to add '%s' property to configuration object, duplicate key", key);
+        delete value;
+        return false;
+    }
+    return true;
 }
 
 }  // namespace elog

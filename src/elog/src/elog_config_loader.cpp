@@ -20,6 +20,39 @@ inline void appendMultiLine(std::string& multiLine, const std::string& line) {
     multiLine += line;
 }
 
+bool ELogConfigLoader::loadFile(const char* configPath,
+                                std::vector<std::pair<uint32_t, std::string>>& lines) {
+    // use simple format
+    std::ifstream cfgFile(configPath);
+    if (!cfgFile.good()) {
+        ELOG_REPORT_SYS_ERROR(fopen, "Failed to open configuration file for reading: %s",
+                              configPath);
+        return false;
+    }
+
+    uint32_t lineNumber = 0;
+    std::string line;
+    while (std::getline(cfgFile, line)) {
+        ++lineNumber;
+        line = trim(line);
+
+        // remove comment part (could be whole line or just end of line)
+        std::string::size_type poundPos = line.find('#');
+        if (poundPos != std::string::npos) {
+            line = line.substr(0, poundPos);
+            line = trim(line);  // trim again (perhaps there is white space at end of line)
+        }
+
+        // skip empty lines
+        if (line.empty()) {
+            continue;
+        }
+        lines.push_back({lineNumber, line});
+    }
+
+    return true;
+}
+
 bool ELogConfigLoader::loadFileProperties(const char* configPath, ELogPropertySequence& props) {
     // use simple format
     std::ifstream cfgFile(configPath);
@@ -196,6 +229,290 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const std::string& logTargetCfg,
         }
     }
     return filter;
+}
+
+ELogTarget* ELogConfigLoader::loadLogTarget(const ELogConfigMapNode* logTargetCfg) {
+    // get the scheme type
+    std::string scheme;
+    bool found = false;
+    if (!logTargetCfg->getStringValue("scheme", found, scheme)) {
+        ELOG_REPORT_ERROR("Invalid log target configuration, scheme key is invalid (context: %s)",
+                          logTargetCfg->getFullContext());
+        return nullptr;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR("Invalid log target configuration, missing scheme key (context: %s)",
+                          logTargetCfg->getFullContext());
+        return nullptr;
+    }
+    ELogSchemaHandler* schemaHandler = ELogSchemaManager::getSchemaHandler(scheme.c_str());
+    if (schemaHandler == nullptr) {
+        ELOG_REPORT_ERROR("Invalid log target specification, unrecognized scheme %s (context: %s)",
+                          scheme.c_str(), logTargetCfg->getFullContext());
+        return nullptr;
+    }
+
+    ELogTarget* logTarget = schemaHandler->loadTarget(logTargetCfg);
+    if (logTarget == nullptr) {
+        ELOG_REPORT_ERROR("Failed to load target for scheme %s (context: %s)", scheme.c_str(),
+                          logTargetCfg->getFullContext());
+        return nullptr;
+    }
+
+    // configure common properties (just this target, not recursively nested)
+    if (!configureLogTargetCommon(logTarget, logTargetCfg)) {
+        delete logTarget;
+        return nullptr;
+    }
+    return logTarget;
+}
+
+ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* logTargetCfg,
+                                                   bool allowNone, bool& result) {
+    result = false;
+    const ELogConfigValue* cfgValue = logTargetCfg->getValue("flush_policy");
+    if (cfgValue == nullptr) {
+        // it is ok not to find a flush policy
+        // in this case the result is true, but the returned flush policy is null
+        result = true;
+        return nullptr;
+    }
+
+    // NOTE: flush policy could be a flat string or an object
+    if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
+        const char* flushPolicyCfg = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
+        if (strcmp(flushPolicyCfg, "none") == 0) {
+            // special case, let target decide by itself what happens when no flush policy is set
+            if (!allowNone) {
+                ELOG_REPORT_ERROR("None flush policy is not allowed in this context: %s",
+                                  cfgValue->getFullContext());
+            } else {
+                result = true;
+            }
+            return nullptr;
+        }
+
+        // unlike previous implementation, it is planned to allow here a free style expression such
+        // as: ((count >= 4096) OR (size >= 1024) OR (timeoutMillis >= 1000))
+
+        // TODO: in case of a string we need to parse it and build a flush policy object
+        ELOG_REPORT_ERROR(
+            "Flat string flush policy configuration is not supported yet (context: %s)",
+            cfgValue->getFullContext());
+        return nullptr;
+    }
+
+    if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
+        ELOG_REPORT_ERROR(
+            "Invalid configuration value type %s for flush policy, neither string nor map "
+            "(context: %s)",
+            configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
+        return nullptr;
+    }
+
+    const ELogConfigMapNode* flushPolicyCfg = ((ELogConfigMapValue*)cfgValue)->getMapNode();
+    std::string flushPolicyType;
+    bool found = false;
+    if (!flushPolicyCfg->getStringValue("type", found, flushPolicyType)) {
+        ELOG_REPORT_ERROR("Failed to configure flush policy for log target (context: %s)",
+                          flushPolicyCfg->getFullContext());
+        return nullptr;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Cannot configure flush policy for log target, missing type property (context: %s)",
+            flushPolicyCfg->getFullContext());
+        return nullptr;
+    }
+
+    if (flushPolicyType.compare("none") == 0) {
+        // special case, let target decide by itself what happens when no flush policy is set
+        if (!allowNone) {
+            ELOG_REPORT_ERROR("None flush policy is not allowed in this context (%s)",
+                              flushPolicyCfg->getFullContext());
+        } else {
+            result = true;
+        }
+        return nullptr;
+    }
+
+    ELogFlushPolicy* flushPolicy = constructFlushPolicy(flushPolicyType.c_str());
+    if (flushPolicy == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create flush policy by type %s (context: %s)",
+                          flushPolicyType.c_str(), flushPolicyCfg->getFullContext());
+        return nullptr;
+    }
+
+    if (!flushPolicy->load(flushPolicyCfg)) {
+        ELOG_REPORT_ERROR("Failed to load flush policy %s by configuration object (context: %s)",
+                          flushPolicyType.c_str(), flushPolicyCfg->getFullContext());
+        delete flushPolicy;
+        flushPolicy = nullptr;
+    } else {
+        result = true;
+    }
+    return flushPolicy;
+}
+
+ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* logTargetCfg, bool& result) {
+    result = false;
+    const ELogConfigValue* cfgValue = logTargetCfg->getValue("filter");
+    if (cfgValue == nullptr) {
+        // it is ok not to find a filter
+        // in this case the result is true, but the returned filter is null
+        result = true;
+        return nullptr;
+    }
+
+    // NOTE: filter could be a flat string or an object
+    if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
+        const char* filterCfg = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
+        // TODO: in case of a string we need to parse it and build a filter object
+        ELOG_REPORT_ERROR("Flat string filter configuration is not supported yet (context: %s)",
+                          cfgValue->getFullContext());
+        return nullptr;
+    }
+
+    if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
+        ELOG_REPORT_ERROR(
+            "Invalid configuration value type %s for filter, neither string nor map (context: %s)",
+            configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
+        return nullptr;
+    }
+
+    const ELogConfigMapNode* filterCfg = ((ELogConfigMapValue*)cfgValue)->getMapNode();
+    std::string filterType;
+    bool found = false;
+    if (!filterCfg->getStringValue("type", found, filterType)) {
+        ELOG_REPORT_ERROR("Failed to configure filter for log target (context: %s)",
+                          filterCfg->getFullContext());
+        return nullptr;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Cannot configure filter for log target, missing type property (context: %s)",
+            filterCfg->getFullContext());
+        return nullptr;
+    }
+
+    ELogFilter* filter = constructFilter(filterType.c_str());
+    if (filter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create filter by type %s (context: %s)", filterType.c_str(),
+                          filterCfg->getFullContext());
+        return nullptr;
+    }
+
+    if (!filter->load(filterCfg)) {
+        ELOG_REPORT_ERROR("Failed to load filter %s by configuration object (context: %s)",
+                          filterType.c_str(), filterCfg->getFullContext());
+        delete filter;
+        filter = nullptr;
+    } else {
+        result = true;
+    }
+    return filter;
+}
+
+bool ELogConfigLoader::getLogTargetStringProperty(const ELogConfigMapNode* logTargetCfg,
+                                                  const char* scheme, const char* propName,
+                                                  std::string& propValue) {
+    bool found = false;
+    if (!logTargetCfg->getStringValue(propName, found, propValue)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid %s log target specification, missing required property '%s' (context: %s)",
+            scheme, propName, logTargetCfg->getFullContext());
+        return false;
+    }
+    return true;
+}
+
+bool ELogConfigLoader::getLogTargetIntProperty(const ELogConfigMapNode* logTargetCfg,
+                                               const char* scheme, const char* propName,
+                                               int64_t& propValue) {
+    bool found = false;
+    if (!logTargetCfg->getIntValue(propName, found, propValue)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid %s log target specification, missing required property '%s' (context: %s)",
+            scheme, propName, logTargetCfg->getFullContext());
+        return false;
+    }
+    return true;
+}
+
+bool ELogConfigLoader::getLogTargetBoolProperty(const ELogConfigMapNode* logTargetCfg,
+                                                const char* scheme, const char* propName,
+                                                bool& propValue) {
+    bool found = false;
+    if (!logTargetCfg->getBoolValue(propName, found, propValue)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid %s log target specification, missing required property '%s' (context: %s)",
+            scheme, propName, logTargetCfg->getFullContext());
+        return false;
+    }
+    return true;
+}
+
+bool ELogConfigLoader::getOptionalLogTargetStringProperty(const ELogConfigMapNode* logTargetCfg,
+                                                          const char* scheme, const char* propName,
+                                                          std::string& propValue,
+                                                          bool* found /* = nullptr */) {
+    bool foundLocal = false;
+    if (!logTargetCfg->getStringValue(propName, foundLocal, propValue)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
+    return true;
+}
+
+bool ELogConfigLoader::getOptionalLogTargetIntProperty(const ELogConfigMapNode* logTargetCfg,
+                                                       const char* scheme, const char* propName,
+                                                       int64_t& propValue,
+                                                       bool* found /* = nullptr */) {
+    bool foundLocal = false;
+    if (!logTargetCfg->getIntValue(propName, foundLocal, propValue)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
+    return true;
+}
+
+bool ELogConfigLoader::getOptionalLogTargetBoolProperty(const ELogConfigMapNode* logTargetCfg,
+                                                        const char* scheme, const char* propName,
+                                                        bool& propValue,
+                                                        bool* found /* = nullptr */) {
+    bool foundLocal = false;
+    if (!logTargetCfg->getBoolValue(propName, foundLocal, propValue)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
+    return true;
 }
 
 bool ELogConfigLoader::configureLogTargetCommon(ELogTarget* logTarget,
@@ -545,6 +862,134 @@ ELogTarget* ELogConfigLoader::applyCompoundTarget(ELogTarget* logTarget,
 
     errorOccurred = false;
     return compoundLogTarget;
+}
+
+bool ELogConfigLoader::configureLogTargetCommon(ELogTarget* logTarget,
+                                                const ELogConfigMapNode* logTargetCfg) {
+    // apply target name if any
+    if (!applyTargetName(logTarget, logTargetCfg)) {
+        return false;
+    }
+
+    // apply target log level if any
+    if (!applyTargetLogLevel(logTarget, logTargetCfg)) {
+        return false;
+    }
+
+    // apply log format if any
+    if (!applyTargetLogFormat(logTarget, logTargetCfg)) {
+        return false;
+    }
+
+    // apply flush policy if any
+    if (!applyTargetFlushPolicy(logTarget, logTargetCfg)) {
+        return false;
+    }
+
+    // apply filter if any
+    if (!applyTargetFilter(logTarget, logTargetCfg)) {
+        return false;
+    }
+    return true;
+}
+
+bool ELogConfigLoader::applyTargetName(ELogTarget* logTarget,
+                                       const ELogConfigMapNode* logTargetCfg) {
+    std::string name;
+    bool found = false;
+    if (!logTargetCfg->getStringValue("name", found, name)) {
+        ELOG_REPORT_ERROR("Failed to set log target name (context: %s)",
+                          logTargetCfg->getFullContext());
+        return false;
+    }
+
+    if (found) {
+        logTarget->setName(name.c_str());
+    }
+    return true;
+}
+
+bool ELogConfigLoader::applyTargetLogLevel(ELogTarget* logTarget,
+                                           const ELogConfigMapNode* logTargetCfg) {
+    std::string logLevelStr;
+    bool found = false;
+    if (!logTargetCfg->getStringValue("log_level", found, logLevelStr)) {
+        ELOG_REPORT_ERROR("Failed to set log level for target (context: %s)",
+                          logTargetCfg->getFullContext());
+        return false;
+    }
+
+    if (found) {
+        ELogLevel logLevel = ELEVEL_INFO;
+        if (!elogLevelFromStr(logLevelStr.c_str(), logLevel)) {
+            ELOG_REPORT_ERROR("Invalid log level '%s' specified in log target (context: %s)",
+                              logLevelStr.c_str(), logTargetCfg->getFullContext());
+            return false;
+        }
+        logTarget->setLogLevel(logLevel);
+    }
+    return true;
+}
+
+bool ELogConfigLoader::applyTargetLogFormat(ELogTarget* logTarget,
+                                            const ELogConfigMapNode* logTargetCfg) {
+    std::string logFormat;
+    bool found = false;
+    if (!logTargetCfg->getStringValue("log_format", found, logFormat)) {
+        ELOG_REPORT_ERROR("Failed to set log format for log target (context: %s)",
+                          logTargetCfg->getFullContext());
+        return false;
+    }
+
+    if (found) {
+        ELogFormatter* logFormatter = new (std::nothrow) ELogFormatter();
+        if (logFormatter == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to allocate log formatter for log target, out of memory (context: %s)",
+                logTargetCfg->getFullContext());
+            return false;
+        }
+        if (!logFormatter->initialize(logFormat.c_str())) {
+            ELOG_REPORT_ERROR("Invalid log format '%s' specified in log target (context: %s)",
+                              logFormat.c_str(), logTargetCfg->getFullContext());
+            delete logFormatter;
+            return false;
+        }
+        logTarget->setLogFormatter(logFormatter);
+    }
+    return true;
+}
+
+bool ELogConfigLoader::applyTargetFlushPolicy(ELogTarget* logTarget,
+                                              const ELogConfigMapNode* logTargetCfg) {
+    bool result = false;
+    ELogFlushPolicy* flushPolicy = loadFlushPolicy(logTargetCfg, true, result);
+    if (!result) {
+        return false;
+    }
+    if (flushPolicy != nullptr) {
+        // active policies require a log target
+        if (flushPolicy->isActive()) {
+            flushPolicy->setLogTarget(logTarget);
+        }
+
+        // that's it
+        logTarget->setFlushPolicy(flushPolicy);
+    }
+    return true;
+}
+
+bool ELogConfigLoader::applyTargetFilter(ELogTarget* logTarget,
+                                         const ELogConfigMapNode* logTargetCfg) {
+    bool result = false;
+    ELogFilter* filter = loadLogFilter(logTargetCfg, result);
+    if (!result) {
+        return false;
+    }
+    if (filter != nullptr) {
+        logTarget->setLogFilter(filter);
+    }
+    return true;
 }
 
 }  // namespace elog

@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "elog_config_loader.h"
 #include "elog_deferred_target_provider.h"
 #include "elog_error.h"
 #include "elog_quantum_target_provider.h"
@@ -90,6 +91,31 @@ ELogTarget* ELogAsyncSchemaHandler::loadTarget(const std::string& logTargetCfg,
     ELOG_REPORT_ERROR(
         "Invalid asynchronous log target specification, unsupported async type %s: %s",
         asyncType.c_str(), logTargetCfg.c_str());
+    return nullptr;
+}
+
+ELogTarget* ELogAsyncSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+    // the path represents the asynchronous target type name
+    // current predefined types are supported:
+    // deferred
+    // queued
+    // quantum
+    std::string asyncType;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "asynchronous", "type",
+                                                      asyncType)) {
+        return nullptr;
+    }
+
+    // get the provider and create the target
+    ProviderMap::iterator providerItr = m_providerMap.find(asyncType);
+    if (providerItr != m_providerMap.end()) {
+        ELogAsyncTargetProvider* provider = providerItr->second;
+        return provider->loadTarget(logTargetCfg);
+    }
+
+    ELOG_REPORT_ERROR(
+        "Invalid asynchronous log target specification, unsupported async type %s (context: %s)",
+        asyncType.c_str(), logTargetCfg->getFullContext());
     return nullptr;
 }
 

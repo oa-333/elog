@@ -28,6 +28,11 @@ public:
         fflush(stderr);
     }
 
+    void onWarn(const char* msg) final {
+        fprintf(stderr, "<ELOG> WARN: %s\n", msg);
+        fflush(stderr);
+    }
+
     void onTrace(const char* msg) final {
         fprintf(stderr, "<ELOG> TRACE: %s\n", msg);
         fflush(stderr);
@@ -57,6 +62,12 @@ public:
     void onError(const char* msg) final {
         if (restrictToStdErr()) {
             ELOG_ERROR_EX(m_logger, msg);
+        }
+    }
+
+    void onWarn(const char* msg) final {
+        if (restrictToStdErr()) {
+            ELOG_WARN_EX(m_logger, msg);
         }
     }
 
@@ -112,7 +123,7 @@ bool ELogError::isTraceEnabled() { return sErrorHandler->isTraceEnabled(); }
 void ELogError::reportError(const char* errorMsgFmt, ...) {
     va_list ap;
     va_start(ap, errorMsgFmt);
-    reportErrorV(errorMsgFmt, ap);
+    reportV(RT_ERROR, errorMsgFmt, ap);
     va_end(ap);
 }
 
@@ -132,6 +143,13 @@ void ELogError::reportSysErrorCode(const char* sysCall, int errCode, const char*
     va_list ap;
     va_start(ap, errorMsgFmt);
     ELOG_REPORT_ERROR(errorMsgFmt, ap);
+    va_end(ap);
+}
+
+void ELogError::reportWarn(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    reportV(RT_WARN, fmt, ap);
     va_end(ap);
 }
 
@@ -205,20 +223,37 @@ void ELogError::initError() {
     }
 }
 
-void ELogError::reportErrorV(const char* errorMsgFmt, va_list ap) {
+void ELogError::reportV(ReportType reportType, const char* msgFmt, va_list ap) {
     // compute error message length, this requires copying variadic argument pointer
     va_list apCopy;
     va_copy(apCopy, ap);
-    uint32_t requiredBytes = (vsnprintf(nullptr, 0, errorMsgFmt, apCopy) + 1);
+    uint32_t requiredBytes = (vsnprintf(nullptr, 0, msgFmt, apCopy) + 1);
 
     // format error message
-    char* errorMsg = (char*)malloc(requiredBytes);
-    vsnprintf(errorMsg, requiredBytes, errorMsgFmt, ap);
+    char* formattedMsg = (char*)malloc(requiredBytes);
+    vsnprintf(formattedMsg, requiredBytes, msgFmt, ap);
 
     // report error
     ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
-    errorHandler->onError(errorMsg);
-    free(errorMsg);
+    switch (reportType) {
+        case RT_ERROR:
+            errorHandler->onError(formattedMsg);
+            break;
+
+        case RT_WARN:
+            errorHandler->onWarn(formattedMsg);
+            break;
+
+        case RT_TRACE:
+            errorHandler->onTrace(formattedMsg);
+            break;
+
+        default:
+            assert(false);
+            break;
+    }
+
+    free(formattedMsg);
     va_end(apCopy);
 }
 

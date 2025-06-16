@@ -24,6 +24,14 @@ public:
      */
     ELogMonTarget* loadTarget(const std::string& logTargetCfg,
                               const ELogTargetSpec& targetSpec) final;
+
+    /**
+     * @brief Loads a target from configuration.
+     * @param logTargetCfg The configuration string.
+     * @param targetSpec The parsed configuration string.
+     * @return ELogMonTarget* The resulting monitoring tool log target, or null of failed.
+     */
+    ELogMonTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
 };
 
 }  // namespace elog

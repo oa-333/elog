@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "elog_common.h"
+#include "elog_config_loader.h"
 #include "elog_error.h"
 #include "elog_mysql_db_target_provider.h"
 #include "elog_pgsql_db_target_provider.h"
@@ -175,6 +176,88 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
     // no difference, just call URL style loading
     return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
+}
+
+ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+    // the path represents the db-type
+    // current predefined types are supported:
+    // mysql
+    // sqlite
+    // postgresql
+    // oracle
+    // sqlserver
+
+    // get mandatory properties
+    std::string dbType;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "database", "path", dbType)) {
+        return nullptr;
+    }
+
+    // in addition, we expect at least two properties: conn_string, insert_query, db_thread_model,
+    // db_max_threads, db_reconnect_timeout_millis
+    std::string connString;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "database", "conn_string",
+                                                      connString)) {
+        return nullptr;
+    }
+
+    std::string insertQuery;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "database", "insert_query",
+                                                      insertQuery)) {
+        return nullptr;
+    }
+
+    // check for optional parameters
+    // optional db_thread_model
+    ELogDbTarget::ThreadModel threadModel = ELogDbTarget::ThreadModel::TM_NONE;
+    bool found = false;
+    std::string threadModelStr;
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(
+            logTargetCfg, "database", "db_thread_model", threadModelStr, &found)) {
+        return nullptr;
+    }
+
+    if (found) {
+        if (threadModelStr.compare("none") == 0) {
+            threadModel = ELogDbTarget::ThreadModel::TM_NONE;
+        } else if (threadModelStr.compare("lock") == 0) {
+            threadModel = ELogDbTarget::ThreadModel::TM_LOCK;
+        } else if (threadModelStr.compare("conn-per-thread") == 0) {
+            threadModel = ELogDbTarget::ThreadModel::TM_CONN_PER_THREAD;
+        } else {
+            ELOG_REPORT_ERROR(
+                "Invalid database log target specification, invalid thread model '%s' (context: "
+                "%s)",
+                threadModelStr.c_str(), logTargetCfg->getFullContext());
+            return nullptr;
+        }
+    }
+
+    // check for optional db_max_threads
+    int64_t maxThreads = ELOG_DB_MAX_THREADS;
+    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "database",
+                                                           "db_max_threads", maxThreads)) {
+        return nullptr;
+    }
+
+    // check for optional db_reconnect_timeout_millis
+    int64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+            logTargetCfg, "database", "db_reconnect_timeout_millis", reconnectTimeoutMillis)) {
+        return nullptr;
+    }
+
+    ProviderMap::iterator providerItr = m_providerMap.find(dbType);
+    if (providerItr != m_providerMap.end()) {
+        ELogDbTargetProvider* provider = providerItr->second;
+        return provider->loadTarget(logTargetCfg, connString, insertQuery, threadModel, maxThreads,
+                                    reconnectTimeoutMillis);
+    }
+
+    ELOG_REPORT_ERROR(
+        "Invalid database log target specification, unsupported db type %s (context: %s)",
+        dbType.c_str(), logTargetCfg->getFullContext());
+    return nullptr;
 }
 
 }  // namespace elog

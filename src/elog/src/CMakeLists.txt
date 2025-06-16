@@ -9,6 +9,7 @@ target_sources(elog PRIVATE
     ./elog_common.cpp
     ./elog_config_loader.cpp
     ./elog_config_parser.cpp
+    ./elog_config.cpp
     ./elog_db_formatter.cpp
     ./elog_db_schema_handler.cpp
     ./elog_db_target.cpp

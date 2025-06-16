@@ -26,6 +26,17 @@ public:
                                        const ELogTargetSpec& targetSpec, const std::string& topic,
                                        const std::string& headers) = 0;
 
+    /**
+     * @brief Loads a target from configuration.
+     * @param logTargetCfg The configuration object.
+     * @param topic The target topic name.
+     * @param headers Optional headers specification (in property-CSV format: "header-name=${field},
+     * header-name=${field}, ...").
+     * @return ELogMsgQTarget* The resulting message queue log target, or null of failed.
+     */
+    virtual ELogMsgQTarget* loadTarget(const ELogConfigMapNode* logTargetCfg,
+                                       const std::string& topic, const std::string& headers) = 0;
+
 protected:
     ELogMsgQTargetProvider() {}
 };

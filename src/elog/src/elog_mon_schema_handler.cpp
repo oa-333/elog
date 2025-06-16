@@ -3,7 +3,9 @@
 #include <cassert>
 
 #include "elog_common.h"
+#include "elog_config_loader.h"
 #include "elog_error.h"
+
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 #include "elog_grafana_target_provider.h"
 #endif
@@ -78,6 +80,28 @@ ELogTarget* ELogMonSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
     // no difference, just call URL style loading
     return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
+}
+
+ELogTarget* ELogMonSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+    // the path represents the monitoring tool type
+    // current predefined types are supported:
+    // grafana_loki
+    std::string monType;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "monitoring-tool", "path",
+                                                      monType)) {
+        return nullptr;
+    }
+
+    ProviderMap::iterator providerItr = m_providerMap.find(monType);
+    if (providerItr != m_providerMap.end()) {
+        ELogMonTargetProvider* provider = providerItr->second;
+        return provider->loadTarget(logTargetCfg);
+    }
+
+    ELOG_REPORT_ERROR(
+        "Invalid monitoring tool log target specification, unsupported type %s (context: %s)",
+        monType.c_str(), logTargetCfg->getFullContext());
+    return nullptr;
 }
 
 }  // namespace elog

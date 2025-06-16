@@ -30,4 +30,21 @@ ELogAsyncTarget* ELogDeferredTargetProvider::loadTarget(const std::string& logTa
     return asyncTarget;
 }
 
+ELogAsyncTarget* ELogDeferredTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+    // load nested target
+    ELogTarget* target = loadNestedTarget(logTargetCfg);
+    if (target == nullptr) {
+        return nullptr;
+    }
+
+    ELogAsyncTarget* asyncTarget = new (std::nothrow) ELogDeferredTarget(target);
+    if (asyncTarget == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create deferred log target, out of memory");
+        delete target;
+        return nullptr;
+    }
+    // NOTE: ELogSystem will configure common properties for this log target
+    return asyncTarget;
+}
+
 }  // namespace elog
