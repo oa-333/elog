@@ -25,6 +25,7 @@ VERBOSE=0
 CLEAN=0
 REBUILD=0
 RE_CONFIG=0
+FULL=0
 
 # parse options
 TEMP=$(getopt -o vdrwsfc:i:lrg -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure -- "$@")

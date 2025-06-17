@@ -73,9 +73,23 @@ uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     // default implementation - format log message and write to log
     // this might not suite all targets, as formatting might take place on a later phase
     // NOTE: this is a naive attempt to reuse a pre-allocated string buffer for better performance
+
+    // NOTE: On MinGW this leads to a crash due to static/TLS destruction problems. Specifically, it
+    // crashes during TLS destruction, and the call stack shows that the logMsg object area is
+    // already filled with dead land, meaning it already got destroyed (seems that as a static
+    // object during thread exit). Moreover, this crash seems to happen only on debug builds. The
+    // probable conclusion is that, the object is destroyed twice when running in release mode, but
+    // it doesn't crash since the first destruction does not fill the object area with dead land,
+    // and so the second destruction finds an empty object and does nothing. This is mere chance,
+    // and this behavior might change in the future, therefore we avoid this small optimization on
+    // MinGW altogether, whether in release or debug builds
+#ifdef ELOG_MINGW
+    std::string logMsg(ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE, 0);
+#else
     static thread_local std::string logMsg(ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE, 0);
     logMsg.clear();  // does this deallocate??
     assert(logMsg.capacity() > 0);
+#endif
     formatLogMsg(logRecord, logMsg);
     logFormattedMsg(logMsg);
     return logMsg.length();

@@ -134,9 +134,12 @@ void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
 #ifdef _GNU_SOURCE
         fputs_unlocked(formattedLogMsg.c_str(), m_fileHandle);
 #else
-        // On Windows/MinGW platforms we do not have the stdio unlocked API, and implementing it
-        // here directly (through the file descriptor) will bypass internal buffering offered by
+        // NOTE: On Windows/MinGW platforms we do not have the stdio unlocked API, and implementing
+        // it here directly (through the file descriptor) will bypass internal buffering offered by
         // fputs. Therefore on these platforms it is advised to use buffered file target instead.
+        // NOTE: there is nothing we can do if the call fails, since reporting it would cause
+        // flooding of error messages. Instead statistics can be maintained, and/or object state
+        // TODO: add ticket/feature-request for statistics
         fputs(formattedLogMsg.c_str(), m_fileHandle);
 #endif
     } else {
