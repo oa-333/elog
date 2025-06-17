@@ -106,7 +106,7 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
     // current predefined types are supported:
     // kafka
     std::string msgQType;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "message queue", "path",
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "message queue", "type",
                                                       msgQType)) {
         return nullptr;
     }

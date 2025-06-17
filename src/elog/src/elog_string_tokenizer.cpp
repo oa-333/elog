@@ -43,6 +43,30 @@ bool ELogStringTokenizer::nextToken(ELogTokenType& tokenType, std::string& token
         tokenType = ELogTokenType::TT_EQUAL_SIGN;
     } else if (tokenChar == ':') {
         tokenType = ELogTokenType::TT_COLON_SIGN;
+    } else if (tokenChar == '"') {
+        // quote token, we parse until next quote is found
+        while (m_pos < m_sourceStr.length() && m_sourceStr[m_pos] != '"') {
+            ++m_pos;
+        }
+        if (m_pos == m_sourceStr.length()) {
+            ELOG_REPORT_ERROR("Missing terminating quote while tokening string");
+            return false;
+        }
+        ++m_pos;
+        token = m_sourceStr.substr(tokenPos, m_pos - tokenPos);
+        tokenType = ELogTokenType::TT_TOKEN;
+    } else if (tokenChar == '\'') {
+        // quote token, we parse until next quote is found
+        while (m_pos < m_sourceStr.length() && m_sourceStr[m_pos] != '\'') {
+            ++m_pos;
+        }
+        if (m_pos == m_sourceStr.length()) {
+            ELOG_REPORT_ERROR("Missing terminating quote while tokening string");
+            return false;
+        }
+        ++m_pos;
+        token = m_sourceStr.substr(tokenPos, m_pos - tokenPos);
+        tokenType = ELogTokenType::TT_TOKEN;
     } else {
         // text token, parse until special char or white space, or end of stream
         while (m_pos < m_sourceStr.length() && !std::isspace(m_sourceStr[m_pos]) &&

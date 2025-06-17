@@ -166,8 +166,8 @@ bool ELogConfigMapNode::mergeStringEntry(const char* key, const char* value) {
         if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
             ELOG_REPORT_ERROR(
                 "Cannot merge string configuration value for key %s, existing value is not of "
-                "string type",
-                key);
+                "string type (context: %s)",
+                key, cfgValue->getFullContext());
             return false;
         }
         ((ELogConfigStringValue*)cfgValue)->setStringValue(value);
@@ -205,8 +205,8 @@ bool ELogConfigMapNode::mergeIntEntry(const char* key, int64_t value) {
         if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_INT_VALUE) {
             ELOG_REPORT_ERROR(
                 "Cannot merge integer configuration value for key %s, existing value is not of "
-                "integer type",
-                key);
+                "integer type (context: %s)",
+                key, cfgValue->getFullContext());
             return false;
         }
         ((ELogConfigIntValue*)cfgValue)->setIntValue(value);
@@ -223,8 +223,9 @@ bool ELogConfigMapNode::getStringValue(const char* key, bool& found, std::string
     found = true;
     if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
         ELOG_REPORT_ERROR(
-            "Invalid configuration value type for %s, expecting string, seeing instead %s", key,
-            configValueTypeToString(cfgValue->getValueType()));
+            "Invalid configuration value type for %s, expecting string, seeing instead type %s "
+            "(context: %s)",
+            key, configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
         return false;
     }
     value = ((ELogConfigStringValue*)cfgValue)->getStringValue();
@@ -240,8 +241,9 @@ bool ELogConfigMapNode::getIntValue(const char* key, bool& found, int64_t& value
     found = true;
     if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_INT_VALUE) {
         ELOG_REPORT_ERROR(
-            "Invalid configuration value type for %s, expecting integer, seeing instead %s", key,
-            configValueTypeToString(cfgValue->getValueType()));
+            "Invalid configuration value type for %s, expecting integer, seeing instead type %s "
+            "(context: %s)",
+            key, configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
         return false;
     }
     value = ((ELogConfigIntValue*)cfgValue)->getIntValue();
@@ -257,8 +259,9 @@ bool ELogConfigMapNode::getBoolValue(const char* key, bool& found, bool& value) 
     found = true;
     if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_BOOL_VALUE) {
         ELOG_REPORT_ERROR(
-            "Invalid configuration value type for %s, expecting boolean, seeing instead %s", key,
-            configValueTypeToString(cfgValue->getValueType()));
+            "Invalid configuration value type for %s, expecting boolean, seeing instead type %s "
+            "(context: %s)",
+            key, configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
         return false;
     }
     value = ((ELogConfigBoolValue*)cfgValue)->getBoolValue();
@@ -289,7 +292,7 @@ ELogConfig* ELogConfig::loadFromFile(const char* path) {
         return nullptr;
     }
 
-    ELogConfigSourceContext* sourceContext = new (std::nothrow) ELogConfigSourceContext();
+    ELogConfigSourceContext* sourceContext = new (std::nothrow) ELogConfigSourceContext(path);
     if (sourceContext == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate configuration source context, out of memory");
         return nullptr;
@@ -301,6 +304,64 @@ ELogConfig* ELogConfig::loadFromFile(const char* path) {
         cfgString += lineData.second;
         sourceContext->addLineData(lineData.first, lineData.second.c_str());
     }
+
+    ELogConfig* cfg = load(cfgString.c_str(), sourceContext);
+    if (cfg == nullptr) {
+        delete sourceContext;
+        return nullptr;
+    }
+
+    // set context data and return
+    cfg->m_sourceContext = sourceContext;
+    return cfg;
+}
+
+ELogConfig* ELogConfig::loadFromPropFile(const char* path) {
+    // we need to load properties from file lines with position information
+    // so we first load line information using helper function (at ELogConfigLoader).
+    // then we parse each line, as "key = value" with additional absolute position information.
+    // for this to work correctly we must disregard empty lines and full comment lines (since the
+    // source context object works on valid lines only). This is already handled by the helper
+    // function. finally, multiline properties should have special treatment in order to be mapped
+    // correctly to source location. Normally it would have been flattened to a single string,
+    // adding spaces between lines, but this method of work would lose position information, both
+    // line numbers, and absolute position, which will drift away by one char for each line. one way
+    // to solve this, is to have the source context support complex lines, that is line data becomes
+    // a pair of base line number, and vector of lines. this way, when the flattened string is used
+    // as property value, any position within the flattened string, can be correctly mapped to
+    // source location. still this requires not adding extra spaces.
+
+    // current we use a simpler solution, that is tweaking a bit the input file to be a valid
+    // configuration file
+
+    // read all lines, combine into a single string and load
+    std::vector<std::pair<uint32_t, std::string>> lines;
+    if (!ELogConfigLoader::loadFile(path, lines)) {
+        ELOG_REPORT_ERROR("Failed to load configuration from file path %s", path);
+        return nullptr;
+    }
+
+    // add context info
+    ELogConfigSourceContext* sourceContext = new (std::nothrow) ELogConfigSourceContext(path);
+    if (sourceContext == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration source context, out of memory");
+        return nullptr;
+    }
+
+    // convert all lines to a single string, while adding context info
+    // we fool the load function, by transforming the input string into a valid configuration
+    // string, by adding comma at each end of line (except for last one), and wrapping the whole
+    // text with braces, so it becomes a one large map node
+    std::string cfgString = "{";
+    for (uint32_t i = 0; i < lines.size(); ++i) {
+        const auto& lineData = lines[i];
+        cfgString += lineData.second;
+        if (i + 1 < lines.size()) {
+            cfgString += ",";
+        }
+        sourceContext->addLineData(lineData.first, lineData.second.c_str());
+    }
+    cfgString += "}";
 
     ELogConfig* cfg = load(cfgString.c_str(), sourceContext);
     if (cfg == nullptr) {
@@ -331,6 +392,81 @@ ELogConfig* ELogConfig::loadFromString(const char* str) {
     // set context data and return
     cfg->m_sourceContext = sourceContext;
     return cfg;
+}
+
+ELogConfig* ELogConfig::loadFromProps(const ELogPropertyPosSequence& props) {
+    // use empty context
+    ELogConfigSourceContext* sourceContext = new (std::nothrow) ELogConfigSourceContext();
+    if (sourceContext == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration source context, out of memory");
+        return nullptr;
+    }
+
+    ELogConfigContext* context = new (std::nothrow) ELogConfigContext(sourceContext, 0, "");
+    if (sourceContext == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration object context, out of memory");
+        delete sourceContext;
+        return nullptr;
+    }
+
+    ELogConfigMapNode* mapNode = new (std::nothrow) ELogConfigMapNode(context);
+    if (mapNode == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration map object, out of memory");
+        delete context;
+        delete sourceContext;
+        return nullptr;
+    }
+
+    for (const auto& prop : props.m_sequence) {
+        context = mapNode->makeConfigContext(prop.second->m_valuePos);
+        if (context == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate configuration value context, out of memory");
+            delete sourceContext;
+            delete mapNode;
+            return nullptr;
+        }
+        ELogConfigValue* value = loadValueFromProp(context, prop.first.c_str(), prop.second);
+        if (value == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to load configuration from properties, invalid property %s type %u",
+                prop.first.c_str(), (uint32_t)prop.second->m_type);
+            delete sourceContext;
+            delete mapNode;
+            return nullptr;
+        }
+        mapNode->addEntry(prop.first.c_str(), value);
+    }
+
+    ELogConfig* cfg = new (std::nothrow) ELogConfig(mapNode);
+    if (cfg == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration object, out of memory");
+        return nullptr;
+    }
+    cfg->m_sourceContext = sourceContext;
+
+    // this should propagate the path to all sub-entities recursively
+    cfg->m_root->setPathContext("<root>");
+    return cfg;
+}
+
+ELogConfigValue* ELogConfig::loadValueFromProp(ELogConfigContext* context, const char* key,
+                                               const ELogPropertyPos* prop) {
+    ELogConfigValue* value = nullptr;
+    if (prop->m_type == ELogPropertyType::PT_STRING) {
+        value = new (std::nothrow)
+            ELogConfigStringValue(context, ((const ELogStringPropertyPos*)prop)->m_value.c_str());
+    } else if (prop->m_type == ELogPropertyType::PT_INT) {
+        value = new (std::nothrow)
+            ELogConfigIntValue(context, ((const ELogIntPropertyPos*)prop)->m_value);
+    } else if (prop->m_type == ELogPropertyType::PT_BOOL) {
+        value = new (std::nothrow)
+            ELogConfigBoolValue(context, ((const ELogBoolPropertyPos*)prop)->m_value);
+    } else {
+        ELOG_REPORT_ERROR(
+            "Failed to load configuration from properties, invalid property %s type %u", key,
+            (uint32_t)prop->m_type);
+    }
+    return value;
 }
 
 bool ELogConfig::setSingleLineSourceContext(const char* line) {

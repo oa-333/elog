@@ -129,6 +129,48 @@ public:
                                         bool defineMissingPath = false);
 
     /**
+     * @brief Configures the ELog System from a properties configuration file (extended
+     * functionality, loading through unified configuration interface, allowing for source location
+     * information).
+     * The following properties are recognized:
+     * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
+     *   Determines the global (root source) log level.
+     * - <qualified-source-name>.log_level: Log level of a log source.
+     * - log_target: expected log target URL.
+     * @param props The properties map.
+     * @param defineLogSources[opt] Optional parameter specifying whether each log source
+     * configuration item triggers creation of the log source.
+     * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
+     * all missing loggers along the name path. If not specified, and a logger on the path from root
+     * to leaf is missing, then the call fails.
+     * @return true If configuration succeeded, otherwise false.
+     */
+    static bool configureFromFileEx(const char* configPath, bool defineLogSources = false,
+                                    bool defineMissingPath = false);
+
+    /**
+     * @brief Configures the ELog System from a properties map (extended functionality, loading
+     * through unified configuration interface).
+     * The following properties are recognized:
+     * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
+     *   Determines the global (root source) log level.
+     * - <qualified-source-name>.log_level: Log level of a log source.
+     * - log_target: expected log target URL.
+     * @param props The properties map.
+     * @param defineLogSources[opt] Optional parameter specifying whether each log source
+     * configuration item triggers creation of the log source.
+     * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
+     * all missing loggers along the name path. If not specified, and a logger on the path from root
+     * to leaf is missing, then the call fails.
+     * @return true If configuration succeeded, otherwise false.
+     */
+    static bool configureFromPropertiesEx(const ELogPropertyPosSequence& props,
+                                          bool defineLogSources = false,
+                                          bool defineMissingPath = false);
+
+    /**
      * @brief Configures the ELog System from a configuration file (see README for format).
      * The following properties are recognized:
      * - log_format: log line format specification. See @ref configureLogFormat() for more details.
@@ -622,6 +664,7 @@ private:
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
     static bool configureRateLimit(const std::string& rateLimitCfg);
     static bool configureLogTarget(const std::string& logTargetCfg);
+    static bool configureLogTargetEx(const std::string& logTargetCfg);
     static bool configureLogTarget(const ELogConfigMapNode* logTargetCfg);
     static bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap);
 };

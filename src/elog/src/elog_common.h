@@ -8,6 +8,14 @@
 
 #include "elog_props.h"
 
+#define ELOG_LEVEL_CONFIG_NAME "log_level"
+#define ELOG_FORMAT_CONFIG_NAME "log_format"
+#define ELOG_FILTER_CONFIG_NAME "log_filter"
+#define ELOG_FLUSH_POLICY_CONFIG_NAME "log_flush_policy"
+#define ELOG_TARGET_CONFIG_NAME "log_target"
+#define ELOG_RATE_LIMIT_CONFIG_NAME "log_rate_limit"
+#define ELOG_AFFINITY_CONFIG_NAME "log_affinity"
+
 #define RED "\x1B[31m"
 #define GRN "\x1B[32m"
 #define YEL "\x1B[33m"

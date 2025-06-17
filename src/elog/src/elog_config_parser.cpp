@@ -172,6 +172,7 @@ ELogConfig* ELogConfigParser::parseLogTargetConfig(const std::string& logTargetU
             return nullptr;
         }
         if (!mapNode->addEntry("log_target", subMapValue)) {
+            ELOG_REPORT_ERROR("Failed to add entry log_target to configuration map");
             delete subMapNode;
             delete config;
             return nullptr;
@@ -516,7 +517,7 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
         return false;
     }
     logTargetUrlSpec.m_scheme.m_value = logTargetUrl.substr(0, schemeSepPos);
-    logTargetUrlSpec.m_scheme.m_keyPos = basePos + schemeSepPos;
+    logTargetUrlSpec.m_scheme.m_keyPos = basePos;
     logTargetUrlSpec.m_scheme.m_valuePos = basePos + schemeSepPos;
 
     // parse until first '?'
@@ -571,9 +572,15 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
                 logTargetUrlSpec.m_port.m_keyPos = keyPos;
                 logTargetUrlSpec.m_port.m_valuePos = valuePos;
             }
-            insertPropPosOverride(logTargetUrlSpec.m_props, key, value, keyPos, valuePos);
+            if (!insertPropPosOverride(logTargetUrlSpec.m_props, key, value, keyPos, valuePos)) {
+                ELOG_REPORT_ERROR("Failed to insert entry to property map");
+                return false;
+            }
         } else {
-            insertPropPosOverride(logTargetUrlSpec.m_props, trim(prop), "", keyPos, 0);
+            if (!insertPropPosOverride(logTargetUrlSpec.m_props, trim(prop), "", keyPos, 0)) {
+                ELOG_REPORT_ERROR("Failed to insert generic entry to property map");
+                return false;
+            }
         }
 
         // find next token separator
@@ -594,9 +601,32 @@ bool ELogConfigParser::parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_
     // and user info is: [user[:password]
     // so we first search for a slash, and anything preceding it is the authority part
     std::string::size_type slashPos = logTargetUrlSpec.m_path.m_value.find('/');
-    if (slashPos == std::string::npos || slashPos == 0) {
+    // authority part is optional, so we may not find a slash at all
+    if (slashPos == std::string::npos) {
         return true;
     }
+
+    // it may also happen that the path contains a slash (and no authority is specified), in which
+    // case we will see 3 slashes, otherwise the first part of the path can be mistakenly parsed as
+    // the authority part.
+    // for example: file://./log_dir/app.log
+    // in this case, the dot will be parsed mistakenly as the authority part (yielding host "."),
+    // rather than being part of the relative file path. so in order to avoid this error, the
+    // correct way is to add a third slash as follows:
+    // file:///./log_dir/app.log
+    // this way the authority part becomes the empty string, and the path is "./log_dir/app.log"
+    if (slashPos == 0) {
+        // when a third slash appears, it is found at position zero after the schema marker "://",
+        // but the path at this parsing phase still contains the third slash, so we need to remove
+        // it, and there is no need to parse the authority part
+        logTargetUrlSpec.m_path.m_value = logTargetUrlSpec.m_path.m_value.substr(1);
+        ++logTargetUrlSpec.m_path.m_keyPos;
+        ++logTargetUrlSpec.m_path.m_valuePos;
+        return true;
+    }
+    // TODO: add to README - if the path contains slash characters, be sure to add a third slash
+    // after the schema marker to avoid having the first part of the path being mistakenly
+    // interpreted as the authority part of the URL (i.e. user/password, host/port specification).
 
     // user/password
     std::string authority = logTargetUrlSpec.m_path.m_value.substr(0, slashPos);
@@ -638,21 +668,60 @@ bool ELogConfigParser::parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_
     return true;
 }
 
-void ELogConfigParser::insertPropPosOverride(ELogPropertyPosMap& props, const std::string& key,
+bool ELogConfigParser::insertPropPosOverride(ELogPropertyPosMap& props, const std::string& key,
                                              const std::string& value, uint32_t keyPos,
                                              uint32_t valuePos) {
-    std::pair<ELogPropertyPosMap::iterator, bool> itrRes =
-        props.insert(ELogPropertyPosMap::value_type(key, {value.c_str(), keyPos, valuePos}));
-    if (!itrRes.second) {
-        itrRes.first->second.m_value = value;
-        itrRes.first->second.m_keyPos = keyPos;
-        itrRes.first->second.m_valuePos = valuePos;
+    // we need to figure out the value type (bool, int or string)
+    ELogPropertyPos* prop = nullptr;
+    if (value.compare("true") == 0 || value.compare("yes") == 0 || value.compare("on") == 0) {
+        prop = new (std::nothrow) ELogBoolPropertyPos(true, keyPos, valuePos);
+    } else if (value.compare("false") == 0 || value.compare("no") == 0 ||
+               value.compare("off") == 0) {
+        prop = new (std::nothrow) ELogBoolPropertyPos(false, keyPos, valuePos);
+    } else {
+        // try to parse as integer
+        int64_t intValue = 0;
+        if (parseIntProp("", "", value, intValue, false)) {
+            prop = new (std::nothrow) ELogIntPropertyPos(intValue, keyPos, valuePos);
+        } else {
+            prop = new (std::nothrow) ELogStringPropertyPos(value.c_str(), keyPos, valuePos);
+        }
     }
+    if (prop == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate configuration property, out of memory");
+        return false;
+    }
+
+    std::pair<ELogPropertyPosMap::MapType::iterator, bool> itrRes =
+        props.m_map.insert(ELogPropertyPosMap::MapType::value_type(key, prop));
+    if (!itrRes.second) {
+        ELogPropertyPos* existingProp = itrRes.first->second;
+        if (existingProp->m_type != prop->m_type) {
+            ELOG_REPORT_ERROR("Mismatching property types, cannot override");
+            delete prop;
+            return false;
+        }
+        if (existingProp->m_type == ELogPropertyType::PT_STRING) {
+            ((ELogStringPropertyPos*)existingProp)->m_value =
+                ((ELogStringPropertyPos*)prop)->m_value;
+        } else if (existingProp->m_type == ELogPropertyType::PT_INT) {
+            ((ELogIntPropertyPos*)existingProp)->m_value = ((ELogIntPropertyPos*)prop)->m_value;
+        } else if (existingProp->m_type == ELogPropertyType::PT_BOOL) {
+            ((ELogBoolPropertyPos*)existingProp)->m_value = ((ELogBoolPropertyPos*)prop)->m_value;
+        } else {
+            ELOG_REPORT_ERROR("Invalid property type, data corrupt");
+            delete prop;
+            return false;
+        }
+        existingProp->m_keyPos = prop->m_keyPos;
+        existingProp->m_valuePos = prop->m_valuePos;
+        delete prop;
+    }
+    return true;
 }
 
 ELogConfigMapNode* ELogConfigParser::logTargetUrlToConfig(ELogTargetUrlSpec* urlSpec,
                                                           ELogConfigSourceContext* sourceContext) {
-    // TODO: implement
     ELogConfigContext* context =
         new (std::nothrow) ELogConfigContext(sourceContext, urlSpec->m_scheme.m_keyPos, "");
     if (context == nullptr) {
@@ -667,35 +736,48 @@ ELogConfigMapNode* ELogConfigParser::logTargetUrlToConfig(ELogTargetUrlSpec* url
     }
 
     // add special fields first
+    if (!addConfigProperty(mapNode, "scheme", &urlSpec->m_scheme)) {
+        delete mapNode;
+        return nullptr;
+    }
+    if (!addConfigProperty(mapNode, "path", &urlSpec->m_path)) {
+        delete mapNode;
+        return nullptr;
+    }
+    // many schema handlers use 'type' as the key and not path, so we add this synonym
+    if (!addConfigProperty(mapNode, "type", &urlSpec->m_path)) {
+        delete mapNode;
+        return nullptr;
+    }
     if (!urlSpec->m_user.m_value.empty()) {
-        if (addConfigProperty(mapNode, "user", urlSpec->m_user)) {
+        if (!addConfigProperty(mapNode, "user", &urlSpec->m_user)) {
             delete mapNode;
             return nullptr;
         }
     }
     if (!urlSpec->m_passwd.m_value.empty()) {
-        if (addConfigProperty(mapNode, "password", urlSpec->m_passwd)) {
+        if (!addConfigProperty(mapNode, "password", &urlSpec->m_passwd)) {
             delete mapNode;
             return nullptr;
         }
     }
     if (!urlSpec->m_host.m_value.empty()) {
-        if (addConfigProperty(mapNode, "host", urlSpec->m_host)) {
+        if (!addConfigProperty(mapNode, "host", &urlSpec->m_host)) {
             delete mapNode;
             return nullptr;
         }
     }
     if (urlSpec->m_port.m_value != 0) {
-        if (addConfigIntProperty(mapNode, "port", urlSpec->m_port)) {
+        if (!addConfigProperty(mapNode, "port", &urlSpec->m_port)) {
             delete mapNode;
             return nullptr;
         }
     }
 
     // now add all other properties
-    for (const auto& entry : urlSpec->m_props) {
+    for (const auto& entry : urlSpec->m_props.m_map) {
         const char* key = entry.first.c_str();
-        const ELogPropertyPos& prop = entry.second;
+        const ELogPropertyPos* prop = entry.second;
         if (!addConfigProperty(mapNode, key, prop)) {
             delete mapNode;
             return nullptr;
@@ -705,39 +787,16 @@ ELogConfigMapNode* ELogConfigParser::logTargetUrlToConfig(ELogTargetUrlSpec* url
 }
 
 bool ELogConfigParser::addConfigProperty(ELogConfigMapNode* mapNode, const char* key,
-                                         const ELogPropertyPos& prop) {
+                                         const ELogPropertyPos* prop) {
     // TODO: key pos is not used
-    ELogConfigContext* context = mapNode->makeConfigContext(prop.m_valuePos);
+    ELogConfigContext* context = mapNode->makeConfigContext(prop->m_valuePos);
     if (context == nullptr) {
         ELOG_REPORT_ERROR("Failed to create configuration context object, out of memory");
         return false;
     }
-    ELogConfigStringValue* value =
-        new (std::nothrow) ELogConfigStringValue(context, prop.m_value.c_str());
+    ELogConfigValue* value = ELogConfig::loadValueFromProp(context, key, prop);
     if (value == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate string configuration value, out of memory");
-        delete context;
-        return false;
-    }
-    if (!mapNode->addEntry(key, value)) {
-        ELOG_REPORT_WARN("Failed to add '%s' property to configuration object, duplicate key", key);
-        delete value;
-        return false;
-    }
-    return true;
-}
-
-bool ELogConfigParser::addConfigIntProperty(ELogConfigMapNode* mapNode, const char* key,
-                                            const ELogIntPropertyPos& prop) {
-    // TODO: key pos is not used
-    ELogConfigContext* context = mapNode->makeConfigContext(prop.m_valuePos);
-    if (context == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create configuration context object, out of memory");
-        return false;
-    }
-    ELogConfigIntValue* value = new (std::nothrow) ELogConfigIntValue(context, prop.m_value);
-    if (value == nullptr) {
-        ELOG_REPORT_ERROR("Failed to allocate integer configuration value, out of memory");
         delete context;
         return false;
     }

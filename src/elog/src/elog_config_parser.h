@@ -40,14 +40,12 @@ private:
                                   ELogTargetUrlSpec& logTargetUrlSpec, uint32_t basePos = 0);
 
     static bool parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_t basePos);
-    static void insertPropPosOverride(ELogPropertyPosMap& props, const std::string& key,
+    static bool insertPropPosOverride(ELogPropertyPosMap& props, const std::string& key,
                                       const std::string& value, uint32_t keyPos, uint32_t valuePos);
     static ELogConfigMapNode* logTargetUrlToConfig(ELogTargetUrlSpec* urlSpec,
                                                    ELogConfigSourceContext* sourceContext);
     static bool addConfigProperty(ELogConfigMapNode* mapNode, const char* key,
-                                  const ELogPropertyPos& prop);
-    static bool addConfigIntProperty(ELogConfigMapNode* mapNode, const char* key,
-                                     const ELogIntPropertyPos& prop);
+                                  const ELogPropertyPos* prop);
 };
 
 }  // namespace elog

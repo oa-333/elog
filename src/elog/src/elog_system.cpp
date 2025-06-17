@@ -259,7 +259,7 @@ bool ELogSystem::registerSchemaHandler(const char* schemeName, ELogSchemaHandler
 
 bool ELogSystem::configureRateLimit(const std::string& rateLimitCfg) {
     uint32_t maxMsgPerSec = 0;
-    if (!parseIntProp("log_rate_limit", "", rateLimitCfg, maxMsgPerSec)) {
+    if (!parseIntProp(ELOG_RATE_LIMIT_CONFIG_NAME, "", rateLimitCfg, maxMsgPerSec)) {
         ELOG_REPORT_ERROR("Failed to parse rate limit configuration: ", rateLimitCfg.c_str());
         return false;
     }
@@ -319,6 +319,58 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
     return true;
 }
 
+bool ELogSystem::configureLogTargetEx(const std::string& logTargetCfg) {
+    // the following formats are currently supported as a URL-like string
+    //
+    // sys://stdout
+    // sys://stderr
+    // sys://syslog
+    //
+    // file://path
+    // file://path?segment-size-mb=<segment-size-mb>
+    //
+    // optional parameters (each set is mutually exclusive with other sets)
+    // defer (no value associated)
+    // queue_batch_size=<batch-size>,queue_timeout_millis=<timeout-millis>
+    // quantum_buffer_size=<buffer-size>
+    //
+    // future provision:
+    // tcp://host:port
+    // udp://host:port
+    // db://db-name?conn_string=<conn-string>&insert-statement=<insert-statement>
+    // msgq://message-broker-name?conn_string=<conn-string>&queue=<queue-name>&msgq_topic=<topic-name>
+    //
+    // additionally the following nested format is accepted:
+    //
+    // log_target = { scheme=db, db-name=postgresql, ...}
+    // log_target = { scheme = async, type = deferred, log_target = { scheme = file, path = ...}}
+    // log_target = { scheme = async, type = quantum, quantum_buffer_size = 10000,
+    //      log_target = [{ scheme = file, path = ...}, {}, {}]}
+    //
+    // in theory nesting level is not restricted, but it doesn't make sense to have more than 2
+    ELogConfig* logTargetConfig = ELogConfigParser::parseLogTargetConfig(logTargetCfg);
+    if (logTargetConfig == nullptr) {
+        ELOG_REPORT_ERROR("Failed to parse log target URL: %s", logTargetCfg.c_str());
+        return false;
+    }
+    const ELogConfigNode* rootNode = logTargetConfig->getRootNode();
+    if (rootNode->getNodeType() != ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {
+        ELOG_REPORT_ERROR("Invalid node type, expecting map node, seeing instead %s (context: %s)",
+                          configNodeTypeToString(rootNode->getNodeType()),
+                          rootNode->getFullContext());
+        delete logTargetConfig;
+        return false;
+    }
+    const ELogConfigMapNode* mapNode = (const ELogConfigMapNode*)rootNode;
+    if (!configureLogTarget(mapNode)) {
+        ELOG_REPORT_ERROR("Failed to configure log target");
+        delete logTargetConfig;
+        return false;
+    }
+    delete logTargetConfig;
+    return true;
+}
+
 bool ELogSystem::configureLogTarget(const ELogConfigMapNode* logTargetCfg) {
     // load the target (common properties already configured)
     ELogTarget* logTarget = ELogConfigLoader::loadLogTarget(logTargetCfg);
@@ -355,7 +407,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
     // configure log format (unrelated to order of appearance)
     // NOTE: only one such item is expected
     std::string logFormatCfg;
-    if (getProp(props, "log_format", logFormatCfg)) {
+    if (getProp(props, ELOG_FORMAT_CONFIG_NAME, logFormatCfg)) {
         if (!configureLogFormat(logFormatCfg.c_str())) {
             ELOG_REPORT_ERROR("Invalid log format in properties: %s", logFormatCfg.c_str());
             return false;
@@ -364,7 +416,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
 
     // configure global rate limit
     std::string rateLimitCfg;
-    if (getProp(props, "log_rate_limit", rateLimitCfg)) {
+    if (getProp(props, ELOG_RATE_LIMIT_CONFIG_NAME, rateLimitCfg)) {
         if (!configureRateLimit(rateLimitCfg)) {
             return false;
         }
@@ -374,12 +426,12 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
     ELogLevel logLevel = ELEVEL_INFO;
     ELogPropagateMode propagateMode = ELogPropagateMode::PM_NONE;
 
-    const char* logLevelSuffix1 = ".log_level";  // for configuration files
-    const char* logLevelSuffix2 = "_log_level";  // for environment variables
+    const char* logLevelSuffix1 = "." ELOG_LEVEL_CONFIG_NAME;  // for configuration files
+    const char* logLevelSuffix2 = "_" ELOG_LEVEL_CONFIG_NAME;  // for environment variables
     uint32_t logLevelSuffixLen = strlen(logLevelSuffix1);
 
-    const char* logAffinitySuffix1 = ".log_affinity";  // for configuration files
-    const char* logAffinitySuffix2 = "_log_affinity";  // for environment variables
+    const char* logAffinitySuffix1 = "." ELOG_AFFINITY_CONFIG_NAME;  // for configuration files
+    const char* logAffinitySuffix2 = "_" ELOG_AFFINITY_CONFIG_NAME;  // for environment variables
     uint32_t logAffinitySuffixLen = strlen(logAffinitySuffix1);
 
     // get configuration also from env
@@ -391,12 +443,12 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
         if (equalPos != std::string::npos) {
             std::string envVarName = envVar.substr(0, equalPos);
             std::string envVarValue = envVar.substr(equalPos + 1);
-            if (envVarName.ends_with("log_level")) {
+            if (envVarName.ends_with(ELOG_LEVEL_CONFIG_NAME)) {
                 ELOG_REPORT_TRACE("Adding prop %s = %s from env", envVarName.c_str(),
                                   envVarValue.c_str());
                 envProps.push_back({envVarName, envVarValue});
             }
-            if (envVarName.ends_with("log_affinity")) {
+            if (envVarName.ends_with(ELOG_AFFINITY_CONFIG_NAME)) {
                 ELOG_REPORT_TRACE("Adding prop %s = %s from env", envVarName.c_str(),
                                   envVarValue.c_str());
                 envProps.push_back({envVarName, envVarValue});
@@ -411,7 +463,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
 
     for (const ELogProperty& prop : combinedProps) {
         // check if this is root log level
-        if (prop.first.compare("log_level") == 0) {
+        if (prop.first.compare(ELOG_LEVEL_CONFIG_NAME) == 0) {
             // global log level
             if (!ELogConfigParser::parseLogLevel(prop.second.c_str(), logLevel, propagateMode)) {
                 ELOG_REPORT_ERROR("Invalid global log level: %s", prop.second.c_str());
@@ -422,7 +474,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
         }
 
         // check for log target
-        if (prop.first.compare("log_target") == 0) {
+        if (prop.first.compare(ELOG_TARGET_CONFIG_NAME) == 0) {
             // configure log target
             if (!configureLogTarget(prop.second)) {
                 return false;
@@ -488,6 +540,33 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
     return true;
 }
 
+bool ELogSystem::configureFromFileEx(const char* configPath, bool defineLogSources /* = false */,
+                                     bool defineMissingPath /* = false */) {
+    // elog requires properties in order due to log level propagation
+    ELogConfig* config = ELogConfig::loadFromPropFile(configPath);
+    if (config == nullptr) {
+        ELOG_REPORT_ERROR("Failed to load configuration from properties file: %s", configPath);
+        return false;
+    }
+    bool res = configure(config, defineLogSources, defineMissingPath);
+    delete config;
+    return res;
+}
+
+bool ELogSystem::configureFromPropertiesEx(const ELogPropertyPosSequence& props,
+                                           bool defineLogSources /* = false */,
+                                           bool defineMissingPath /* = false */) {
+    // we first convert properties to configuration object and then load from cfg object
+    ELogConfig* config = ELogConfig::loadFromProps(props);
+    if (config == nullptr) {
+        ELOG_REPORT_ERROR("Failed to load configuration from properties");
+        return false;
+    }
+    bool res = configure(config, defineLogSources, defineMissingPath);
+    delete config;
+    return res;
+}
+
 bool ELogSystem::configureFromConfigFile(const char* configPath,
                                          bool defineLogSources /* = false */,
                                          bool defineMissingPath /* = false */) {
@@ -512,8 +591,9 @@ bool ELogSystem::augmentConfigFromEnv(ELogConfigMapNode* cfgMap) {
             std::string envVarValue = envVar.substr(equalPos + 1);
 
             // check for log_level, log_format, log_filter, log_rate_limit
-            if (envVarName.compare("log_level") == 0 || envVarName.compare("log_format") == 0 ||
-                envVarName.compare("log_filter") == 0) {
+            if (envVarName.compare(ELOG_LEVEL_CONFIG_NAME) == 0 ||
+                envVarName.compare(ELOG_FORMAT_CONFIG_NAME) == 0 ||
+                envVarName.compare(ELOG_FILTER_CONFIG_NAME) == 0) {
                 ELOG_REPORT_TRACE("Overriding %s from env: %s", envVarName.c_str(),
                                   envVarValue.c_str());
                 if (!cfgMap->mergeStringEntry(envVarName.c_str(), envVarValue.c_str())) {
@@ -521,26 +601,28 @@ bool ELogSystem::augmentConfigFromEnv(ELogConfigMapNode* cfgMap) {
                                       envVarName.c_str(), cfgMap->getFullContext());
                     return false;
                 }
-            } else if (envVarName.compare("log_rate_limit") == 0) {
-                ELOG_REPORT_TRACE("Overriding log_rate_limit from env: %s", envVarValue.c_str());
+            } else if (envVarName.compare(ELOG_RATE_LIMIT_CONFIG_NAME) == 0) {
+                ELOG_REPORT_TRACE("Overriding " ELOG_RATE_LIMIT_CONFIG_NAME " from env: %s",
+                                  envVarValue.c_str());
                 int64_t rateLimit = 0;
-                if (!parseIntProp("log_rate_limit", "N/A", envVarValue, rateLimit)) {
-                    ELOG_REPORT_ERROR(
-                        "Invalid rate limit environment variable value %s, expecting integer "
-                        "(context: %s)",
-                        envVarValue.c_str(), cfgMap->getFullContext());
+                if (!parseIntProp(ELOG_RATE_LIMIT_CONFIG_NAME, "N/A", envVarValue, rateLimit)) {
+                    ELOG_REPORT_ERROR("Invalid " ELOG_RATE_LIMIT_CONFIG_NAME
+                                      " environment variable value %s, expecting integer "
+                                      "(context: %s)",
+                                      envVarValue.c_str(), cfgMap->getFullContext());
                     return false;
                 }
                 if (!cfgMap->mergeIntEntry(envVarName.c_str(), rateLimit)) {
-                    ELOG_REPORT_ERROR(
-                        "Failed to merge log_rate_limit from environment variables (context: %s)",
-                        cfgMap->getFullContext());
+                    ELOG_REPORT_ERROR("Failed to merge " ELOG_RATE_LIMIT_CONFIG_NAME
+                                      " from environment variables (context: %s)",
+                                      cfgMap->getFullContext());
                     return false;
                 }
             }
 
             // check for variables that end with _log_level or _log_affinity
-            else if (envVarName.ends_with("log_level") || envVarName.ends_with("log_affinity")) {
+            else if (envVarName.ends_with(ELOG_LEVEL_CONFIG_NAME) ||
+                     envVarName.ends_with(ELOG_AFFINITY_CONFIG_NAME)) {
                 ELOG_REPORT_TRACE("Overriding %s = %s from env", envVarName.c_str(),
                                   envVarValue.c_str());
                 if (!cfgMap->mergeStringEntry(envVarName.c_str(), envVarValue.c_str())) {
@@ -607,7 +689,7 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
     // configure global log format
     bool found = false;
     std::string logFormatCfg;
-    if (!cfgMap->getStringValue("log_format", found, logFormatCfg)) {
+    if (!cfgMap->getStringValue(ELOG_FORMAT_CONFIG_NAME, found, logFormatCfg)) {
         // configuration error
         return false;
     } else if (found && !configureLogFormat(logFormatCfg.c_str())) {
@@ -618,7 +700,7 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
     // configure global rate limit
     // TODO: what about valid values? should be defined and checked
     int64_t rateLimit = 0;
-    if (!cfgMap->getIntValue("log_rate_limit", found, rateLimit)) {
+    if (!cfgMap->getIntValue(ELOG_RATE_LIMIT_CONFIG_NAME, found, rateLimit)) {
         // configuration error
         return false;
     } else if (found && !setRateLimit((uint32_t)rateLimit)) {
@@ -629,21 +711,21 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
     ELogLevel logLevel = ELEVEL_INFO;
     ELogPropagateMode propagateMode = ELogPropagateMode::PM_NONE;
 
-    const char* logLevelSuffix1 = ".log_level";  // for configuration files
-    const char* logLevelSuffix2 = "_log_level";  // for environment variables
+    const char* logLevelSuffix1 = "." ELOG_LEVEL_CONFIG_NAME;  // for configuration files
+    const char* logLevelSuffix2 = "_" ELOG_LEVEL_CONFIG_NAME;  // for environment variables
     uint32_t logLevelSuffixLen = strlen(logLevelSuffix1);
 
-    const char* logAffinitySuffix1 = ".log_affinity";  // for configuration files
-    const char* logAffinitySuffix2 = "_log_affinity";  // for environment variables
+    const char* logAffinitySuffix1 = "." ELOG_AFFINITY_CONFIG_NAME;  // for configuration files
+    const char* logAffinitySuffix2 = "_" ELOG_AFFINITY_CONFIG_NAME;  // for environment variables
     uint32_t logAffinitySuffixLen = strlen(logAffinitySuffix1);
 
     for (size_t i = 0; i < cfgMap->getEntryCount(); ++i) {
         const ELogConfigMapNode::EntryType& prop = cfgMap->getEntryAt(i);
         const ELogConfigValue* cfgValue = prop.second;
         // check if this is root log level
-        if (prop.first.compare("log_level") == 0) {
+        if (prop.first.compare(ELOG_LEVEL_CONFIG_NAME) == 0) {
             // global log level, should be a string
-            if (!validateConfigValueStringType(cfgValue, "log_level")) {
+            if (!validateConfigValueStringType(cfgValue, ELOG_LEVEL_CONFIG_NAME)) {
                 return false;
             }
             const char* logLevelStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
@@ -657,11 +739,13 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
         }
 
         // check for log target
-        if (prop.first.compare("log_target") == 0) {
+        if (prop.first.compare(ELOG_TARGET_CONFIG_NAME) == 0) {
             // configure log target
             if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
                 const char* logTargetStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
-                if (!configureLogTarget(logTargetStr)) {
+                if (!configureLogTargetEx(logTargetStr)) {
+                    ELOG_REPORT_ERROR("Failed to configure log target (context: %s)",
+                                      cfgValue->getFullContext());
                     return false;
                 }
             } else if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
@@ -671,10 +755,11 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
                     return false;
                 }
             } else {
-                ELOG_REPORT_ERROR(
-                    "Invalid configuration value type for log_target, expecting either string or "
-                    "map, seeing instead %s (context: %s)",
-                    configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
+                ELOG_REPORT_ERROR("Invalid configuration value type for " ELOG_TARGET_CONFIG_NAME
+                                  ", expecting either string or "
+                                  "map, seeing instead %s (context: %s)",
+                                  configValueTypeToString(cfgValue->getValueType()),
+                                  cfgValue->getFullContext());
                 return false;
             }
             continue;

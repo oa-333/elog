@@ -134,7 +134,7 @@ ELogTarget* ELogRpcSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetC
     // current predefined types are supported:
     // grpc
     std::string rpcProvider;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "RPC", "path", rpcProvider)) {
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "RPC", "type", rpcProvider)) {
         return nullptr;
     }
 

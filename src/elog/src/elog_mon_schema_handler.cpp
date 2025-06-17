@@ -87,7 +87,7 @@ ELogTarget* ELogMonSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetC
     // current predefined types are supported:
     // grafana_loki
     std::string monType;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "monitoring-tool", "path",
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "monitoring-tool", "type",
                                                       monType)) {
         return nullptr;
     }

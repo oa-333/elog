@@ -94,8 +94,8 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
 
     // there could be optional property file_buffer_size
     int64_t bufferSize = 0;
-    if (!ELogConfigLoader::getLogTargetIntProperty(logTargetCfg, "file", "file_buffer_size",
-                                                   bufferSize)) {
+    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "file", "file_buffer_size",
+                                                           bufferSize)) {
         return nullptr;
     }
 

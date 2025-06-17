@@ -7,14 +7,15 @@
 #include <vector>
 
 #include "elog_def.h"
-
-namespace elog {
+#include "elog_props.h"
 
 /**
  * @file Configuration tree API.
  * Although this may seem like a poor man's JSON alternative, the purpose of defining this API is to
  * avoid forcing users to depend on external JSON packages.
  */
+
+namespace elog {
 
 /** @enum Configuration node type constants. */
 enum class ELogConfigNodeType : uint32_t {
@@ -45,7 +46,8 @@ extern ELOG_API const char* configValueTypeToString(ELogConfigValueType valueTyp
 /** @brief Common source data context used by all configuration entities. */
 class ELOG_API ELogConfigSourceContext {
 public:
-    ELogConfigSourceContext() {}
+    ELogConfigSourceContext(const char* sourceFilePath = "<input-string>")
+        : m_sourceFilePath(sourceFilePath) {}
     ELogConfigSourceContext(const ELogConfigSourceContext&) = delete;
     ELogConfigSourceContext(ELogConfigSourceContext&&) = delete;
     ~ELogConfigSourceContext() {}
@@ -66,6 +68,7 @@ public:
 private:
     /** @brief Source lines as read from file. In case of a string input there is a single line. */
     std::vector<std::pair<uint32_t, std::string>> m_lines;
+    std::string m_sourceFilePath;
 };
 
 /** @brief Context class for each specific configuration entity. */
@@ -418,7 +421,11 @@ public:
     }
 
     static ELogConfig* loadFromFile(const char* path);
+    static ELogConfig* loadFromPropFile(const char* path);
     static ELogConfig* loadFromString(const char* str);
+    static ELogConfig* loadFromProps(const ELogPropertyPosSequence& props);
+    static ELogConfigValue* loadValueFromProp(ELogConfigContext* context, const char* key,
+                                              const ELogPropertyPos* prop);
 
     inline const ELogConfigNode* getRootNode() const { return m_root; }
     inline void setRootNode(ELogConfigNode* root) {

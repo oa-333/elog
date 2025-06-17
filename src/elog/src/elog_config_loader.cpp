@@ -1,5 +1,6 @@
 #include "elog_config_loader.h"
 
+#include <cassert>
 #include <fstream>
 
 #include "elog_common.h"
@@ -34,19 +35,20 @@ bool ELogConfigLoader::loadFile(const char* configPath,
     std::string line;
     while (std::getline(cfgFile, line)) {
         ++lineNumber;
-        line = trim(line);
+
+        // skip empty lines and full comment lines
+        std::string trimmedLine = trim(line);
+        if (trimmedLine.empty() || trimmedLine[0] == '#') {
+            continue;
+        }
 
         // remove comment part (could be whole line or just end of line)
         std::string::size_type poundPos = line.find('#');
         if (poundPos != std::string::npos) {
             line = line.substr(0, poundPos);
-            line = trim(line);  // trim again (perhaps there is white space at end of line)
+            // no further trimming, otherwise we lose precise location information
         }
-
-        // skip empty lines
-        if (line.empty()) {
-            continue;
-        }
+        assert(!line.empty());
         lines.push_back({lineNumber, line});
     }
 
@@ -281,25 +283,27 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* logT
     // NOTE: flush policy could be a flat string or an object
     if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
         const char* flushPolicyCfg = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
-        if (strcmp(flushPolicyCfg, "none") == 0) {
-            // special case, let target decide by itself what happens when no flush policy is set
-            if (!allowNone) {
-                ELOG_REPORT_ERROR("None flush policy is not allowed in this context: %s",
-                                  cfgValue->getFullContext());
-            } else {
-                result = true;
-            }
+        if (flushPolicyCfg == nullptr || *flushPolicyCfg == 0) {
+            ELOG_REPORT_ERROR("Empty flush policy is not allowed at this context: %s",
+                              cfgValue->getFullContext());
+            result = false;
             return nullptr;
         }
 
         // unlike previous implementation, it is planned to allow here a free style expression such
         // as: ((count >= 4096) OR (size >= 1024) OR (timeoutMillis >= 1000))
+        // this will be distinguished from normal case by the presence of parenthesis
+        if (flushPolicyCfg[0] == '(') {
+            // TODO: in case of a string we need to parse it and build a flush policy object
+            ELOG_REPORT_ERROR(
+                "Flush policy configuration by expression is not supported yet (context: %s)",
+                cfgValue->getFullContext());
+            return nullptr;
+        }
 
-        // TODO: in case of a string we need to parse it and build a flush policy object
-        ELOG_REPORT_ERROR(
-            "Flat string flush policy configuration is not supported yet (context: %s)",
-            cfgValue->getFullContext());
-        return nullptr;
+        // otherwise we allow the flush policy properties to be specified at the same level as the
+        // log target
+        return loadFlushPolicy(logTargetCfg, flushPolicyCfg, allowNone, result);
     }
 
     if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
@@ -310,6 +314,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* logT
         return nullptr;
     }
 
+    // we allow for flush policy to be specified as an object
     const ELogConfigMapNode* flushPolicyCfg = ((ELogConfigMapValue*)cfgValue)->getMapNode();
     std::string flushPolicyType;
     bool found = false;
@@ -325,33 +330,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* logT
         return nullptr;
     }
 
-    if (flushPolicyType.compare("none") == 0) {
-        // special case, let target decide by itself what happens when no flush policy is set
-        if (!allowNone) {
-            ELOG_REPORT_ERROR("None flush policy is not allowed in this context (%s)",
-                              flushPolicyCfg->getFullContext());
-        } else {
-            result = true;
-        }
-        return nullptr;
-    }
-
-    ELogFlushPolicy* flushPolicy = constructFlushPolicy(flushPolicyType.c_str());
-    if (flushPolicy == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create flush policy by type %s (context: %s)",
-                          flushPolicyType.c_str(), flushPolicyCfg->getFullContext());
-        return nullptr;
-    }
-
-    if (!flushPolicy->load(flushPolicyCfg)) {
-        ELOG_REPORT_ERROR("Failed to load flush policy %s by configuration object (context: %s)",
-                          flushPolicyType.c_str(), flushPolicyCfg->getFullContext());
-        delete flushPolicy;
-        flushPolicy = nullptr;
-    } else {
-        result = true;
-    }
-    return flushPolicy;
+    return loadFlushPolicy(flushPolicyCfg, flushPolicyType.c_str(), allowNone, result);
 }
 
 ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* logTargetCfg, bool& result) {
@@ -367,10 +346,27 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* logTargetCf
     // NOTE: filter could be a flat string or an object
     if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
         const char* filterCfg = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
-        // TODO: in case of a string we need to parse it and build a filter object
-        ELOG_REPORT_ERROR("Flat string filter configuration is not supported yet (context: %s)",
-                          cfgValue->getFullContext());
-        return nullptr;
+        if (filterCfg == nullptr || *filterCfg == 0) {
+            ELOG_REPORT_ERROR("Empty filter value is not allowed at this context: %s",
+                              cfgValue->getFullContext());
+            result = false;
+            return nullptr;
+        }
+
+        // unlike previous implementation, it is planned to allow here a free style expression such
+        // as: ((log_source == core.files) OR (tname == main))
+        // this will be distinguished from normal case by the presence of parenthesis
+        if (filterCfg[0] == '(') {
+            // TODO: in case of a string we need to parse it and build a filter object
+            ELOG_REPORT_ERROR(
+                "Filter configuration by expression is not supported yet (context: %s)",
+                cfgValue->getFullContext());
+            return nullptr;
+        }
+
+        // otherwise we allow the filter properties to be specified at the same level as the log
+        // target
+        return loadLogFilter(logTargetCfg, filterCfg, result);
     }
 
     if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
@@ -395,22 +391,7 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* logTargetCf
         return nullptr;
     }
 
-    ELogFilter* filter = constructFilter(filterType.c_str());
-    if (filter == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create filter by type %s (context: %s)", filterType.c_str(),
-                          filterCfg->getFullContext());
-        return nullptr;
-    }
-
-    if (!filter->load(filterCfg)) {
-        ELOG_REPORT_ERROR("Failed to load filter %s by configuration object (context: %s)",
-                          filterType.c_str(), filterCfg->getFullContext());
-        delete filter;
-        filter = nullptr;
-    } else {
-        result = true;
-    }
-    return filter;
+    return loadLogFilter(filterCfg, filterType.c_str(), result);
 }
 
 bool ELogConfigLoader::getLogTargetStringProperty(const ELogConfigMapNode* logTargetCfg,
@@ -513,6 +494,58 @@ bool ELogConfigLoader::getOptionalLogTargetBoolProperty(const ELogConfigMapNode*
         *found = foundLocal;
     }
     return true;
+}
+
+ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
+                                                   const char* flushPolicyType, bool allowNone,
+                                                   bool& result) {
+    if (strcmp(flushPolicyType, "none") == 0) {
+        // special case, let target decide by itself what happens when no flush policy is set
+        if (!allowNone) {
+            ELOG_REPORT_ERROR("None flush policy is not allowed in this context (%s)",
+                              flushPolicyCfg->getFullContext());
+        } else {
+            result = true;
+        }
+        return nullptr;
+    }
+
+    ELogFlushPolicy* flushPolicy = constructFlushPolicy(flushPolicyType);
+    if (flushPolicy == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create flush policy by type %s (context: %s)", flushPolicyType,
+                          flushPolicyCfg->getFullContext());
+        return nullptr;
+    }
+
+    if (!flushPolicy->load(flushPolicyCfg)) {
+        ELOG_REPORT_ERROR("Failed to load flush policy %s by configuration object (context: %s)",
+                          flushPolicyType, flushPolicyCfg->getFullContext());
+        delete flushPolicy;
+        flushPolicy = nullptr;
+    } else {
+        result = true;
+    }
+    return flushPolicy;
+}
+
+ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* filterCfg,
+                                            const char* filterType, bool& result) {
+    ELogFilter* filter = constructFilter(filterType);
+    if (filter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create filter by type %s (context: %s)", filterType,
+                          filterCfg->getFullContext());
+        return nullptr;
+    }
+
+    if (!filter->load(filterCfg)) {
+        ELOG_REPORT_ERROR("Failed to load filter %s by configuration object (context: %s)",
+                          filterType, filterCfg->getFullContext());
+        delete filter;
+        filter = nullptr;
+    } else {
+        result = true;
+    }
+    return filter;
 }
 
 bool ELogConfigLoader::configureLogTargetCommon(ELogTarget* logTarget,

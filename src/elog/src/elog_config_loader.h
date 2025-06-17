@@ -21,7 +21,7 @@ public:
                          std::vector<std::pair<uint32_t, std::string>>& lines);
 
     /**
-     * @brief Loads ELog properties from file, including multiline nested specification
+     * @brief Loads ELog properties from file, including multiline nested specification.
      * @param configPath The configuration file path.
      * @return true If the operation succeed, otherwise false.
      */
@@ -86,6 +86,11 @@ public:
                                                  bool& propValue, bool* found = nullptr);
 
 private:
+    static ELogFlushPolicy* loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
+                                            const char* flushPolicyType, bool allowNone,
+                                            bool& result);
+    static ELogFilter* loadLogFilter(const ELogConfigMapNode* filterCfg, const char* filterType,
+                                     bool& result);
     static bool configureLogTargetCommon(ELogTarget* logTarget, const std::string& logTargetCfg,
                                          const ELogTargetNestedSpec& logTargetSpec);
     static void applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec);

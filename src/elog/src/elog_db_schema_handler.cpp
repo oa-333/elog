@@ -189,7 +189,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
 
     // get mandatory properties
     std::string dbType;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "database", "path", dbType)) {
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "database", "type", dbType)) {
         return nullptr;
     }
 

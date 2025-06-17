@@ -48,7 +48,7 @@ ELogTarget* ELogSysSchemaHandler::loadTarget(const std::string& logTargetCfg,
 
 ELogTarget* ELogSysSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     std::string path;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "system", "path", path)) {
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "system", "type", path)) {
         return nullptr;
     }
     ELogTarget* logTarget = nullptr;
