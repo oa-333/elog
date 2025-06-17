@@ -14,13 +14,13 @@ enum class ELogTokenType : uint32_t {
     /** @brief An open brace token. */
     TT_OPEN_BRACE,
 
-    /** @brief An close brace token. */
+    /** @brief A close brace token. */
     TT_CLOSE_BRACE,
 
     /** @brief An open square bracket (array subscript) token. */
     TT_OPEN_BRACKET,
 
-    /** @brief An close square bracket (array subscript) token. */
+    /** @brief A close square bracket (array subscript) token. */
     TT_CLOSE_BRACKET,
 
     /** @brief A comma (property separator). */
@@ -35,8 +35,6 @@ enum class ELogTokenType : uint32_t {
     /** @brief A text token. */
     TT_TOKEN
 };
-
-// TODO: rename to ELogStringTokenizer
 
 class ELogStringTokenizer {
 public:

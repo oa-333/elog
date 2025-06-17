@@ -18,6 +18,8 @@ target_sources(elog PRIVATE
     ./elog_deferred_target_provider.cpp
     ./elog_error.cpp
     ./elog_error.h
+    ./elog_expression_parser.cpp
+    ./elog_expression_tokenizer.cpp
     ./elog_field_selector.cpp
     ./elog_file_schema_handler.cpp
     ./elog_file_target.cpp
