@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "elog_config.h"
+#include "elog_expression.h"
 #include "elog_target_spec.h"
 
 namespace elog {
@@ -33,6 +34,9 @@ public:
 
     /** @brief Loads flush policy from configuration. */
     virtual bool load(const ELogConfigMapNode* flushPolicyCfg) { return true; }
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    virtual bool load(const ELogExpression* expr) { return true; };
 
     /**
      * @brief Queries whether this flush policy is active (i.e. has a background thread that
@@ -73,6 +77,10 @@ protected:
 
     // helper for combined flush policy
     virtual void propagateLogTarget(ELogTarget* logTarget) {}
+
+    bool loadIntFlushPolicy(const ELogConfigMapNode* flushPolicyCfg, const char* filterName,
+                            const char* propName, uint64_t& value);
+    bool loadIntFlushPolicy(const ELogExpression* expr, const char* filterName, uint64_t& value);
 
 private:
     bool m_isActive;
@@ -187,6 +195,29 @@ private:
     ELOG_DECLARE_FLUSH_POLICY(ELogOrFlushPolicy, OR);
 };
 
+/** @brief A log flush policy that negates the result of another log flush policy. */
+class ELOG_API ELogNotFlushPolicy : public ELogFlushPolicy {
+public:
+    ELogNotFlushPolicy() : m_flushPolicy(nullptr) {}
+    ELogNotFlushPolicy(ELogFlushPolicy* flushPolicy) : m_flushPolicy(flushPolicy) {}
+    ~ELogNotFlushPolicy() {}
+
+    /** @brief Loads flush policy from property map. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
+    bool shouldFlush(uint32_t msgSizeBytes) final {
+        return !m_flushPolicy->shouldFlush(msgSizeBytes);
+    }
+
+private:
+    ELogFlushPolicy* m_flushPolicy;
+
+    ELOG_DECLARE_FLUSH_POLICY(ELogNotFlushPolicy, NOT);
+};
+
 /** @class A immediate flush policy, for enforcing log target flush after every log message.  */
 class ELOG_API ELogImmediateFlushPolicy : public ELogFlushPolicy {
 public:
@@ -226,9 +257,7 @@ private:
  */
 class ELOG_API ELogCountFlushPolicy : public ELogFlushPolicy {
 public:
-    ELogCountFlushPolicy() : m_logCountLimit(0), m_currentLogCount(0) {}
-    ELogCountFlushPolicy(uint64_t logCountLimit)
-        : m_logCountLimit(logCountLimit), m_currentLogCount(0) {}
+    ELogCountFlushPolicy(uint64_t logCountLimit = 0) : m_logCountLimit(0), m_currentLogCount(0) {}
     ELogCountFlushPolicy(const ELogCountFlushPolicy&) = delete;
     ELogCountFlushPolicy(ELogCountFlushPolicy&&) = delete;
     ~ELogCountFlushPolicy() {}
@@ -238,6 +267,9 @@ public:
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -254,8 +286,7 @@ private:
  */
 class ELOG_API ELogSizeFlushPolicy : public ELogFlushPolicy {
 public:
-    ELogSizeFlushPolicy() : m_logSizeLimitBytes(0), m_currentLogSizeBytes(0) {}
-    ELogSizeFlushPolicy(uint64_t logSizeLimitBytes)
+    ELogSizeFlushPolicy(uint64_t logSizeLimitBytes = 0)
         : m_logSizeLimitBytes(logSizeLimitBytes), m_currentLogSizeBytes(0) {}
     ELogSizeFlushPolicy(const ELogSizeFlushPolicy&) = delete;
     ELogSizeFlushPolicy(ELogSizeFlushPolicy&&) = delete;
@@ -266,6 +297,9 @@ public:
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -294,6 +328,9 @@ public:
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     bool start() final;

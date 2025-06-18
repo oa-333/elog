@@ -2,6 +2,7 @@
 #define __ELOG_CONFIG_LOADER_H__
 
 #include "elog_config.h"
+#include "elog_expression.h"
 #include "elog_flush_policy.h"
 #include "elog_target.h"
 #include "elog_target_spec.h"
@@ -86,9 +87,13 @@ public:
                                                  bool& propValue, bool* found = nullptr);
 
 private:
+    static ELogFlushPolicy* loadFlushPolicyExprStr(const char* flushPolicyExpr);
+    static ELogFlushPolicy* loadFlushPolicyExpr(ELogExpression* expr);
     static ELogFlushPolicy* loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
                                             const char* flushPolicyType, bool allowNone,
                                             bool& result);
+    static ELogFilter* loadLogFilterExprStr(const char* filterExpr);
+    static ELogFilter* loadLogFilterExpr(ELogExpression* expr);
     static ELogFilter* loadLogFilter(const ELogConfigMapNode* filterCfg, const char* filterType,
                                      bool& result);
     static bool configureLogTargetCommon(ELogTarget* logTarget, const std::string& logTargetCfg,

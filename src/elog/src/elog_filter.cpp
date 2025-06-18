@@ -12,7 +12,7 @@
 
 namespace elog {
 
-ELOG_IMPLEMENT_FILTER(ELogNegateFilter)
+ELOG_IMPLEMENT_FILTER(ELogNotFilter)
 ELOG_IMPLEMENT_FILTER(ELogAndLogFilter)
 ELOG_IMPLEMENT_FILTER(ELogOrLogFilter)
 ELOG_IMPLEMENT_FILTER(ELogRecordIdFilter);
@@ -46,6 +46,9 @@ typedef std::unordered_map<std::string, ELogFilterConstructor*> ELogFilterConstr
 
 static ELogFilterConstructorMap sFilterConstructorMap;
 
+typedef std::unordered_map<std::string, ELogCmpOp> ELogCmpOpMap;
+static ELogCmpOpMap sCmpOpMap;
+
 void registerFilterConstructor(const char* name, ELogFilterConstructor* constructor) {
     // due to c runtime issues we delay access to unordered map
     if (sFilterConstructorsCount >= ELOG_MAX_FILTER_COUNT) {
@@ -70,9 +73,28 @@ static bool applyFilterConstructorRegistration() {
     return true;
 }
 
-bool initFilters() { return applyFilterConstructorRegistration(); }
+static void initCmpOpMap() {
+    sCmpOpMap["=="] = ELogCmpOp::CMP_OP_EQ;
+    sCmpOpMap["!="] = ELogCmpOp::CMP_OP_NE;
+    sCmpOpMap["<"] = ELogCmpOp::CMP_OP_LT;
+    sCmpOpMap["<="] = ELogCmpOp::CMP_OP_LE;
+    sCmpOpMap[">"] = ELogCmpOp::CMP_OP_GT;
+    sCmpOpMap[">="] = ELogCmpOp::CMP_OP_GE;
+    sCmpOpMap["CONTAINS"] = ELogCmpOp::CMP_OP_CONTAINS;
+    sCmpOpMap["LIKE"] = ELogCmpOp::CMP_OP_LIKE;
+    sCmpOpMap["contains"] = ELogCmpOp::CMP_OP_CONTAINS;
+    sCmpOpMap["like"] = ELogCmpOp::CMP_OP_LIKE;
+}
 
-void termFilters() { sFilterConstructorMap.clear(); }
+bool initFilters() {
+    initCmpOpMap();
+    return applyFilterConstructorRegistration();
+}
+
+void termFilters() {
+    sFilterConstructorMap.clear();
+    sCmpOpMap.clear();
+}
 
 ELogFilter* constructFilter(const char* name) {
     ELogFilterConstructorMap::iterator itr = sFilterConstructorMap.find(name);
@@ -132,15 +154,15 @@ inline bool compareTime(ELogCmpOp cmpOp, ELogTime lhs, ELogTime rhs) {
     return compareInt(cmpOp, elogTimeToUTCNanos(lhs), elogTimeToUTCNanos(rhs));
 }
 
-ELogNegateFilter::~ELogNegateFilter() {
+ELogNotFilter::~ELogNotFilter() {
     if (m_filter != nullptr) {
         delete m_filter;
         m_filter = nullptr;
     }
 }
 
-bool ELogNegateFilter::load(const std::string& logTargetCfg,
-                            const ELogTargetNestedSpec& logTargetSpec) {
+bool ELogNotFilter::load(const std::string& logTargetCfg,
+                         const ELogTargetNestedSpec& logTargetSpec) {
     // we expect to find a nested property 'filter_args' with one array item
     ELogTargetNestedSpec::SubSpecMap::const_iterator itr =
         logTargetSpec.m_subSpec.find("filter_args");
@@ -179,7 +201,7 @@ bool ELogNegateFilter::load(const std::string& logTargetCfg,
     return true;
 }
 
-bool ELogNegateFilter::load(const ELogConfigMapNode* filterCfg) {
+bool ELogNotFilter::load(const ELogConfigMapNode* filterCfg) {
     // we expect to find a nested property 'args' with one array item
     const ELogConfigValue* cfgValue = filterCfg->getValue("args");
     if (cfgValue == nullptr) {
@@ -211,8 +233,8 @@ bool ELogNegateFilter::load(const ELogConfigMapNode* filterCfg) {
     }
     if (arrayNode->getValueAt(0)->getValueType() != ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
         ELOG_REPORT_ERROR(
-            "Invalid property 'args' type (required for NOT filter), expecting array, seeing "
-            "instead %s (context: %s)",
+            "Invalid array property 'args' item type (required for NOT filter), expecting map, "
+            "seeing instead %s (context: %s)",
             arrayNode->getFullContext());
         return false;
     }
@@ -466,6 +488,16 @@ static bool parseStringCmpOp(const char* filterName, const ELogConfigMapNode* fi
     return parseCmpOpCommon(filterName, filterCfg, cmpOp);
 }
 
+bool elogCmpOpFromString(const char* cmpOpStr, ELogCmpOp& cmpOp) {
+    ELogCmpOpMap::const_iterator itr = sCmpOpMap.find(cmpOpStr);
+    if (itr == sCmpOpMap.end()) {
+        ELOG_REPORT_ERROR("Invalid comparison operator '%s'", cmpOpStr);
+        return false;
+    }
+    cmpOp = itr->second;
+    return true;
+}
+
 bool ELogCmpFilter::loadStringFilter(const ELogConfigMapNode* filterCfg, const char* propertyName,
                                      const char* filterName, std::string& propertyValue) {
     bool found = false;
@@ -510,6 +542,46 @@ bool ELogCmpFilter::loadIntFilter(const ELogConfigMapNode* filterCfg, const char
     return true;
 }
 
+bool ELogCmpFilter::loadStringFilter(const ELogExpression* expr, const char* filterName,
+                                     std::string& value) {
+    if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression type, operator expression required for loading %s filter",
+            filterName);
+        return false;
+    }
+    const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
+    if (!elogCmpOpFromString(opExpr->m_op.c_str(), m_cmpOp)) {
+        ELOG_REPORT_ERROR("Invalid comparison operator '%s' for %s filter", opExpr->m_op.c_str(),
+                          filterName);
+        return false;
+    }
+    value = opExpr->m_rhs;
+    return true;
+}
+
+bool ELogCmpFilter::loadIntFilter(const ELogExpression* expr, const char* filterName,
+                                  uint64_t& value) {
+    if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression type, operator expression required for loading %s filter",
+            filterName);
+        return false;
+    }
+    const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
+    if (!elogCmpOpFromString(opExpr->m_op.c_str(), m_cmpOp)) {
+        ELOG_REPORT_ERROR("Invalid comparison operator '%s' for %s filter", opExpr->m_op.c_str(),
+                          filterName);
+        return false;
+    }
+    if (!parseIntProp("", "", opExpr->m_rhs, value, false)) {
+        ELOG_REPORT_ERROR("Invalid expression operand '%s' for %s filter, required integer type",
+                          opExpr->m_rhs.c_str(), filterName);
+        return false;
+    }
+    return true;
+}
+
 bool ELogRecordIdFilter::load(const std::string& logTargetCfg,
                               const ELogTargetNestedSpec& logTargetSpec) {
     // get mandatory property record_id
@@ -535,6 +607,10 @@ bool ELogRecordIdFilter::load(const std::string& logTargetCfg,
 
 bool ELogRecordIdFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadIntFilter(filterCfg, "record_id", "record id", m_recordId);
+}
+
+bool ELogRecordIdFilter::load(const ELogExpression* expr) {
+    return loadIntFilter(expr, "record_id", m_recordId);
 }
 
 bool ELogRecordIdFilter::filterLogRecord(const ELogRecord& logRecord) {
@@ -576,6 +652,22 @@ bool ELogRecordTimeFilter::load(const ELogConfigMapNode* filterCfg) {
     if (!elogTimeFromString(timeStr.c_str(), m_logTime)) {
         ELOG_REPORT_ERROR("Time specification %s for record time filter is invalid (context: %s)",
                           timeStr.c_str(), filterCfg->getFullContext());
+        return false;
+    }
+    return true;
+}
+
+bool ELogRecordTimeFilter::load(const ELogExpression* expr) {
+    // get mandatory property record_time
+    std::string timeStr;
+    if (!loadStringFilter(expr, "record_time", timeStr)) {
+        return false;
+    }
+
+    // parse time
+    if (!elogTimeFromString(timeStr.c_str(), m_logTime)) {
+        ELOG_REPORT_ERROR("Time specification %s for record time filter is invalid",
+                          timeStr.c_str());
         return false;
     }
     return true;
@@ -662,6 +754,10 @@ bool ELogThreadNameFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "thread_name", "thread name", m_threadName);
 }
 
+bool ELogThreadNameFilter::load(const ELogExpression* expr) {
+    return loadStringFilter(expr, "thread name", m_threadName);
+}
+
 bool ELogThreadNameFilter::filterLogRecord(const ELogRecord& logRecord) {
     const char* threadName = getCurrentThreadNameField();
     if (threadName == nullptr || *threadName == 0) {
@@ -692,6 +788,10 @@ bool ELogSourceFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "log_source", "log source", m_logSourceName);
 }
 
+bool ELogSourceFilter::load(const ELogExpression* expr) {
+    return loadStringFilter(expr, "log source", m_logSourceName);
+}
+
 bool ELogSourceFilter::filterLogRecord(const ELogRecord& logRecord) {
     size_t logSourceNameLength = 0;
     const char* logSourceName = getLogSourceName(logRecord, logSourceNameLength);
@@ -720,6 +820,10 @@ bool ELogModuleFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "log_module", "log module", m_logModuleName);
 }
 
+bool ELogModuleFilter::load(const ELogExpression* expr) {
+    return loadStringFilter(expr, "log module", m_logModuleName);
+}
+
 bool ELogModuleFilter::filterLogRecord(const ELogRecord& logRecord) {
     size_t moduleNameLength = 0;
     const char* moduleName = getLogModuleName(logRecord, moduleNameLength);
@@ -746,6 +850,10 @@ bool ELogFileNameFilter::load(const std::string& logTargetCfg,
 
 bool ELogFileNameFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "file_name", "file name", m_fileName);
+}
+
+bool ELogFileNameFilter::load(const ELogExpression* expr) {
+    return loadStringFilter(expr, "file name", m_fileName);
 }
 
 bool ELogFileNameFilter::filterLogRecord(const ELogRecord& logRecord) {
@@ -785,6 +893,15 @@ bool ELogLineNumberFilter::load(const ELogConfigMapNode* filterCfg) {
     return true;
 }
 
+bool ELogLineNumberFilter::load(const ELogExpression* expr) {
+    uint64_t lineNumber = 0;
+    if (!loadIntFilter(expr, "line number", lineNumber)) {
+        return false;
+    }
+    m_lineNumber = (int)lineNumber;
+    return true;
+}
+
 bool ELogLineNumberFilter::filterLogRecord(const ELogRecord& logRecord) {
     return compareInt(m_cmpOp, logRecord.m_line, m_lineNumber);
 }
@@ -809,6 +926,10 @@ bool ELogFunctionNameFilter::load(const std::string& logTargetCfg,
 
 bool ELogFunctionNameFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "function_name", "function name", m_functionName);
+}
+
+bool ELogFunctionNameFilter::load(const ELogExpression* expr) {
+    return loadStringFilter(expr, "function name", m_functionName);
 }
 
 bool ELogFunctionNameFilter::filterLogRecord(const ELogRecord& logRecord) {
@@ -852,6 +973,21 @@ bool ELogLevelFilter::load(const ELogConfigMapNode* filterCfg) {
     return true;
 }
 
+bool ELogLevelFilter::load(const ELogExpression* expr) {
+    std::string logLevelStr;
+    if (!loadStringFilter(expr, "log level", logLevelStr)) {
+        return false;
+    }
+
+    // parse time
+    if (!elogLevelFromStr(logLevelStr.c_str(), m_logLevel)) {
+        ELOG_REPORT_ERROR("Invalid log_level value '%s' specified for log level filter",
+                          logLevelStr.c_str());
+        return false;
+    }
+    return true;
+}
+
 bool ELogLevelFilter::filterLogRecord(const ELogRecord& logRecord) {
     return compareLogLevel(m_cmpOp, logRecord.m_logLevel, m_logLevel);
 }
@@ -876,6 +1012,10 @@ bool ELogMsgFilter::load(const std::string& logTargetCfg,
 
 bool ELogMsgFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "log_msg", "log message", m_logMsg);
+}
+
+bool ELogMsgFilter::load(const ELogExpression* expr) {
+    return loadStringFilter(expr, "log message", m_logMsg);
 }
 
 bool ELogMsgFilter::filterLogRecord(const ELogRecord& logRecord) {

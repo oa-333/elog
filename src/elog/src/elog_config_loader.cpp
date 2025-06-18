@@ -6,6 +6,7 @@
 #include "elog_common.h"
 #include "elog_deferred_target.h"
 #include "elog_error.h"
+#include "elog_expression_parser.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
 #include "elog_quantum_target.h"
@@ -290,15 +291,11 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* logT
             return nullptr;
         }
 
-        // unlike previous implementation, it is planned to allow here a free style expression such
-        // as: ((count >= 4096) OR (size >= 1024) OR (timeoutMillis >= 1000))
+        // unlike previous implementation, it is allowed to specify here a free style expression
+        // such as: ((count == 4096) OR (size == 1024) OR (timeoutMillis == 1000))
         // this will be distinguished from normal case by the presence of parenthesis
         if (flushPolicyCfg[0] == '(') {
-            // TODO: in case of a string we need to parse it and build a flush policy object
-            ELOG_REPORT_ERROR(
-                "Flush policy configuration by expression is not supported yet (context: %s)",
-                cfgValue->getFullContext());
-            return nullptr;
+            return loadFlushPolicyExprStr(flushPolicyCfg);
         }
 
         // otherwise we allow the flush policy properties to be specified at the same level as the
@@ -353,15 +350,12 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* logTargetCf
             return nullptr;
         }
 
-        // unlike previous implementation, it is planned to allow here a free style expression such
-        // as: ((log_source == core.files) OR (tname == main))
+        // unlike previous implementation, it is allowed to specify here a free style expression
+        // such as: ((log_source == core.files) OR (tname == main) OR (file LIKE .*cpp))
         // this will be distinguished from normal case by the presence of parenthesis
         if (filterCfg[0] == '(') {
             // TODO: in case of a string we need to parse it and build a filter object
-            ELOG_REPORT_ERROR(
-                "Filter configuration by expression is not supported yet (context: %s)",
-                cfgValue->getFullContext());
-            return nullptr;
+            return loadLogFilterExprStr(filterCfg);
         }
 
         // otherwise we allow the filter properties to be specified at the same level as the log
@@ -496,6 +490,89 @@ bool ELogConfigLoader::getOptionalLogTargetBoolProperty(const ELogConfigMapNode*
     return true;
 }
 
+ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExprStr(const char* flushPolicyExpr) {
+    ELogExpression* expr = ELogExpressionParser::parseExpressionString(flushPolicyExpr);
+    if (expr == nullptr) {
+        ELOG_REPORT_ERROR("Failed to parse flush policy expression: %s", flushPolicyExpr);
+        return nullptr;
+    }
+    ELogFlushPolicy* flushPolicy = loadFlushPolicyExpr(expr);
+    delete expr;
+    return flushPolicy;
+}
+
+ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(ELogExpression* expr) {
+    if (expr->m_type == ELogExpressionType::ET_AND_EXPR ||
+        expr->m_type == ELogExpressionType::ET_OR_EXPR) {
+        // TODO: use coherent terminology, either compound of composite
+        ELogCompositeExpression* andExpr = (ELogCompositeExpression*)expr;
+        ELogCompoundFlushPolicy* flushPolicy = nullptr;
+        if (expr->m_type == ELogExpressionType::ET_AND_EXPR) {
+            flushPolicy = new (std::nothrow) ELogAndFlushPolicy();
+        } else {
+            flushPolicy = new (std::nothrow) ELogOrFlushPolicy();
+        }
+        if (flushPolicy == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
+            return nullptr;
+        }
+        for (ELogExpression* subExpr : andExpr->m_expressions) {
+            ELogFlushPolicy* subFlushPolicy = loadFlushPolicyExpr(subExpr);
+            if (subFlushPolicy == nullptr) {
+                ELOG_REPORT_ERROR("Failed to load sub-flush policy from expression");
+                delete flushPolicy;
+                return nullptr;
+            }
+            flushPolicy->addFlushPolicy(subFlushPolicy);
+        }
+        return flushPolicy;
+    } else if (expr->m_type == ELogExpressionType::ET_NOT_EXPR) {
+        ELogNotExpression* notExpr = (ELogNotExpression*)expr;
+        ELogFlushPolicy* subFlushPolicy = loadFlushPolicyExpr(notExpr->m_expression);
+        if (subFlushPolicy == nullptr) {
+            ELOG_REPORT_ERROR("Failed to load sub-flush policy for NOT flush policy");
+            return nullptr;
+        }
+        ELogNotFlushPolicy* notFlushPolicy = new (std::nothrow) ELogNotFlushPolicy(subFlushPolicy);
+        if (notFlushPolicy == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
+            delete subFlushPolicy;
+            return nullptr;
+        }
+        return notFlushPolicy;
+    } else {
+        assert(expr->m_type == ELogExpressionType::ET_OP_EXPR);
+        // LHS is always the flush policy name
+        // RHS is the value (size/count/time-millis), always an integer
+        // OP is always "=="
+        ELogOpExpression* opExpr = (ELogOpExpression*)expr;
+        if (opExpr->m_op.compare("==") != 0) {
+            ELOG_REPORT_ERROR("Invalid flush policy operation '%s', only equals operator supported",
+                              opExpr->m_op.c_str());
+            return nullptr;
+        }
+        uint64_t value = 0;
+        if (!parseIntProp("", "", opExpr->m_rhs, value)) {
+            ELOG_REPORT_ERROR("Invalid flush policy argument '%s', expected integer type",
+                              opExpr->m_rhs.c_str());
+            return nullptr;
+        }
+        ELogFlushPolicy* flushPolicy = constructFlushPolicy(opExpr->m_lhs.c_str());
+        if (flushPolicy == nullptr) {
+            ELOG_REPORT_ERROR("Failed to load flush policy by name '%s", opExpr->m_lhs.c_str());
+            return nullptr;
+        }
+
+        // now have the flush policy load itself from the parsed expression
+        if (!flushPolicy->load(opExpr)) {
+            ELOG_REPORT_ERROR("Failed to load flush policy from expression");
+            delete flushPolicy;
+            return nullptr;
+        }
+        return flushPolicy;
+    }
+}
+
 ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
                                                    const char* flushPolicyType, bool allowNone,
                                                    bool& result) {
@@ -526,6 +603,89 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* flus
         result = true;
     }
     return flushPolicy;
+}
+
+ELogFilter* ELogConfigLoader::loadLogFilterExprStr(const char* filterExpr) {
+    ELogExpression* expr = ELogExpressionParser::parseExpressionString(filterExpr);
+    if (expr == nullptr) {
+        ELOG_REPORT_ERROR("Failed to parse filter expression: %s", filterExpr);
+        return nullptr;
+    }
+    ELogFilter* filter = loadLogFilterExpr(expr);
+    delete expr;
+    return filter;
+}
+
+ELogFilter* ELogConfigLoader::loadLogFilterExpr(ELogExpression* expr) {
+    if (expr->m_type == ELogExpressionType::ET_AND_EXPR ||
+        expr->m_type == ELogExpressionType::ET_OR_EXPR) {
+        // TODO: use coherent terminology, either compound of composite
+        ELogCompositeExpression* andExpr = (ELogCompositeExpression*)expr;
+        ELogCompoundLogFilter* filter = nullptr;
+        if (expr->m_type == ELogExpressionType::ET_AND_EXPR) {
+            filter = new (std::nothrow) ELogAndLogFilter();
+        } else {
+            filter = new (std::nothrow) ELogOrLogFilter();
+        }
+        if (filter == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate filter, out of memory");
+            return nullptr;
+        }
+        for (ELogExpression* subExpr : andExpr->m_expressions) {
+            ELogFilter* subFilter = loadLogFilterExpr(subExpr);
+            if (subFilter == nullptr) {
+                ELOG_REPORT_ERROR("Failed to load sub-filter from expression");
+                delete filter;
+                return nullptr;
+            }
+            filter->addFilter(subFilter);
+        }
+        return filter;
+    } else if (expr->m_type == ELogExpressionType::ET_NOT_EXPR) {
+        ELogNotExpression* notExpr = (ELogNotExpression*)expr;
+        ELogFilter* subFilter = loadLogFilterExpr(notExpr->m_expression);
+        if (subFilter == nullptr) {
+            ELOG_REPORT_ERROR("Failed to load sub-filter for NOT filter");
+            return nullptr;
+        }
+        ELogNotFilter* notFilter = new (std::nothrow) ELogNotFilter(subFilter);
+        if (notFilter == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
+            delete subFilter;
+            return nullptr;
+        }
+        return notFilter;
+    } else {
+        assert(expr->m_type == ELogExpressionType::ET_OP_EXPR);
+        // LHS is always the flush policy name
+        // RHS is the value (size/count/time-millis), always an integer
+        // OP is always "=="
+        ELogOpExpression* opExpr = (ELogOpExpression*)expr;
+        if (opExpr->m_op.compare("==") != 0) {
+            ELOG_REPORT_ERROR("Invalid flush policy operation '%s', only equals operator supported",
+                              opExpr->m_op.c_str());
+            return nullptr;
+        }
+        uint64_t value = 0;
+        if (!parseIntProp("", "", opExpr->m_rhs, value)) {
+            ELOG_REPORT_ERROR("Invalid flush policy argument '%s', expected integer type",
+                              opExpr->m_rhs.c_str());
+            return nullptr;
+        }
+        ELogFilter* filter = constructFilter(opExpr->m_lhs.c_str());
+        if (filter == nullptr) {
+            ELOG_REPORT_ERROR("Failed to load filter by name '%s", opExpr->m_lhs.c_str());
+            return nullptr;
+        }
+
+        // now have the filter load itself from the parsed expression
+        if (!filter->load(opExpr)) {
+            ELOG_REPORT_ERROR("Failed to load filter from expression");
+            delete filter;
+            return nullptr;
+        }
+        return filter;
+    }
 }
 
 ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* filterCfg,

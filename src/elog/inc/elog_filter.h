@@ -2,6 +2,7 @@
 #define __ELOG_FILTER_H__
 
 #include "elog_config.h"
+#include "elog_expression.h"
 #include "elog_record.h"
 #include "elog_target_spec.h"
 
@@ -19,6 +20,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     virtual bool load(const ELogConfigMapNode* filterCfg) { return true; }
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    virtual bool load(const ELogExpression* expr) { return true; };
 
     /**
      * @brief Filters a log record.
@@ -78,11 +82,11 @@ protected:
     FilterType::FilterType##Constructor FilterType::sConstructor;
 
 /** @brief A log filter that negates the result of another log filter. */
-class ELOG_API ELogNegateFilter : public ELogFilter {
+class ELOG_API ELogNotFilter : public ELogFilter {
 public:
-    ELogNegateFilter() : m_filter(nullptr) {}
-    ELogNegateFilter(ELogFilter* filter) : m_filter(filter) {}
-    ~ELogNegateFilter() final;
+    ELogNotFilter() : m_filter(nullptr) {}
+    ELogNotFilter(ELogFilter* filter) : m_filter(filter) {}
+    ~ELogNotFilter() final;
 
     /** @brief Loads filter from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
@@ -103,7 +107,7 @@ public:
 private:
     ELogFilter* m_filter;
 
-    ELOG_DECLARE_FILTER(ELogNegateFilter, NOT);
+    ELOG_DECLARE_FILTER(ELogNotFilter, NOT);
 };
 
 /**
@@ -192,6 +196,9 @@ enum class ELogCmpOp : uint32_t {
     CMP_OP_CONTAINS
 };
 
+/** @brief Convert a string to a comparison operator. */
+extern ELOG_API bool elogCmpOpFromString(const char* cmpOpStr, ELogCmpOp& cmpOp);
+
 class ELOG_API ELogCmpFilter : public ELogFilter {
 public:
 protected:
@@ -204,6 +211,9 @@ protected:
                           const char* filterName, std::string& propertyValue);
     bool loadIntFilter(const ELogConfigMapNode* filterCfg, const char* propertyName,
                        const char* filterName, uint64_t& propertyValue);
+
+    bool loadStringFilter(const ELogExpression* expr, const char* filterName, std::string& value);
+    bool loadIntFilter(const ELogExpression* expr, const char* filterName, uint64_t& value);
 };
 
 class ELOG_API ELogRecordIdFilter : public ELogCmpFilter {
@@ -217,6 +227,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -245,6 +258,9 @@ public:
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -259,6 +275,10 @@ private:
     ELOG_DECLARE_FILTER(ELogRecordTimeFilter, record_time);
 };
 
+// TODO: the filters below will be useful when we have some kind of dispatch hub/service, that reads
+// records from many loggers and then dispatches them to some server. right now they are disabled
+// the process/thread id filters make no sense, unless we apply some live filters during runtime
+// (i.e. as a result of some controlling dashboard for the purpose of live RCA)
 #if 0
 class ELOG_API ELogHostNameFilter : public ELogCmpFilter {
 public:
@@ -271,6 +291,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -298,6 +321,9 @@ public:
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -323,6 +349,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -350,6 +379,9 @@ public:
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -375,6 +407,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -403,6 +438,9 @@ public:
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -428,6 +466,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -455,6 +496,9 @@ public:
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -480,6 +524,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -509,6 +556,9 @@ public:
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -534,6 +584,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -563,6 +616,9 @@ public:
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
     /**
      * @brief Filters a log record.
      * @param logRecord The log record to filter.
@@ -588,6 +644,9 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.

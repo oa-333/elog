@@ -21,6 +21,7 @@ target_sources(
             elog_def.h
             elog_deferred_target.h
             elog_error_handler.h
+            elog_expression.h
             elog_field_receptor.h
             elog_field_selector.h
             elog_field_spec.h
