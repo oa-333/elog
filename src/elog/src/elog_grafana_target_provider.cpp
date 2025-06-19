@@ -184,7 +184,7 @@ ELogMonTarget* ELogGrafanaTargetProvider::loadTarget(const ELogConfigMapNode* lo
             ELogGrafanaJsonTarget(lokiEndpoint, connectTimeoutMillis, writeTimeoutMillis,
                                   readTimeoutMillis, labels.c_str(), logLineMetadata.c_str());
         if (target == nullptr) {
-            ELOG_REPORT_ERROR("Failed to allocate Kafka message queue log target, out of memory");
+            ELOG_REPORT_ERROR("Failed to allocate Grafana-Loki log target, out of memory");
         }
         return target;
     }

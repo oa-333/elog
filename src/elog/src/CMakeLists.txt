@@ -52,6 +52,8 @@ target_sources(elog PRIVATE
     ./elog_rpc_schema_handler.cpp
     ./elog_schema_manager.cpp
     ./elog_segmented_file_target.cpp
+    ./elog_sentry_target_provider.cpp
+    ./elog_sentry_target.cpp
     ./elog_shared_logger.cpp
     ./elog_source.cpp
     ./elog_string_tokenizer.cpp

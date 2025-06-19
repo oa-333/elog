@@ -57,6 +57,7 @@ target_sources(
             elog_rpc_target.h
             elog_schema_handler.h
             elog_segmented_file_target.h
+            elog_sentry_target.h
             elog_shared_logger.h
             elog_source.h
             elog_sqlite_db_target.h

@@ -10,6 +10,10 @@
 #include "elog_grafana_target_provider.h"
 #endif
 
+#ifdef ELOG_ENABLE_SENTRY_CONNECTOR
+#include "elog_sentry_target_provider.h"
+#endif
+
 namespace elog {
 
 template <typename T>
@@ -40,6 +44,11 @@ bool ELogMonSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
     if (!initMonTargetProvider<ELogGrafanaTargetProvider>(this, "grafana")) {
+        return false;
+    }
+#endif
+#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
+    if (!initMonTargetProvider<ELogSentryTargetProvider>(this, "sentry")) {
         return false;
     }
 #endif
