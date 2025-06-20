@@ -16,13 +16,14 @@ else()
 endif()
 
 # optional compilation features
+option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
 option(ELOG_ENABLE_PGSQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
 option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF)
 option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
 option(ELOG_ENABLE_GRAFANA_CONNECTOR "ELog Grafana connector" OFF)
-option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
+option(ELOG_ENABLE_SENTRY_CONNECTOR "ELog Sentry connector" OFF)
 
 # fix error "IMPORTED_LOCATION not set" On Windows/vcpkg
 if (MSVC)
@@ -32,6 +33,7 @@ if (MSVC)
 endif()
 
 # stack trace requires dbgutil
+# TODO: this should change after moving to public repo
 if (ELOG_ENABLE_STACK_TRACE)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_STACK_TRACE)
     # add dbg util dependency
@@ -150,6 +152,21 @@ if (ELOG_ENABLE_GRAFANA_CONNECTOR)
     # add dependency on nlohmann_json
     find_package(nlohmann_json CONFIG REQUIRED)
     target_link_libraries(elog nlohmann_json::nlohmann_json)
+endif()
+
+if (ELOG_ENABLE_SENTRY_CONNECTOR)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_SENTRY_CONNECTOR)
+    if (MSVC)
+        find_package(sentry CONFIG REQUIRED)
+        target_link_libraries(elog sentry::sentry)
+    else()
+        message(STATUS "Using SENTRY_SDK_HOME " $ENV{SENTRY_SDK_HOME})
+        target_include_directories(elog PRIVATE "$ENV{SENTRY_SDK_HOME}/include")
+        target_link_directories(elog PRIVATE "$ENV{SENTRY_SDK_HOME}/lib")
+        target_link_directories(elog_bench PRIVATE "$ENV{SENTRY_SDK_HOME}/lib")
+        target_link_libraries(elog sentry)
+        target_link_libraries(elog_bench sentry)
+    endif()
 endif()
 
 # set different name on MinGW

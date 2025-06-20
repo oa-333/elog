@@ -2,6 +2,7 @@
 #define __ELOG_LOGGER_H__
 
 #include <atomic>
+#include <cstdarg>
 
 #include "elog_level.h"
 #include "elog_record_builder.h"
@@ -25,6 +26,18 @@ public:
      */
     void logFormat(ELogLevel logLevel, const char* file, int line, const char* function,
                    const char* fmt, ...);
+
+    /**
+     * @brief Formats a log message and sends it to all log target.
+     * @param logLevel The log level. No log level checking takes place.
+     * @param file The issuing file name.
+     * @param line The issuing line.
+     * @param function The issuing function.
+     * @param fmt The message format.
+     * @param args The message arguments.
+     */
+    void logFormatV(ELogLevel logLevel, const char* file, int line, const char* function,
+                    const char* fmt, va_list args);
 
     /**
      * @brief Sends unformatted log message to all log targets.

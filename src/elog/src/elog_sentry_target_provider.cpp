@@ -72,6 +72,11 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const std::string& logTarget
     if (itr != targetSpec.m_props.end()) {
         proxy = itr->second;
     }
+    std::string handlerPath;
+    itr = targetSpec.m_props.find("handler_path");
+    if (itr != targetSpec.m_props.end()) {
+        handlerPath = itr->second;
+    }
 
     // optional timeouts
     uint32_t flushTimeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
@@ -110,9 +115,16 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const std::string& logTarget
         }
     }
 
-    ELogSentryTarget* target = new (std::nothrow) ELogSentryTarget(
-        dsn.c_str(), dbPath.c_str(), release.c_str(), env.c_str(), dist.c_str(),
-        caCertsPath.c_str(), proxy.c_str(), flushTimeoutMillis, shutdownTimeoutMillis, debug);
+    std::string loggerLevel;
+    itr = targetSpec.m_props.find("loggerLevel");
+    if (itr != targetSpec.m_props.end()) {
+        loggerLevel = itr->second;
+    }
+
+    ELogSentryTarget* target = new (std::nothrow)
+        ELogSentryTarget(dsn.c_str(), dbPath.c_str(), release.c_str(), env.c_str(), dist.c_str(),
+                         caCertsPath.c_str(), proxy.c_str(), handlerPath.c_str(),
+                         flushTimeoutMillis, shutdownTimeoutMillis, debug, loggerLevel.c_str());
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate Sentry log target, out of memory");
     }
@@ -129,9 +141,11 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     //  dist=<name>&
     //  ca_certs_path=<file-path>&
     //  proxy=https://host:port&
+    //  handler_path=<path>
     //  flush_timeout_millis=value
     //  shutdown_timeout_millis=value
     //  debug=yes/no
+    //
 
     std::string dsn;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Sentry", "dsn", dsn)) {
@@ -153,12 +167,14 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
         return nullptr;
     }
 
+    // optional distribution
     std::string dist;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Sentry", "dist", dist)) {
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "Sentry", "dist",
+                                                              dist)) {
         return nullptr;
     }
 
-    // optional log line metadata
+    // optional certificates path
     std::string caCertsPath;
     if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "Sentry",
                                                               "ca_certs_path", caCertsPath)) {
@@ -172,29 +188,46 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
         return nullptr;
     }
 
-    // timeouts
+    // optional handler path
+    std::string handlerPath;
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "Sentry",
+                                                              "handler_path", handlerPath)) {
+        return nullptr;
+    }
+
+    // optional flush timeout
     int64_t flushTimeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
     if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
             logTargetCfg, "Sentry", "flush_timeout_millis", flushTimeoutMillis)) {
         return nullptr;
     }
 
+    // optional shutdown timeout
     int64_t shutdownTimeoutMillis = ELOG_SENTRY_DEFAULT_SHUTDOWN_TIMEOUT_MILLIS;
     if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
             logTargetCfg, "Sentry", "shutdown_timeout_millis", shutdownTimeoutMillis)) {
         return nullptr;
     }
 
-    // debug
+    // optional debug flag
     bool debug = false;
     if (!ELogConfigLoader::getOptionalLogTargetBoolProperty(logTargetCfg, "Sentry", "debug",
                                                             debug)) {
         return nullptr;
     }
 
-    ELogSentryTarget* target = new (std::nothrow) ELogSentryTarget(
-        dsn.c_str(), dbPath.c_str(), release.c_str(), env.c_str(), dist.c_str(),
-        caCertsPath.c_str(), proxy.c_str(), flushTimeoutMillis, shutdownTimeoutMillis, debug);
+    // optional logger level
+    std::string loggerLevel;
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "Sentry",
+                                                              "logger_level", loggerLevel)) {
+        return nullptr;
+    }
+
+    // create log target
+    ELogSentryTarget* target = new (std::nothrow)
+        ELogSentryTarget(dsn.c_str(), dbPath.c_str(), release.c_str(), env.c_str(), dist.c_str(),
+                         caCertsPath.c_str(), proxy.c_str(), handlerPath.c_str(),
+                         flushTimeoutMillis, shutdownTimeoutMillis, debug, loggerLevel.c_str());
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate Sentry log target, out of memory");
     }

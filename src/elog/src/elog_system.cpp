@@ -1428,7 +1428,7 @@ void ELogSystem::log(
     for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
         if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY ||
-            ELOG_HAS_TARGET_AFFINITY_MASK(logTargetAffinityMask, logTargetId + 1)) {
+            ELOG_HAS_TARGET_AFFINITY_MASK(logTargetAffinityMask, logTargetId)) {
             logTarget->log(logRecord);
             logged = true;
         }

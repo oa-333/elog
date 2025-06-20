@@ -47,7 +47,7 @@ bool ELogMonSchemaHandler::registerPredefinedProviders() {
         return false;
     }
 #endif
-#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
+#ifdef ELOG_ENABLE_SENTRY_CONNECTOR
     if (!initMonTargetProvider<ELogSentryTargetProvider>(this, "sentry")) {
         return false;
     }

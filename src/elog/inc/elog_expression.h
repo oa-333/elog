@@ -1,6 +1,7 @@
 #ifndef __ELOG_EXPRESSION_H__
 #define __ELOG_EXPRESSION_H__
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

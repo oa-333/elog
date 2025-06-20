@@ -90,8 +90,11 @@ do
         echo "[INFO] Adding gRPC connector"
         OPTS+=" -DELOG_ENABLE_GRPC_CONNECTOR=ON"
     elif [ "$conn" == "grafana" ]; then
-        echo "[INFO] Adding Frafana connector"
+        echo "[INFO] Adding Grafana connector"
         OPTS+=" -DELOG_ENABLE_GRAFANA_CONNECTOR=ON"
+    elif [ "$conn" == "sentry" ]; then
+        echo "[INFO] Adding Sentry connector"
+        OPTS+=" -DELOG_ENABLE_SENTRY_CONNECTOR=ON"
     elif [ "$conn" == "all" ]; then
         echo "[INFO] Enabling all connectors"
         OPTS+=" -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON"
@@ -99,6 +102,7 @@ do
         OPTS+=" -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_GRPC_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_GRAFANA_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_SENTRY_CONNECTOR=ON"
     else
         echo "[ERROR] Invalid connector name $conn, aborting"
         exit 1

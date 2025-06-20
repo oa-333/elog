@@ -7,7 +7,6 @@
 #include <unistd.h>
 #endif  // not defined ELOG_MSVC
 
-#include <cstdarg>
 #include <cstring>
 
 #include "elog_error.h"
@@ -45,13 +44,18 @@ void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const
                            const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
+    logFormatV(logLevel, file, line, function, fmt, ap);
+    va_end(ap);
+}
+
+void ELogLogger::logFormatV(ELogLevel logLevel, const char* file, int line, const char* function,
+                            const char* fmt, va_list args) {
     if (isLogging()) {
         pushRecordBuilder();
     }
     startLogRecord(logLevel, file, line, function);
-    appendMsgV(fmt, ap);
+    appendMsgV(fmt, args);
     finishLog();
-    va_end(ap);
 }
 
 void ELogLogger::logNoFormat(ELogLevel logLevel, const char* file, int line, const char* function,
