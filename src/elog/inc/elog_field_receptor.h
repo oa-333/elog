@@ -75,6 +75,24 @@ public:
         return receiveStringField(typeId, userName, fieldSpec);
     }
 
+    /** @brief Receives the OS name. */
+    virtual void receiveOsName(uint32_t typeId, const char* osName,
+                               const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, osName, fieldSpec);
+    }
+
+    /** @brief Receives the OS version. */
+    virtual void receiveOsVersion(uint32_t typeId, const char* osVersion,
+                                  const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, osVersion, fieldSpec);
+    }
+
+    /** @brief Receives the application name. */
+    virtual void receiveAppName(uint32_t typeId, const char* appName,
+                                const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, appName, fieldSpec);
+    }
+
     /** @brief Receives the program name. */
     virtual void receiveProgramName(uint32_t typeId, const char* programName,
                                     const ELogFieldSpec& fieldSpec) {

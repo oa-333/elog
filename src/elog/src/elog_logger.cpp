@@ -9,36 +9,19 @@
 
 #include <cstring>
 
+#include "elog_common.h"
 #include "elog_error.h"
 #include "elog_system.h"
 
-#ifdef ELOG_MINGW
-// we need windows headers for MinGW
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#elif !defined(ELOG_WINDOWS)
+#ifndef ELOG_WINDOWS
 #include <sys/stat.h>
-#include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
-#ifdef SYS_gettid
-#define gettid() syscall(SYS_gettid)
-#else
-#error "SYS_gettid unavailable on this platform"
-#endif
 #endif
 
 namespace elog {
 
 static std::atomic<uint64_t> sNextRecordId = 0;
-
-inline uint64_t getCurrentThreadId() {
-#ifdef ELOG_WINDOWS
-    return GetCurrentThreadId();
-#else
-    return gettid();
-#endif  // ELOG_WINDOWS
-}
 
 void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const char* function,
                            const char* fmt, ...) {

@@ -6,7 +6,21 @@
 #include <cstring>
 #include <string>
 
+#include "elog_def.h"
 #include "elog_props.h"
+
+#ifdef ELOG_MINGW
+// we need windows headers for MinGW
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif !defined(ELOG_WINDOWS)
+#include <sys/syscall.h>
+#ifdef SYS_gettid
+#define gettid() syscall(SYS_gettid)
+#else
+#error "SYS_gettid unavailable on this platform"
+#endif
+#endif
 
 #define ELOG_LEVEL_CONFIG_NAME "log_level"
 #define ELOG_FORMAT_CONFIG_NAME "log_format"
@@ -28,6 +42,14 @@
 #define ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE 256
 
 namespace elog {
+
+inline uint64_t getCurrentThreadId() {
+#ifdef ELOG_WINDOWS
+    return GetCurrentThreadId();
+#else
+    return gettid();
+#endif  // ELOG_WINDOWS
+}
 
 /** @brief Helper function for retrieving a property from a sequence */
 inline bool getProp(const ELogPropertySequence& props, const char* propName,

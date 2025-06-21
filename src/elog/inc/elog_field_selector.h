@@ -176,6 +176,42 @@ private:
     ELOG_DECLARE_FIELD_SELECTOR(ELogUserNameSelector, user);
 };
 
+class ELOG_API ELogOsNameSelector : public ELogFieldSelector {
+public:
+    ELogOsNameSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
+    ~ELogOsNameSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogOsNameSelector, os);
+};
+
+class ELOG_API ELogOsVersionSelector : public ELogFieldSelector {
+public:
+    ELogOsVersionSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
+    ~ELogOsVersionSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogOsVersionSelector, os_ver);
+};
+
+class ELOG_API ELogAppNameSelector : public ELogFieldSelector {
+public:
+    ELogAppNameSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
+    ~ELogAppNameSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogAppNameSelector, app);
+};
+
 class ELOG_API ELogProgramNameSelector : public ELogFieldSelector {
 public:
     ELogProgramNameSelector(const ELogFieldSpec& fieldSpec)

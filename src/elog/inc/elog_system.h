@@ -573,7 +573,10 @@ public:
      */
     static void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
 
-    /** @brief Sets the current thread'd name, to be referenced by token ${tname}. */
+    /** @brief Sets the application's name, to be referenced by token ${app}. */
+    static void setAppName(const char* appName);
+
+    /** @brief Sets the current thread's name, to be referenced by token ${tname}. */
     static void setCurrentThreadName(const char* threadName);
 
     /**

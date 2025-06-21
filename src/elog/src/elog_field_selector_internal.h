@@ -19,8 +19,20 @@ extern const char* getHostName();
 /** @brief Retrieves user name (for internal use only). */
 extern const char* getUserName();
 
+/** @brief Retrieves operating system name (for internal use only). */
+extern const char* getOsName();
+
+/** @brief Retrieves operating system version (for internal use only). */
+extern const char* getOsVersion();
+
+/** @brief Retrieves application name (for internal use only). */
+extern const char* getAppName();
+
 /** @brief Retrieves program name (for internal use only). */
 extern const char* getProgramName();
+
+/** @brief Installs the application's name (for internal use only). */
+extern void setAppNameField(const char* appName);
 
 /** @brief Installs the current thread name (for internal use only). */
 extern void setCurrentThreadNameField(const char* threadName);

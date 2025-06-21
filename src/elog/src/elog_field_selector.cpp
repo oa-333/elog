@@ -17,6 +17,9 @@
 #include <unistd.h>
 #endif
 
+#define OS_NAME_MAX 256
+#define OS_VERSION_MAX 256
+#define APP_NAME_MAX 256
 #define PROG_NAME_MAX 256
 #define THREAD_NAME_MAX 256
 
@@ -31,9 +34,12 @@
 
 namespace elog {
 
-static char hostName[HOST_NAME_MAX];
-static char userName[LOGIN_NAME_MAX];
-static char progName[PROG_NAME_MAX];
+static char sHostName[HOST_NAME_MAX];
+static char sUserName[LOGIN_NAME_MAX];
+static char sOsName[OS_NAME_MAX];
+static char sOsVersion[OS_VERSION_MAX];
+static char sAppName[APP_NAME_MAX];
+static char sProgName[PROG_NAME_MAX];
 static thread_local char sThreadName[THREAD_NAME_MAX] = {};
 
 #ifdef ELOG_ENABLE_STACK_TRACE
@@ -66,6 +72,9 @@ ELOG_IMPLEMENT_FIELD_SELECTOR(ELogRecordIdSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogTimeSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogHostNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogUserNameSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogOsNameSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogOsVersionSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogAppNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogProgramNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogProcessIdSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogThreadIdSelector)
@@ -136,13 +145,138 @@ ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec) {
     return fieldSelector;
 }
 
-static void getProgName() {
+static void initHostName() {
+#ifdef ELOG_WINDOWS
+    DWORD len = HOST_NAME_MAX;
+    if (!GetComputerNameA(sHostName, &len)) {
+        strcpy(sHostName, "<N/A>");
+    }
+#else
+    if (gethostname(sHostName, HOST_NAME_MAX) != 0) {
+        strcpy(sHostName, "<N/A>");
+    }
+#endif
+}
+
+static void initUserName() {
+#ifdef ELOG_WINDOWS
+    DWORD len = LOGIN_NAME_MAX;
+    if (!GetUserNameA(sUserName, &len)) {
+        strcpy(sUserName, "<N/A>");
+    }
+#else  // ELOG_WINDOWS
+    if (getlogin_r(sUserName, LOGIN_NAME_MAX) != 0) {
+        strcpy(sUserName, "<N/A>");
+    }
+#endif
+}
+
+#ifdef ELOG_WINDOWS
+static const char* getWin32OSName(LPOSVERSIONINFOEXA verInfo) {
+    if (verInfo->dwMajorVersion == 10) {
+        if (verInfo->wProductType == VER_NT_WORKSTATION) {
+            return "Windows 10";
+        } else {
+            return "Windows Server 2016";
+        }
+    } else if (verInfo->dwMajorVersion == 6) {
+        if (verInfo->wProductType == VER_NT_WORKSTATION) {
+            if (verInfo->dwMinorVersion == 3) {
+                return "Windows 8.1";
+            } else if (verInfo->dwMinorVersion == 2) {
+                return "Windows 8";
+            } else if (verInfo->dwMinorVersion == 1) {
+                return "Windows 7";
+            } else if (verInfo->dwMinorVersion == 0) {
+                return "Windows Vista";
+            }
+        } else {
+            if (verInfo->dwMinorVersion == 3) {
+                return "Windows Server 2012 R2";
+            } else if (verInfo->dwMinorVersion == 2) {
+                return "Windows Server 2012";
+            } else if (verInfo->dwMinorVersion == 1) {
+                return "Windows Server 2008 R2";
+            } else if (verInfo->dwMinorVersion == 0) {
+                return "Windows Server 2008";
+            }
+        }
+    } else if (verInfo->dwMajorVersion == 5) {
+        if (verInfo->wProductType == VER_NT_WORKSTATION) {
+            if (verInfo->dwMinorVersion == 2) {
+                // NOTE: we don't test for architecture as documentation requires since we support
+                // only x64 builds for windows platforms
+                return "Windows XP 64-Bit Edition";
+            } else if (verInfo->dwMinorVersion == 1) {
+                return "Windows XP";
+            } else if (verInfo->dwMinorVersion == 0) {
+                return "Windows 2000";
+            }
+        } else {
+            if (verInfo->dwMinorVersion == 2) {
+                if (verInfo->wSuiteMask & VER_SUITE_WH_SERVER) {
+                    return "Windows Home Server";
+                } else if (GetSystemMetrics(SM_SERVERR2) != 0) {
+                    return "Windows Server 2003 R2";
+                } else {
+                    return "Windows Server 2003";
+                }
+            }
+        }
+    }
+    return "";
+}
+
+static const char* getWin32SuiteName(LPOSVERSIONINFOEXA verInfo) {
+    // currently we don't support this, is it really needed?
+    return "";
+}
+static const char* getWin32ProductName(LPOSVERSIONINFOEXA verInfo) {
+    if (verInfo->wProductType == VER_NT_DOMAIN_CONTROLLER) {
+        return "Domain Controller";
+    } else if (verInfo->wProductType == VER_NT_SERVER) {
+        return "Server";
+    } else if (verInfo->wProductType == VER_NT_WORKSTATION) {
+        return "Workstation";
+    } else {
+        return "";
+    }
+}
+#endif
+
+static void initOsNameAndVersion() {
+#ifdef ELOG_WINDOWS
+    OSVERSIONINFOEXA verInfo;
+    ZeroMemory(&verInfo, sizeof(OSVERSIONINFOEXA));
+    verInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
+    GetVersionExA((LPOSVERSIONINFOA)&verInfo);
+    strncpy(sOsName, getWin32OSName(&verInfo), OS_NAME_MAX);
+    sOsName[OS_NAME_MAX - 1] = 0;
+#ifdef ELOG_MINGW
+    strncat(sOsName, "MSYS2", OS_NAME_MAX - strlen(sOsName) - 1);
+    sOsName[OS_NAME_MAX - 1] = 0;
+#endif
+    std::stringstream s;
+    s << verInfo.dwMajorVersion << "." << verInfo.dwMinorVersion << "." << verInfo.dwBuildNumber
+      << " " << verInfo.szCSDVersion << getWin32SuiteName(&verInfo) << " "
+      << getWin32ProductName(&verInfo);
+    std::string osVer = s.str();
+    strncpy(sOsName, osVer.c_str(), OS_VERSION_MAX);
+    sOsVersion[OS_VERSION_MAX - 1] = 0;
+#else
+    // TODO: on Linux we need to parse /etc/release*** or lsb_release output, this is ugly...
+    strcpy(sOsName, "Linux");
+    sOsVersion[0] = 0;
+#endif
+}
+
+static void initProgName() {
     // set some default in case of error
-    strcpy(progName, "N/A");
+    strcpy(sProgName, "N/A");
 
     // get executable file name
 #ifdef ELOG_WINDOWS
-    DWORD pathLen = GetModuleFileNameA(NULL, progName, PROG_NAME_MAX);
+    DWORD pathLen = GetModuleFileNameA(NULL, sProgName, PROG_NAME_MAX);
     if (pathLen == 0) {
         ELOG_REPORT_ERROR("WARNING: Failed to get executable file name: %u", GetLastError());
         return;
@@ -158,7 +292,7 @@ static void getProgName() {
 
     // read as many bytes as possible, the program name ends with a null (then program arguments
     // follow, but we don't care about them)
-    ssize_t res = read(fd, progName, PROG_NAME_MAX);
+    ssize_t res = read(fd, sProgName, PROG_NAME_MAX);
     if (res == ((ssize_t)-1)) {
         ELOG_REPORT_ERROR("Failed to read from /proc/self/cmdline for reading: %d", errno);
         close(fd);
@@ -169,29 +303,29 @@ static void getProgName() {
     // search for null and if not found then set one
     bool nullFound = false;
     for (uint32_t i = 0; i < PROG_NAME_MAX; ++i) {
-        if (progName[i] == 0) {
+        if (sProgName[i] == 0) {
             nullFound = true;
             break;
         }
     }
     if (!nullFound) {
-        progName[PROG_NAME_MAX - 1] = 0;
+        sProgName[PROG_NAME_MAX - 1] = 0;
     }
     const char slash = '/';
 #endif
 
     // platform-agnostic part:
     // now search for last slash and pull string back
-    char* slashPos = strrchr(progName, slash);
+    char* slashPos = strrchr(sProgName, slash);
     if (slashPos != nullptr) {
-        memmove(progName, slashPos + 1, strlen(slashPos + 1) + 1);
+        memmove(sProgName, slashPos + 1, strlen(slashPos + 1) + 1);
     }
 
     // finally remove extension
-    char* dotPtr = strrchr(progName, '.');
+    char* dotPtr = strrchr(sProgName, '.');
     if (dotPtr != nullptr) {
-        uint32_t dotPos = dotPtr - progName;
-        progName[dotPos] = 0;
+        uint32_t dotPos = dotPtr - sProgName;
+        sProgName[dotPos] = 0;
     }
 }
 
@@ -200,32 +334,17 @@ extern bool initFieldSelectors() {
         return false;
     }
 
-// initialize host name
-#ifdef ELOG_WINDOWS
-    DWORD len = HOST_NAME_MAX;
-    if (!GetComputerNameA(hostName, &len)) {
-        strcpy(hostName, "<N/A>");
-    }
-#else
-    if (gethostname(hostName, HOST_NAME_MAX) != 0) {
-        strcpy(hostName, "<N/A>");
-    }
-#endif
+    // initialize host name
+    initHostName();
 
     // initialize user name
-#ifdef ELOG_WINDOWS
-    len = LOGIN_NAME_MAX;
-    if (!GetUserNameA(userName, &len)) {
-        strcpy(userName, "<N/A>");
-    }
-#else  // ELOG_WINDOWS
-    if (getlogin_r(userName, LOGIN_NAME_MAX) != 0) {
-        strcpy(userName, "<N/A>");
-    }
-#endif
+    initUserName();
+
+    // initialize OS name and version
+    initOsNameAndVersion();
 
     // initialize program name
-    getProgName();
+    initProgName();
 
     // initialize pid
 #ifdef ELOG_WINDOWS
@@ -238,14 +357,23 @@ extern bool initFieldSelectors() {
 
 void termFieldSelectors() { sFieldSelectorConstructorMap.clear(); }
 
-const char* getHostName() { return hostName; }
+const char* getHostName() { return sHostName; }
 
-const char* getUserName() { return userName; }
+const char* getUserName() { return sUserName; }
 
-const char* getProgramName() { return progName; }
+extern const char* getOsName() { return sOsName; }
+
+extern const char* getOsVersion() { return sOsVersion; }
+
+extern const char* getAppName() { return sAppName; }
+
+const char* getProgramName() { return sProgName; }
+
+void setAppNameField(const char* appName) { strncpy(sAppName, appName, APP_NAME_MAX); }
 
 void setCurrentThreadNameField(const char* threadName) {
     strncpy(sThreadName, threadName, THREAD_NAME_MAX);
+    sThreadName[THREAD_NAME_MAX - 1] = 0;
 #ifdef ELOG_ENABLE_STACK_TRACE
     addThreadNameField(threadName);
 #endif
@@ -385,25 +513,49 @@ void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* 
 
 void ELogHostNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveHostName(getTypeId(), hostName, m_fieldSpec);
+        receptor->receiveHostName(getTypeId(), sHostName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), hostName, m_fieldSpec);
+        receptor->receiveStringField(getTypeId(), sHostName, m_fieldSpec);
     }
 }
 
 void ELogUserNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveUserName(getTypeId(), userName, m_fieldSpec);
+        receptor->receiveUserName(getTypeId(), sUserName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), userName, m_fieldSpec);
+        receptor->receiveStringField(getTypeId(), sUserName, m_fieldSpec);
+    }
+}
+
+void ELogOsNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
+        receptor->receiveOsName(getTypeId(), sOsName, m_fieldSpec);
+    } else {
+        receptor->receiveStringField(getTypeId(), sOsName, m_fieldSpec);
+    }
+}
+
+void ELogOsVersionSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
+        receptor->receiveOsVersion(getTypeId(), sOsVersion, m_fieldSpec);
+    } else {
+        receptor->receiveStringField(getTypeId(), sOsVersion, m_fieldSpec);
+    }
+}
+
+void ELogAppNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
+        receptor->receiveAppName(getTypeId(), sAppName, m_fieldSpec);
+    } else {
+        receptor->receiveStringField(getTypeId(), sAppName, m_fieldSpec);
     }
 }
 
 void ELogProgramNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveProgramName(getTypeId(), progName, m_fieldSpec);
+        receptor->receiveProgramName(getTypeId(), sProgName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), progName, m_fieldSpec);
+        receptor->receiveStringField(getTypeId(), sProgName, m_fieldSpec);
     }
 }
 

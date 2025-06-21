@@ -30,7 +30,7 @@ bool ELogPropsFormatter::handleText(const std::string& text) {
         ELOG_REPORT_ERROR("Header name text '%s' missing expected equal sign", text.c_str());
         return false;
     }
-    std::string propName = trim(text.substr(0, equalPos));
+    std::string propName = trim(text.substr(startPos, equalPos - startPos));
     m_propNames.push_back(propName);
     m_lastFieldType = FieldType::FT_TEXT;
     return true;

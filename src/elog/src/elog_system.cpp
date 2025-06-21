@@ -1335,6 +1335,8 @@ void ELogSystem::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) 
     sGlobalFormatter->formatLogMsg(logRecord, logMsg);
 }
 
+void ELogSystem::setAppName(const char* appName) { setAppNameField(appName); }
+
 void ELogSystem::setCurrentThreadName(const char* threadName) {
     setCurrentThreadNameField(threadName);
 }

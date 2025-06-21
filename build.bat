@@ -58,8 +58,10 @@ IF /I "%ARG1%" == "-g" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHEC
 IF /I "%ARG1%" == "--reconfigure" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 
 REM handle invalid option
-echo [ERROR] Invalid option: %ARG1%
-GOTO HANDLE_ERROR
+IF NOT "%1" == "" (
+    echo [ERROR] Invalid option: "%1"
+    GOTO HANDLE_ERROR
+)
 
 :CHECK_OPTS
 shift
