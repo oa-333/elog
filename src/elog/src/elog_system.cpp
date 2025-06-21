@@ -145,9 +145,17 @@ bool ELogSystem::initGlobals() {
 }
 
 void ELogSystem::termGlobals() {
+    // NOTE: since log target may have indirect dependencies (e.g. one log target, while writing a
+    // log message, issues another log message with is dispatched to all other log targets), we
+    // first stop all targets and then delete them, but this requires log target to be able to
+    // reject log messages after stop() was called.
     for (ELogTarget* logTarget : sLogTargets) {
         if (logTarget != nullptr) {
             logTarget->stop();
+        }
+    }
+    for (ELogTarget* logTarget : sLogTargets) {
+        if (logTarget != nullptr) {
             delete logTarget;
         }
     }
@@ -962,26 +970,36 @@ ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const ch
 
 ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
     // TODO: should we guard against duplicate names (they are used in search by name and in log
-    // affinity mask building) - this will require API change (returning at least bool)
+    // affinity mask building) - this might require API change (returning at least bool)
     ELOG_REPORT_TRACE("Adding log target: %s", logTarget->getName());
-    if (!logTarget->start()) {
-        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
-        return ELOG_INVALID_TARGET_ID;
-    }
 
     // find vacant slot ro add a new one
+    ELogTargetId logTargetId = ELOG_INVALID_TARGET_ID;
     for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
         if (sLogTargets[i] == nullptr) {
             sLogTargets[i] = logTarget;
             ELOG_REPORT_TRACE("Added log target %s with id %u", logTarget->getName(), i);
-            return i;
+            logTargetId = i;
+            break;
         }
     }
 
     // otherwise add a new slot
-    sLogTargets.push_back(logTarget);
-    ELOG_REPORT_TRACE("Added log target %s with id %u", logTarget->getName(), sLogTargets.size());
-    return (ELogTargetId)(sLogTargets.size() - 1);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        logTargetId = sLogTargets.size();
+        sLogTargets.push_back(logTarget);
+        ELOG_REPORT_TRACE("Added log target %s with id %u", logTarget->getName(), logTargetId);
+    }
+
+    // set target id and start it
+    logTarget->setId(logTargetId);
+    if (!logTarget->start()) {
+        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
+        sLogTargets[logTargetId] = nullptr;
+        logTarget->setId(ELOG_INVALID_TARGET_ID);
+        return ELOG_INVALID_TARGET_ID;
+    }
+    return logTargetId;
 }
 
 ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 0 */,

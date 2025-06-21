@@ -246,22 +246,29 @@ static const char* getWin32ProductName(LPOSVERSIONINFOEXA verInfo) {
 
 static void initOsNameAndVersion() {
 #ifdef ELOG_WINDOWS
+    // get version info
     OSVERSIONINFOEXA verInfo;
     ZeroMemory(&verInfo, sizeof(OSVERSIONINFOEXA));
     verInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
     GetVersionExA((LPOSVERSIONINFOA)&verInfo);
-    strncpy(sOsName, getWin32OSName(&verInfo), OS_NAME_MAX);
-    sOsName[OS_NAME_MAX - 1] = 0;
-#ifdef ELOG_MINGW
-    strncat(sOsName, "MSYS2", OS_NAME_MAX - strlen(sOsName) - 1);
-    sOsName[OS_NAME_MAX - 1] = 0;
-#endif
+
+    // format OS name
     std::stringstream s;
+    s << getWin32OSName(&verInfo);
+#ifdef ELOG_MINGW
+    s << " MSYS2";
+#endif
+    std::string osName = s.str();
+    strncpy(sOsName, osName.c_str(), OS_NAME_MAX);
+    sOsName[OS_NAME_MAX - 1] = 0;
+
+    // format version
+    s.str(std::string());  // clear string stream contents
     s << verInfo.dwMajorVersion << "." << verInfo.dwMinorVersion << "." << verInfo.dwBuildNumber
       << " " << verInfo.szCSDVersion << getWin32SuiteName(&verInfo) << " "
       << getWin32ProductName(&verInfo);
     std::string osVer = s.str();
-    strncpy(sOsName, osVer.c_str(), OS_VERSION_MAX);
+    strncpy(sOsVersion, osVer.c_str(), OS_VERSION_MAX);
     sOsVersion[OS_VERSION_MAX - 1] = 0;
 #else
     // TODO: on Linux we need to parse /etc/release*** or lsb_release output, this is ugly...

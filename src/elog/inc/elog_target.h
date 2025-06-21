@@ -75,6 +75,12 @@ public:
     /** @brief Orders a buffered log target to flush it log messages. */
     void flush();
 
+    /** @brief Sets the log target id. */
+    inline void setId(ELogTargetId id) { m_id = id; }
+
+    /** @brief Retrieves the log target id. */
+    inline ELogTargetId getId() { return m_id; }
+
     /**
      * @brief Sets optional log target name (for identification, can be used when searching for a
      * log target by name, see @ref ELogSystem::getLogTarget()).
@@ -149,6 +155,8 @@ protected:
     // target
     ELogTarget(const char* typeName, ELogFlushPolicy* flushPolicy = nullptr)
         : m_typeName(typeName),
+          m_id(ELOG_INVALID_TARGET_ID),
+          m_isRunning(false),
           m_isNativelyThreadSafe(false),
           m_isExternallyThreadSafe(false),
           m_requiresLock(true),
@@ -202,6 +210,8 @@ protected:
 private:
     std::string m_typeName;
     std::string m_name;
+    ELogTargetId m_id;
+    std::atomic<bool> m_isRunning;
     bool m_isNativelyThreadSafe;
     bool m_isExternallyThreadSafe;
     bool m_requiresLock;

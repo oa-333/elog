@@ -1,6 +1,7 @@
 #include "elog_target.h"
 
 #include "elog_common.h"
+#include "elog_error.h"
 #include "elog_filter.h"
 #include "elog_flush_policy.h"
 #include "elog_formatter.h"
@@ -18,6 +19,11 @@ bool ELogTarget::start() {
 }
 
 bool ELogTarget::startNoLock() {
+    bool isRunning = m_isRunning.load(std::memory_order_relaxed);
+    if (isRunning || !m_isRunning.compare_exchange_strong(isRunning, true)) {
+        ELOG_REPORT_ERROR("Cannot start log target %s/%s, already running");
+        return false;
+    }
     if (m_flushPolicy != nullptr) {
         if (!m_flushPolicy->start()) {
             return false;
@@ -36,6 +42,11 @@ bool ELogTarget::stop() {
 }
 
 bool ELogTarget::stopNoLock() {
+    bool isRunning = m_isRunning.load(std::memory_order_relaxed);
+    if (!isRunning || !m_isRunning.compare_exchange_strong(isRunning, false)) {
+        ELOG_REPORT_ERROR("Cannot stop log target %s/%s, not running");
+        return false;
+    }
     if (m_flushPolicy != nullptr) {
         if (!m_flushPolicy->stop()) {
             return false;
@@ -54,6 +65,11 @@ void ELogTarget::log(const ELogRecord& logRecord) {
 }
 
 void ELogTarget::logNoLock(const ELogRecord& logRecord) {
+    bool isRunning = m_isRunning.load(std::memory_order_relaxed);
+    if (!isRunning) {
+        // silently discard
+        return;
+    }
     if (canLog(logRecord)) {
         uint32_t bytesWritten = writeLogRecord(logRecord);
         // update statistics counter

@@ -156,8 +156,12 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     //  stack_trace=yes/no
 
     ELogSentryParams params;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Sentry", "dsn",
-                                                      params.m_dsn)) {
+
+    // first check for env var SENTRY_DSN
+    if (getenv("SENTRY_DSN") != nullptr) {
+        params.m_dsn = getenv("SENTRY_DSN");
+    } else if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Sentry", "dsn",
+                                                             params.m_dsn)) {
         return nullptr;
     }
 

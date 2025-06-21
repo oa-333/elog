@@ -185,7 +185,7 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogOsNameSelector, os);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogOsNameSelector, os_name);
 };
 
 class ELOG_API ELogOsVersionSelector : public ELogFieldSelector {

@@ -20,8 +20,6 @@ namespace elog {
 
 // TODO: understand how to work with Sentry transactions
 
-// TODO: if there is a SENTRY_DSN env var then use it (override config, also allows empty config)
-
 // TODO: checkout the beta logging interface
 
 // TODO: learn how to use envelopes and transport
@@ -33,6 +31,92 @@ static ELogLogger* sSentryLogger = nullptr;
 #ifdef ELOG_ENABLE_STACK_TRACE
 static void* sELogBaseAddress = nullptr;
 static void* sDbgUtilBaseAddress = nullptr;
+static void initSelfModuleAddress() {
+    dbgutil::OsModuleInfo modInfo;
+#ifdef ELOG_WINDOWS
+    const char* elogModName = "elog.dll";
+    const char* dbgutilModName = "dbgutil.dll";
+#else
+    const char* elogModName = "elog.so";
+    const char* dbgutilModName = "dbgutil.so";
+#endif
+    dbgutil::DbgUtilErr rc =
+        dbgutil::getModuleManager()->getModuleByName(elogModName, modInfo, true);
+    if (rc == DBGUTIL_ERR_OK) {
+        sELogBaseAddress = modInfo.m_loadAddress;
+    }
+    rc = dbgutil::getModuleManager()->getModuleByName(dbgutilModName, modInfo);
+    if (rc == DBGUTIL_ERR_OK) {
+        sDbgUtilBaseAddress = modInfo.m_loadAddress;
+    }
+}
+
+static sentry_value_t buildStackTrace() {
+    // since we are able to provide full stack trace information, we bypass the high-level API
+    // sentry_value_set_stacktrace(), and instead set the attributes manually
+
+    // get the stack trace and fill in frames information
+    dbgutil::StackTrace stackTrace;
+    dbgutil::getStackTrace(stackTrace);
+    sentry_value_t frames = sentry_value_new_list();
+
+    // traverse in reverse order due to sentry requirement (first frame is oldest)
+    for (dbgutil::StackTrace::reverse_iterator itr = stackTrace.rbegin(); itr != stackTrace.rend();
+         ++itr) {
+        dbgutil::StackEntry& stackEntry = *itr;
+
+        // skip frames with elog or dbgutil module, so that stack is cleaner
+        if (stackEntry.m_entryInfo.m_moduleBaseAddress == sELogBaseAddress ||
+            stackEntry.m_entryInfo.m_moduleBaseAddress == sDbgUtilBaseAddress) {
+            continue;
+        }
+
+        // set frame address
+        sentry_value_t frame = sentry_value_new_object();
+        std::stringstream s;
+        s << "0x" << std::hex << stackEntry.m_frameAddress;
+        sentry_value_set_by_key(frame, "instruction_addr",
+                                sentry_value_new_string(s.str().c_str()));
+        s.str(std::string());  // clear string stream
+
+        // set image address
+        s << "0x" << std::hex << stackEntry.m_entryInfo.m_moduleBaseAddress;
+        sentry_value_set_by_key(frame, "image_addr", sentry_value_new_string(s.str().c_str()));
+
+        // set image path
+        sentry_value_set_by_key(
+            frame, "package", sentry_value_new_string(stackEntry.m_entryInfo.m_moduleName.c_str()));
+
+        // set file name
+        sentry_value_set_by_key(frame, "filename",
+                                sentry_value_new_string(stackEntry.m_entryInfo.m_fileName.c_str()));
+
+        // set function
+        sentry_value_set_by_key(
+            frame, "function",
+            sentry_value_new_string(stackEntry.m_entryInfo.m_symbolName.c_str()));
+
+        // set module
+        sentry_value_set_by_key(
+            frame, "module", sentry_value_new_string(stackEntry.m_entryInfo.m_moduleName.c_str()));
+
+        // set line number
+        sentry_value_set_by_key(frame, "lineno",
+                                sentry_value_new_int32(stackEntry.m_entryInfo.m_lineNumber));
+
+        // set column number
+        sentry_value_set_by_key(frame, "colno",
+                                sentry_value_new_int32(stackEntry.m_entryInfo.m_columnIndex));
+
+        // add the frame to the frame list
+        sentry_value_append(frames, frame);
+    }
+
+    // create a stack trace object and set the frames attribute
+    sentry_value_t st = sentry_value_new_object();
+    sentry_value_set_by_key(st, "frames", frames);
+    return st;
+}
 #endif
 
 inline sentry_level_e elogLevelToSentryLevel(ELogLevel logLevel) {
@@ -68,9 +152,24 @@ inline ELogLevel sentryLogLevelToELog(sentry_level_t logLevel) {
     }
 }
 
+static void initSentryLogger(ELogTargetId sentryLogTargetId) {
+    ELogSource* logSource = ELogSystem::defineLogSource("elog.sentry", true);
+    if (logSource != nullptr) {
+        // make sure we do not enter infinite loop, so we ensure sentry log source does NOT write to
+        // the sentry log target
+        ELogTargetAffinityMask mask = ELOG_ALL_TARGET_AFFINITY_MASK;
+        ELOG_REMOVE_TARGET_AFFINITY_MASK(mask, sentryLogTargetId);
+        logSource->setLogTargetAffinity(mask);
+        sSentryLogger = logSource->createSharedLogger();
+    } else {
+        ELOG_REPORT_WARN("Sentry logger could not be set up, failed to define log source");
+    }
+}
+
 static void sentryLoggerFunc(sentry_level_t level, const char* message, va_list args,
                              void* userdata);
 
+// field receptor for setting context
 class ELogSentryContextReceptor : public ELogFieldReceptor {
 public:
     ELogSentryContextReceptor() { m_context = sentry_value_new_object(); }
@@ -107,6 +206,7 @@ private:
     sentry_value_t m_context;
 };
 
+// field receptor for setting context
 class ELogSentryTagsReceptor : public ELogFieldReceptor {
 public:
     ELogSentryTagsReceptor() {}
@@ -154,24 +254,18 @@ private:
 };
 
 bool ELogSentryTarget::startLogTarget() {
-    // parse context and tags if any
+    // process context if any
     if (!m_params.m_context.empty()) {
-        if (!m_contextFormatter.initialize(m_params.m_context.c_str())) {
+        if (!m_contextFormatter.parseProps(m_params.m_context.c_str())) {
             ELOG_REPORT_ERROR("Invalid context specification for Sentry log target: %s",
                               m_params.m_context.c_str());
             return false;
         }
     }
 
-    // we fabricate a log record so we can get the context fields resolved
-    // NOTE: context is set only once and is shared among all events
-    ELogRecord dummy = {};
-    ELogSentryContextReceptor contextReceptor;
-    m_contextFormatter.fillInProps(dummy, &contextReceptor);
-    contextReceptor.applyContext(m_params.m_contextTitle.c_str());
-
+    // process tags if any
     if (!m_params.m_tags.empty()) {
-        if (!m_tagsFormatter.initialize(m_params.m_tags.c_str())) {
+        if (!m_tagsFormatter.parseProps(m_params.m_tags.c_str())) {
             ELOG_REPORT_ERROR("Invalid tags specification for Sentry log target: %s",
                               m_params.m_tags.c_str());
             return false;
@@ -201,6 +295,8 @@ bool ELogSentryTarget::startLogTarget() {
     }
     // if user built Sentry with launch-pad backend, then he should also provide handler path, so we
     // should allow it from configuration (optional)
+    // NOTE: on Windows, the vcpkg package manager builds sentry with crashpad, so this is required
+    // TODO: add this to README
     if (!m_params.m_handlerPath.empty()) {
         sentry_options_set_handler_path(options, m_params.m_handlerPath.c_str());
     }
@@ -210,23 +306,7 @@ bool ELogSentryTarget::startLogTarget() {
 
     // finally configure sentry logger (only if debug is set)
     if (m_params.m_debug) {
-        ELogSource* logSource = ELogSystem::defineLogSource("elog.sentry", true);
-        if (logSource != nullptr) {
-            // make sure we do not enter infinite loop, so we make sentry log source writes only to
-            // stderr, this requires stderr to be defined BEFORE sentry log target
-            ELogTargetAffinityMask mask = 0;
-            ELogTargetId logTargetId = ELogSystem::getLogTargetId("stderr");
-            if (logTargetId != ELOG_INVALID_TARGET_ID) {
-                ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTargetId);
-                logSource->setLogTargetAffinity(mask);
-            } else {
-                ELOG_REPORT_WARN(
-                    "Could not restrict sentry log source to stderr (stderr log target not found)");
-            }
-            sSentryLogger = logSource->createSharedLogger();
-        } else {
-            ELOG_REPORT_WARN("Sentry logger could not be set up, failed to define log source");
-        }
+        initSentryLogger(getId());  // pass self id in order to filter out sentry log target
         sentry_options_set_logger(options, sentryLoggerFunc, nullptr);
 
         // allow user to control log level
@@ -242,23 +322,7 @@ bool ELogSentryTarget::startLogTarget() {
     sentry_init(options);
 
 #ifdef ELOG_ENABLE_STACK_TRACE
-    dbgutil::OsModuleInfo modInfo;
-#ifdef ELOG_WINDOWS
-    const char* elogModName = "elog.dll";
-    const char* dbgutilModName = "dbgutil.dll";
-#else
-    const char* elogModName = "elog.so";
-    const char* dbgutilModName = "dbgutil.so";
-#endif
-    dbgutil::DbgUtilErr rc =
-        dbgutil::getModuleManager()->getModuleByName(elogModName, modInfo, true);
-    if (rc == DBGUTIL_ERR_OK) {
-        sELogBaseAddress = modInfo.m_loadAddress;
-    }
-    rc = dbgutil::getModuleManager()->getModuleByName(dbgutilModName, modInfo);
-    if (rc == DBGUTIL_ERR_OK) {
-        sDbgUtilBaseAddress = modInfo.m_loadAddress;
-    }
+    initSelfModuleAddress();
 #endif
 
     return true;
@@ -286,10 +350,15 @@ bool ELogSentryTarget::stopLogTarget() {
     // the last solution is the best, since it does not require dependency on a specific log target
     // (what if it is not defined, or defined not early enough?), but it requires more development
     // effort, which is not that much
+    // The solution will be implemented in two phases:
+    // 1. non-thread-safe solution - get target id, add it to lo g target and start log target
+    // 2. consider adding thread-safety to log target array, either lock-free or read-write lock
+    //    this is not required here, but might be required if we consider external configuration
+    //    changes that allow adding targets and configuring ELog from outside by external process
 
     // for now we will just set it to null
-    sSentryLogger = nullptr;
     sentry_close();
+    sSentryLogger = nullptr;
     return true;
 }
 
@@ -300,6 +369,13 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
         /*   level */ elogLevelToSentryLevel(logRecord.m_logLevel),
         /*  logger */ logRecord.m_logger->getLogSource()->getQualifiedName(),
         /* message */ logMsg.c_str());
+
+    // append additional event context if configured to do so
+    if (!m_params.m_context.empty()) {
+        ELogSentryContextReceptor contextReceptor;
+        m_contextFormatter.fillInProps(logRecord, &contextReceptor);
+        contextReceptor.applyContext(m_params.m_contextTitle.c_str());
+    }
 
     // append additional event as tags if configured to do so
     uint32_t bytesWritten = 0;
@@ -322,79 +398,17 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     // unlike Sentry, we can report fully resolved frames
     if (m_params.m_stackTrace) {
 #ifdef ELOG_ENABLE_STACK_TRACE
-        // since we are able to provide full stack trace information, we bypass the high-level API
-        // sentry_value_set_stacktrace(), and instead set the attributes manually
-
-        // get the stack trace and fill in frames information
-        dbgutil::StackTrace stackTrace;
-        dbgutil::getStackTrace(stackTrace);
-        sentry_value_t frames = sentry_value_new_list();
-
-        // traverse in reverse order due to sentry requirement (first frame is oldest)
-        for (dbgutil::StackTrace::reverse_iterator itr = stackTrace.rbegin();
-             itr != stackTrace.rend(); ++itr) {
-            dbgutil::StackEntry& stackEntry = *itr;
-
-            // skip frames with elog or dbgutil module, so that stack is cleaner
-            if (stackEntry.m_entryInfo.m_moduleBaseAddress == sELogBaseAddress ||
-                stackEntry.m_entryInfo.m_moduleBaseAddress == sDbgUtilBaseAddress) {
-                continue;
-            }
-
-            // set frame address
-            sentry_value_t frame = sentry_value_new_object();
-            std::stringstream s;
-            s << "0x" << std::hex << stackEntry.m_frameAddress;
-            sentry_value_set_by_key(frame, "instruction_addr",
-                                    sentry_value_new_string(s.str().c_str()));
-            s.str(std::string());  // clear string stream
-
-            // set image address
-            s << "0x" << std::hex << stackEntry.m_entryInfo.m_moduleBaseAddress;
-            sentry_value_set_by_key(frame, "image_addr", sentry_value_new_string(s.str().c_str()));
-
-            // set image path
-            sentry_value_set_by_key(
-                frame, "package",
-                sentry_value_new_string(stackEntry.m_entryInfo.m_moduleName.c_str()));
-
-            // set file name
-            sentry_value_set_by_key(
-                frame, "filename",
-                sentry_value_new_string(stackEntry.m_entryInfo.m_fileName.c_str()));
-
-            // set function
-            sentry_value_set_by_key(
-                frame, "function",
-                sentry_value_new_string(stackEntry.m_entryInfo.m_symbolName.c_str()));
-
-            // set module
-            sentry_value_set_by_key(
-                frame, "module",
-                sentry_value_new_string(stackEntry.m_entryInfo.m_moduleName.c_str()));
-
-            // set line number
-            sentry_value_set_by_key(frame, "lineno",
-                                    sentry_value_new_int32(stackEntry.m_entryInfo.m_lineNumber));
-
-            // set column number
-            sentry_value_set_by_key(frame, "colno",
-                                    sentry_value_new_int32(stackEntry.m_entryInfo.m_columnIndex));
-
-            // add the frame to the frame list
-            sentry_value_append(frames, frame);
-        }
-
         // create a stack trace object and set the frames attribute
-        sentry_value_t st = sentry_value_new_object();
-        sentry_value_set_by_key(st, "frames", frames);
-        sentry_value_set_by_key(thd, "stacktrace", st);
-        // sentry_value_set_stacktrace(thd, &stackTrace[0], stackTrace.size());
+        sentry_value_t stackTrace = buildStackTrace();
+        sentry_value_set_by_key(thd, "stacktrace", stackTrace);
 #endif
     }
     sentry_event_add_thread(evt, thd);
 
+    // hand over the ready event to Sentry background thread
     sentry_capture_event(evt);
+    // TODO: this number a bit misleading, since we may also have stack trace in payload
+    // this will be more critical when using non-trivial flush policy
     return bytesWritten + logMsg.length();
 }
 
