@@ -25,6 +25,8 @@ struct ELOG_API ELogSentryParams {
     std::string m_context;
     std::string m_contextTitle;
     std::string m_tags;
+    std::string m_attributes;
+    enum class Mode : uint32_t { MODE_MESSAGE, MODE_LOGS } m_mode;
     bool m_stackTrace;
     uint64_t m_flushTimeoutMillis;
     uint64_t m_shutdownTimeoutMillis;
@@ -59,6 +61,7 @@ protected:
     ELogSentryParams m_params;
     ELogPropsFormatter m_contextFormatter;
     ELogPropsFormatter m_tagsFormatter;
+    ELogPropsFormatter m_attributesFormatter;
 };
 
 }  // namespace elog

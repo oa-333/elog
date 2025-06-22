@@ -15,6 +15,7 @@
 #include <windows.h>
 #elif !defined(ELOG_WINDOWS)
 #include <sys/syscall.h>
+#include <unistd.h>
 #ifdef SYS_gettid
 #define gettid() syscall(SYS_gettid)
 #else

@@ -14,6 +14,7 @@
 #endif
 #else
 #include <fcntl.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 #endif
 
@@ -244,6 +245,23 @@ static const char* getWin32ProductName(LPOSVERSIONINFOEXA verInfo) {
 }
 #endif
 
+#ifdef ELOG_LINUX
+static bool getLinuxDistribution(std::string& dist) {
+    const char* cmd = "lsb_release -d | awk {'first = $1; $1=\"\"; print $0'}|sed 's/^ //g'";
+    FILE* fp = popen(cmd, "r");
+    if (fp == NULL) {
+        ELOG_REPORT_SYS_ERROR(popen, "Failed to run command: %s", cmd);
+        return false;
+    }
+    char buf[1024];
+    while (fgets(buf, sizeof(buf), fp) != NULL) {
+        dist += buf;
+    }
+    pclose(fp);
+    return true;
+}
+#endif
+
 static void initOsNameAndVersion() {
 #ifdef ELOG_WINDOWS
     // get version info
@@ -271,9 +289,24 @@ static void initOsNameAndVersion() {
     strncpy(sOsVersion, osVer.c_str(), OS_VERSION_MAX);
     sOsVersion[OS_VERSION_MAX - 1] = 0;
 #else
-    // TODO: on Linux we need to parse /etc/release*** or lsb_release output, this is ugly...
-    strcpy(sOsName, "Linux");
+    sOsName[0] = 0;
     sOsVersion[0] = 0;
+    struct utsname buf = {};
+    if (uname(&buf) == -1) {
+        ELOG_REPORT_SYS_ERROR(uname, "Failed to get Linux version information");
+    } else {
+        // now get distribution (Ubuntu, RHEL, etc.)
+        strncpy(sOsName, buf.sysname, OS_NAME_MAX - 1);
+        sOsName[OS_NAME_MAX - 1] = 0;
+        std::string dist;
+        if (getLinuxDistribution(dist)) {
+            strncat(sOsName, " ", OS_NAME_MAX - strlen(sOsName) - 1);
+            strncat(sOsName, dist.c_str(), OS_NAME_MAX - strlen(sOsName) - 1);
+            sOsName[OS_NAME_MAX - 1] = 0;
+        }
+        strncpy(sOsVersion, buf.release, OS_VERSION_MAX - 1);
+        sOsVersion[OS_VERSION_MAX - 1] = 0;
+    }
 #endif
 }
 

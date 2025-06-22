@@ -22,9 +22,7 @@ namespace elog {
 
 // TODO: checkout the beta logging interface
 
-// TODO: learn how to use envelopes and transport
-
-// TODO: file requires reorganizing
+// TODO: learn how to use envelopes and transport (so we can incorporate flush policy correctly)
 
 static ELogLogger* sSentryLogger = nullptr;
 
@@ -74,13 +72,19 @@ static sentry_value_t buildStackTrace() {
         // set frame address
         sentry_value_t frame = sentry_value_new_object();
         std::stringstream s;
-        s << "0x" << std::hex << stackEntry.m_frameAddress;
+#ifdef ELOG_MSVC
+        s << "0x";
+#endif
+        s << std::hex << stackEntry.m_frameAddress;
         sentry_value_set_by_key(frame, "instruction_addr",
                                 sentry_value_new_string(s.str().c_str()));
         s.str(std::string());  // clear string stream
 
         // set image address
-        s << "0x" << std::hex << stackEntry.m_entryInfo.m_moduleBaseAddress;
+#ifdef ELOG_MSVC
+        s << "0x";
+#endif
+        s << std::hex << stackEntry.m_entryInfo.m_moduleBaseAddress;
         sentry_value_set_by_key(frame, "image_addr", sentry_value_new_string(s.str().c_str()));
 
         // set image path
@@ -254,6 +258,10 @@ private:
 };
 
 bool ELogSentryTarget::startLogTarget() {
+#ifdef ELOG_ENABLE_STACK_TRACE
+    initSelfModuleAddress();
+#endif
+
     // process context if any
     if (!m_params.m_context.empty()) {
         if (!m_contextFormatter.parseProps(m_params.m_context.c_str())) {
@@ -267,6 +275,15 @@ bool ELogSentryTarget::startLogTarget() {
     if (!m_params.m_tags.empty()) {
         if (!m_tagsFormatter.parseProps(m_params.m_tags.c_str())) {
             ELOG_REPORT_ERROR("Invalid tags specification for Sentry log target: %s",
+                              m_params.m_tags.c_str());
+            return false;
+        }
+    }
+
+    // process attributes if any
+    if (!m_params.m_attributes.empty()) {
+        if (!m_tagsFormatter.parseProps(m_params.m_attributes.c_str())) {
+            ELOG_REPORT_ERROR("Invalid attributes specification for Sentry log target: %s",
                               m_params.m_tags.c_str());
             return false;
         }
@@ -321,10 +338,6 @@ bool ELogSentryTarget::startLogTarget() {
     }
     sentry_init(options);
 
-#ifdef ELOG_ENABLE_STACK_TRACE
-    initSelfModuleAddress();
-#endif
-
     return true;
 }
 
@@ -351,7 +364,7 @@ bool ELogSentryTarget::stopLogTarget() {
     // (what if it is not defined, or defined not early enough?), but it requires more development
     // effort, which is not that much
     // The solution will be implemented in two phases:
-    // 1. non-thread-safe solution - get target id, add it to lo g target and start log target
+    // 1. non-thread-safe solution - get target id, add it to log target and start log target
     // 2. consider adding thread-safety to log target array, either lock-free or read-write lock
     //    this is not required here, but might be required if we consider external configuration
     //    changes that allow adding targets and configuring ELog from outside by external process
@@ -410,6 +423,9 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     // TODO: this number a bit misleading, since we may also have stack trace in payload
     // this will be more critical when using non-trivial flush policy
     return bytesWritten + logMsg.length();
+
+    // TODO: Currently the native SDK does not support yet new logs interface, when it does we will
+    // send it as well
 }
 
 void ELogSentryTarget::flushLogTarget() {

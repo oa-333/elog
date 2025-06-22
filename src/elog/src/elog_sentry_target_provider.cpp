@@ -153,7 +153,9 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     //  logger_level=FATAL/ERROR/WARN/INFO/DEBUG
     //  context={<key-value list, comma-separated>}
     //  tags={<key-value list, comma-separated>}
+    //  attributes={<key-value list, comma-separated>}
     //  stack_trace=yes/no
+    //  mode=message/logs
 
     ELogSentryParams params;
 
@@ -225,6 +227,32 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     // optional tags
     if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "Sentry", "tags",
                                                               params.m_tags)) {
+        return nullptr;
+    }
+
+    // optional attributes
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "Sentry", "attributes",
+                                                              params.m_attributes)) {
+        return nullptr;
+    }
+
+    // optional mode
+    std::string mode = "message";
+    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "Sentry", "mode",
+                                                              mode)) {
+        return nullptr;
+    }
+    if (mode.compare("message") == 0) {
+        params.m_mode = ELogSentryParams::Mode::MODE_MESSAGE;
+    } else if (mode.compare("logs") == 0) {
+        params.m_mode = ELogSentryParams::Mode::MODE_LOGS;
+        ELOG_REPORT_WARN(
+            "Sentry log target 'logs' report mode is not supported yet (waiting for native SDK "
+            "support). In the meantime 'message' mode will be used.");
+        params.m_mode = ELogSentryParams::Mode::MODE_MESSAGE;
+    } else {
+        ELOG_REPORT_ERROR(
+            "Invalid Sentry log target specification, mode can be only 'message' or 'logs'");
         return nullptr;
     }
 
