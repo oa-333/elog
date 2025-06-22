@@ -5,6 +5,19 @@
 
 namespace elog {
 
+bool ELogPropsFormatter ::parseProps(const std::string& props) {
+    // props is expected to wrapped with curly braces
+    std::string trimmedProps = trim(props);
+    if (trimmedProps[0] != '{' || trimmedProps[trimmedProps.length() - 1] != '}') {
+        ELOG_REPORT_ERROR(
+            "Invalid properties specification, should be enclosed with curly braces {}: %s",
+            props.c_str());
+        return false;
+    }
+    trimmedProps = trimmedProps.substr(1, trimmedProps.length() - 2);
+    return initialize(trimmedProps.c_str());
+}
+
 bool ELogPropsFormatter::handleText(const std::string& text) {
     // ignore all white space parts
     if (trim(text).empty()) {

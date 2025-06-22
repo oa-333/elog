@@ -12,7 +12,7 @@ public:
     ELogPropsFormatter(ELogPropsFormatter&&) = delete;
     ~ELogPropsFormatter() final {}
 
-    inline bool parseProps(const std::string& props) { return initialize(props.c_str()); }
+    bool parseProps(const std::string& props);
 
     inline void fillInProps(const ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {
         applyFieldSelectors(logRecord, receptor);
