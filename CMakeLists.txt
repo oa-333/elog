@@ -61,6 +61,15 @@ if (ELOG_ENABLE_HTTP)
 
         target_link_libraries(elog httplib)
     endif()
+
+    # we also add here gzip for HTTP clients requiring compression
+    find_path(GZIP_HPP_INCLUDE_DIRS "gzip/compress.hpp")
+    target_include_directories(elog PRIVATE ${GZIP_HPP_INCLUDE_DIRS})
+
+    # gzip requires zlib
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(elog ZLIB::ZLIB)
+    target_compile_definitions(elog PRIVATE ZLIB_CONST)
 endif()
 
 # get JSON if needed

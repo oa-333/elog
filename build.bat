@@ -138,6 +138,8 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_DATADOG_CONNECTOR=ON
         vcpkg add port cpp-httplib
         vcpkg add port nlohmann-json
+        vcpkg add port gzip-hpp
+        vcpkg add port zlib
     )
     IF "!conn!" == "all" (
         echo [INFO]  Enabling all connectors
