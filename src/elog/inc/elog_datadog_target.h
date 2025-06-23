@@ -36,15 +36,14 @@ namespace elog {
 
 class ELOG_API ELogDatadogTarget : public ELogMonTarget {
 public:
-    ELogDatadogTarget(const char* endpoint, const char* apiKey, const char* applicationKey,
-                      const char* source = "", const char* service = "", const char* tags = "",
-                      bool stackTrace = false, bool compress = false,
+    ELogDatadogTarget(const char* endpoint, const char* apiKey, const char* source = "",
+                      const char* service = "", const char* tags = "", bool stackTrace = false,
+                      bool compress = false,
                       uint32_t connectTimeoutMillis = ELOG_DATADOG_DEFAULT_CONNECT_TIMEOUT_MILLIS,
                       uint32_t writeTimeoutMillis = ELOG_DATADOG_DEFAULT_WRITE_TIMEOUT_MILLIS,
                       uint32_t readTimeoutMillis = ELOG_DATADOG_DEFAULT_READ_TIMEOUT_MILLIS)
         : m_endpoint(endpoint),
           m_apiKey(apiKey),
-          m_applicationKey(applicationKey),
           m_source(source),
           m_service(service),
           m_tags(tags),
@@ -78,7 +77,6 @@ protected:
 private:
     std::string m_endpoint;
     std::string m_apiKey;
-    std::string m_applicationKey;
     std::string m_source;
     std::string m_service;
     std::string m_tags;

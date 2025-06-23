@@ -2,6 +2,8 @@
 
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
 
+#include <gzip/compress.hpp>
+
 #include "elog_common.h"
 #include "elog_error.h"
 #include "elog_field_selector_internal.h"
@@ -113,11 +115,15 @@ void ELogDatadogTarget::flushLogTarget() {
     ELOG_REPORT_TRACE("POST log message for Datadog: %s", m_logItemArray.dump().c_str());
     httplib::Headers headers;
     headers.insert(httplib::Headers::value_type("DD-API-KEY", m_apiKey));
-    headers.insert(httplib::Headers::value_type("DD-APPLICATION-KEY", m_applicationKey));
     std::string body =
         m_logItemArray.size() == 1 ? m_logItemArray[0].dump() : m_logItemArray.dump();
+    if (m_compress) {
+        body = gzip::compress(body.data(), body.size(), Z_BEST_COMPRESSION);
+        headers.insert(httplib::Headers::value_type("Content-Encoding", "gzip"));
+        headers.insert(httplib::Headers::value_type("Content-Length", std::to_string(body.size())));
+    }
     httplib::Result res =
-        m_client->Post("/api/v2/logs", headers, m_logItemArray.dump(), "application/json");
+        m_client->Post("/api/v2/logs", headers, body.data(), body.size(), "application/json");
     ELOG_REPORT_TRACE("POST done");
     if (!res) {
         ELOG_REPORT_ERROR("Failed to POST HTTP request to Datadog: %s",

@@ -15,7 +15,6 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const std::string& logTarge
     // mon://datadog?
     //  endpoint=http://host:port&  // e.g. endpoint=https://http-intake.logs.datadoghq.com
     //  api_key=<key>&
-    //  application_key=<key>&
     //  source=<name>&
     //  service=<name>&
     //  tags={JSON_FORMAT}&
@@ -45,15 +44,6 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const std::string& logTarge
         return nullptr;
     }
     const std::string& apiKey = itr->second;
-
-    itr = targetSpec.m_props.find("application_key");
-    if (itr == targetSpec.m_props.end()) {
-        ELOG_REPORT_ERROR(
-            "Invalid Datadog log target specification, missing property 'application_key': %s",
-            logTargetCfg.c_str());
-        return nullptr;
-    }
-    const std::string& applicationKey = itr->second;
 
     // optional source
     std::string source;
@@ -150,10 +140,9 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const std::string& logTarge
         }
     }
 
-    ELogDatadogTarget* target = new (std::nothrow)
-        ELogDatadogTarget(endpoint.c_str(), apiKey.c_str(), applicationKey.c_str(), source.c_str(),
-                          service.c_str(), tags.c_str(), stackTrace, compress, connectTimeoutMillis,
-                          writeTimeoutMillis, readTimeoutMillis);
+    ELogDatadogTarget* target = new (std::nothrow) ELogDatadogTarget(
+        endpoint.c_str(), apiKey.c_str(), source.c_str(), service.c_str(), tags.c_str(), stackTrace,
+        compress, connectTimeoutMillis, writeTimeoutMillis, readTimeoutMillis);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate Datadog log target, out of memory");
     }
@@ -165,7 +154,6 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* lo
     // mon://datadog?
     //  endpoint=http://host:port&  // e.g. endpoint=https://http-intake.logs.datadoghq.com
     //  api_key=<key>&
-    //  application_key=<key>&
     //  source=<name>&
     //  service=<name>&
     //  tags={JSON_FORMAT}&
@@ -186,12 +174,6 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* lo
 
     std::string apiKey;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Datadog", "api_key", apiKey)) {
-        return nullptr;
-    }
-
-    std::string applicationKey;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Datadog", "application_key",
-                                                      applicationKey)) {
         return nullptr;
     }
 
@@ -259,10 +241,9 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* lo
         return nullptr;
     }
 
-    ELogDatadogTarget* target = new (std::nothrow)
-        ELogDatadogTarget(endpoint.c_str(), apiKey.c_str(), applicationKey.c_str(), source.c_str(),
-                          service.c_str(), tags.c_str(), stackTrace, compress, connectTimeoutMillis,
-                          writeTimeoutMillis, readTimeoutMillis);
+    ELogDatadogTarget* target = new (std::nothrow) ELogDatadogTarget(
+        endpoint.c_str(), apiKey.c_str(), source.c_str(), service.c_str(), tags.c_str(), stackTrace,
+        compress, connectTimeoutMillis, writeTimeoutMillis, readTimeoutMillis);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate Datadog log target, out of memory");
     }
