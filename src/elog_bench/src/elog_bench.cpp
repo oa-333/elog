@@ -1,6 +1,9 @@
+#include <algorithm>
 #include <chrono>
 #include <cinttypes>
 #include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <thread>
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
@@ -10,15 +13,57 @@
 #endif
 #include "elog_system.h"
 
+#if defined(ELOG_MSVC) || defined(ELOG_MINGW)
+#include <intrin.h>
+inline int64_t elog_rdtscp() {
+    unsigned int dummy = 0;
+    return __rdtscp(&dummy);
+}
+#else
+#include <x86gprintrin.h>
+inline int64_t elog_rdtscp() {
+    unsigned int dummy = 0;
+    return __rdtscp(&dummy);
+}
+#endif
+
+// TODO: consider fixing measuring method as follows:
+// single thread:
+// run loop indefinitely, then:
+// wait for 1 second for warmup
+// then take counters (submit/collect/execute)
+// wait for 3 seconds measure
+// then take counters
+// then stop test with a flag
+// compute
+
+// multi-thread
+// do the same but figure out how to know all threads are running (we can check counters of each)
+
+// so we need to fix counters management for that
+
 static const uint64_t MSG_COUNT = 10000;
 static const uint32_t MIN_THREAD_COUNT = 1;
 static const uint32_t MAX_THREAD_COUNT = 16;
-static const char* DEFAULT_CFG = "file://./bench_data/elog_bench.log";
+static const char* DEFAULT_CFG = "file:///./bench_data/elog_bench.log";
+static bool sTestConns = false;
+
+struct StatData {
+    double p50;
+    double p95;
+    double p99;
+
+    StatData() : p50(0.0f), p95(0.0f), p99(0.0f) {}
+};
+
+static void getSamplePercentiles(const std::vector<double>& samples, StatData& percentile);
 
 static elog::ELogTarget* initElog(const char* cfg = DEFAULT_CFG);
 static void termELog();
 static void testPerfPrivateLog();
 static void testPerfSharedLogger();
+
+// test connectors
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
 static void testGRPC();
 static void testGRPCSimple();
@@ -27,8 +72,34 @@ static void testGRPCAsync();
 static void testGRPCAsyncCallbackUnary();
 static void testGRPCAsyncCallbackStream();
 #endif
+#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
+static void testGrafana();
+#endif
+#ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
+static void testMySQL();
+#endif
+#ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
+static void testSQLite();
+#endif
+#ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
+static void testPostgreSQL();
+#endif
+#ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+static void testKafka();
+#endif
+#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
+static void testGrafana();
+#endif
+#ifdef ELOG_ENABLE_SENTRY_CONNECTOR
+static void testSentry();
+#endif
+#ifdef ELOG_ENABLE_DATADOG_CONNECTOR
+static void testDatadog();
+#endif
+
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
-                                  double& ioThroughput);
+                                  double& ioThroughput, StatData& msgPercentile,
+                                  uint32_t msgCount = MSG_COUNT);
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
                                bool privateLogger = true, uint32_t maxThreads = MAX_THREAD_COUNT);
 static void printMermaidChart(const char* name, std::vector<double>& msgThroughput,
@@ -52,22 +123,33 @@ static void testPerfSizeFlushPolicy();
 static void testPerfTimeFlushPolicy();
 static void testPerfCompoundFlushPolicy();
 
-void testPerfSTFlushImmediate(std::vector<double>& msgThroughput,
-                              std::vector<double>& ioThroughput);
-void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput);
-void testPerfSTFlushCount4096(std::vector<double>& msgThroughput,
-                              std::vector<double>& ioThroughput);
-void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput);
-void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput,
-                              std::vector<double>& ioThroughput);
+void testPerfSTFlushImmediate(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                              std::vector<double>& msgp50, std::vector<double>& msgp95,
+                              std::vector<double>& msgp99);
+void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                          std::vector<double>& msgp50, std::vector<double>& msgp95,
+                          std::vector<double>& msgp99);
+void testPerfSTFlushCount4096(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                              std::vector<double>& msgp50, std::vector<double>& msgp95,
+                              std::vector<double>& msgp99);
+void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                            std::vector<double>& msgp50, std::vector<double>& msgp95,
+                            std::vector<double>& msgp99);
+void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                              std::vector<double>& msgp50, std::vector<double>& msgp95,
+                              std::vector<double>& msgp99);
 void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
-                               std::vector<double>& ioThroughput);
+                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                               std::vector<double>& msgp95, std::vector<double>& msgp99);
 void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
-                                 std::vector<double>& ioThroughput);
+                                 std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                 std::vector<double>& msgp95, std::vector<double>& msgp99);
 void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
-                               std::vector<double>& ioThroughput);
+                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                               std::vector<double>& msgp95, std::vector<double>& msgp99);
 void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
-                                std::vector<double>& ioThroughput);
+                                std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                std::vector<double>& msgp95, std::vector<double>& msgp99);
 
 // TODO: check rdtsc for percentile tests
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
@@ -79,7 +161,8 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
 
 static std::mutex coutLock;
 static void handleLogRecord(const elog_grpc::ELogGRPCRecordMsg* msg) {
-    // return;
+    // TODO: conduct a real test - collect messages, verify they match the log messages
+    return;
     std::stringstream s;
     uint32_t fieldCount = 0;
     s << "Received log record: [";
@@ -335,7 +418,50 @@ public:
 // flush policies compared
 // quantum, deferred Vs. best sync log
 
+static int testConnectors() {
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
+    testGRPC();
+    testGRPCSimple();
+    testGRPCStream();
+    testGRPCAsync();
+    testGRPCAsyncCallbackUnary();
+    testGRPCAsyncCallbackStream();
+#endif
+#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
+    testGrafana();
+#endif
+#ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
+    testMySQL();
+#endif
+#ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
+    testSQLite();
+#endif
+#ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
+    testPostgreSQL();
+#endif
+#ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+    testKafka();
+#endif
+#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
+    testGrafana();
+#endif
+#ifdef ELOG_ENABLE_SENTRY_CONNECTOR
+    testSentry();
+#endif
+#ifdef ELOG_ENABLE_DATADOG_CONNECTOR
+    testDatadog();
+#endif
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
+    if (argc == 2) {
+        if (strcmp(argv[1], "--test-conn") == 0) {
+            sTestConns = true;
+            return testConnectors();
+        }
+    }
+    fprintf(stderr, "STARTING ELOG BENCHMARK\n");
     testPerfPrivateLog();
     testPerfSharedLogger();
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
@@ -350,13 +476,27 @@ int main(int argc, char* argv[]) {
     testPerfAllSingleThread();
 }
 
+void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
+    std::sort(samples.begin(), samples.end());
+    uint32_t sampleCount = samples.size();
+    percentile.p50 = samples[sampleCount / 2];
+    percentile.p95 = samples[sampleCount * 95 / 100];
+    percentile.p99 = samples[sampleCount * 99 / 100];
+}
+
 elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     if (!elog::ELogSystem::initialize()) {
         fprintf(stderr, "Failed to initialize elog system\n");
         return nullptr;
     }
+    fprintf(stderr, "ELog system initialized\n");
+    if (sTestConns) {
+        elog::ELogSystem::addStdErrLogTarget();
+        elog::ELogSystem::setCurrentThreadName("elog_bench_main");
+        elog::ELogSystem::setAppName("elog_bench_app");
+    }
 
-    elog::ELogPropertySequence props;
+    elog::ELogPropertyPosSequence props;
     std::string namedCfg = cfg;
     std::string::size_type nonSpacePos = namedCfg.find_first_not_of(" \t\r\n");
     if (nonSpacePos == std::string::npos) {
@@ -364,19 +504,35 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
         elog::ELogSystem::terminate();
         return nullptr;
     }
+    bool res = false;
     if (namedCfg[nonSpacePos] != '{') {
         if (namedCfg.find('?') != std::string::npos) {
             namedCfg += "&name=elog_bench";
         } else {
             namedCfg += "?name=elog_bench";
         }
+        static int confType = 0;
+        if (++confType % 2 == 0) {
+            fprintf(stderr, "Using configuration: log_target = %s\n", namedCfg.c_str());
+            elog::ELogStringPropertyPos* prop =
+                new elog::ELogStringPropertyPos(namedCfg.c_str(), 0, 0);
+            props.m_sequence.push_back({"log_target", prop});
+            res = elog::ELogSystem::configureFromPropertiesEx(props);
+        } else {
+            std::string cfgStr = "{ log_target = \"";
+            cfgStr += namedCfg + "\"}";
+            fprintf(stderr, "Using configuration: log_target = %s\n", namedCfg.c_str());
+            res = elog::ELogSystem::configureFromConfigStr(cfgStr.c_str());
+        }
+    } else {
+        res = elog::ELogSystem::configureFromConfigStr(cfg);
     }
-    props.push_back(elog::ELogProperty("log_target", namedCfg));
-    if (!elog::ELogSystem::configureFromProperties(props)) {
+    if (!res) {
         fprintf(stderr, "Failed to initialize elog system with log target config: %s\n", cfg);
         elog::ELogSystem::terminate();
         return nullptr;
     }
+    fprintf(stderr, "Configure from props OK\n");
 
     elog::ELogTarget* logTarget = elog::ELogSystem::getLogTarget("elog_bench");
     if (logTarget == nullptr) {
@@ -390,12 +546,15 @@ void termELog() { elog::ELogSystem::terminate(); }
 
 void testPerfPrivateLog() {
     // Private logger test
+    fprintf(stderr, "Running Empty Private logger test\n");
     elog::ELogTarget* logTarget = initElog();
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to init private logger test, aborting\n");
         return;
     }
+    fprintf(stderr, "initElog() OK\n");
     elog::ELogLogger* privateLogger = elog::ELogSystem::getPrivateLogger("");
+    fprintf(stderr, "private logger retrieved\n");
 
     fprintf(stderr, "Empty private log benchmark:\n");
     uint64_t bytesStart = logTarget->getBytesWritten();
@@ -429,6 +588,7 @@ void testPerfPrivateLog() {
 
 void testPerfSharedLogger() {
     // Shared logger test
+    fprintf(stderr, "Running Empty Shared logger test\n");
     elog::ELogTarget* logTarget = initElog();
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to init shared logger test, aborting\n");
@@ -493,7 +653,7 @@ void testGRPCSimple() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (unary)", cfg, msgPerf, ioPerf);
-    runMultiThreadTest("gRPC (unary)", "elog_bench_grpc_unary", cfg, true, 4);
+    runMultiThreadTest("gRPC (unary)", "elog_bench_grpc_unary", cfg);
 
     server->Shutdown();
     t.join();
@@ -515,7 +675,7 @@ void testGRPCStream() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (stream)", cfg, msgPerf, ioPerf);
-    runMultiThreadTest("gRPC (stream)", "elog_bench_grpc_stream", cfg, true, 4);
+    runMultiThreadTest("gRPC (stream)", "elog_bench_grpc_stream", cfg);
 
     server->Shutdown();
     t.join();
@@ -538,7 +698,7 @@ void testGRPCAsync() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (async)", cfg, msgPerf, ioPerf);
-    runMultiThreadTest("gRPC (async)", "elog_bench_grpc_async", cfg, true, 4);
+    runMultiThreadTest("gRPC (async)", "elog_bench_grpc_async", cfg);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -595,8 +755,127 @@ void testGRPCAsyncCallbackStream() {
 }
 #endif
 
+#ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
+void testMySQL() {
+    const char* cfg =
+        "db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&"
+        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, ${user},"
+        "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
+        "db_thread_model=conn-per-thread";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("MySQL", cfg, msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
+void testSQLite() {
+    const char* cfg =
+        "db://sqlite?conn_string=test.db&"
+        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, ${user},"
+        "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
+        "db_thread_model=conn-per-thread";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("PostgreSQL", cfg, msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
+void testPostgreSQL() {
+    const char* cfg =
+        "db://postgresql?conn_string=192.168.108.111&port=5432&db=mydb&user=oren&passwd=1234&"
+        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, ${user},"
+        "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
+        "db_thread_model=conn-per-thread";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("PostgreSQL", cfg, msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
+void testKafka() {
+    const char* cfg =
+        "msgq://kafka?kafka_bootstrap_servers=192.168.108.111:9092&"
+        "msgq_topic=log_records&"
+        "kafka_flush_timeout_millis=50&"
+        "flush_policy=immediate&"
+        "headers={rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, "
+        "prog=${prog},"
+        "pid = ${pid}, tid = ${tid}, tname = ${tname}, file = ${file}, line = ${line}, func = "
+        "${func}"
+        "mod = ${mod}, src = ${src}, msg = ${msg}}";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Kafka", cfg, msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
+void testGrafana() {
+    const char* cfg =
+        "mon://grafana?mode=json&"
+        "loki_endpoint=http://192.168.108.111:3100&"
+        "labels={\"app\": \"test\"}";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Grafana-Loki", cfg, msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_SENTRY_CONNECTOR
+void testSentry() {
+    const char* cfg =
+        "mon://sentry?dsn=https://"
+        "68a375c6d69b9b1af1ec19d91f98d0c5@o4509530146537472.ingest.de.sentry.io/"
+        "4509530351992912&"
+        "db_path=.sentry-native&"
+        "release=native@1.0&"
+        "env=staging&"
+        "handler_path=vcpkg_installed\\x64-windows\\tools\\sentry-native\\crashpad_handler.exe&"
+        "installed\\x64-windows\\tools\\sentry-native&"
+        "flush_policy=immediate&"
+        "debug=true&"
+        "logger_level=DEBUG&"
+        "tags={log_source=${src}, module=${mod}, file=${file}, line=${line}}&"
+        "stack_trace=yes&"
+        "context={app=${app}, os=${os_name}, ver=${os_ver}}&"
+        "context_title=Env Details";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Sentry", cfg, msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_DATADOG_CONNECTOR
+void testDatadog() {
+    const char* cfg =
+        "mon://datadog?endpoint=https://http-intake.logs.datadoghq.eu&"
+        "api_key=670d32934fa0d393561050a42c6ef7db&"
+        "source=elog&"
+        "service=elog_bench&"
+        "flush_policy=count&"
+        "flush_count=5&"
+        "tags={log_source=${src}, module=${mod}, file=${file}, line=${line}}&"
+        "stack_trace=yes&"
+        "compress=yes";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Datadog", cfg, msgPerf, ioPerf, statData, 10);
+}
+#endif
+
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
-                           double& ioThroughput) {
+                           double& ioThroughput, StatData& msgPercentile,
+                           uint32_t msgCount /* = MSG_COUNT */) {
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to init %s test, aborting\n", title);
@@ -604,18 +883,37 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     }
 
     fprintf(stderr, "\n\nRunning %s single-thread test\n", title);
-    elog::ELogLogger* logger = elog::ELogSystem::getPrivateLogger("");
+    elog::ELogSource* logSource = elog::ELogSystem::defineLogSource("elog.bench", true);
+    elog::ELogLogger* logger = logSource->createPrivateLogger();
+#ifdef MEASURE_PERCENTILE
+    std::vector<double> samples(msgCount, 0.0f);
+#endif
+    ELOG_ERROR_EX(logger, "This is a test error message");
     uint64_t bytesStart = logTarget->getBytesWritten();
     auto start = std::chrono::high_resolution_clock::now();
-    for (uint64_t j = 0; j < MSG_COUNT; ++j) {
-        ELOG_INFO_EX(logger, "Single thread Test log %u", j);
+    for (uint64_t i = 0; i < msgCount; ++i) {
+#ifdef MEASURE_PERCENTILE
+        auto logStart = std::chrono::high_resolution_clock::now();
+#endif
+        ELOG_INFO_EX(logger, "Single thread Test log %u", i);
+        auto logEnd = std::chrono::high_resolution_clock::now();
+#ifdef MEASURE_PERCENTILE
+        samples[i] =
+            std::chrono::duration_cast<std::chrono::microseconds>(logEnd - logStart).count();
+#endif
     }
     auto end0 = std::chrono::high_resolution_clock::now();
+    fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
     uint64_t writeCount = 0;
     uint64_t readCount = 0;
+    // uint64_t waitCount = 0;
     while (!logTarget->isCaughtUp(writeCount, readCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
+        /*if (++waitCount % 10000 == 0) {
+            fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
+        }*/
     }
+    // fputs("\n", stderr);
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime0 =
@@ -627,11 +925,14 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     // fprintf(stderr, "Msg Test time: %u usec\n", (unsigned)testTime0.count());
     // fprintf(stderr, "IO Test time: %u usec\n", (unsigned)testTime.count());
 
-    msgThroughput = MSG_COUNT / (double)testTime0.count() * 1000000.0f;
+    msgThroughput = msgCount / (double)testTime0.count() * 1000000.0f;
     fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", msgThroughput);
 
     ioThroughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
     fprintf(stderr, "Throughput: %0.3f KB/Sec\n", ioThroughput);
+#ifdef MEASURE_PERCENTILE
+    getSamplePercentiles(samples, msgPercentile);
+#endif
 
     termELog();
 }
@@ -680,15 +981,21 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
             threads[i].join();
         }
         auto end0 = std::chrono::high_resolution_clock::now();
+        fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
         uint64_t writeCount = 0;
         uint64_t readCount = 0;
+        // uint64_t waitCount = 0;
         while (!logTarget->isCaughtUp(writeCount, readCount)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(0));
+            /*if (++waitCount % 10000 == 0) {
+                fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
+            }*/
             /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
                     readCount);*/
         }
-        // fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-        // readCount);
+        // fputs("\n", stderr);
+        //  fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
+        //  readCount);
         auto end = std::chrono::high_resolution_clock::now();
         ELOG_INFO("%u Thread Test ended", threadCount);
         uint64_t bytesEnd = logTarget->getBytesWritten();
@@ -713,7 +1020,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         byteThroughput.push_back(throughput);
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     termELog();
 
     // printMermaidChart(title, msgThroughput, byteThroughput);
@@ -843,27 +1150,27 @@ void testPerfFileFlushPolicy() {
 
 void testPerfBufferedFile() {
     const char* cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_buffered512.log?file_buffer_size=512&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (512 bytes)", "elog_bench_buffered512", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_buffered4kb.log?file_buffer_size=4096&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (4kb)", "elog_bench_buffered4kb", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_buffered64kb.log?file_buffer_size=65536&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (64kb)", "elog_bench_buffered64kb", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_buffered1mb.log?file_buffer_size=1048576&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (1mb)", "elog_bench_buffered1mb", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_buffered4mb.log?file_buffer_size=4194304&file_lock=yes&flush_policy=none";
     runMultiThreadTest("Buffered File (4mb)", "elog_bench_buffered4mb", cfg);
 }
@@ -873,9 +1180,12 @@ void testPerfDeferredFile() {
         "file://./bench_data/"
         "elog_bench_deferred.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&deferred";*/
-    const char* cfg =
+    /*const char* cfg =
         "file://./bench_data/"
-        "elog_bench_deferred.log?flush_policy=count&flush_count=4096&deferred";
+        "elog_bench_deferred.log?flush_policy=count&flush_count=4096&deferred";*/
+    const char* cfg =
+        "async://deferred?flush_policy=count&flush_count=4096&name=elog_bench#"
+        "file:///./bench_data/elog_bench_deferred.log?file_buffer_size=4096&file_lock=no";
     runMultiThreadTest("Deferred (Flush Count 4096)", "elog_bench_deferred", cfg);
 }
 
@@ -885,11 +1195,15 @@ void testPerfQueuedFile() {
         "elog_bench_queued.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&queue_batch_size=10000&queue_"
         "timeout_millis=200";*/
-    const char* cfg =
+    /*const char* cfg =
         "file://./bench_data/"
         "elog_bench_queued.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&"
         "queue_"
-        "timeout_millis=200";
+        "timeout_millis=200";*/
+    const char* cfg =
+        "async://queued?queue_batch_size=10000&queue_timeout_millis=200&"
+        "flush_policy=count&flush_count=4096&name=elog_bench#"
+        "file:///./bench_data/elog_bench_queued.log?file_buffer_size=4096&file_lock=no";
     runMultiThreadTest("Queued 4096 + 200ms (Flush Count 4096)", "elog_bench_queued", cfg);
 }
 
@@ -899,155 +1213,223 @@ void testPerfQuantumFile(bool privateLogger) {
         "elog_bench_quantum.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&quantum_buffer_size=2000000";*/
     const char* cfg =
-        "file://./bench_data/"
-        "elog_bench_quantum.log?flush_policy=count&flush_count=4096&quantum_buffer_size="
-        "2000000";
+        "async://"
+        "quantum?quantum_buffer_size=2000000&flush_policy=count&flush_count=4096&name=elog_bench"
+        "#file:///./bench_data/elog_bench_quantum.log?file_buffer_size=4096&file_lock=no";
     runMultiThreadTest("Quantum 200000 (Flush Count 4096)", "elog_bench_quantum", cfg,
                        privateLogger);
+}
+
+static void writeSTCsv(const char* fname, const std::vector<double>& data) {
+    std::ofstream f(fname, std::ios_base::trunc);
+    int column = 0;
+    f << column << " \"Flush\\nImmediate\" " << std::fixed << std::setprecision(2) << data[column++]
+      << std::endl;
+    f << column << " \"Flush\\nNever\" " << std::fixed << std::setprecision(2) << data[column++]
+      << std::endl;
+    f << column << " \"Flush\\nCount=4096\" " << std::fixed << std::setprecision(2)
+      << data[column++] << std::endl;
+    f << column << " \"Flush\\nSize=1MB\" " << std::fixed << std::setprecision(2) << data[column++]
+      << std::endl;
+    f << column << " \"Flush\\nTime=200ms\" " << std::fixed << std::setprecision(2)
+      << data[column++] << std::endl;
+    f << column << " \"Buffered\\nSize=1MB\" " << std::fixed << std::setprecision(2)
+      << data[column++] << std::endl;
+    f << column << " Deferred " << std::fixed << std::setprecision(2) << data[column++]
+      << std::endl;
+    f << column << " Queued " << std::fixed << std::setprecision(2) << data[column++] << std::endl;
+    f << column << " Quantum " << std::fixed << std::setprecision(2) << data[column++] << std::endl;
+    f.close();
 }
 
 void testPerfAllSingleThread() {
     std::vector<double> msgThroughput;
     std::vector<double> ioThroughput;
+    std::vector<double> msgp50;
+    std::vector<double> msgp95;
+    std::vector<double> msgp99;
 
-    testPerfSTFlushImmediate(msgThroughput, ioThroughput);
-    testPerfSTFlushNever(msgThroughput, ioThroughput);
-    testPerfSTFlushCount4096(msgThroughput, ioThroughput);
-    testPerfSTFlushSize1mb(msgThroughput, ioThroughput);
-    testPerfSTFlushTime200ms(msgThroughput, ioThroughput);
-    testPerfSTBufferedFile1mb(msgThroughput, ioThroughput);
-    testPerfSTDeferredCount4096(msgThroughput, ioThroughput);
-    testPerfSTQueuedCount4096(msgThroughput, ioThroughput);
-    testPerfSTQuantumCount4096(msgThroughput, ioThroughput);
+    testPerfSTFlushImmediate(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTFlushNever(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTFlushCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTFlushSize1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTFlushTime200ms(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTBufferedFile1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTDeferredCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTQueuedCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    testPerfSTQuantumCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
 
     // now write CSV for drawing bar chart with gnuplot
-    std::ofstream f("./bench_data/st_msg.csv", std::ios_base::trunc);
-    int column = 0;
-    f << column << " \"Flush\\nImmediate\" " << std::fixed << std::setprecision(2)
-      << msgThroughput[column++] << std::endl;
-    f << column << " \"Flush\\nNever\" " << std::fixed << std::setprecision(2)
-      << msgThroughput[column++] << std::endl;
-    f << column << " \"Flush\\nCount=4096\" " << std::fixed << std::setprecision(2)
-      << msgThroughput[column++] << std::endl;
-    f << column << " \"Flush\\nSize=1MB\" " << std::fixed << std::setprecision(2)
-      << msgThroughput[column++] << std::endl;
-    f << column << " \"Flush\\nTime=200ms\" " << std::fixed << std::setprecision(2)
-      << msgThroughput[column++] << std::endl;
-    f << column << " \"Buffered\\nSize=1MB\" " << std::fixed << std::setprecision(2)
-      << msgThroughput[column++] << std::endl;
-    f << column << " Deferred " << std::fixed << std::setprecision(2) << msgThroughput[column++]
-      << std::endl;
-    f << column << " Queued " << std::fixed << std::setprecision(2) << msgThroughput[column++]
-      << std::endl;
-    f << column << " Quantum " << std::fixed << std::setprecision(2) << msgThroughput[column++]
-      << std::endl;
-    f.close();
+    writeSTCsv("./bench_data/st_msg.csv", msgThroughput);
+#ifdef MEASURE_PERCENTILE
+    writeSTCsv("./bench_data/st_msg_p50.csv", msgp50);
+    writeSTCsv("./bench_data/st_msg_p95.csv", msgp95);
+    writeSTCsv("./bench_data/st_msg_p99.csv", msgp99);
+#endif
 }
 
-void testPerfSTFlushImmediate(std::vector<double>& msgThroughput,
-                              std::vector<double>& ioThroughput) {
+void testPerfSTFlushImmediate(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                              std::vector<double>& msgp50, std::vector<double>& msgp95,
+                              std::vector<double>& msgp99) {
     const char* cfg =
-        "file://./bench_data/elog_bench_flush_immediate_st.log?flush_policy=immediate";
+        "file:///./bench_data/elog_bench_flush_immediate_st.log?flush_policy=immediate";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Flush Immediate", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Flush Immediate", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
-void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput) {
-    const char* cfg = "file://./bench_data/elog_bench_flush_never_st.log?flush_policy=never";
+void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                          std::vector<double>& msgp50, std::vector<double>& msgp95,
+                          std::vector<double>& msgp99) {
+    const char* cfg = "file:///./bench_data/elog_bench_flush_never_st.log?flush_policy=never";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Flush Never", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Flush Never", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
-void testPerfSTFlushCount4096(std::vector<double>& msgThroughput,
-                              std::vector<double>& ioThroughput) {
+void testPerfSTFlushCount4096(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                              std::vector<double>& msgp50, std::vector<double>& msgp95,
+                              std::vector<double>& msgp99) {
     const char* cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_flush_count4096_st.log?flush_policy=count&flush_count=4096";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Flush Count=4096", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Flush Count=4096", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
-void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput) {
+void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                            std::vector<double>& msgp50, std::vector<double>& msgp95,
+                            std::vector<double>& msgp99) {
     const char* cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_flush_size_1mb_st.log?flush_policy=size&flush_size_bytes=1048576";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Flush Size=1MB", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Flush Size=1MB", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
-void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput,
-                              std::vector<double>& ioThroughput) {
+void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                              std::vector<double>& msgp50, std::vector<double>& msgp95,
+                              std::vector<double>& msgp99) {
     const char* cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_flush_time_200ms_st.log?flush_policy=time&flush_timeout_millis=200";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Flush Time=200ms", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Flush Time=200ms", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
 void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
-                               std::vector<double>& ioThroughput) {
+                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                               std::vector<double>& msgp95, std::vector<double>& msgp99) {
     const char* cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_buffered_1mb_st.log?file_buffer_size=1048576&flush_policy=none";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Buffered Size=1mb", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Buffered Size=1mb", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
 void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
-                                 std::vector<double>& ioThroughput) {
+                                 std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                 std::vector<double>& msgp95, std::vector<double>& msgp99) {
     /*const char* cfg =
         "file://./bench_data/"
         "elog_bench_deferred_st.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&deferred";*/
     const char* cfg =
-        "file://./bench_data/"
-        "elog_bench_deferred_st.log?flush_policy=count&flush_count=4096&deferred";
+        "async://deferred?flush_policy=count&flush_count=4096&name=elog_bench#"
+        "file:///./bench_data/elog_bench_deferred_st.log";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Deferred", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Deferred", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
 void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
-                               std::vector<double>& ioThroughput) {
+                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                               std::vector<double>& msgp95, std::vector<double>& msgp99) {
     /*const char* cfg =
         "file://./bench_data/"
         "elog_bench_queued_st.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&queue_batch_size=10000&queue_"
         "timeout_millis=500";*/
     const char* cfg =
-        "file://./bench_data/"
-        "elog_bench_queued_st.log?flush_policy=count&flush_count=4096&queue_batch_size=10000&"
-        "queue_"
-        "timeout_millis=500";
+        "async://queued?queue_batch_size=10000&queue_timeout_millis=500&"
+        "flush_policy=count&flush_count=4096&name=elog_bench#"
+        "file:///./bench_data/elog_bench_queued_st.log";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Queued", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Queued", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
 void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
-                                std::vector<double>& ioThroughput) {
+                                std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                std::vector<double>& msgp95, std::vector<double>& msgp99) {
     /*const char* cfg =
         "file://./bench_data/"
         "elog_bench_quantum_st.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
@@ -1060,68 +1442,85 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
         "file://./bench_data/"
         "elog_bench_quantum_st.log?flush_policy=count&flush_count=4096&quantum_buffer_size=2000000";*/
     const char* cfg =
-        "{  scheme = async, "
-        "   type = quantum, "
-        "   quantum_buffer_size = 2000000, "
-        "   name = elog_bench, "
-        "   log_target = { "
-        "       scheme = file, "
-        "       path = ./bench_data/elog_bench_quantum_st.log, "
-        "       flush_policy = count,"
-        "       flush_count = 4096"
+        "{"
+        "   log_target = {"
+        "       scheme = async,"
+        "       type = quantum,"
+        "       quantum_buffer_size = 2000000,"
+        "       name = elog_bench,"
+        "       log_target = {"
+        "           scheme = file,"
+        "           path = ./bench_data/elog_bench_quantum_st.log,"
+        "           flush_policy = {"
+        "               type = count,"
+        "               flush_count = 4096"
+        "           },"
+        "           file_buffer_size = 4096,"
+        "           file_lock = no"
+        "       }"
         "   }"
         "}";
+    /*const char* cfg =
+        "file://./bench_data/elog_bench_quantum.log?file_buffer_size=4096&file_lock=no&"
+        //"flush_policy=count&flush_count=4096&"
+        "quantum_buffer_size=2000000";*/
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("Quantum", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("Quantum", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
 }
 
 void testPerfFileNeverFlushPolicy() {
-    const char* cfg = "file://./bench_data/elog_bench_flush_never.log?flush_policy=never";
+    const char* cfg = "file:///./bench_data/elog_bench_flush_never.log?flush_policy=never";
     runMultiThreadTest("File (Never Flush Policy)", "elog_bench_flush_never", cfg);
 }
 
 static void testPerfImmediateFlushPolicy() {
-    const char* cfg = "file://./bench_data/elog_bench_flush_immediate.log?flush_policy=immediate";
+    const char* cfg = "file:///./bench_data/elog_bench_flush_immediate.log?flush_policy=immediate";
     runMultiThreadTest("File (Immediate Flush Policy)", "elog_bench_flush_immediate", cfg);
 }
 
 static void testPerfCountFlushPolicy() {
     const char* cfg =
-        "file://./bench_data/elog_bench_count64.log?flush_policy=count&flush_count=64";
+        "file:///./bench_data/elog_bench_count64.log?flush_policy=count&flush_count=64";
     runMultiThreadTest("File (Count 64 Flush Policy)", "elog_bench_count64", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count256.log?flush_policy=count&flush_count=256";
+    cfg = "file:///./bench_data/elog_bench_count256.log?flush_policy=count&flush_count=256";
     runMultiThreadTest("File (Count 256 Flush Policy)", "elog_bench_count256", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count512.log?flush_policy=count&flush_count=512";
+    cfg = "file:///./bench_data/elog_bench_count512.log?flush_policy=count&flush_count=512";
     runMultiThreadTest("File (Count 512 Flush Policy)", "elog_bench_count512", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count1024.log?flush_policy=count&flush_count=1024";
+    cfg = "file:///./bench_data/elog_bench_count1024.log?flush_policy=count&flush_count=1024";
     runMultiThreadTest("File (Count 1024 Flush Policy)", "elog_bench_count1024", cfg);
 
-    cfg = "file://./bench_data/elog_bench_count4096.log?flush_policy=count&flush_count=4096";
+    cfg = "file:///./bench_data/elog_bench_count4096.log?flush_policy=count&flush_count=4096";
     runMultiThreadTest("File (Count 4096 Flush Policy)", "elog_bench_count4096", cfg);
 }
 
 static void testPerfSizeFlushPolicy() {
     const char* cfg =
-        "file://./bench_data/elog_bench_size64.log?flush_policy=size&flush_size_bytes=64";
+        "file:///./bench_data/elog_bench_size64.log?flush_policy=size&flush_size_bytes=64";
     runMultiThreadTest("File (Size 64 bytes Flush Policy)", "elog_bench_size64", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_1kb.log?flush_policy=size&flush_size_bytes=1024";
+    cfg = "file:///./bench_data/elog_bench_size_1kb.log?flush_policy=size&flush_size_bytes=1024";
     runMultiThreadTest("File (Size 1KB Flush Policy)", "elog_bench_size_1kb", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_4kb.log?flush_policy=size&flush_size_bytes=4096";
+    cfg = "file:///./bench_data/elog_bench_size_4kb.log?flush_policy=size&flush_size_bytes=4096";
     runMultiThreadTest("File (Size 4KB Flush Policy)", "elog_bench_size_4kb", cfg);
 
-    cfg = "file://./bench_data/elog_bench_size_64kb.log?flush_policy=size&flush_size_bytes=65536";
+    cfg = "file:///./bench_data/elog_bench_size_64kb.log?flush_policy=size&flush_size_bytes=65536";
     runMultiThreadTest("File (Size 64KB Flush Policy)", "elog_bench_size_64kb", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_size_1mb.log?flush_policy=size&flush_size_bytes=1048576";
     runMultiThreadTest("File (Size 1MB Flush Policy)", "elog_bench_size_1mb", cfg);
 }
@@ -1139,17 +1538,17 @@ static void testPerfTimeFlushPolicy() {
     runMultiThreadTest("File (Time 100 ms Flush Policy)", "elog_bench_time_100ms", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_time_200ms?flush_policy=time&flush_timeout_millis=200";
     runMultiThreadTest("File (Time 200 ms Flush Policy)", "elog_bench_time_200ms", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_time_500ms.log?flush_policy=time&flush_timeout_millis=500";
     runMultiThreadTest("File (Time 500 ms Flush Policy)", "elog_bench_time_500ms", cfg);
 
     cfg =
-        "file://./bench_data/"
+        "file:///./bench_data/"
         "elog_bench_time_1000ms.log?flush_policy=time&flush_timeout_millis=1000";
     runMultiThreadTest("File (Time 1000 ms Flush Policy)", "elog_bench_time_1000ms", cfg);
 }

@@ -45,7 +45,7 @@ bool getStackTraceVector(dbgutil::StackTrace& stackTrace) {
 
     // fix frame numbers
     for (uint32_t i = 0; i < stackTrace.size(); ++i) {
-        stackTrace[i].m_frameIndex = i + 1;
+        stackTrace[i].m_frameIndex = i;
     }
     return true;
 }

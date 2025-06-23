@@ -104,6 +104,7 @@ endif()
 if (ELOG_ENABLE_GRPC_CONNECTOR)
     # enable connector in code
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
 
     # Find Protobuf installation
     option(protobuf_MODULE_COMPATIBLE TRUE)
@@ -178,11 +179,13 @@ endif()
 
 if (ELOG_ENABLE_GRAFANA_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_GRAFANA_CONNECTOR)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRAFANA_CONNECTOR)
     # Grafana requires HTTP connection and JSON support, which is already handled above
 endif()
 
 if (ELOG_ENABLE_SENTRY_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_SENTRY_CONNECTOR)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_SENTRY_CONNECTOR)
     if (MSVC)
         find_package(sentry CONFIG REQUIRED)
         target_link_libraries(elog sentry::sentry)
@@ -198,6 +201,7 @@ endif()
 
 if (ELOG_ENABLE_DATADOG_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_DATADOG_CONNECTOR)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_DATADOG_CONNECTOR)
     # Datadog requires HTTP connection and JSON support, which is already handled above
 endif()
 
@@ -299,6 +303,7 @@ target_link_libraries(elog_bench elog)
 if (ELOG_ENABLE_SQLITE_DB_CONNECTOR)
     # NOTE: find_package works only for MSVC/vcpkg
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_SQLITE_DB_CONNECTOR)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_SQLITE_DB_CONNECTOR)
     if (MSVC)
         find_package(unofficial-sqlite3 CONFIG REQUIRED)
         target_link_libraries(elog unofficial::sqlite3::sqlite3)
@@ -311,6 +316,7 @@ endif()
 # PostgreSQL
 if (ELOG_ENABLE_PGSQL_DB_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_PGSQL_DB_CONNECTOR)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_PGSQL_DB_CONNECTOR)
     # NOTE: find_package works only for Windows/MinGW
     if (MSVC)
         find_package(PostgreSQL REQUIRED)
@@ -331,6 +337,7 @@ if (MSVC)
         # default value: "C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
         message(STATUS "Using MYSQL_ROOT " ${MYSQL_ROOT})
         target_compile_definitions(elog PRIVATE ELOG_ENABLE_MYSQL_DB_CONNECTOR)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_MYSQL_DB_CONNECTOR)
         #find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)
         #target_link_libraries(elog unofficial::mysql-connector-cpp::connector)
         target_include_directories(elog PRIVATE "${MYSQL_ROOT}\\include")
@@ -344,6 +351,7 @@ endif()
 # Kafka - supported on all platforms
 if (ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
     if (MSVC)
         find_package(RdKafka CONFIG REQUIRED)
         target_link_libraries(elog RdKafka::rdkafka RdKafka::rdkafka++)

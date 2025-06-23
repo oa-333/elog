@@ -52,6 +52,7 @@ bool ELogTarget::stopNoLock() {
             return false;
         }
     }
+    flushLogTarget();
     return stopLogTarget();
 }
 
