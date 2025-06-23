@@ -10,6 +10,8 @@ target_sources(elog PRIVATE
     ./elog_config_loader.cpp
     ./elog_config_parser.cpp
     ./elog_config.cpp
+    ./elog_datadog_target_provider.cpp
+    ./elog_datadog_target.cpp
     ./elog_db_formatter.cpp
     ./elog_db_schema_handler.cpp
     ./elog_db_target.cpp
@@ -30,6 +32,8 @@ target_sources(elog PRIVATE
     ./elog_grafana_target_provider.cpp
     ./elog_grafana_target.cpp
     ./elog_grpc_target_provider.cpp
+    ./elog_json_formatter.cpp
+    ./elog_json_receptor.cpp
     ./elog_kafka_msgq_target.cpp
     ./elog_kafka_msgq_target_provider.cpp
     ./elog_level.cpp
@@ -59,6 +63,7 @@ target_sources(elog PRIVATE
     ./elog_string_tokenizer.cpp
     ./elog_sqlite_db_target.cpp
     ./elog_sqlite_db_target_provider.cpp
+    ./elog_stack_trace.cpp
     ./elog_string_stream_receptor.cpp
     ./elog_string_receptor.cpp
     ./elog_sys_schema_handler.cpp

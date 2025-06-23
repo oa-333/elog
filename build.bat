@@ -134,6 +134,11 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_SENTRY_CONNECTOR=ON
         vcpkg add port sentry-native
     )
+    IF "!conn!" == "datadog" (
+        SET OPTS=!OPTS! -DELOG_ENABLE_DATADOG_CONNECTOR=ON
+        vcpkg add port cpp-httplib
+        vcpkg add port nlohmann-json
+    )
     IF "!conn!" == "all" (
         echo [INFO]  Enabling all connectors
         IF "%MYSQL_ROOT%" == "" SET MYSQL_ROOT="C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
@@ -144,6 +149,7 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_GRPC_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_GRAFANA_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_SENTRY_CONNECTOR=ON
+        SET OPTS=!OPTS! -DELOG_ENABLE_DATADOG_CONNECTOR=ON
         vcpkg add port sqlite3
         vcpkg add port libpqxx
         vcpkg add port librdkafka

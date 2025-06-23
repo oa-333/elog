@@ -58,6 +58,7 @@ protected:
     /** @brief Order the log target to flush. */
     void flushLogTarget() override;
 
+private:
     ELogSentryParams m_params;
     ELogPropsFormatter m_contextFormatter;
     ELogPropsFormatter m_tagsFormatter;

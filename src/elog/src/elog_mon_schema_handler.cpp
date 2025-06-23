@@ -14,6 +14,10 @@
 #include "elog_sentry_target_provider.h"
 #endif
 
+#ifdef ELOG_ENABLE_DATADOG_CONNECTOR
+#include "elog_datadog_target_provider.h"
+#endif
+
 namespace elog {
 
 template <typename T>
@@ -49,6 +53,11 @@ bool ELogMonSchemaHandler::registerPredefinedProviders() {
 #endif
 #ifdef ELOG_ENABLE_SENTRY_CONNECTOR
     if (!initMonTargetProvider<ELogSentryTargetProvider>(this, "sentry")) {
+        return false;
+    }
+#endif
+#ifdef ELOG_ENABLE_DATADOG_CONNECTOR
+    if (!initMonTargetProvider<ELogDatadogTargetProvider>(this, "datadog")) {
         return false;
     }
 #endif

@@ -91,8 +91,17 @@ struct ELOG_API ELogRecord {
 };
 
 #ifdef ELOG_MSVC
-#define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
-#define UNIXTIME_TO_FILETIME(ut, ft) (*(LONGLONG*)&(ft) = (ut) * 10000000LL + 116444736000000000LL)
+#define UNIX_MSVC_DIFF_SECONDS 11644473600LL
+#define SECONDS_TO_100NANOS(seconds) ((seconds) * 10000000LL)
+#define FILE_TIME_TO_LL(ft) (*(LONGLONG*)&(ft))
+#define FILETIME_TO_UNIXTIME_NANOS(ft) \
+    (FILE_TIME_TO_LL(ft) - SECONDS_TO_100NANOS(UNIX_MSVC_DIFF_SECONDS)) * 100LL
+#define FILETIME_TO_UNIXTIME(ft) FILETIME_TO_UNIXTIME_NANOS(ft) / 1000000000LL
+#define UNIXTIME_TO_FILETIME(ut, ft) \
+    FILE_TIME_TO_LL(ft) = SECONDS_TO_100NANOS(ut + UNIX_MSVC_DIFF_SECONDS)
+// #define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
+// #define UNIXTIME_TO_FILETIME(ut, ft) (*(LONGLONG*)&(ft) = (ut) * 10000000LL +
+// 116444736000000000LL)
 #endif
 
 inline uint64_t elogTimeToUTCNanos(ELogTime logTime) {
@@ -101,17 +110,17 @@ inline uint64_t elogTimeToUTCNanos(ELogTime logTime) {
         std::chrono::duration_cast<std::chrono::nanoseconds>(logTime.time_since_epoch());
     uint64_t utcTimeNanos = epochMillis.count();
     return utcTimeNanos;
-#else
-#ifdef ELOG_MSVC
-    FILETIME fileTime;
-    // SystemTimeToFileTime(&logTime, &fileTime);
-    uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME(logTime);
+#elif defined(ELOG_MSVC)
+    uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(logTime);
     return utcTimeNanos;
 #else
     uint64_t utcTimeNanos = logTime.tv_sec * 1000000000ULL + logTime.tv_nsec;
     return utcTimeNanos;
 #endif
-#endif
+}
+
+inline uint64_t elogTimeToUTCSeconds(ELogTime logTime) {
+    return elogTimeToUTCNanos(logTime) / 1000000000ULL;
 }
 
 /**

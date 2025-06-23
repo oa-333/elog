@@ -14,6 +14,7 @@ target_sources(
             elog_buffered_file_writer.h
             elog_common_def.h
             elog_config.h
+            elog_datadog_target.h
             elog_db_formatter.h
             elog_db_schema_handler.h
             elog_db_target.h
@@ -32,6 +33,8 @@ target_sources(
             elog_grafana_json_target.h
             elog_grafana_target.h
             elog_grpc_target.h
+            elog_json_formatter.h
+            elog_json_receptor.h
             elog_kafka_msgq_target.h
             elog_level.h
             elog_logger.h

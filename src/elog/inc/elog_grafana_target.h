@@ -19,7 +19,7 @@ namespace elog {
 
 class ELOG_API ELogGrafanaTarget : public ELogMonTarget {
 public:
-    ELogGrafanaTarget(const std::string& lokiEndpoint,
+    ELogGrafanaTarget(const char* lokiEndpoint,
                       uint32_t connectTimeoutMillis = ELOG_GRAFANA_DEFAULT_CONNECT_TIMEOUT_MILLIS,
                       uint32_t writeTimeoutMillis = ELOG_GRAFANA_DEFAULT_WRITE_TIMEOUT_MILLIS,
                       uint32_t readTimeoutMillis = ELOG_GRAFANA_DEFAULT_READ_TIMEOUT_MILLIS)

@@ -25,6 +25,7 @@
 #include "elog_rate_limiter.h"
 #include "elog_schema_manager.h"
 #include "elog_segmented_file_target.h"
+#include "elog_stack_trace.h"
 #include "elog_syslog_target.h"
 #include "elog_target_spec.h"
 
@@ -137,6 +138,7 @@ bool ELogSystem::initGlobals() {
         return false;
     }
     sDbgUtilLogHandler.applyLogLevelCfg();
+    initStackTrace();
     ELOG_REPORT_TRACE("Debug utility library logging initialized");
 #endif
 

@@ -11,9 +11,7 @@
 #include "elog_system.h"
 
 #ifdef ELOG_ENABLE_STACK_TRACE
-#include "dbg_stack_trace.h"
-#include "dbg_util.h"
-#include "os_module_manager.h"
+#include "elog_stack_trace.h"
 #endif
 
 namespace elog {
@@ -27,47 +25,21 @@ namespace elog {
 static ELogLogger* sSentryLogger = nullptr;
 
 #ifdef ELOG_ENABLE_STACK_TRACE
-static void* sELogBaseAddress = nullptr;
-static void* sDbgUtilBaseAddress = nullptr;
-static void initSelfModuleAddress() {
-    dbgutil::OsModuleInfo modInfo;
-#ifdef ELOG_WINDOWS
-    const char* elogModName = "elog.dll";
-    const char* dbgutilModName = "dbgutil.dll";
-#else
-    const char* elogModName = "elog.so";
-    const char* dbgutilModName = "dbgutil.so";
-#endif
-    dbgutil::DbgUtilErr rc =
-        dbgutil::getModuleManager()->getModuleByName(elogModName, modInfo, true);
-    if (rc == DBGUTIL_ERR_OK) {
-        sELogBaseAddress = modInfo.m_loadAddress;
-    }
-    rc = dbgutil::getModuleManager()->getModuleByName(dbgutilModName, modInfo);
-    if (rc == DBGUTIL_ERR_OK) {
-        sDbgUtilBaseAddress = modInfo.m_loadAddress;
-    }
-}
-
-static sentry_value_t buildStackTrace() {
+static bool buildStackTrace(sentry_value_t& st) {
     // since we are able to provide full stack trace information, we bypass the high-level API
     // sentry_value_set_stacktrace(), and instead set the attributes manually
 
     // get the stack trace and fill in frames information
     dbgutil::StackTrace stackTrace;
-    dbgutil::getStackTrace(stackTrace);
+    if (!getStackTraceVector(stackTrace)) {
+        return false;
+    }
     sentry_value_t frames = sentry_value_new_list();
 
     // traverse in reverse order due to sentry requirement (first frame is oldest)
     for (dbgutil::StackTrace::reverse_iterator itr = stackTrace.rbegin(); itr != stackTrace.rend();
          ++itr) {
         dbgutil::StackEntry& stackEntry = *itr;
-
-        // skip frames with elog or dbgutil module, so that stack is cleaner
-        if (stackEntry.m_entryInfo.m_moduleBaseAddress == sELogBaseAddress ||
-            stackEntry.m_entryInfo.m_moduleBaseAddress == sDbgUtilBaseAddress) {
-            continue;
-        }
 
         // set frame address
         sentry_value_t frame = sentry_value_new_object();
@@ -117,9 +89,9 @@ static sentry_value_t buildStackTrace() {
     }
 
     // create a stack trace object and set the frames attribute
-    sentry_value_t st = sentry_value_new_object();
+    st = sentry_value_new_object();
     sentry_value_set_by_key(st, "frames", frames);
-    return st;
+    return true;
 }
 #endif
 
@@ -258,10 +230,6 @@ private:
 };
 
 bool ELogSentryTarget::startLogTarget() {
-#ifdef ELOG_ENABLE_STACK_TRACE
-    initSelfModuleAddress();
-#endif
-
     // process context if any
     if (!m_params.m_context.empty()) {
         if (!m_contextFormatter.parseProps(m_params.m_context.c_str())) {
@@ -412,8 +380,10 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     if (m_params.m_stackTrace) {
 #ifdef ELOG_ENABLE_STACK_TRACE
         // create a stack trace object and set the frames attribute
-        sentry_value_t stackTrace = buildStackTrace();
-        sentry_value_set_by_key(thd, "stacktrace", stackTrace);
+        sentry_value_t stackTrace;
+        if (buildStackTrace(stackTrace)) {
+            sentry_value_set_by_key(thd, "stacktrace", stackTrace);
+        }
 #endif
     }
     sentry_event_add_thread(evt, thd);

@@ -5,38 +5,26 @@
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 
-#include <nlohmann/json.hpp>
-#include <unordered_map>
+#ifndef ELOG_ENABLE_HTTP
+#ifdef ELOG_MSVC
+#error "Invalid configuration, Grafana connector requires HTTP client"
+#else
+#pragma GCC diagnostic error "Invalid configuration, Grafana connector requires HTTP client"
+#endif
+#endif
+
+#ifndef ELOG_ENABLE_JSON
+#ifdef ELOG_MSVC
+#error "Invalid configuration, Grafana connector requires JSON"
+#else
+#pragma GCC diagnostic error "Invalid configuration, Grafana connector requires JSON"
+#endif
+#endif
 
 #include "elog_grafana_target.h"
-#include "elog_props_formatter.h"
+#include "elog_json_formatter.h"
 
 namespace elog {
-
-// TODO: consider adding dependency on json, and have this class defined in its own file
-class ELOG_API ELogJsonFormatter : public ELogBaseFormatter {
-public:
-    ELogJsonFormatter() {}
-    ELogJsonFormatter(const ELogJsonFormatter&) = delete;
-    ELogJsonFormatter(ELogJsonFormatter&&) = delete;
-    ~ELogJsonFormatter() override {}
-
-    bool parseJson(const std::string& jsonStr);
-
-    inline void fillInProps(const ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {
-        applyFieldSelectors(logRecord, receptor);
-    }
-
-    inline const std::string& getPropNameAt(uint32_t index) const { return m_propNames[index]; }
-
-    inline uint32_t getPropCount() const { return m_propNames.size(); }
-
-    inline const std::vector<std::string>& getPropNames() const { return m_propNames; }
-
-private:
-    nlohmann::json m_jsonField;
-    std::vector<std::string> m_propNames;
-};
 
 class ELOG_API ELogGrafanaJsonTarget : public ELogGrafanaTarget {
 public:

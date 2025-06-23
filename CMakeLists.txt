@@ -15,6 +15,13 @@ else()
     set(SYSTEM_NAME "${CMAKE_SYSTEM_NAME}")
 endif()
 
+# fix error "IMPORTED_LOCATION not set" On Windows/vcpkg
+if (MSVC)
+    set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL MinSizeRel RelWithDebInfo Release Debug)
+    set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO RelWithDebInfo Release MinSizeRel Debug)
+    set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Release RelWithDebInfo MinSizeRel Debug)
+endif()
+
 # optional compilation features
 option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
@@ -24,12 +31,44 @@ option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF
 option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
 option(ELOG_ENABLE_GRAFANA_CONNECTOR "ELog Grafana connector" OFF)
 option(ELOG_ENABLE_SENTRY_CONNECTOR "ELog Sentry connector" OFF)
+option(ELOG_ENABLE_DATADOG_CONNECTOR "ELog Datadog connector" OFF)
 
-# fix error "IMPORTED_LOCATION not set" On Windows/vcpkg
-if (MSVC)
-    set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL MinSizeRel RelWithDebInfo Release Debug)
-    set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO RelWithDebInfo Release MinSizeRel Debug)
-    set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Release RelWithDebInfo MinSizeRel Debug)
+# figure out whether HTTP client and JSON support is required
+set(ELOG_ENABLE_HTTP OFF)
+set(ELOG_ENABLE_JSON OFF)
+if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR)
+    set(ELOG_ENABLE_HTTP ON)
+    set(ELOG_ENABLE_JSON ON)
+endif()
+
+# get HTTP client if needed
+if (ELOG_ENABLE_HTTP)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_HTTP)
+    # add dependency on httplib
+    # NOTE: on Windows/MinGW find_package works after vcpkg/pacman package install
+    # but on Linux this fails, especially beware of installing libzstd-dev
+    if (MSVC1)
+        find_package(httplib CONFIG REQUIRED)
+        target_link_libraries(elog httplib::httplib)
+    else()
+        # on Linux we need to use fetch content method instead
+        message("Getting httplib")
+        FetchContent_Declare(httplib SYSTEM
+            GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
+            GIT_TAG 3af7f2c16147f3fbc6e4d717032daf505dc1652c # v0.20.1
+            GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(httplib)
+
+        target_link_libraries(elog httplib)
+    endif()
+endif()
+
+# get JSON if needed
+if (ELOG_ENABLE_JSON)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_JSON)
+    # add dependency on nlohmann_json
+    find_package(nlohmann_json CONFIG REQUIRED)
+    target_link_libraries(elog nlohmann_json::nlohmann_json)
 endif()
 
 # stack trace requires dbgutil
@@ -129,29 +168,8 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
 endif()
 
 if (ELOG_ENABLE_GRAFANA_CONNECTOR)
-    # Grafana requires HTTP connection
-    # add dependency on httplib
-    # NOTE: on Windows/MinGW find_package works after vcpkg/pacman package install
-    # but on Linux this fails, especially beware of installing libzstd-dev
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_GRAFANA_CONNECTOR)
-    if (MSVC1)
-        find_package(httplib CONFIG REQUIRED)
-        target_link_libraries(elog httplib::httplib)
-    else()
-        # on Linux we need to use fetch content method instead
-        message("Getting httplib")
-        FetchContent_Declare(httplib SYSTEM
-            GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
-            GIT_TAG 3af7f2c16147f3fbc6e4d717032daf505dc1652c # v0.20.1
-            GIT_SHALLOW TRUE)
-        FetchContent_MakeAvailable(httplib)
-
-        target_link_libraries(elog httplib)
-    endif()
-
-    # add dependency on nlohmann_json
-    find_package(nlohmann_json CONFIG REQUIRED)
-    target_link_libraries(elog nlohmann_json::nlohmann_json)
+    # Grafana requires HTTP connection and JSON support, which is already handled above
 endif()
 
 if (ELOG_ENABLE_SENTRY_CONNECTOR)
@@ -167,6 +185,11 @@ if (ELOG_ENABLE_SENTRY_CONNECTOR)
         target_link_libraries(elog sentry)
         target_link_libraries(elog_bench sentry)
     endif()
+endif()
+
+if (ELOG_ENABLE_DATADOG_CONNECTOR)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_DATADOG_CONNECTOR)
+    # Datadog requires HTTP connection and JSON support, which is already handled above
 endif()
 
 # set different name on MinGW

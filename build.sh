@@ -95,6 +95,9 @@ do
     elif [ "$conn" == "sentry" ]; then
         echo "[INFO] Adding Sentry connector"
         OPTS+=" -DELOG_ENABLE_SENTRY_CONNECTOR=ON"
+    elif [ "$conn" == "datadog" ]; then
+        echo "[INFO] Adding Datadog connector"
+        OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
     elif [ "$conn" == "all" ]; then
         echo "[INFO] Enabling all connectors"
         OPTS+=" -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON"
@@ -103,6 +106,7 @@ do
         OPTS+=" -DELOG_ENABLE_GRPC_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_GRAFANA_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_SENTRY_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
     else
         echo "[ERROR] Invalid connector name $conn, aborting"
         exit 1
