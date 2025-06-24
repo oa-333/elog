@@ -13,3 +13,5 @@ cmake_build/**/*
 bin/**/*
 build/**/*
 src/elog/proto/**/*.pb.*
+vcpkg.json
+CMakeUserPresets.json
