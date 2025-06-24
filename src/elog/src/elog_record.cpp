@@ -31,9 +31,8 @@ static bool elogTimeFromStringChrono(const char* timeStr, ELogTime& logTime) {
 #endif
 
 #if !defined(ELOG_TIME_USE_CHRONO) && defined(ELOG_MSVC)
-static bool elogTimeFromStringWindows(const char* timeStr, ELogTime& logTime) {
+static bool elogSystemTimeFromStringWindows(const char* timeStr, SYSTEMTIME& sysTime) {
     const int DATE_TIME_ITEM_COUNT = 6;
-    SYSTEMTIME sysTime;
     int ret = sscanf(timeStr, "%hu-%hu-%hu %hu:%hu:%hu", &sysTime.wYear, &sysTime.wMonth,
                      &sysTime.wDay, &sysTime.wHour, &sysTime.wMinute, &sysTime.wSecond);
     if (ret == EOF) {
@@ -43,6 +42,18 @@ static bool elogTimeFromStringWindows(const char* timeStr, ELogTime& logTime) {
         ELOG_REPORT_ERROR("Invalid time specification, missing date-time items: %s", timeStr, ret);
         return false;
     }
+    return true;
+}
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+inline bool elogTimeFromStringWindows(const char* timeStr, ELogTime& logTime) {
+    return elogSystemTimeFromStringWindows(timeStr, logTime);
+}
+#else
+static bool elogTimeFromStringWindows(const char* timeStr, ELogTime& logTime) {
+    SYSTEMTIME sysTime;
+    if (!elogSystemTimeFromStringWindows(timeStr, sysTime)) {
+        return false;
+    }
     if (!SystemTimeToFileTime(&sysTime, &logTime)) {
         ELOG_REPORT_WIN32_ERROR(SystemTimeToFileTime,
                                 "Failed to convert system time to file time: %s", timeStr);
@@ -50,6 +61,7 @@ static bool elogTimeFromStringWindows(const char* timeStr, ELogTime& logTime) {
     }
     return true;
 }
+#endif
 #endif
 
 #if !defined(ELOG_TIME_USE_CHRONO) && !defined(ELOG_MSVC)

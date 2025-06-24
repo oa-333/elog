@@ -26,10 +26,10 @@ echo INFO: Purging bench_data directory from previous run results
 del /Q bench_data\*
 
 echo INFO: Executing benchmark
+echo DEBUG: Running command .\elog_bench.exe %*
 REM xcopy /Y %INSTALL_DIR%\elog\bin\* .
-.\elog_bench.exe
+.\elog_bench.exe %*
 
-REM TODO: plot this with mingw gnuplot
 REM plot
 xcopy /Y %DEV_DIR%\src\elog_bench\gnuplot\*.gp .
 for %%x in (*.gp) DO (

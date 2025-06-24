@@ -14,11 +14,21 @@
 
 namespace elog {
 
+// performance tests show that std chrono does not perform well so we use native functions instead
+// particularly, on Windows, using FILETIME performs better than SYSTEMTIME
+// so:
+// by default ELOG_TIME_USE_CHRONO is NOT defined
+// by default on Windows/MSVC, SYSTEMTIME is NOT defined
+
 #ifdef ELOG_TIME_USE_CHRONO
 typedef std::chrono::system_clock::time_point ELogTime;
 #else
 #ifdef ELOG_MSVC
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+typedef SYSTEMTIME ELogTime;
+#else
 typedef FILETIME ELogTime;
+#endif
 #else
 typedef timespec ELogTime;
 #endif
@@ -104,22 +114,31 @@ struct ELOG_API ELogRecord {
 // 116444736000000000LL)
 #endif
 
-inline uint64_t elogTimeToUTCNanos(ELogTime logTime) {
+inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime) {
 #ifdef ELOG_TIME_USE_CHRONO
     auto epochNanos =
         std::chrono::duration_cast<std::chrono::nanoseconds>(logTime.time_since_epoch());
     uint64_t utcTimeNanos = epochMillis.count();
     return utcTimeNanos;
 #elif defined(ELOG_MSVC)
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+    FILETIME ft = {};
+    if (SystemTimeToFileTime(&logTime, &ft)) {
+        uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ft);
+        return utcTimeNanos;
+    }
+    return 0;
+#else
     uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(logTime);
     return utcTimeNanos;
+#endif
 #else
     uint64_t utcTimeNanos = logTime.tv_sec * 1000000000ULL + logTime.tv_nsec;
     return utcTimeNanos;
 #endif
 }
 
-inline uint64_t elogTimeToUTCSeconds(ELogTime logTime) {
+inline uint64_t elogTimeToUTCSeconds(const ELogTime& logTime) {
     return elogTimeToUTCNanos(logTime) / 1000000000ULL;
 }
 

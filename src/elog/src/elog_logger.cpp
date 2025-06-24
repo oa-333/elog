@@ -131,7 +131,11 @@ void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
     logRecord.m_logTime = std::chrono::system_clock::now();
 #else
 #ifdef ELOG_MSVC
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+    GetLocalTime(&logRecord.m_logTime);
+#else
     GetSystemTimeAsFileTime(&logRecord.m_logTime);
+#endif
 #else
     // NOTE: gettimeofday is obsolete, instead clock_gettime() should be used
     clock_gettime(CLOCK_REALTIME, &logRecord.m_logTime);

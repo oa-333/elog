@@ -1,5 +1,6 @@
 #include "elog_string_receptor.h"
 
+#include <charconv>
 #include <cstring>
 
 #include "elog_system.h"
@@ -16,8 +17,16 @@ void ELogStringReceptor::receiveStringField(uint32_t typeId, const char* field,
 
 void ELogStringReceptor::receiveIntField(uint32_t typeId, uint64_t field,
                                          const ELogFieldSpec& fieldSpec) {
+    // quite interestingly, using to_chars is slower... at least on MSVC/MinGW
+#if __cpp_lib_to_chars >= 201611L && 0
+    const int FIELD_SIZE = 64;
+    char strField[FIELD_SIZE];
+    std::to_chars(strField, strField + FIELD_SIZE, field);
+    applyJustify(fieldSpec, strField);
+#else
     std::string strField = std::to_string(field);
     applyJustify(fieldSpec, strField.c_str(), strField.length());
+#endif
 }
 
 void ELogStringReceptor::receiveTimeField(uint32_t typeId, const ELogTime& logTime,

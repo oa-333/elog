@@ -173,7 +173,7 @@ public:
     /** @brief Receives a log level log record field. */
     void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
                               const ELogFieldSpec& fieldSpec) final {
-        // time cannot be part of context
+        // log level cannot be part of context
     }
 
     void applyContext(const char* name) { sentry_set_context(name, m_context); }

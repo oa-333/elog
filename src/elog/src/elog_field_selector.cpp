@@ -528,6 +528,15 @@ void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* 
     const size_t BUF_SIZE = 64;
     char timeStr[BUF_SIZE];
 #ifdef ELOG_MSVC
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+    const ELogTime& sysTime = record.m_logTime;
+    // it appears that this snprintf is very costly, so we revert to internal implementation
+    /*std::size_t offset = snprintf(timeStr, BUF_SIZE, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u",
+                                  sysTime.wYear, sysTime.wMonth, sysTime.wDay, sysTime.wHour,
+                                  sysTime.wMinute, sysTime.wSecond, sysTime.wMilliseconds);*/
+    size_t offset = win32ELogFormatTime(timeStr, &sysTime);
+    receptor->receiveTimeField(getTypeId(), sysTime, timeStr, m_fieldSpec);
+#else
     FILETIME localFileTime;
     SYSTEMTIME sysTime;
     if (FileTimeToLocalFileTime(&record.m_logTime, &localFileTime) &&
@@ -539,6 +548,7 @@ void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* 
         size_t offset = win32ELogFormatTime(timeStr, &sysTime);
         receptor->receiveTimeField(getTypeId(), record.m_logTime, timeStr, m_fieldSpec);
     }
+#endif
 #else
     time_t timer = record.m_logTime.tv_sec;
     struct tm* tm_info = localtime(&timer);

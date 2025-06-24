@@ -47,6 +47,9 @@ static const uint32_t MIN_THREAD_COUNT = 1;
 static const uint32_t MAX_THREAD_COUNT = 16;
 static const char* DEFAULT_CFG = "file:///./bench_data/elog_bench.log";
 static bool sTestConns = false;
+static int sMsgCnt = -1;
+static int sMinThreadCnt = -1;
+static int sMaxThreadCnt = -1;
 
 struct StatData {
     double p50;
@@ -454,7 +457,187 @@ static int testConnectors() {
     return 0;
 }
 
+static bool sTestPerfAll = true;
+static bool sTestPerfIdleLog = false;
+static bool sTestPerfFileFlush = false;
+static bool sTestPerfBufferedFile = false;
+static bool sTestPerfDeferredFile = false;
+static bool sTestPerfQueuedFile = false;
+static bool sTestPerfQuantumPrivateFile = false;
+static bool sTestPerfQuantumSharedFile = false;
+static bool sTestSingleThread = false;
+
+static bool sTestSingleAll = true;
+static bool sTestSingleThreadFlushImmediate = false;
+static bool sTestSingleThreadFlushNever = false;
+static bool sTestSingleThreadFlushCount = false;
+static bool sTestSingleThreadFlushSize = false;
+static bool sTestSingleThreadFlushTime = false;
+static bool sTestSingleThreadBuffered = false;
+static bool sTestSingleThreadDeferred = false;
+static bool sTestSingleThreadQueued = false;
+static bool sTestSingleThreadQuantum = false;
+
+static bool getPerfParam(const char* param) {
+    if (strcmp(param, "idle") == 0) {
+        sTestPerfIdleLog = true;
+    } else if (strcmp(param, "file") == 0) {
+        sTestPerfFileFlush = true;
+    } else if (strcmp(param, "buffered") == 0) {
+        sTestPerfBufferedFile = true;
+    } else if (strcmp(param, "deferred") == 0) {
+        sTestPerfDeferredFile = true;
+    } else if (strcmp(param, "queued") == 0) {
+        sTestPerfQueuedFile = true;
+    } else if (strcmp(param, "quantum-private") == 0) {
+        sTestPerfQuantumPrivateFile = true;
+    } else if (strcmp(param, "quantum-shared") == 0) {
+        sTestPerfQuantumSharedFile = true;
+    } else if (strcmp(param, "single-thread") == 0) {
+        sTestSingleThread = true;
+    } else {
+        return false;
+    }
+    sTestPerfAll = false;
+    return true;
+}
+
+static bool getSingleParam(const char* param) {
+    if (strcmp(param, "flush-immediate") == 0) {
+        sTestSingleThreadFlushImmediate = true;
+    } else if (strcmp(param, "flush-never") == 0) {
+        sTestSingleThreadFlushNever = true;
+    } else if (strcmp(param, "flush-count") == 0) {
+        sTestSingleThreadFlushCount = true;
+    } else if (strcmp(param, "flush-size") == 0) {
+        sTestSingleThreadFlushSize = true;
+    } else if (strcmp(param, "flush-time") == 0) {
+        sTestSingleThreadFlushTime = true;
+    } else if (strcmp(param, "buffered") == 0) {
+        sTestSingleThreadBuffered = true;
+    } else if (strcmp(param, "deferred") == 0) {
+        sTestSingleThreadDeferred = true;
+    } else if (strcmp(param, "queued") == 0) {
+        sTestSingleThreadQueued = true;
+    } else if (strcmp(param, "quantum") == 0) {
+        sTestSingleThreadQuantum = true;
+    } else {
+        return false;
+    }
+    sTestSingleAll = false;
+    return true;
+}
+
+static bool parseIntParam(char* valueStr, int& value, const char* paramName) {
+    std::size_t pos = 0;
+    try {
+        value = std::stol(valueStr, &pos);
+    } catch (std::exception& e) {
+        fprintf(stderr, "Invalid %s integer value '%s': %s", paramName, valueStr, e.what());
+        return false;
+    }
+    if (pos != strlen(valueStr)) {
+        fprintf(stderr, "Excess characters at %s value '%s'", paramName, valueStr);
+        return false;
+    }
+    return true;
+}
+
+static bool parseArgs(int argc, char* argv[]) {
+    if (argc == 1) {
+        // run all performance tests
+        sTestPerfAll = true;
+        return true;
+    }
+    if (argc == 2) {
+        if (strcmp(argv[1], "--test-conn") == 0) {
+            sTestConns = true;
+            return true;
+        }
+    }
+
+    // otherwise we expect the following format:
+    // --perf idle|file|buffered|deferred|queued|quantum-private|quantum-shared|single-thread
+    // this may repeat several times (override previous options)
+    // for single thread test we can expect another optional parameter as follows:
+    // --single
+    // flush-immediate|flush-never|flush-count|flush-size|flush-time|buffered|deferred|queued|quantum
+    // this may be repeated
+    // if none specified then all single thread tests are performed
+    // in the future we should also allow specifying count, size, time buffer size, queue params,
+    // quantum params, and even entire log target specification
+    int i = 1;
+    while (i < argc) {
+        if (strcmp(argv[i], "--perf") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --perf\n");
+                return false;
+            }
+            if (!getPerfParam(argv[i])) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--single") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --single\n");
+                return false;
+            }
+            if (!getSingleParam(argv[i])) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--msg-count") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --msg-count\n");
+                return false;
+            }
+            if (!parseIntParam(argv[i], sMsgCnt, "--msg-cnt")) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--thread-count") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --thread-count\n");
+                return false;
+            }
+            int threadCount = -1;
+            if (!parseIntParam(argv[i], threadCount, "--thread-count")) {
+                return false;
+            }
+            sMinThreadCnt = threadCount;
+            sMaxThreadCnt = threadCount;
+        } else if (strcmp(argv[i], "--min-thread-count") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --min-thread-count\n");
+                return false;
+            }
+            if (!parseIntParam(argv[i], sMinThreadCnt, "--min-thread-count")) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--max-thread-count") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --max-thread-count\n");
+                return false;
+            }
+            if (!parseIntParam(argv[i], sMaxThreadCnt, "--max-thread-count")) {
+                return false;
+            }
+        } else {
+            fprintf(stderr, "ERROR: Invalid parameter '%s'\n", argv[i]);
+            return false;
+        }
+        ++i;
+    }
+    return true;
+}
+
 int main(int argc, char* argv[]) {
+    if (!parseArgs(argc, argv)) {
+        return 1;
+    }
     if (argc == 2) {
         if (strcmp(argv[1], "--test-conn") == 0) {
             sTestConns = true;
@@ -462,18 +645,31 @@ int main(int argc, char* argv[]) {
         }
     }
     fprintf(stderr, "STARTING ELOG BENCHMARK\n");
-    testPerfPrivateLog();
-    testPerfSharedLogger();
-#ifdef ELOG_ENABLE_GRPC_CONNECTOR
-    testGRPC();
-#endif
-    testPerfFileFlushPolicy();
-    testPerfBufferedFile();
-    testPerfDeferredFile();
-    testPerfQueuedFile();
-    testPerfQuantumFile(true);
-    testPerfQuantumFile(false);
-    testPerfAllSingleThread();
+    if (sTestPerfAll || sTestPerfIdleLog) {
+        testPerfPrivateLog();
+        testPerfSharedLogger();
+    }
+    if (sTestPerfAll || sTestPerfFileFlush) {
+        testPerfFileFlushPolicy();
+    }
+    if (sTestPerfAll || sTestPerfBufferedFile) {
+        testPerfBufferedFile();
+    }
+    if (sTestPerfAll || sTestPerfDeferredFile) {
+        testPerfDeferredFile();
+    }
+    if (sTestPerfAll || sTestPerfQueuedFile) {
+        testPerfQueuedFile();
+    }
+    if (sTestPerfAll || sTestPerfQuantumPrivateFile) {
+        testPerfQuantumFile(true);
+    }
+    if (sTestPerfAll || sTestPerfQuantumSharedFile) {
+        testPerfQuantumFile(false);
+    }
+    if (sTestPerfAll || sTestSingleThread) {
+        testPerfAllSingleThread();
+    }
 }
 
 void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
@@ -876,6 +1072,9 @@ void testDatadog() {
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput, StatData& msgPercentile,
                            uint32_t msgCount /* = MSG_COUNT */) {
+    if (sMsgCnt > 0) {
+        msgCount = sMsgCnt;
+    }
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to init %s test, aborting\n", title);
@@ -940,6 +1139,14 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
 void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
                         bool privateLogger /* = true */,
                         uint32_t maxThreads /* = MAX_THREAD_COUNT */) {
+    uint32_t minThreads = sMinThreadCnt >= 0 ? sMinThreadCnt : MIN_THREAD_COUNT;
+    if (sMaxThreadCnt > 0) {
+        maxThreads = sMaxThreadCnt;
+    }
+    uint32_t msgCount = MSG_COUNT;
+    if (sMsgCnt > 0) {
+        msgCount = sMsgCnt;
+    }
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to init %s test, aborting\n", title);
@@ -952,7 +1159,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
     std::vector<double> accumThroughput;
     elog::ELogLogger* sharedLogger =
         privateLogger ? nullptr : elog::ELogSystem::getSharedLogger("");
-    for (uint32_t threadCount = MIN_THREAD_COUNT; threadCount <= maxThreads; ++threadCount) {
+    for (uint32_t threadCount = minThreads; threadCount <= maxThreads; ++threadCount) {
         // fprintf(stderr, "Running %u threads test\n", threadCount);
         ELOG_INFO("Running %u Thread Test", threadCount);
         std::vector<std::thread> threads;
@@ -960,17 +1167,17 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         auto start = std::chrono::high_resolution_clock::now();
         uint64_t bytesStart = logTarget->getBytesWritten();
         for (uint32_t i = 0; i < threadCount; ++i) {
-            threads.emplace_back(std::thread([i, &resVec, sharedLogger]() {
+            threads.emplace_back(std::thread([i, &resVec, sharedLogger, msgCount]() {
                 elog::ELogLogger* logger =
                     sharedLogger != nullptr ? sharedLogger : elog::ELogSystem::getPrivateLogger("");
                 auto start = std::chrono::high_resolution_clock::now();
-                for (uint64_t j = 0; j < MSG_COUNT; ++j) {
+                for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_INFO_EX(logger, "Thread %u Test log %u", i, j);
                 }
                 auto end = std::chrono::high_resolution_clock::now();
                 std::chrono::microseconds testTime =
                     std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-                double throughput = MSG_COUNT / (double)testTime.count() * 1000000.0f;
+                double throughput = msgCount / (double)testTime.count() * 1000000.0f;
                 /*fprintf(stderr, "Test time: %u usec, msg count: %u\n",
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT); fprintf(stderr, "Throughput:
                 %0.3f MSg/Sec\n", throughput);*/
@@ -1010,7 +1217,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
             std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
         std::chrono::microseconds testTime =
             std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        throughput = threadCount * MSG_COUNT / (double)testTime0.count() * 1000000.0f;
+        throughput = threadCount * msgCount / (double)testTime0.count() * 1000000.0f;
         /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
         fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
@@ -1249,23 +1456,43 @@ void testPerfAllSingleThread() {
     std::vector<double> msgp95;
     std::vector<double> msgp99;
 
-    testPerfSTFlushImmediate(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTFlushNever(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTFlushCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTFlushSize1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTFlushTime200ms(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTBufferedFile1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTDeferredCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTQueuedCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    testPerfSTQuantumCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    if (sTestSingleAll || sTestSingleThreadFlushImmediate) {
+        testPerfSTFlushImmediate(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadFlushNever) {
+        testPerfSTFlushNever(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadFlushCount) {
+        testPerfSTFlushCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadFlushSize) {
+        testPerfSTFlushSize1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadFlushTime) {
+        testPerfSTFlushTime200ms(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadBuffered) {
+        testPerfSTBufferedFile1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadDeferred) {
+        testPerfSTDeferredCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadQueued) {
+        testPerfSTQueuedCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadQuantum) {
+        testPerfSTQuantumCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
 
     // now write CSV for drawing bar chart with gnuplot
-    writeSTCsv("./bench_data/st_msg.csv", msgThroughput);
+    if (sTestSingleAll) {
+        writeSTCsv("./bench_data/st_msg.csv", msgThroughput);
 #ifdef MEASURE_PERCENTILE
-    writeSTCsv("./bench_data/st_msg_p50.csv", msgp50);
-    writeSTCsv("./bench_data/st_msg_p95.csv", msgp95);
-    writeSTCsv("./bench_data/st_msg_p99.csv", msgp99);
+        writeSTCsv("./bench_data/st_msg_p50.csv", msgp50);
+        writeSTCsv("./bench_data/st_msg_p95.csv", msgp95);
+        writeSTCsv("./bench_data/st_msg_p99.csv", msgp99);
 #endif
+    }
 }
 
 void testPerfSTFlushImmediate(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,

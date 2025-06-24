@@ -28,12 +28,13 @@ fi
 
 mkdir -p bench_data
 rm -f bench_data/*
-#cp $INSTALL_DIR/elog/bin/* .
-#cp $INSTALL_DIR/elog/lib/* .
+echo "[INFO] Executing benchmark"
 if [ "$OS" = "Msys" ]; then
-    ./elog_bench_mingw.exe
+    echo "[DEBUG] Running command ./elog_bench_mingw.exe $*"
+    ./elog_bench_mingw.exe $*
 else
-    ./elog_bench
+    echo "[DEBUG] Running command ./elog_bench $*"
+    ./elog_bench $*
 fi
 
 # plot
