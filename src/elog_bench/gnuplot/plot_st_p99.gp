@@ -2,7 +2,7 @@
 
 reset
 set terminal png size 1000,700
-set output "./log_st.png"
+set output "./log_st_p99.png"
 
 set label "Logging Method" at 100,100 center
 set ylabel "Throughput (Msg/Sec)"
@@ -11,10 +11,10 @@ set border 3
 set tics nomirror
 set grid ytics
 
-set format y "%'.0f"
+set format y '%.0f'
 
 set title "Single-threaded Logging Message Throughput"
 
 set boxwidth 0.5
 set style fill solid 0.8
-plot "bench_data/st_msg.csv" using 1:3:xtic(2) with boxes notitle fillcolor rgb "#658CF5", '' u 1:3:3 with labels notitle offset character 1,1
+plot "bench_data/st_msg_p99.csv" using 1:3:xtic(2) with boxes notitle fillcolor rgb "#658CF5", '' u 1:3:3 with labels notitle offset character 1,1

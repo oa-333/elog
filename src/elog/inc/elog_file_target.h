@@ -13,7 +13,8 @@ public:
      * @brief Construct a new ELogFileTarget object.
      * @param filePath The path to the log file.
      * @param flushPolicy Optional flush policy to use.
-     * @see @ref ELofBufferedFileWriter.
+     * @note On Windows/MinGW platforms there is no support stdio unlocked API, so it is advised to
+     * use buffered file target instead on those platforms.
      */
     ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy = nullptr);
 

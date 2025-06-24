@@ -14,13 +14,13 @@ namespace elog {
 /**
  * @brief A lock-free segmented log file target, that breaks log file into segments by a configured
  * segment size limit. The segmented log file target can be combined with a user specified flush
- * policy. If none-given, then the default (immediate) policy will be used, that is, the current log
- * segment will be flushed after each log message.
+ * policy. If none-given, then the no flush policy is used, that is, the current log segment will be
+ * flushed according to underlying implementation. Normally that means when internal buffer is full.
  *
- * The segmented log file target logs message and switches segments in a safe lock-free manner,
- * although the logger, on whose log message call a segment switch is performed, will incur the log
- * segment switch overhead (open new segment, switch segments, log message, busy wait until previous
- * segment loggers are finished).
+ * The segmented log file target logs message and switches segments in a safe lock-free manner.
+ * Pay attention that the logger, on whose log-message call a segment switch is performed, will
+ * incur the log segment switch overhead (open new segment, switch segments, log message, busy wait
+ * until previous segment loggers are finished, log pending messages accumulated during switch).
  */
 class ELOG_API ELogSegmentedFileTarget : public ELogTarget {
 public:
@@ -69,7 +69,6 @@ private:
 
     bool openSegment();
     bool getSegmentCount(uint32_t& segmentCount, uint32_t& lastSegmentSizeBytes);
-
     bool scanDirFiles(const char* dirPath, std::vector<std::string>& fileNames);
     bool getSegmentIndex(const std::string& fileName, int32_t& segmentIndex);
     bool getFileSize(const char* filePath, uint32_t& fileSize);

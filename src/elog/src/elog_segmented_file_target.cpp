@@ -225,6 +225,7 @@ void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg
     m_entered.fetch_add(1, std::memory_order_acquire);
 
     // check if segment switch is required
+    // TODO: if message size exceeds segment size then this logic fails!
     uint32_t msgSizeBytes = formattedLogMsg.length();
     uint64_t bytesLogged = m_bytesLogged.fetch_add(msgSizeBytes, std::memory_order_relaxed);
     uint64_t prevSegmentId = bytesLogged / m_segmentLimitBytes;
@@ -251,6 +252,9 @@ void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg
     FILE* currentSegment = m_currentSegment.load(std::memory_order_relaxed);
     if (fputs(formattedLogMsg.c_str(), currentSegment) == EOF) {
         ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
+        // TODO: in order to avoid log flooding, this error message must be emitted only once!
+        // alternatively, the log target should be marked as unusable and reject all requests to log
+        // messages. This is true for all log targets.
     }
 
     // we must remember the segment we used for logging, so that we can tell during flush it is
@@ -463,6 +467,8 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     // logging threads know that a segment has been opened and can be used)
     ELOG_REPORT_TRACE("Current segment opener id: %" PRIu64,
                       m_segmentOpenerId.load(std::memory_order_relaxed));
+    // NOTE: point of serialization, only one thread at a time can pass (i.e. lock-free but not
+    // wait-free)
     while (m_segmentOpenerId.load(std::memory_order_relaxed) != segmentId) {
         std::this_thread::yield();
     }
@@ -479,7 +485,8 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     // segment, when another segment already needs to be opened. this is ok, as several threads
     // will get "stuck" for a short while, each trying to close its segment
 
-    // switch segments
+    // switch segments (allow other threads start writing to next segment while this thread writes
+    // messages to previous segment)
     if (!m_currentSegment.compare_exchange_strong(prevSegment, nextSegment,
                                                   std::memory_order_relaxed)) {
         ELOG_REPORT_ERROR("Failed to switch log segment files, suspected log flooding");
