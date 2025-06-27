@@ -74,10 +74,10 @@ bool ELogConfigParser::parseLogAffinityList(const char* affinityListStr,
         if (tokenType == prevTokenType) {
             if (tokenType == ELogTokenType::TT_TOKEN) {
                 ELOG_REPORT_ERROR("Missing comma in log target list: %s",
-                                  tokenizer.getErrLocStr(tokenPos));
+                                  tokenizer.getErrLocStr(tokenPos).c_str());
             } else {
                 ELOG_REPORT_ERROR("Duplicate comma in log target list: %s",
-                                  tokenizer.getErrLocStr(tokenPos));
+                                  tokenizer.getErrLocStr(tokenPos).c_str());
             }
             return false;
         }
@@ -659,7 +659,7 @@ bool ELogConfigParser::parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_
             ELOG_REPORT_ERROR(
                 "Invalid port specification in log target URL, expecting integer, seeing instead "
                 "'%s' (context: %s)",
-                portStr.c_str(), authority);
+                portStr.c_str(), authority.c_str());
             return false;
         }
         logTargetUrlSpec.m_port.m_keyPos = basePos + atPos + colonPos + 1;

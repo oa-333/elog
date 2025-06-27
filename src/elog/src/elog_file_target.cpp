@@ -113,7 +113,7 @@ bool ELogFileTarget::startLogTarget() {
 
 bool ELogFileTarget::stopLogTarget() {
     if (m_fileHandle != nullptr && m_shouldClose) {
-        flush();
+        // no need to flush, parent class already takes care of that
         if (fclose(m_fileHandle) == -1) {
             ELOG_REPORT_SYS_ERROR(fclose, "Failed to close log file %s", m_filePath.c_str());
             return false;
@@ -122,7 +122,7 @@ bool ELogFileTarget::stopLogTarget() {
     return true;
 }
 
-void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
+void ELogFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
     // NOTE: according to https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_concurrency.html
     // gcc documentations states that: "POSIX standard requires that C stdio FILE* operations are
     // atomic. POSIX-conforming C libraries (e.g, on Solaris and GNU/Linux) have an internal mutex
@@ -132,7 +132,7 @@ void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
         // unlocked stdio is available only if _GNU_SOURCE is defined, regardless of Unix/Linux
         // platform/flavor
 #ifdef _GNU_SOURCE
-        fputs_unlocked(formattedLogMsg.c_str(), m_fileHandle);
+        fputs_unlocked(formattedLogMsg, m_fileHandle);
 #else
         // NOTE: On Windows/MinGW platforms we do not have the stdio unlocked API, and implementing
         // it here directly (through the file descriptor) will bypass internal buffering offered by
@@ -140,10 +140,10 @@ void ELogFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
         // NOTE: there is nothing we can do if the call fails, since reporting it would cause
         // flooding of error messages. Instead statistics can be maintained, and/or object state
         // TODO: add ticket/feature-request for statistics
-        fputs(formattedLogMsg.c_str(), m_fileHandle);
+        fputs(formattedLogMsg, m_fileHandle);
 #endif
     } else {
-        fputs(formattedLogMsg.c_str(), m_fileHandle);
+        fputs(formattedLogMsg, m_fileHandle);
     }
 }
 

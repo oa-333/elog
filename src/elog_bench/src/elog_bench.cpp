@@ -14,7 +14,7 @@
 #include "elog_system.h"
 
 #if defined(ELOG_MSVC) || defined(ELOG_MINGW)
-#include <intrin.h>
+#include <x86intrin.h>
 inline int64_t elog_rdtscp() {
     unsigned int dummy = 0;
     return __rdtscp(&dummy);
@@ -702,10 +702,12 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     }
     bool res = false;
     if (namedCfg[nonSpacePos] != '{') {
-        if (namedCfg.find('?') != std::string::npos) {
-            namedCfg += "&name=elog_bench";
-        } else {
-            namedCfg += "?name=elog_bench";
+        if (namedCfg.find("name=elog_bench") == std::string::npos) {
+            if (namedCfg.find('?') != std::string::npos) {
+                namedCfg += "&name=elog_bench";
+            } else {
+                namedCfg += "?name=elog_bench";
+            }
         }
         static int confType = 0;
         if (++confType % 2 == 0) {
@@ -1766,7 +1768,7 @@ static void testPerfTimeFlushPolicy() {
 
     cfg =
         "file:///./bench_data/"
-        "elog_bench_time_200ms?flush_policy=time&flush_timeout_millis=200";
+        "elog_bench_time_200ms.log?flush_policy=time&flush_timeout_millis=200";
     runMultiThreadTest("File (Time 200 ms Flush Policy)", "elog_bench_time_200ms", cfg);
 
     cfg =

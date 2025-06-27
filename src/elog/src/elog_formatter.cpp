@@ -2,6 +2,7 @@
 
 #include <bit>
 
+#include "elog_buffer_receptor.h"
 #include "elog_string_receptor.h"
 
 namespace elog {
@@ -9,9 +10,10 @@ namespace elog {
 #define ELOG_SPECIAL_FIELDS_SIZE 128
 
 void ELogFormatter::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
-    // we try to reserve space for the formatted message to avoid repeated memory allocations during
-    // message formatting
-    // it is advised to pass into this function a reusable string buffer for logMsg
+// we try to reserve space for the formatted message to avoid repeated memory allocations during
+// message formatting
+// it is advised to pass into this function a reusable string buffer for logMsg
+#if 0
     uint32_t requiredLen = logRecord.m_logMsgLen;
     requiredLen += ELOG_SPECIAL_FIELDS_SIZE;  // approximation for special fields
     // round up to next power of 2
@@ -25,11 +27,19 @@ void ELogFormatter::formatLogMsg(const ELogRecord& logRecord, std::string& logMs
     }
     requiredLen = pow2;
 #endif
-    logMsg.reserve(requiredLen);
+    if (logMsg.capacity() < requiredLen) {
+        logMsg.reserve(requiredLen);
+    }
+#endif
 
     // unlike the string stream receptor, the string receptor formats directly the resulting log
     // message string, and so we save one or two string copies
     ELogStringReceptor receptor(logMsg);
+    applyFieldSelectors(logRecord, &receptor);
+}
+
+void ELogFormatter::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
+    ELogBufferReceptor receptor(logBuffer);
     applyFieldSelectors(logRecord, &receptor);
 }
 

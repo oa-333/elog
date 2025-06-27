@@ -28,7 +28,7 @@ public:
 
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
-                          const ELogFieldSpec& fieldSpec) final {
+                          const ELogFieldSpec& fieldSpec, size_t length) final {
         m_stringCache.push_back(timeStr);
     }
 

@@ -25,9 +25,11 @@
 #include "elog_rate_limiter.h"
 #include "elog_schema_manager.h"
 #include "elog_segmented_file_target.h"
+#include "elog_shared_logger.h"
 #include "elog_stack_trace.h"
 #include "elog_syslog_target.h"
 #include "elog_target_spec.h"
+#include "elog_time_internal.h"
 
 namespace elog {
 
@@ -55,9 +57,31 @@ bool ELogSystem::initGlobals() {
     // init the error log so we can have trace messages as early as possible
     ELogError::initError();
 
+    // initialize the date table
+    if (!initDateTable()) {
+        ELOG_REPORT_ERROR("Failed to initialize date table");
+        termGlobals();
+        return false;
+    }
+
+    // create thread local storage key for log buffers
+    if (!ELogTarget::createLogBufferKey()) {
+        ELOG_REPORT_ERROR("Failed to initialize log buffer thread local storage");
+        termGlobals();
+        return false;
+    }
+
+    // create thread local storage key for log buffers
+    if (!ELogSharedLogger::createRecordBuilderKey()) {
+        ELOG_REPORT_ERROR("Failed to initialize record builder thread local storage");
+        termGlobals();
+        return false;
+    }
+
     ELOG_REPORT_TRACE("Starting ELog initialization sequence");
     if (!initFieldSelectors()) {
         ELOG_REPORT_ERROR("Failed to initialize field selectors");
+        termGlobals();
         return false;
     }
     ELOG_REPORT_TRACE("Field selectors initialized");
@@ -166,7 +190,8 @@ void ELogSystem::termGlobals() {
 #ifdef ELOG_ENABLE_STACK_TRACE
     dbgutil::DbgUtilErr rc = dbgutil::termDbgUtil();
     if (rc != DBGUTIL_ERR_OK) {
-        // TODO: what now?
+        // issue error and continue
+        ELOG_REPORT_ERROR("Failed to terminate Debug Util library");
     }
 #endif
 
@@ -187,6 +212,13 @@ void ELogSystem::termGlobals() {
     termFlushPolicies();
     ELogSchemaManager::termSchemaHandlers();
     termFieldSelectors();
+    if (!ELogSharedLogger::destroyRecordBuilderKey()) {
+        ELOG_REPORT_ERROR("Failed to destroy record builder thread-local storage");
+    }
+    if (!ELogTarget::destroyLogBufferKey()) {
+        ELOG_REPORT_ERROR("Failed to destroy log buffer thread-local storage");
+    }
+    termDateTable();
 }
 
 bool ELogSystem::initialize(ELogErrorHandler* errorHandler /* = nullptr */) {
@@ -1353,6 +1385,10 @@ void ELogSystem::setLogFormatter(ELogFormatter* logFormatter) {
 
 void ELogSystem::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
     sGlobalFormatter->formatLogMsg(logRecord, logMsg);
+}
+
+void ELogSystem::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
+    sGlobalFormatter->formatLogBuffer(logRecord, logBuffer);
 }
 
 void ELogSystem::setAppName(const char* appName) { setAppNameField(appName); }

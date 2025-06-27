@@ -1,6 +1,7 @@
 #ifndef __ELOG_ERROR_H__
 #define __ELOG_ERROR_H__
 
+#include <cerrno>
 #include <cstdarg>
 
 #include "elog_def.h"

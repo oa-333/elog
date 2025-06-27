@@ -2,6 +2,10 @@
 
 #include <cassert>
 
+#include "elog_aligned_alloc.h"
+#include "elog_error.h"
+#include "elog_tls.h"
+
 namespace elog {
 
 // ATTENTION: the following thread local variables cannot be class members, because these causes
@@ -10,30 +14,97 @@ namespace elog {
 // some thread when thread exits, the destructor of the TLS variable runs with an object whose
 // contents is dead-land and the application crashes)
 
-static thread_local ELogRecordBuilder sRecordBuilderHead;
-static thread_local ELogRecordBuilder* sRecordBuilder = &sRecordBuilderHead;
+static ELogTlsKey sRecordBuilderKey = ELOG_INVALID_TLS_KEY;
+
+inline ELogRecordBuilder* allocRecordBuilder() {
+    return elogAlignedAllocObject<ELogRecordBuilder>(ELOG_CACHE_LINE);
+}
+
+inline void freeRecordBuilder(void* data) {
+    ELogRecordBuilder* recordBuilder = (ELogRecordBuilder*)data;
+    if (recordBuilder != nullptr) {
+        elogAlignedFreeObject(recordBuilder);
+    }
+}
+
+static ELogRecordBuilder* getOrCreateTlsRecordBuilder() {
+    ELogRecordBuilder* recordBuilder = (ELogRecordBuilder*)elogGetTls(sRecordBuilderKey);
+    if (recordBuilder == nullptr) {
+        recordBuilder = allocRecordBuilder();
+        if (recordBuilder == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate thread-local log buffer");
+            return nullptr;
+        }
+        if (!elogSetTls(sRecordBuilderKey, recordBuilder)) {
+            ELOG_REPORT_ERROR("Failed to set thread-local log buffer");
+            freeRecordBuilder(recordBuilder);
+            return nullptr;
+        }
+    }
+    return recordBuilder;
+}
+
+// due to MinGW issues with static/thread-local destruction (it crashes sometimes), we use instead
+// thread-local pointers
+static thread_local ELogRecordBuilder* sRecordBuilderHead = nullptr;
+static thread_local ELogRecordBuilder* sRecordBuilder = nullptr;
+
+bool ELogSharedLogger::createRecordBuilderKey() {
+    if (sRecordBuilderKey != ELOG_INVALID_TLS_KEY) {
+        ELOG_REPORT_ERROR("Cannot create record builder TLS key, already created");
+        return false;
+    }
+    return elogCreateTls(sRecordBuilderKey, freeRecordBuilder);
+}
+
+bool ELogSharedLogger::destroyRecordBuilderKey() {
+    if (sRecordBuilderKey == ELOG_INVALID_TLS_KEY) {
+        // silently ignore the request
+        return true;
+    }
+    bool res = elogDestroyTls(sRecordBuilderKey);
+    if (res) {
+        sRecordBuilderKey = ELOG_INVALID_TLS_KEY;
+    }
+    return res;
+}
 
 ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() {
+    if (sRecordBuilder == nullptr) {
+        // create on-demand on a per-thread basis
+        sRecordBuilder = getOrCreateTlsRecordBuilder();
+        assert(sRecordBuilderHead == nullptr);
+        sRecordBuilderHead = sRecordBuilder;
+    }
+    // we cannot afford a failure here, this is fatal
     assert(sRecordBuilder != nullptr);
     return *sRecordBuilder;
 }
 
 const ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() const {
+    if (sRecordBuilder == nullptr) {
+        // create on-demand on a per-thread basis
+        sRecordBuilder = getOrCreateTlsRecordBuilder();
+        assert(sRecordBuilderHead == nullptr);
+        sRecordBuilderHead = sRecordBuilder;
+    }
+    // we cannot afford a failure here, this is fatal
     assert(sRecordBuilder != nullptr);
     return *sRecordBuilder;
 }
 
 void ELogSharedLogger::pushRecordBuilder() {
-    ELogRecordBuilder* recordBuilder = new (std::nothrow) ELogRecordBuilder(sRecordBuilder);
+    ELogRecordBuilder* recordBuilder =
+        elogAlignedAllocObject<ELogRecordBuilder>(ELOG_CACHE_LINE, sRecordBuilder);
     if (recordBuilder != nullptr) {
         sRecordBuilder = recordBuilder;
     }
 }
 
 void ELogSharedLogger::popRecordBuilder() {
-    if (sRecordBuilder != &sRecordBuilderHead) {
+    if (sRecordBuilder != sRecordBuilderHead) {
         ELogRecordBuilder* next = sRecordBuilder->getNext();
-        delete sRecordBuilder;
+        elogAlignedFreeObject(sRecordBuilder);
         sRecordBuilder = next;
     }
 }

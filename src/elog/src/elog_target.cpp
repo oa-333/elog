@@ -1,13 +1,68 @@
 #include "elog_target.h"
 
+#include "elog_aligned_alloc.h"
 #include "elog_common.h"
 #include "elog_error.h"
 #include "elog_filter.h"
 #include "elog_flush_policy.h"
 #include "elog_formatter.h"
 #include "elog_system.h"
+#include "elog_tls.h"
 
 namespace elog {
+
+static ELogTlsKey sLogBufferKey = ELOG_INVALID_TLS_KEY;
+
+inline ELogBuffer* allocLogBuffer() {
+    // ELogBuffer* logBuffer = new (std::align_val_t(ELOG_CACHE_LINE), std::nothrow) ELogBuffer();
+    return elogAlignedAllocObject<ELogBuffer>(ELOG_CACHE_LINE);
+}
+
+inline void freeLogBuffer(void* data) {
+    ELogBuffer* logBuffer = (ELogBuffer*)data;
+    if (logBuffer != nullptr) {
+        //::operator delete(logBuffer, std::align_val_t(ELOG_CACHE_LINE));
+        elogAlignedFreeObject(logBuffer);
+    }
+}
+
+static ELogBuffer* getOrCreateTlsLogBuffer() {
+    ELogBuffer* logBuffer = (ELogBuffer*)elogGetTls(sLogBufferKey);
+    if (logBuffer == nullptr) {
+        logBuffer = allocLogBuffer();
+        if (logBuffer == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate thread-local log buffer");
+            return nullptr;
+        }
+        if (!elogSetTls(sLogBufferKey, logBuffer)) {
+            ELOG_REPORT_ERROR("Failed to set thread-local log buffer");
+            //::operator delete(logBuffer, std::align_val_t(ELOG_CACHE_LINE));
+            freeLogBuffer(logBuffer);
+            return nullptr;
+        }
+    }
+    return logBuffer;
+}
+
+bool ELogTarget::createLogBufferKey() {
+    if (sLogBufferKey != ELOG_INVALID_TLS_KEY) {
+        ELOG_REPORT_ERROR("Cannot create log buffer TLS key, already created");
+        return false;
+    }
+    return elogCreateTls(sLogBufferKey, freeLogBuffer);
+}
+
+bool ELogTarget::destroyLogBufferKey() {
+    if (sLogBufferKey == ELOG_INVALID_TLS_KEY) {
+        // silently ignore the request
+        return true;
+    }
+    bool res = elogDestroyTls(sLogBufferKey);
+    if (res) {
+        sLogBufferKey = ELOG_INVALID_TLS_KEY;
+    }
+    return res;
+}
 
 bool ELogTarget::start() {
     if (m_requiresLock) {
@@ -66,11 +121,6 @@ void ELogTarget::log(const ELogRecord& logRecord) {
 }
 
 void ELogTarget::logNoLock(const ELogRecord& logRecord) {
-    bool isRunning = m_isRunning.load(std::memory_order_relaxed);
-    if (!isRunning) {
-        // silently discard
-        return;
-    }
     if (canLog(logRecord)) {
         uint32_t bytesWritten = writeLogRecord(logRecord);
         // update statistics counter
@@ -81,7 +131,8 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
         // TODO: check that async target flush policy works correctly
         bytesWritten = m_bytesWritten.fetch_add(bytesWritten, std::memory_order_relaxed);
         if (shouldFlush(bytesWritten)) {
-            flush();
+            // don't call flush(), but rather flushLogTarget(), because we already have the lock
+            flushLogTarget();
         }
     }
 }
@@ -89,27 +140,27 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
 uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     // default implementation - format log message and write to log
     // this might not suite all targets, as formatting might take place on a later phase
-    // NOTE: this is a naive attempt to reuse a pre-allocated string buffer for better performance
 
-    // NOTE: On MinGW this leads to a crash due to static/TLS destruction problems. Specifically, it
-    // crashes during TLS destruction, and the call stack shows that the logMsg object area is
-    // already filled with dead land, meaning it already got destroyed (seems that as a static
-    // object during thread exit). Moreover, this crash seems to happen only on debug builds. The
-    // probable conclusion is that, the object is destroyed twice when running in release mode, but
-    // it doesn't crash since the first destruction does not fill the object area with dead land,
-    // and so the second destruction finds an empty object and does nothing. This is mere chance,
-    // and this behavior might change in the future, therefore we avoid this small optimization on
-    // MinGW altogether, whether in release or debug builds
-#ifdef ELOG_MINGW
-    std::string logMsg(ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE, 0);
-#else
-    static thread_local std::string logMsg(ELOG_DEFAULT_LOG_MSG_RESERVE_SIZE, 0);
-    logMsg.clear();  // does this deallocate??
-    assert(logMsg.capacity() > 0);
-#endif
-    formatLogMsg(logRecord, logMsg);
-    logFormattedMsg(logMsg);
-    return logMsg.length();
+    // NOTE: in order to accelerate performance a pre-allocated string buffer used
+
+    // NOTE: On MinGW, when using the thread_local keyword, this leads to a crash due to static/TLS
+    // destruction problems. Specifically, it crashes during TLS destruction, and the call stack
+    // shows that the logMsg object area is already filled with dead land, meaning it already got
+    // destroyed (seems that as a static object during thread exit). Moreover, this crash seems to
+    // happen only on debug builds. The probable conclusion is that, the object is destroyed twice
+    // when running in release mode, but it doesn't crash since the first destruction does not fill
+    // the object area with dead land, and so the second destruction finds an empty object and does
+    // nothing. This is mere chance, and this behavior might change in the future
+
+    // For this reason a unified thread local storage was developed, which relies on pthread calls
+    ELogBuffer* logBuffer = getOrCreateTlsLogBuffer();
+    if (logBuffer == nullptr) {
+        return 0;
+    }
+    logBuffer->reset();
+    formatLogBuffer(logRecord, *logBuffer);
+    logFormattedMsg(logBuffer->getRef(), logBuffer->getOffset());
+    return logBuffer->getOffset();
 }
 
 void ELogTarget::flush() {
@@ -149,8 +200,20 @@ void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) 
         ELogSystem::formatLogMsg(logRecord, logMsg);
     }
     if (m_addNewLine) {
-        logMsg += "\n";
+        logMsg.append("\n");
     }
+}
+
+void ELogTarget::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
+    if (m_logFormatter != nullptr) {
+        m_logFormatter->formatLogBuffer(logRecord, logBuffer);
+    } else {
+        ELogSystem::formatLogBuffer(logRecord, logBuffer);
+    }
+    if (m_addNewLine) {
+        logBuffer.append("\n");
+    }
+    logBuffer.finalize();
 }
 
 bool ELogCombinedTarget::startLogTarget() {

@@ -573,6 +573,13 @@ public:
      */
     static void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
 
+    /**
+     * @brief Formats a log message, using the installed log formatter.
+     * @param logRecord The log record to format.
+     * @param[out] logBuffer The resulting formatted log buffer.
+     */
+    static void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
+
     /** @brief Sets the application's name, to be referenced by token ${app}. */
     static void setAppName(const char* appName);
 

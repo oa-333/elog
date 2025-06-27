@@ -79,36 +79,33 @@ private:
     void flushLogTarget() final;
 
 private:
-    enum EntryState : uint32_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };
+    enum EntryState : uint64_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };
     struct ELogRecordData {
+        // NOTE: all members are well aligned
         ELogRecord m_logRecord;
-        std::string m_logMsg;
+        ELogBuffer* m_logBuffer;
         std::atomic<EntryState> m_entryState;
+        uint64_t m_padding[6];
+        // NOTE: each record data takes 2 cache lines
 
-        ELogRecordData() : m_entryState(ES_VACANT) {}
-        ELogRecordData(const ELogRecordData& recordData)
-            : m_logRecord(recordData.m_logRecord),
-              m_logMsg(recordData.m_logMsg),
-              m_entryState(recordData.m_entryState.load(std::memory_order_relaxed)) {}
+        ELogRecordData() : m_logBuffer(nullptr), m_entryState(ES_VACANT) {}
+        ~ELogRecordData() {}
 
-        inline ELogRecordData operator=(const ELogRecordData& recordData) {
-            m_logRecord = recordData.m_logRecord;
-            m_logMsg = recordData.m_logMsg;
-            m_entryState.store(recordData.m_entryState.load(std::memory_order_relaxed),
-                               std::memory_order_relaxed);
-            return *this;
-        }
+        inline void setLogBuffer(ELogBuffer* logBuffer) { m_logBuffer = logBuffer; }
     };
 
-    typedef std::vector<ELogRecordData> LogRingBuffer;
-    ELogRecordData* m_ringBuffer;
-    uint32_t m_ringBufferSize;
-    // we put the write/read pos each in its own cache line to avoid false sharing
-    // alignas(std::hardware_destructive_interference_size) std::atomic<uint64_t> m_writePos;
-    // alignas(std::hardware_destructive_interference_size) std::atomic<uint64_t> m_readPos;
-    std::atomic<uint64_t> m_writePos;
-    std::atomic<uint64_t> m_readPos;
-    CongestionPolicy m_congestionPolicy;
+    ELOG_CACHE_ALIGN ELogRecordData* m_ringBuffer;
+    ELogBuffer* m_bufferArray;
+    uint64_t m_ringBufferSize;
+
+    // NOTE: write pos is usually very noisy, so we don't want it to affect read pos, which usually
+    // is much slower, therefore, we put read pos in a separate cache line
+    // in addition, ring buffer ptr, buffer array ptr and size are not changing, so they are good
+    // cache candidates, so we would like to keep them unaffected as well, so we put write pos also
+    // in it sown cache line
+    ELOG_CACHE_ALIGN std::atomic<uint64_t> m_writePos;
+    ELOG_CACHE_ALIGN std::atomic<uint64_t> m_readPos;
+    // CongestionPolicy m_congestionPolicy;
 
     std::thread m_logThread;
     bool m_stop;

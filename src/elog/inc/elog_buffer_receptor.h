@@ -1,23 +1,21 @@
-#ifndef __ELOG_STRING_STREAM_RECEPTOR_H__
-#define __ELOG_STRING_STREAM_RECEPTOR_H__
+#ifndef __ELOG_BUFFER_RECEPTOR_H__
+#define __ELOG_BUFFER_RECEPTOR_H__
 
-#include <sstream>
-
+#include "elog_buffer.h"
 #include "elog_field_receptor.h"
 
 namespace elog {
 
 /**
  * @brief A default implementation of the @ref ELogFieldReceptor interface that redirects selected
- * log record fields into a string stream.
+ * log record fields into a string (in-place, no string copying).
  */
-class ELOG_API ELogStringStreamReceptor : public ELogFieldReceptor {
+class ELOG_API ELogBufferReceptor : public ELogFieldReceptor {
 public:
-    ELogStringStreamReceptor() {}
-    ELogStringStreamReceptor(std::string& logMsg) : m_msgStream(logMsg) {}
-    ELogStringStreamReceptor(const ELogStringStreamReceptor&) = delete;
-    ELogStringStreamReceptor(ELogStringStreamReceptor&&) = delete;
-    ~ELogStringStreamReceptor() final {}
+    ELogBufferReceptor(ELogBuffer& logBuffer) : m_buffer(logBuffer) {}
+    ELogBufferReceptor(const ELogBufferReceptor&) = delete;
+    ELogBufferReceptor(ELogBufferReceptor&&) = delete;
+    ~ELogBufferReceptor() final {}
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
@@ -34,17 +32,16 @@ public:
     void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
                               const ELogFieldSpec& fieldSpec) final;
 
-    /** @brief Retrieves the formatted log message. */
-    inline void getFormattedLogMsg(std::string& logMsg) const {
-        logMsg = std::move(m_msgStream).str();
-    }
+    inline void finalize() { m_buffer.finalize(); }
+    inline const char* getBuffer() const { return m_buffer.getRef(); }
+    inline size_t getBufferSize() const { return m_buffer.getOffset(); }
 
 private:
-    std::stringstream m_msgStream;
+    ELogBuffer& m_buffer;
 
-    void applyJustify(const ELogFieldSpec& fieldSpec);
+    void applyJustify(const ELogFieldSpec& fieldSpec, const char* strField, uint32_t fieldLen = 0);
 };
 
 }  // namespace elog
 
-#endif  // __ELOG_STRING_STREAM_RECEPTOR_H__
+#endif  // __ELOG_BUFFER_RECEPTOR_H__

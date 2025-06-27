@@ -643,12 +643,6 @@ static ELogConfigValue* parseConfigValue(ELogStringTokenizer& tok,
         return nullptr;
     }
 
-    ELogConfigContext* context = new (std::nothrow) ELogConfigContext(sourceContext, tokenPos, "");
-    if (context == nullptr) {
-        ELOG_REPORT_ERROR("Failed to allocate configuration entity context, out of memory");
-        return nullptr;
-    }
-
     ELogConfigValue* res = nullptr;
     if ((tokenType == ELogTokenType::TT_OPEN_BRACE) ||
         (tokenType == ELogTokenType::TT_OPEN_BRACKET)) {
@@ -658,13 +652,19 @@ static ELogConfigValue* parseConfigValue(ELogStringTokenizer& tok,
                   ? parseMapValue(tok, sourceContext, configMode)
                   : parseArrayValue(tok, sourceContext, configMode);
     } else {
+        ELogConfigContext* context =
+            new (std::nothrow) ELogConfigContext(sourceContext, tokenPos, "");
+        if (context == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate configuration entity context, out of memory");
+            return nullptr;
+        }
         res = parseSimpleValue(token, context);
+        if (res == nullptr) {
+            delete context;
+            context = nullptr;
+        }
     }
 
-    if (res == nullptr) {
-        delete context;
-        context = nullptr;
-    }
     return res;
 }
 

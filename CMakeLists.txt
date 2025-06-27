@@ -33,12 +33,29 @@ option(ELOG_ENABLE_GRAFANA_CONNECTOR "ELog Grafana connector" OFF)
 option(ELOG_ENABLE_SENTRY_CONNECTOR "ELog Sentry connector" OFF)
 option(ELOG_ENABLE_DATADOG_CONNECTOR "ELog Datadog connector" OFF)
 
+# debug options
+option(ELOG_ENABLE_MEM_CHECK "Enables ELog memory check" OFF)
+
 # figure out whether HTTP client and JSON support is required
 set(ELOG_ENABLE_HTTP OFF)
 set(ELOG_ENABLE_JSON OFF)
 if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR)
     set(ELOG_ENABLE_HTTP ON)
     set(ELOG_ENABLE_JSON ON)
+endif()
+
+if (ELOG_ENABLE_MEM_CHECK)
+    if (MSVC)
+        target_compile_options(elog PRIVATE "/fsanitize=address")
+        target_compile_options(elog_bench PRIVATE "/fsanitize=address")
+    else()
+        target_compile_options(elog PRIVATE "-fsanitize=address")
+        target_compile_options(elog_bench PRIVATE "-fsanitize=address")
+        target_link_options(elog PRIVATE -fsanitize=address)
+        #target_link_options(elog PRIVATE -shared-libasan)
+        #target_link_libraries(elog asan)
+        #target_link_libraries(elog_bench asan)
+    endif()
 endif()
 
 # get HTTP client if needed
@@ -267,6 +284,12 @@ endif()
 # -Wno-interference-size - don't warn about using std::hardware_destructive_interference_size
 if (NOT MSVC)
     add_compile_options(-Wno-interference-size)
+endif()
+
+# TODO: we should fix this in code
+if ("$ENV{CXX}" MATCHES ".*clang.*")
+    target_compile_options(elog PRIVATE "-Wno-final-dtor-non-final-class")
+    target_compile_options(elog_bench PRIVATE "-Wno-final-dtor-non-final-class")
 endif()
 
 # compile flags for per platform

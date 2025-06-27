@@ -45,9 +45,10 @@ public:
     /**
      * @brief Write a log message to the log file.
      * @param formattedLogMsg The log message to write.
+     * @param length The message size (not including terminating null).
      * @return true If the operation succeeded, otherwise false.
      */
-    bool logMsg(const std::string& formattedLogMsg);
+    bool logMsg(const char* formattedLogMsg, size_t length);
 
     /** @brief Write whatever is left from the buffer to the log. */
     bool finishLog();
@@ -60,7 +61,7 @@ private:
     bool m_useLock;
     alignas(8) std::mutex m_lock;
 
-    bool logMsgUnlocked(const std::string& formattedLogMsg);
+    bool logMsgUnlocked(const char* formattedLogMsg, size_t length);
 
     bool writeToFile(const char* buffer, uint32_t length);
 };

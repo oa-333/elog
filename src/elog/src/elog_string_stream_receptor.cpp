@@ -19,8 +19,8 @@ void ELogStringStreamReceptor::receiveIntField(uint32_t typeId, uint64_t field,
 }
 
 void ELogStringStreamReceptor::receiveTimeField(uint32_t typeId, const ELogTime& logTime,
-                                                const char* timeStr,
-                                                const ELogFieldSpec& fieldSpec) {
+                                                const char* timeStr, const ELogFieldSpec& fieldSpec,
+                                                size_t length) {
     applyJustify(fieldSpec);
     m_msgStream << timeStr;
 }

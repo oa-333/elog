@@ -13,6 +13,7 @@ REM -i|--install-dir <INSTALL_DIR>
 REM -l|--clean
 REM -r|--rebuild (no reconfigure)
 REM -g|--reconfigure
+REM -m|--mem-check
 
 REM set default values
 SET PLATFORM=WINDOWS
@@ -24,6 +25,7 @@ SET FULL=0
 SET CLEAN=0
 SET REBUILD=0
 SET RE_CONFIG=0
+SET MEM_CHECK=0
 
 SET CONN_INDEX=0
 SET CONNS[0]=tmp
@@ -56,6 +58,8 @@ IF /I "%ARG1%" == "-r" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--rebuild" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-g" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--reconfigure" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-m" SET MEM_CHECK=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--mem-check" SET MEM_CHECK=1 & GOTO CHECK_OPTS
 
 REM handle invalid option
 IF NOT "%1" == "" (
@@ -78,6 +82,7 @@ echo [DEBUG] FULL=%FULL%
 echo [DEBUG] CLEAN=%CLEAN%
 echo [DEBUG] REBUILD=%REBUILD%
 echo [DEBUG] RE_CONFIG=%RE_CONFIG%
+echo [DEBUG] MEM_CHECK=%MEM_CHECK%
 echo [DEBUG] Args parsed, options left: %*
 
 IF %FULL% EQU 1 (
@@ -93,6 +98,7 @@ echo [INFO]  Install dir: %INSTALL_DIR%
 SET OPTS=-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR%
 IF %VERBOSE% EQU 1 SET OPTS=%OPTS% -DCMAKE_VERBOSE_MAKEFILE=ON
 IF %STACK_TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_STACK_TRACE=ON
+IF %MEM_CHECK% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_MEM_CHECK=ON
 echo [DEBUG] Current options: %OPTS%
 
 REM add optional connectors

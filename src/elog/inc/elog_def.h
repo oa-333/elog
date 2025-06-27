@@ -37,4 +37,10 @@
 #endif
 #endif
 
+// #include <new>
+
+// #define ELOG_CACHE_LINE std::hardware_destructive_interference_size
+#define ELOG_CACHE_LINE 64
+#define ELOG_CACHE_ALIGN alignas(ELOG_CACHE_LINE)
+
 #endif  // __ELOG_DEF_H__

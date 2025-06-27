@@ -9,6 +9,7 @@ target_sources(
             elog_async_target.h
             elog_async_target_provider.h
             elog_base_formatter.h
+            elog_buffer_receptor.h
             elog_buffer.h
             elog_buffered_file_target.h
             elog_buffered_file_writer.h
@@ -68,5 +69,6 @@ target_sources(
             elog_string_receptor.h
             elog_syslog_target.h
             elog_system.h
+            elog_target_spec.h
             elog_target.h
-            elog_target_spec.h)
+            elog_time.h)

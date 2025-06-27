@@ -127,20 +127,7 @@ void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
     logRecord.m_file = file;
     logRecord.m_line = line;
     logRecord.m_function = function;
-#ifdef ELOG_TIME_USE_CHRONO
-    logRecord.m_logTime = std::chrono::system_clock::now();
-#else
-#ifdef ELOG_MSVC
-#ifdef ELOG_TIME_USE_SYSTEMTIME
-    GetLocalTime(&logRecord.m_logTime);
-#else
-    GetSystemTimeAsFileTime(&logRecord.m_logTime);
-#endif
-#else
-    // NOTE: gettimeofday is obsolete, instead clock_gettime() should be used
-    clock_gettime(CLOCK_REALTIME, &logRecord.m_logTime);
-#endif
-#endif
+    getCurrentTime(logRecord.m_logTime);
     logRecord.m_threadId = getCurrentThreadId();
     logRecord.m_logger = this;
 }
@@ -148,20 +135,14 @@ void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
 void ELogLogger::appendMsgV(const char* fmt, va_list ap) {
     va_list apCopy;
     va_copy(apCopy, ap);
-    uint32_t requiredBytes = (vsnprintf(nullptr, 0, fmt, apCopy) + 1);
     ELogRecordBuilder& recordBuilder = getRecordBuilder();
-    if (recordBuilder.ensureBufferLength(requiredBytes)) {
-        recordBuilder.appendV(fmt, ap);
-    }
+    (void)recordBuilder.appendV(fmt, ap);
     va_end(apCopy);
 }
 
 void ELogLogger::appendMsg(const char* msg) {
-    uint32_t requiredBytes = (strlen(msg) + 1);
     ELogRecordBuilder& recordBuilder = getRecordBuilder();
-    if (recordBuilder.ensureBufferLength(requiredBytes)) {
-        recordBuilder.append(msg);
-    }
+    (void)recordBuilder.append(msg);
 }
 
 }  // namespace elog

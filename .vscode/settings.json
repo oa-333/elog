@@ -83,7 +83,8 @@
         "future": "cpp",
         "valarray": "cpp",
         "version": "cpp",
-        "xstring": "cpp"
+        "xstring": "cpp",
+        "cstdalign": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

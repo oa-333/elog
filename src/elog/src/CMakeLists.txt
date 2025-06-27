@@ -3,6 +3,7 @@ target_sources(elog PRIVATE
     ./elog_async_target_provider.cpp
     ./elog_async_target.cpp
     ./elog_base_formatter.cpp
+    ./elog_buffer_receptor.cpp
     ./elog_buffer.cpp
     ./elog_buffered_file_target.cpp
     ./elog_buffered_file_writer.cpp
@@ -44,6 +45,7 @@ target_sources(elog PRIVATE
     ./elog_mysql_db_target_provider.cpp
     ./elog_pgsql_db_target.cpp
     ./elog_pgsql_db_target_provider.cpp
+    ./elog_private_logger.cpp
     ./elog_props_formatter.cpp
     ./elog_quantum_target.cpp
     ./elog_quantum_target_provider.cpp
@@ -69,4 +71,7 @@ target_sources(elog PRIVATE
     ./elog_sys_schema_handler.cpp
     ./elog_syslog_target.cpp
     ./elog_system.cpp
-    ./elog_target.cpp)
+    ./elog_target.cpp
+    ./elog_time.cpp
+    ./elog_tls.cpp
+    ./elog_win32_dll_event.cpp)

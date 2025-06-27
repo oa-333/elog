@@ -220,13 +220,13 @@ bool ELogSegmentedFileTarget::stopLogTarget() {
     return true;
 }
 
-void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
+void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
     // first thing, increment the entered count
     m_entered.fetch_add(1, std::memory_order_acquire);
 
     // check if segment switch is required
     // TODO: if message size exceeds segment size then this logic fails!
-    uint32_t msgSizeBytes = formattedLogMsg.length();
+    uint32_t msgSizeBytes = length;
     uint64_t bytesLogged = m_bytesLogged.fetch_add(msgSizeBytes, std::memory_order_relaxed);
     uint64_t prevSegmentId = bytesLogged / m_segmentLimitBytes;
     uint64_t currSegmentId = (bytesLogged + msgSizeBytes) / m_segmentLimitBytes;
@@ -250,7 +250,7 @@ void ELogSegmentedFileTarget::logFormattedMsg(const std::string& formattedLogMsg
 
     // NOTE: the following call to fputs() is guaranteed to be atomic according to POSIX
     FILE* currentSegment = m_currentSegment.load(std::memory_order_relaxed);
-    if (fputs(formattedLogMsg.c_str(), currentSegment) == EOF) {
+    if (fputs(formattedLogMsg, currentSegment) == EOF) {
         ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
         // TODO: in order to avoid log flooding, this error message must be emitted only once!
         // alternatively, the log target should be marked as unusable and reject all requests to log

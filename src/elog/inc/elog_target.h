@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "elog_buffer.h"
 #include "elog_common_def.h"
 #include "elog_flush_policy.h"
 #include "elog_record.h"
@@ -42,6 +43,12 @@ public:
         setLogFormatter(nullptr);
         setFlushPolicy(nullptr);
     }
+
+    /** @brief Allocate thread local storage key for per-thread log buffer. */
+    static bool createLogBufferKey();
+
+    /** @brief Free thread local storage key used for per-thread log buffer. */
+    static bool destroyLogBufferKey();
 
     /** @brief Retrieves the unique type name of the log target. */
     inline const char* getTypeName() const { return m_typeName.c_str(); }
@@ -201,8 +208,11 @@ protected:
     /** @brief Helper method for formatting a log message. */
     void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
 
+    /** @brief Helper method for formatting a log message. */
+    void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
+
     /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
-    virtual void logFormattedMsg(const std::string& logMsg) {}
+    virtual void logFormattedMsg(const char* formattedLogMsg, size_t length) {}
 
     /** @brief Helper method for querying whether the log record can be written to log. */
     inline bool canLog(const ELogRecord& logRecord) { return logRecord.m_logLevel <= m_logLevel; }

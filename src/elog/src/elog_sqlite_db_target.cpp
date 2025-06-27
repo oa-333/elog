@@ -49,7 +49,7 @@ public:
 
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
-                          const ELogFieldSpec& fieldSpec) final {
+                          const ELogFieldSpec& fieldSpec, size_t length) final {
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, timeStr, -1, SQLITE_TRANSIENT);
         if (m_res == 0) {
             m_res = res;

@@ -35,6 +35,9 @@ ELogSource::~ELogSource() {
         delete logger;
     }
     m_loggers.clear();
+    for (auto& entry : m_children) {
+        delete entry.second;
+    }
 }
 
 bool ELogSource::addChild(ELogSource* logSource) {

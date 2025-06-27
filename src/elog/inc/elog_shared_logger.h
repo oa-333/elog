@@ -10,6 +10,12 @@ public:
     ELogSharedLogger(ELogSource* logSource) : ELogLogger(logSource) {}
     ~ELogSharedLogger() final {}
 
+    /** @brief Allocate thread local storage key for per-thread record builder. */
+    static bool createRecordBuilderKey();
+
+    /** @brief Free thread local storage key used for per-thread record builder. */
+    static bool destroyRecordBuilderKey();
+
 protected:
     /** @brief Retrieves the underlying log record builder. */
     ELogRecordBuilder& getRecordBuilder() final;

@@ -4,7 +4,7 @@
 
 #include "elog_system.h"
 
-#define ELOG_FLUSH_REQUEST ((void*)-1)
+#define ELOG_FLUSH_REQUEST ((uint16_t)-1)
 
 namespace elog {
 
@@ -24,7 +24,7 @@ bool ELogDeferredTarget::stopLogTarget() {
 uint32_t ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord) {
     m_writeCount.fetch_add(1, std::memory_order_relaxed);
     std::unique_lock<std::mutex> lock(m_lock);
-    m_logQueue.push_back(std::make_pair(logRecord, logRecord.m_logMsg));
+    m_logQueue.emplace_back(logRecord, logRecord.m_logMsg);
     m_cv.notify_one();
     // asynchronous log targets do not report byte count
     return 0;
@@ -33,11 +33,11 @@ uint32_t ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord) {
 void ELogDeferredTarget::flushLogTarget() {
     // log empty message, which designated a flush request
     // NOTE: there is no waiting for flush to complete
-    ELogRecord flushRecord;
+    ELOG_CACHE_ALIGN ELogRecord flushRecord;
     flushRecord.m_logMsg = "";
     flushRecord.m_reserved = ELOG_FLUSH_REQUEST;
     std::unique_lock<std::mutex> lock(m_lock);
-    m_logQueue.push_back(std::make_pair(flushRecord, flushRecord.m_logMsg));
+    m_logQueue.emplace_back(flushRecord, flushRecord.m_logMsg);
     m_cv.notify_one();
 }
 

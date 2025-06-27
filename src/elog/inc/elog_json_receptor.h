@@ -29,7 +29,7 @@ public:
 
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
-                          const ELogFieldSpec& fieldSpec) override {
+                          const ELogFieldSpec& fieldSpec, size_t length) override {
         m_propValues.push_back(timeStr);
     }
 

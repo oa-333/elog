@@ -19,21 +19,10 @@ protected:
     const ELogRecordBuilder& getRecordBuilder() const final { return *m_recordBuilder; }
 
     /** @brief Push current builder on builder stack and open a new builder. */
-    void pushRecordBuilder() final {
-        ELogRecordBuilder* recordBuilder = new (std::nothrow) ELogRecordBuilder(m_recordBuilder);
-        if (recordBuilder != nullptr) {
-            m_recordBuilder = recordBuilder;
-        }
-    }
+    void pushRecordBuilder() final;
 
     /** @brief Pop current builder from builder stack and restore previous builder. */
-    void popRecordBuilder() final {
-        if (m_recordBuilder != &m_recordBuilderHead) {
-            ELogRecordBuilder* next = m_recordBuilder->getNext();
-            delete m_recordBuilder;
-            m_recordBuilder = next;
-        }
-    }
+    void popRecordBuilder() final;
 
 private:
     ELogRecordBuilder m_recordBuilderHead;

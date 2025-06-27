@@ -42,7 +42,7 @@ public:
 
 protected:
     /** @brief Log a formatted message. */
-    void logFormattedMsg(const std::string& formattedLogMsg) final;
+    void logFormattedMsg(const char* formattedLogMsg, size_t length) final;
 
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() final;

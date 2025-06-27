@@ -2,6 +2,7 @@
 #define __ELOG_FORMATTER_H__
 
 #include "elog_base_formatter.h"
+#include "elog_buffer.h"
 
 namespace elog {
 
@@ -11,6 +12,8 @@ public:
     ~ELogFormatter() final {}
 
     virtual void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
+
+    virtual void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
 };
 
 }  // namespace elog

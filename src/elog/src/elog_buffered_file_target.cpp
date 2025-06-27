@@ -46,8 +46,8 @@ bool ELogBufferedFileTarget::stopLogTarget() {
     return true;
 }
 
-void ELogBufferedFileTarget::logFormattedMsg(const std::string& formattedLogMsg) {
-    if (!m_fileWriter.logMsg(formattedLogMsg)) {
+void ELogBufferedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
+    if (!m_fileWriter.logMsg(formattedLogMsg, length)) {
         ELOG_REPORT_TRACE("Failed to write formatted log message to buffered file writer");
     }
 }

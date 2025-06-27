@@ -44,7 +44,7 @@
 
 namespace elog {
 
-inline uint64_t getCurrentThreadId() {
+inline uint32_t getCurrentThreadId() {
 #ifdef ELOG_WINDOWS
     return GetCurrentThreadId();
 #else
@@ -98,6 +98,21 @@ inline std::string trim(const std::string& s) {
     rtrim(res);
     return res;
 }
+
+/**
+ * @brief Safer and possibly/hopefully faster version of strncpy() (not benchmarked yet). Unlike
+ * strncpy(), this implementation has three notable differences:
+ * (1) The resulting destination always has a terminating null
+ * (2) In case of a short source string, the resulting destination is not padded with many nulls up
+ * to the size limit, but rather only one terminating null is added
+ * (3) The result value is the number of characters copied, not including the terminating null.
+ * @param dest The destination string.
+ * @param src The source string.
+ * @param destLen The destination length.
+ * @param srcLen The source length (optional, can run faster if provided).
+ * @return The number of characters copied.
+ */
+extern uint32_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen = 0);
 
 }  // namespace elog
 

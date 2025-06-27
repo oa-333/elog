@@ -1,18 +1,21 @@
 #!/bin/bash
 
-PLATFORM=$(uname -s)
-
 # Possible options:
+# -v|--verbose
 # -d|--debug
 # -r|--release
 # -w|--rel-with-debug-info
+# -s|--stack-trace
+# -f|--full
 # -c|--conn sqlite|mysql|postgresql|kafka
 # -i|--install-dir <INSTALL_DIR>
 # -l|--clean
 # -r|--rebuild (no reconfigure)
 # -g|--reconfigure
+# -m|--mem-check
 
 # set default values
+PLATFORM=$(uname -s)
 BUILD_TYPE=Debug
 OS=`uname -o`
 if [ "$OS" = "Msys" ]; then
@@ -22,13 +25,15 @@ else
 fi
 STACK_TRACE=0
 VERBOSE=0
+FULL=0
 CLEAN=0
 REBUILD=0
 RE_CONFIG=0
-FULL=0
+MEM_CHECK=0
+CLANG=0
 
 # parse options
-TEMP=$(getopt -o vdrwsfc:i:lrg -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure -- "$@")
+TEMP=$(getopt -o vdrwsfc:i:lrgma -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -45,6 +50,8 @@ while true; do
     -l | --clean) CLEAN=1; shift ;;
     -r | --rebuild) REBUILD=1; CLEAN=1; shift ;;
     -g | --reconfigure) RE_CONFIG=1; REBUILD=1; CLEAN=1; shift ;;
+    -m | --mem-check) MEM_CHECK=1; shift ;;
+    -a | --clang) CLANG=1; shift ;;
     -- ) shift; break ;;
     * ) echo "[ERROR] Invalid option $1, aborting"; exit 1; break ;;
   esac
@@ -60,15 +67,29 @@ fi
 echo "[INFO] Build type: $BUILD_TYPE"
 echo "[INFO] Install dir: $INSTALL_DIR"
 echo "[INFO] Stack trace: $STACK_TRACE"
+echo "[INFO] Verbose: $VERBOSE"
+echo "[INFO] Full: $FULL"
 echo "[INFO] Clean: $CLEAN"
 echo "[INFO] Rebuild: $REBUILD"
 echo "[INFO] Reconfigure: $RE_CONFIG"
+echo "[INFO] Mem-check: $MEM_CHECK"
+echo "[INFO] Clang: $CLANG"
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 if [ "$VERBOSE" == "1" ]; then
     OPTS+=" -DCMAKE_VERBOSE_MAKEFILE=ON"
 fi
 if [ "$STACK_TRACE" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_STACK_TRACE=ON"
+fi
+if [ "$MEM_CHECK" == "1" ]; then
+    OPTS+=" -DELOG_ENABLE_MEM_CHECK=ON"
+fi
+if [ "$CLANG" == "1" ]; then
+    export CXX=`which clang++`;
+    if [ -z "$CXX" ]; then
+        echo "[ERROR] clang not found, aborting"
+        exit 1
+    fi
 fi
 
 # add optional connectors

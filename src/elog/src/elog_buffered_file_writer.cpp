@@ -19,12 +19,12 @@ void ELogBufferedFileWriter::setFileHandle(FILE* fileHandle) {
     m_bufferOffset = 0;
 }
 
-bool ELogBufferedFileWriter::logMsg(const std::string& formattedLogMsg) {
+bool ELogBufferedFileWriter::logMsg(const char* formattedLogMsg, size_t length) {
     if (m_useLock) {
         std::unique_lock<std::mutex> lock(m_lock);
-        return logMsgUnlocked(formattedLogMsg);
+        return logMsgUnlocked(formattedLogMsg, length);
     } else {
-        return logMsgUnlocked(formattedLogMsg);
+        return logMsgUnlocked(formattedLogMsg, length);
     }
 }
 
@@ -39,10 +39,10 @@ bool ELogBufferedFileWriter::finishLog() {
     return true;
 }
 
-bool ELogBufferedFileWriter::logMsgUnlocked(const std::string& formattedLogMsg) {
+bool ELogBufferedFileWriter::logMsgUnlocked(const char* formattedLogMsg, size_t length) {
     // write buffer to file if there is not enough room (this way only whole messages are written to
     // log file)
-    if (m_bufferOffset + formattedLogMsg.length() > m_logBuffer.size()) {
+    if (m_bufferOffset + length > m_logBuffer.size()) {
         if (!writeToFile(&m_logBuffer[0], m_bufferOffset)) {
             return false;
         }
@@ -50,16 +50,16 @@ bool ELogBufferedFileWriter::logMsgUnlocked(const std::string& formattedLogMsg) 
     }
 
     // if there is still no room them write entire message directly to file
-    if (m_bufferOffset + formattedLogMsg.length() > m_logBuffer.size()) {
+    if (m_bufferOffset + length > m_logBuffer.size()) {
         // cannot buffer, message is too large, do direct write instead
         assert(m_bufferOffset == 0);
-        if (!writeToFile(formattedLogMsg.c_str(), formattedLogMsg.length())) {
+        if (!writeToFile(formattedLogMsg, length)) {
             return false;
         }
     } else {
         // otherwise append message to buffer (do not append terminating null)
-        memcpy(&m_logBuffer[m_bufferOffset], formattedLogMsg.c_str(), formattedLogMsg.size());
-        m_bufferOffset += formattedLogMsg.length();
+        memcpy(&m_logBuffer[m_bufferOffset], formattedLogMsg, length);
+        m_bufferOffset += length;
     }
     return true;
 }

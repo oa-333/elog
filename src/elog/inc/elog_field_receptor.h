@@ -167,7 +167,7 @@ public:
 
     /** @brief Receives a time log record field. */
     virtual void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
-                                  const ELogFieldSpec& fieldSpec) = 0;
+                                  const ELogFieldSpec& fieldSpec, size_t length = 0) = 0;
 
     /** @brief Receives a log level log record field. */
     virtual void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
