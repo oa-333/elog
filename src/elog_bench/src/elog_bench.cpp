@@ -14,7 +14,11 @@
 #include "elog_system.h"
 
 #if defined(ELOG_MSVC) || defined(ELOG_MINGW)
+#ifdef __clang__
 #include <x86intrin.h>
+#else
+#include <intrin.h>
+#endif
 inline int64_t elog_rdtscp() {
     unsigned int dummy = 0;
     return __rdtscp(&dummy);
