@@ -1399,7 +1399,10 @@ void testPerfDeferredFile() {
     const char* cfg =
         "async://deferred?flush_policy=count&flush_count=4096&name=elog_bench#"
         "file:///./bench_data/elog_bench_deferred.log?file_buffer_size=4096&file_lock=no";
-    runMultiThreadTest("Deferred (Flush Count 4096)", "elog_bench_deferred", cfg);
+    cfg =
+        "async://deferred?name=elog_bench#"
+        "file:///./bench_data/elog_bench_deferred.log?file_buffer_size=1048576&file_lock=no";
+    runMultiThreadTest("Deferred (1MB Buffer)", "elog_bench_deferred", cfg);
 }
 
 void testPerfQueuedFile() {
@@ -1417,7 +1420,10 @@ void testPerfQueuedFile() {
         "async://queued?queue_batch_size=10000&queue_timeout_millis=200&"
         "flush_policy=count&flush_count=4096&name=elog_bench#"
         "file:///./bench_data/elog_bench_queued.log?file_buffer_size=4096&file_lock=no";
-    runMultiThreadTest("Queued 4096 + 200ms (Flush Count 4096)", "elog_bench_queued", cfg);
+    cfg =
+        "async://queued?queue_batch_size=10000&queue_timeout_millis=200&name=elog_bench#"
+        "file:///./bench_data/elog_bench_queued.log?file_buffer_size=1048576&file_lock=no";
+    runMultiThreadTest("Queued 100000 + 200ms (1MB Buffer)", "elog_bench_queued", cfg);
 }
 
 void testPerfQuantumFile(bool privateLogger) {
@@ -1429,8 +1435,11 @@ void testPerfQuantumFile(bool privateLogger) {
         "async://"
         "quantum?quantum_buffer_size=2000000&flush_policy=count&flush_count=4096&name=elog_bench"
         "#file:///./bench_data/elog_bench_quantum.log?file_buffer_size=4096&file_lock=no";
-    runMultiThreadTest("Quantum 200000 (Flush Count 4096)", "elog_bench_quantum", cfg,
-                       privateLogger);
+    cfg =
+        "async://"
+        "quantum?quantum_buffer_size=2000000&name=elog_bench"
+        "#file:///./bench_data/elog_bench_quantum.log?file_buffer_size=1048576&file_lock=no";
+    runMultiThreadTest("Quantum 2000000 (1MB Buffer)", "elog_bench_quantum", cfg, privateLogger);
 }
 
 static void writeSTCsv(const char* fname, const std::vector<double>& data) {
