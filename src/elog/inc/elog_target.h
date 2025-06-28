@@ -66,7 +66,7 @@ public:
      */
     inline void setExternallyThreadSafe() {
         m_isExternallyThreadSafe = true;
-        m_requiresLock = false;
+        m_requiresLock = 0;
         onThreadSafe();
     }
 
@@ -130,7 +130,7 @@ public:
      * Typically file log targets will add a new line, while others, such as db log targets, will
      * not need an additional new line at the end of the formatted message.
      */
-    void setAddNewLine(bool addNewLine) { m_addNewLine = addNewLine; }
+    void setAddNewLine(bool addNewLine) { m_addNewLine = addNewLine ? 1 : 0; }
 
     /**
      * @brief Sets the flush policy for the log target. Derived classes should take into
@@ -163,21 +163,21 @@ protected:
     ELogTarget(const char* typeName, ELogFlushPolicy* flushPolicy = nullptr)
         : m_typeName(typeName),
           m_id(ELOG_INVALID_TARGET_ID),
+          m_logLevel(ELEVEL_DIAG),
           m_isRunning(false),
           m_isNativelyThreadSafe(false),
           m_isExternallyThreadSafe(false),
-          m_requiresLock(true),
-          m_logLevel(ELEVEL_DIAG),
+          m_addNewLine(0),
+          m_requiresLock(1),
           m_logFilter(nullptr),
           m_logFormatter(nullptr),
           m_flushPolicy(flushPolicy),
-          m_addNewLine(false),
           m_bytesWritten(0) {}
 
     /** @brief Sets the natively-thread-safe property to true. */
     inline void setNativelyThreadSafe() {
         m_isNativelyThreadSafe = true;
-        m_requiresLock = false;
+        m_requiresLock = 0;
         onThreadSafe();
     }
 
@@ -221,17 +221,18 @@ private:
     std::string m_typeName;
     std::string m_name;
     ELogTargetId m_id;
+    ELogLevel m_logLevel;
     std::atomic<bool> m_isRunning;
     bool m_isNativelyThreadSafe;
     bool m_isExternallyThreadSafe;
-    bool m_requiresLock;
-    std::recursive_mutex m_lock;
-    ELogLevel m_logLevel;
+    alignas(8) uint64_t m_addNewLine;
+    // this member is pretty hot, so we avoid using 1 byte boolean, and use instead aligned uint64
+    alignas(8) uint64_t m_requiresLock;
     ELogFilter* m_logFilter;
     ELogFormatter* m_logFormatter;
     ELogFlushPolicy* m_flushPolicy;
-    bool m_addNewLine;
     std::atomic<uint64_t> m_bytesWritten;
+    std::recursive_mutex m_lock;
 
     bool startNoLock();
     bool stopNoLock();

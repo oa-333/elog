@@ -108,7 +108,8 @@ uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
     assert(entryState == ES_VACANT);
 
     recordData.m_entryState.store(ES_WRITING, std::memory_order_seq_cst);
-    recordData.m_logRecord = logRecord;
+    // recordData.m_logRecord = logRecord;
+    memcpy(&recordData.m_logRecord, &logRecord, sizeof(ELogRecord));
     recordData.m_logBuffer->assign(logRecord.m_logMsg, logRecord.m_logMsgLen);
     recordData.m_logRecord.m_logMsg = recordData.m_logBuffer->getRef();
     recordData.m_entryState.store(ES_READY, std::memory_order_release);
@@ -129,9 +130,9 @@ void ELogQuantumTarget::flushLogTarget() {
 
 void ELogQuantumTarget::logThread() {
     bool done = false;
-    // const uint32_t SPIN_COUNT_INIT = 256;
-    // const uint32_t SPIN_COUNT_MAX = 16384;
-    // uint32_t spinCount = SPIN_COUNT_INIT;
+    // const uint64_t SPIN_COUNT_INIT = 256;
+    // const uint64_t SPIN_COUNT_MAX = 16384;
+    // uint64_t spinCount = SPIN_COUNT_INIT;
     while (!done) {
         // get read/write pos
         uint64_t writePos = m_writePos.load(std::memory_order_relaxed);
@@ -145,8 +146,12 @@ void ELogQuantumTarget::logThread() {
             // uint32_t localSpinCount = SPIN_COUNT_INIT;
             while (entryState != ES_READY) {
                 // cpu relax then try again
+                // NOTE: this degrades performance, not clear yet why
                 // CPU_RELAX;
                 entryState = recordData.m_entryState.load(std::memory_order_relaxed);
+                // we don't spin/back-off here since the state change is expected to happen
+                // immediately
+
                 // spin and exponential backoff
                 // for (uint32_t spin = 0; spin < localSpinCount; ++spin);
                 // localSpinCount *= 2;
@@ -172,6 +177,10 @@ void ELogQuantumTarget::logThread() {
             recordData.m_entryState.store(ES_VACANT, std::memory_order_relaxed);
             m_readPos.fetch_add(1, std::memory_order_relaxed);
         } else {
+            // write pos is not changing yet, so this mostly means the writers are idle, but since
+            // they might start any time, we don't do any spin/backoff, but rather just relax
+            // NOTE: this degrades performance, not clear yet why
+            // CPU_RELAX;
             /*if (spinCount > SPIN_COUNT_MAX) {
                 // yield processor
                 std::this_thread::yield();

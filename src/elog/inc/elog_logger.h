@@ -87,10 +87,12 @@ public:
     void appendLogNoFormat(const char* msg);
 
     /** @brief Terminates a multi-part log message and sends it to all log targets. */
-    void finishLog();
+    inline void finishLog() { finishLog(getRecordBuilder()); }
 
     /** @brief Queries whether a multi-part log message is being constructed. */
-    inline bool isLogging() const { return getRecordBuilder().getOffset() > 0; }
+    inline bool isLogging(const ELogRecordBuilder& recordBuilder) const {
+        return recordBuilder.getOffset() > 0;
+    }
 
     /** @brief Queries whether the logger can issue log message with the given level. */
     inline bool canLog(ELogLevel logLevel) const { return m_logSource->canLog(logLevel); }
@@ -128,11 +130,21 @@ private:
      * @brief Starts a multi-part log message.
      * @param logLevel The log level. No log level checking takes place.
      */
-    void startLogRecord(ELogLevel logLevel, const char* file, int line, const char* function);
+    void startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file, int line,
+                        const char* function);
 
-    void appendMsgV(const char* fmt, va_list ap);
+    void finishLog(ELogRecordBuilder& recordBuilder);
 
-    void appendMsg(const char* msg);
+    inline void appendMsgV(ELogRecordBuilder& recordBuilder, const char* fmt, va_list ap) {
+        va_list apCopy;
+        va_copy(apCopy, ap);
+        (void)recordBuilder.appendV(fmt, ap);
+        va_end(apCopy);
+    }
+
+    inline void appendMsg(ELogRecordBuilder& recordBuilder, const char* msg) {
+        (void)recordBuilder.append(msg);
+    }
 };
 
 }  // namespace elog

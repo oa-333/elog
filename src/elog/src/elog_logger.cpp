@@ -33,50 +33,59 @@ void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const
 
 void ELogLogger::logFormatV(ELogLevel logLevel, const char* file, int line, const char* function,
                             const char* fmt, va_list args) {
-    if (isLogging()) {
+    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    if (isLogging(recordBuilder)) {
         pushRecordBuilder();
+        recordBuilder = getRecordBuilder();
     }
-    startLogRecord(logLevel, file, line, function);
-    appendMsgV(fmt, args);
-    finishLog();
+    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    appendMsgV(recordBuilder, fmt, args);
+    finishLog(recordBuilder);
 }
 
 void ELogLogger::logNoFormat(ELogLevel logLevel, const char* file, int line, const char* function,
                              const char* msg) {
-    if (isLogging()) {
+    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    if (isLogging(recordBuilder)) {
         pushRecordBuilder();
+        recordBuilder = getRecordBuilder();
     }
-    startLogRecord(logLevel, file, line, function);
-    appendMsg(msg);
-    finishLog();
+    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    appendMsg(recordBuilder, msg);
+    finishLog(recordBuilder);
 }
 
 void ELogLogger::startLog(ELogLevel logLevel, const char* file, int line, const char* function,
                           const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    if (isLogging()) {
+    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    if (isLogging(recordBuilder)) {
         pushRecordBuilder();
+        recordBuilder = getRecordBuilder();
     }
-    startLogRecord(logLevel, file, line, function);
-    appendMsgV(fmt, ap);
+    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    appendMsgV(recordBuilder, fmt, ap);
     va_end(ap);
 }
 
 void ELogLogger::startLogNoFormat(ELogLevel logLevel, const char* file, int line,
                                   const char* function, const char* msg) {
-    if (isLogging()) {
+    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    if (isLogging(recordBuilder)) {
         pushRecordBuilder();
+        recordBuilder = getRecordBuilder();
     }
-    startLogRecord(logLevel, file, line, function);
-    appendMsg(msg);
+    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    appendMsg(recordBuilder, msg);
 }
 
 void ELogLogger::appendLog(const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    if (isLogging()) {
-        appendMsgV(fmt, ap);
+    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    if (isLogging(recordBuilder)) {
+        appendMsgV(recordBuilder, fmt, ap);
     } else {
         fprintf(stderr, "Attempt to append log message without start-log being issued first: ");
         vfprintf(stderr, fmt, ap);
@@ -87,8 +96,9 @@ void ELogLogger::appendLog(const char* fmt, ...) {
 }
 
 void ELogLogger::appendLogNoFormat(const char* msg) {
-    if (isLogging()) {
-        appendMsg(msg);
+    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    if (isLogging(recordBuilder)) {
+        appendMsg(recordBuilder, msg);
     } else {
         fprintf(stderr,
                 "Attempt to append unformatted log message without start-log being issued first: ");
@@ -98,11 +108,10 @@ void ELogLogger::appendLogNoFormat(const char* msg) {
     }
 }
 
-void ELogLogger::finishLog() {
-    if (isLogging()) {
+void ELogLogger::finishLog(ELogRecordBuilder& recordBuilder) {
+    if (isLogging(recordBuilder)) {
         // NOTE: new line character at the end of the line is added by each log target individually
         // add terminating null and transfer to log record
-        ELogRecordBuilder& recordBuilder = getRecordBuilder();
         recordBuilder.finalize();
 
         // send to log targets
@@ -119,9 +128,8 @@ void ELogLogger::finishLog() {
     }
 }
 
-void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
-                                const char* function) {
-    ELogRecord& logRecord = getRecordBuilder().getLogRecord();
+void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file,
+                                int line, const char* function) {
     logRecord.m_logRecordId = sNextRecordId.fetch_add(1, std::memory_order_relaxed);
     logRecord.m_logLevel = logLevel;
     logRecord.m_file = file;
@@ -130,19 +138,6 @@ void ELogLogger::startLogRecord(ELogLevel logLevel, const char* file, int line,
     getCurrentTime(logRecord.m_logTime);
     logRecord.m_threadId = getCurrentThreadId();
     logRecord.m_logger = this;
-}
-
-void ELogLogger::appendMsgV(const char* fmt, va_list ap) {
-    va_list apCopy;
-    va_copy(apCopy, ap);
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
-    (void)recordBuilder.appendV(fmt, ap);
-    va_end(apCopy);
-}
-
-void ELogLogger::appendMsg(const char* msg) {
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
-    (void)recordBuilder.append(msg);
 }
 
 }  // namespace elog
