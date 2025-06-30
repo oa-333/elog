@@ -74,4 +74,5 @@ target_sources(
             elog_system.h
             elog_target_spec.h
             elog_target.h
-            elog_time.h)
+            elog_time.h
+            elog_tls.h)
