@@ -35,6 +35,7 @@ option(ELOG_ENABLE_DATADOG_CONNECTOR "ELog Datadog connector" OFF)
 
 # debug options
 option(ELOG_ENABLE_MEM_CHECK "Enables ELog memory check" OFF)
+option(ELOG_ENABLE_GROUP_FLUSH_GC_TRACE "Enable debug trace group flush garbage collection" OFF)
 
 # figure out whether HTTP client and JSON support is required
 set(ELOG_ENABLE_HTTP OFF)
@@ -56,6 +57,10 @@ if (ELOG_ENABLE_MEM_CHECK)
         #target_link_libraries(elog asan)
         #target_link_libraries(elog_bench asan)
     endif()
+endif()
+
+if (ELOG_ENABLE_GROUP_FLUSH_GC_TRACE)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_GROUP_FLUSH_GC_TRACE)
 endif()
 
 # get HTTP client if needed
