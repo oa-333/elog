@@ -59,6 +59,9 @@ public:
     static ELogFlushPolicy* loadFlushPolicy(const ELogConfigMapNode* logTargetCfg, bool allowNone,
                                             bool& result);
 
+    /** @brief Loads flush policy from a parsed expression. */
+    static ELogFlushPolicy* loadFlushPolicyExpr(const ELogExpression* expr);
+
     /**
      * @brief Loads a log filter from target specification using nested style (internal use only).
      */
@@ -87,8 +90,7 @@ public:
                                                  bool& propValue, bool* found = nullptr);
 
 private:
-    static ELogFlushPolicy* loadFlushPolicyExprStr(const char* flushPolicyExpr);
-    static ELogFlushPolicy* loadFlushPolicyExpr(ELogExpression* expr);
+    static ELogFlushPolicy* loadFlushPolicyExprStr(const char* flushPolicyExpr, bool& result);
     static ELogFlushPolicy* loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
                                             const char* flushPolicyType, bool allowNone,
                                             bool& result);

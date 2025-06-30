@@ -33,24 +33,22 @@ void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const
 
 void ELogLogger::logFormatV(ELogLevel logLevel, const char* file, int line, const char* function,
                             const char* fmt, va_list args) {
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
-        pushRecordBuilder();
-        recordBuilder = getRecordBuilder();
+        recordBuilder = pushRecordBuilder();
     }
-    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function);
     appendMsgV(recordBuilder, fmt, args);
     finishLog(recordBuilder);
 }
 
 void ELogLogger::logNoFormat(ELogLevel logLevel, const char* file, int line, const char* function,
                              const char* msg) {
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
-        pushRecordBuilder();
-        recordBuilder = getRecordBuilder();
+        recordBuilder = pushRecordBuilder();
     }
-    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function);
     appendMsg(recordBuilder, msg);
     finishLog(recordBuilder);
 }
@@ -59,31 +57,29 @@ void ELogLogger::startLog(ELogLevel logLevel, const char* file, int line, const 
                           const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
-        pushRecordBuilder();
-        recordBuilder = getRecordBuilder();
+        recordBuilder = pushRecordBuilder();
     }
-    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function);
     appendMsgV(recordBuilder, fmt, ap);
     va_end(ap);
 }
 
 void ELogLogger::startLogNoFormat(ELogLevel logLevel, const char* file, int line,
                                   const char* function, const char* msg) {
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
-        pushRecordBuilder();
-        recordBuilder = getRecordBuilder();
+        recordBuilder = pushRecordBuilder();
     }
-    startLogRecord(recordBuilder.getLogRecord(), logLevel, file, line, function);
+    startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function);
     appendMsg(recordBuilder, msg);
 }
 
 void ELogLogger::appendLog(const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
         appendMsgV(recordBuilder, fmt, ap);
     } else {
@@ -96,7 +92,7 @@ void ELogLogger::appendLog(const char* fmt, ...) {
 }
 
 void ELogLogger::appendLogNoFormat(const char* msg) {
-    ELogRecordBuilder& recordBuilder = getRecordBuilder();
+    ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
         appendMsg(recordBuilder, msg);
     } else {
@@ -108,20 +104,20 @@ void ELogLogger::appendLogNoFormat(const char* msg) {
     }
 }
 
-void ELogLogger::finishLog(ELogRecordBuilder& recordBuilder) {
+void ELogLogger::finishLog(ELogRecordBuilder* recordBuilder) {
     if (isLogging(recordBuilder)) {
         // NOTE: new line character at the end of the line is added by each log target individually
         // add terminating null and transfer to log record
-        recordBuilder.finalize();
+        recordBuilder->finalize();
 
         // send to log targets
-        const ELogRecord& logRecord = recordBuilder.getLogRecord();
+        const ELogRecord& logRecord = recordBuilder->getLogRecord();
         if (ELogSystem::filterLogMsg(logRecord)) {
             ELogSystem::log(logRecord, m_logSource->getLogTargetAffinityMask());
         }
 
         // reset log record data
-        recordBuilder.reset();
+        recordBuilder->reset();
         popRecordBuilder();
     } else {
         ELOG_REPORT_ERROR("attempt to end log message without start-log being issued first\n");

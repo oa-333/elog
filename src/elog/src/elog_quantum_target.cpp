@@ -7,14 +7,6 @@
 #include "elog_error.h"
 #include "elog_system.h"
 
-#ifdef ELOG_GCC
-#define CPU_RELAX asm volatile("pause\n" : : : "memory")
-#elif defined(ELOG_MSVC)
-#define CPU_RELAX YieldProcessor()
-#else
-#define CPU_RELAX
-#endif
-
 #define ELOG_FLUSH_REQUEST ((uint16_t)-1)
 #define ELOG_STOP_REQUEST ((uint16_t)-2)
 

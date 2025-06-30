@@ -130,9 +130,19 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
         // policies don't care how many bytes were written, but rather how many calls were made
         // TODO: check that async target flush policy works correctly
         bytesWritten = m_bytesWritten.fetch_add(bytesWritten, std::memory_order_relaxed);
-        if (shouldFlush(bytesWritten)) {
-            // don't call flush(), but rather flushLogTarget(), because we already have the lock
-            flushLogTarget();
+        if (m_flushPolicy != nullptr) {
+            if (m_flushPolicy->shouldFlush(bytesWritten)) {
+                // flush moderation should take place only when log target is natively thread-safe
+                // NOTE: Being externally thread safe means that either there is an external lock,
+                // or that only one thread accesses the log target - in either case, flush
+                // moderation is not required
+                if (m_isNativelyThreadSafe) {
+                    m_flushPolicy->moderateFlush(this);
+                } else {
+                    // don't call flush(), but rather flushLogTarget() - we already have the lock
+                    flushLogTarget();
+                }
+            }
         }
     }
 }

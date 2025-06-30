@@ -90,8 +90,8 @@ public:
     inline void finishLog() { finishLog(getRecordBuilder()); }
 
     /** @brief Queries whether a multi-part log message is being constructed. */
-    inline bool isLogging(const ELogRecordBuilder& recordBuilder) const {
-        return recordBuilder.getOffset() > 0;
+    inline bool isLogging(const ELogRecordBuilder* recordBuilder) const {
+        return recordBuilder->getOffset() > 0;
     }
 
     /** @brief Queries whether the logger can issue log message with the given level. */
@@ -111,13 +111,13 @@ protected:
     ELogLogger(ELogSource* logSource) : m_logSource(logSource) {}
 
     /** @brief Retrieves the underlying log record builder. */
-    virtual ELogRecordBuilder& getRecordBuilder() = 0;
+    virtual ELogRecordBuilder* getRecordBuilder() = 0;
 
     /** @brief Retrieves the underlying log record builder. */
-    virtual const ELogRecordBuilder& getRecordBuilder() const = 0;
+    virtual const ELogRecordBuilder* getRecordBuilder() const = 0;
 
     /** @brief Push current builder on builder stack and open a new builder. */
-    virtual void pushRecordBuilder() = 0;
+    virtual ELogRecordBuilder* pushRecordBuilder() = 0;
 
     /** @brief Pop current builder from builder stack and restore previous builder. */
     virtual void popRecordBuilder() = 0;
@@ -133,17 +133,17 @@ private:
     void startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file, int line,
                         const char* function);
 
-    void finishLog(ELogRecordBuilder& recordBuilder);
+    void finishLog(ELogRecordBuilder* recordBuilder);
 
-    inline void appendMsgV(ELogRecordBuilder& recordBuilder, const char* fmt, va_list ap) {
+    inline void appendMsgV(ELogRecordBuilder* recordBuilder, const char* fmt, va_list ap) {
         va_list apCopy;
         va_copy(apCopy, ap);
-        (void)recordBuilder.appendV(fmt, ap);
+        (void)recordBuilder->appendV(fmt, ap);
         va_end(apCopy);
     }
 
-    inline void appendMsg(ELogRecordBuilder& recordBuilder, const char* msg) {
-        (void)recordBuilder.append(msg);
+    inline void appendMsg(ELogRecordBuilder* recordBuilder, const char* msg) {
+        (void)recordBuilder->append(msg);
     }
 };
 

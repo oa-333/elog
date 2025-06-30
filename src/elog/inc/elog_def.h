@@ -27,6 +27,14 @@
 #error "Unsupported platform"
 #endif
 
+#ifdef ELOG_GCC
+#define CPU_RELAX asm volatile("pause\n" : : : "memory")
+#elif defined(ELOG_MSVC)
+#define CPU_RELAX YieldProcessor()
+#else
+#define CPU_RELAX
+#endif
+
 // define strcasecmp for MSVC
 #ifdef ELOG_MSVC
 #ifdef strncasecmp

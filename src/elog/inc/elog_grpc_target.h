@@ -10,6 +10,7 @@
 
 #include "elog.grpc.pb.h"
 #include "elog.pb.h"
+#include "elog_atomic.h"
 #include "elog_error_handler.h"
 #include "elog_rpc_target.h"
 
@@ -198,25 +199,9 @@ private:
 
     typedef grpc::ClientWriteReactor<MessageType> BaseClass;
 
-    template <typename T>
-    struct atomic_wrapper {
-        std::atomic<T> m_atomicValue;
-        atomic_wrapper() : m_atomicValue() {}
-        atomic_wrapper(const T& value) : m_atomicValue(value) {}
-        atomic_wrapper(const std::atomic<T>& atomicValue)
-            : m_atomicValue(atomicValue.load(std::memory_order_relaxed)) {}
-        atomic_wrapper(const atomic_wrapper& other)
-            : m_atomicValue(other.m_atomicValue.load(std::memory_order_relaxed)) {}
-        atomic_wrapper& operator=(const atomic_wrapper& other) {
-            m_atomicValue.store(other.m_atomicValue.load(std::memory_order_relaxed),
-                                std::memory_order_relaxed);
-            return *this;
-        }
-    };
-
     struct CallData {
-        atomic_wrapper<uint64_t> m_requestId;
-        atomic_wrapper<bool> m_isUsed;
+        ELogAtomic<uint64_t> m_requestId;
+        ELogAtomic<bool> m_isUsed;
         MessageType* m_logRecordMsg;
         ReceptorType m_receptor;
 

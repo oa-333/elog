@@ -4,12 +4,13 @@
 
 namespace elog {
 
-void ELogPrivateLogger::pushRecordBuilder() {
+ELogRecordBuilder* ELogPrivateLogger::pushRecordBuilder() {
     ELogRecordBuilder* recordBuilder =
         elogAlignedAllocObject<ELogRecordBuilder>(ELOG_CACHE_LINE, m_recordBuilder);
     if (recordBuilder != nullptr) {
         m_recordBuilder = recordBuilder;
     }
+    return m_recordBuilder;
 }
 
 void ELogPrivateLogger::popRecordBuilder() {

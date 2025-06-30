@@ -108,7 +108,8 @@ static void runSingleThreadedTest(const char* title, const char* cfg, double& ms
                                   double& ioThroughput, StatData& msgPercentile,
                                   uint32_t msgCount = MSG_COUNT);
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
-                               bool privateLogger = true, uint32_t maxThreads = MAX_THREAD_COUNT);
+                               bool privateLogger = true, uint32_t minThreads = MIN_THREAD_COUNT,
+                               uint32_t maxThreads = MAX_THREAD_COUNT);
 static void printMermaidChart(const char* name, std::vector<double>& msgThroughput,
                               std::vector<double>& byteThroughput);
 static void printMarkdownTable(const char* name, std::vector<double>& msgThroughput,
@@ -123,8 +124,9 @@ static void testPerfQueuedFile();
 static void testPerfQuantumFile(bool privateLogger);
 static void testPerfAllSingleThread();
 
-static void testPerfFileNeverFlushPolicy();
 static void testPerfImmediateFlushPolicy();
+static void testPerfFileNeverFlushPolicy();
+static void testPerfGroupFlushPolicy();
 static void testPerfCountFlushPolicy();
 static void testPerfSizeFlushPolicy();
 static void testPerfTimeFlushPolicy();
@@ -134,6 +136,9 @@ void testPerfSTFlushImmediate(std::vector<double>& msgThroughput, std::vector<do
                               std::vector<double>& msgp50, std::vector<double>& msgp95,
                               std::vector<double>& msgp99);
 void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                          std::vector<double>& msgp50, std::vector<double>& msgp95,
+                          std::vector<double>& msgp99);
+void testPerfSTFlushGroup(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
                           std::vector<double>& msgp50, std::vector<double>& msgp95,
                           std::vector<double>& msgp99);
 void testPerfSTFlushCount4096(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
@@ -471,9 +476,18 @@ static bool sTestPerfQuantumPrivateFile = false;
 static bool sTestPerfQuantumSharedFile = false;
 static bool sTestSingleThread = false;
 
+static bool sTestFileAll = true;
+static bool sTestFileNever = false;
+static bool sTestFileImmediate = false;
+static bool sTestFileGroup = false;
+static bool sTestFileCount = false;
+static bool sTestFileSize = false;
+static bool sTestFileTime = false;
+
 static bool sTestSingleAll = true;
 static bool sTestSingleThreadFlushImmediate = false;
 static bool sTestSingleThreadFlushNever = false;
+static bool sTestSingleThreadFlushGroup = false;
 static bool sTestSingleThreadFlushCount = false;
 static bool sTestSingleThreadFlushSize = false;
 static bool sTestSingleThreadFlushTime = false;
@@ -481,6 +495,9 @@ static bool sTestSingleThreadBuffered = false;
 static bool sTestSingleThreadDeferred = false;
 static bool sTestSingleThreadQueued = false;
 static bool sTestSingleThreadQuantum = false;
+
+static int sGroupSize = 0;
+static int sGroupTimeoutMicros = 0;
 
 static bool getPerfParam(const char* param) {
     if (strcmp(param, "idle") == 0) {
@@ -506,11 +523,33 @@ static bool getPerfParam(const char* param) {
     return true;
 }
 
+static bool getFileParam(const char* param) {
+    if (strcmp(param, "flush-immediate") == 0) {
+        sTestFileImmediate = true;
+    } else if (strcmp(param, "flush-never") == 0) {
+        sTestFileNever = true;
+    } else if (strcmp(param, "flush-group") == 0) {
+        sTestFileGroup = true;
+    } else if (strcmp(param, "flush-count") == 0) {
+        sTestFileCount = true;
+    } else if (strcmp(param, "flush-size") == 0) {
+        sTestFileSize = true;
+    } else if (strcmp(param, "flush-time") == 0) {
+        sTestFileTime = true;
+    } else {
+        return false;
+    }
+    sTestFileAll = false;
+    return true;
+}
+
 static bool getSingleParam(const char* param) {
     if (strcmp(param, "flush-immediate") == 0) {
         sTestSingleThreadFlushImmediate = true;
     } else if (strcmp(param, "flush-never") == 0) {
         sTestSingleThreadFlushNever = true;
+    } else if (strcmp(param, "flush-group") == 0) {
+        sTestSingleThreadFlushGroup = true;
     } else if (strcmp(param, "flush-count") == 0) {
         sTestSingleThreadFlushCount = true;
     } else if (strcmp(param, "flush-size") == 0) {
@@ -590,6 +629,15 @@ static bool parseArgs(int argc, char* argv[]) {
             if (!getSingleParam(argv[i])) {
                 return false;
             }
+        } else if (strcmp(argv[i], "--file") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --single\n");
+                return false;
+            }
+            if (!getFileParam(argv[i])) {
+                return false;
+            }
         } else if (strcmp(argv[i], "--msg-count") == 0) {
             ++i;
             if (i == argc) {
@@ -627,6 +675,24 @@ static bool parseArgs(int argc, char* argv[]) {
                 return false;
             }
             if (!parseIntParam(argv[i], sMaxThreadCnt, "--max-thread-count")) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--group-size") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --group-size\n");
+                return false;
+            }
+            if (!parseIntParam(argv[i], sGroupSize, "--group-size")) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--group-timeout-micros") == 0) {
+            ++i;
+            if (i == argc) {
+                fprintf(stderr, "ERROR: Missing argument for --group-timeout-micros\n");
+                return false;
+            }
+            if (!parseIntParam(argv[i], sGroupTimeoutMicros, "--group-timeout-micros")) {
                 return false;
             }
         } else {
@@ -741,6 +807,10 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
         fprintf(stderr, "Failed to find logger by name elog_bench, aborting\n");
         elog::ELogSystem::terminate();
     }
+    elog::ELogSource* logSource = elog::ELogSystem::defineLogSource("elog_bench_logger");
+    elog::ELogTargetAffinityMask mask = 0;
+    ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
+    logSource->setLogTargetAffinity(mask);
     return logTarget;
 }
 
@@ -925,7 +995,7 @@ void testGRPCAsyncCallbackUnary() {
     double ioPerf = 0.0f;
     runSingleThreadedTest("gRPC (async callback unary)", cfg, msgPerf, ioPerf);
     runMultiThreadTest("gRPC (async callback unary)", "elog_bench_grpc_async_cb_unary", cfg, true,
-                       4);
+                       1, 4);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -1144,8 +1214,11 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
 
 void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
                         bool privateLogger /* = true */,
+                        uint32_t minThreads /* = MIN_THREAD_COUNT */,
                         uint32_t maxThreads /* = MAX_THREAD_COUNT */) {
-    uint32_t minThreads = sMinThreadCnt >= 0 ? sMinThreadCnt : MIN_THREAD_COUNT;
+    if (sMinThreadCnt > 0) {
+        minThreads = sMinThreadCnt;
+    }
     if (sMaxThreadCnt > 0) {
         maxThreads = sMaxThreadCnt;
     }
@@ -1159,12 +1232,22 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         return;
     }
 
-    fprintf(stderr, "\n\nRunning %s thread test\n", title);
+    fprintf(stderr, "\n\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
     std::vector<double> msgThroughput;
     std::vector<double> byteThroughput;
     std::vector<double> accumThroughput;
     elog::ELogLogger* sharedLogger =
-        privateLogger ? nullptr : elog::ELogSystem::getSharedLogger("");
+        privateLogger ? nullptr : elog::ELogSystem::getSharedLogger("elog_bench_logger");
+    for (uint32_t i = MIN_THREAD_COUNT; i < minThreads; ++i) {
+        msgThroughput.push_back(0);
+        byteThroughput.push_back(0);
+        accumThroughput.push_back(0);
+    }
+    for (uint32_t i = maxThreads + 1; i < MAX_THREAD_COUNT; ++i) {
+        msgThroughput.push_back(0);
+        byteThroughput.push_back(0);
+        accumThroughput.push_back(0);
+    }
     for (uint32_t threadCount = minThreads; threadCount <= maxThreads; ++threadCount) {
         // fprintf(stderr, "Running %u threads test\n", threadCount);
         ELOG_INFO("Running %u Thread Test", threadCount);
@@ -1175,7 +1258,9 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         for (uint32_t i = 0; i < threadCount; ++i) {
             threads.emplace_back(std::thread([i, &resVec, sharedLogger, msgCount]() {
                 elog::ELogLogger* logger =
-                    sharedLogger != nullptr ? sharedLogger : elog::ELogSystem::getPrivateLogger("");
+                    sharedLogger != nullptr
+                        ? sharedLogger
+                        : elog::ELogSystem::getPrivateLogger("elog_bench_logger");
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_INFO_EX(logger, "Thread %u Test log %u", i, j);
@@ -1343,19 +1428,35 @@ void writeCsvFile(const char* fileName, std::vector<double>& msgThroughput,
 
 void testPerfFileFlushPolicy() {
     // flush never
-    testPerfFileNeverFlushPolicy();
+    if (sTestFileAll || sTestFileNever) {
+        testPerfFileNeverFlushPolicy();
+    }
 
     // flush immediate
-    testPerfImmediateFlushPolicy();
+    if (sTestFileAll || sTestFileImmediate) {
+        testPerfImmediateFlushPolicy();
+    }
+
+    // group flush - not part of total performance test, can only test separately
+    // because group flush is good only for thread thrashing scenario
+    if (/*sTestFileAll ||*/ sTestFileGroup) {
+        testPerfGroupFlushPolicy();
+    }
 
     // flush count
-    testPerfCountFlushPolicy();
+    if (sTestFileAll || sTestFileCount) {
+        testPerfCountFlushPolicy();
+    }
 
     // flush size
-    testPerfSizeFlushPolicy();
+    if (sTestFileAll || sTestFileSize) {
+        testPerfSizeFlushPolicy();
+    }
 
     // flush time
-    testPerfTimeFlushPolicy();
+    if (sTestFileAll || sTestFileTime) {
+        testPerfTimeFlushPolicy();
+    }
 
     // compound flush policy, size or count
     // testPerfCompoundFlushPolicy();
@@ -1449,6 +1550,8 @@ static void writeSTCsv(const char* fname, const std::vector<double>& data) {
       << std::endl;
     f << column << " \"Flush\\nNever\" " << std::fixed << std::setprecision(2) << data[column++]
       << std::endl;
+    /*f << column << " \"Flush\\nGroup\" " << std::fixed << std::setprecision(2) << data[column++]
+      << std::endl;*/
     f << column << " \"Flush\\nCount=4096\" " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
     f << column << " \"Flush\\nSize=1MB\" " << std::fixed << std::setprecision(2) << data[column++]
@@ -1477,6 +1580,9 @@ void testPerfAllSingleThread() {
     if (sTestSingleAll || sTestSingleThreadFlushNever) {
         testPerfSTFlushNever(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
     }
+    /*if (sTestSingleAll || sTestSingleThreadFlushGroup) {
+        testPerfSTFlushGroup(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }*/
     if (sTestSingleAll || sTestSingleThreadFlushCount) {
         testPerfSTFlushCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
     }
@@ -1536,6 +1642,25 @@ void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double
     double ioPerf = 0.0f;
     StatData statData;
     runSingleThreadedTest("Flush Never", cfg, msgPerf, ioPerf, statData);
+    msgThroughput.push_back(msgPerf);
+    ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
+}
+
+void testPerfSTFlushGroup(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
+                          std::vector<double>& msgp50, std::vector<double>& msgp95,
+                          std::vector<double>& msgp99) {
+    const char* cfg =
+        "file:///./bench_data/elog_bench_flush_group_st.log?"
+        "flush_policy=(CHAIN(immediate, group(group_size:4, group_timeout_micros:200)))";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Flush Group", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
 #ifdef MEASURE_PERCENTILE
@@ -1729,6 +1854,60 @@ static void testPerfImmediateFlushPolicy() {
     runMultiThreadTest("File (Immediate Flush Policy)", "elog_bench_flush_immediate", cfg);
 }
 
+static void testPerfGroupFlushPolicy() {
+    if (sGroupSize != 0 && sGroupTimeoutMicros != 0) {
+        char cfg[1024];
+        snprintf(cfg, 1024,
+                 "file:///./bench_data/"
+                 "elog_bench_group_%d_%dms.log?flush_policy=(CHAIN(immediate, group(group_size:%d, "
+                 "group_timeout_micros:%d)))",
+                 sGroupSize, sGroupTimeoutMicros, sGroupSize, sGroupTimeoutMicros);
+        runMultiThreadTest("Group File (Custom)", "elog_bench_group_custom", cfg, true, sGroupSize);
+        return;
+    }
+    // sMsgCnt = 100;
+    const char* cfg =
+        "file:///./bench_data/"
+        "elog_bench_group_4_100ms.log?flush_policy=(CHAIN(immediate, group(group_size:4, "
+        "group_timeout_micros:100)))";
+    runMultiThreadTest("Group File (4/100)", "elog_bench_group_4_100ms", cfg, true, 4);
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_group_4_200ms.log?flush_policy=(CHAIN(immediate, group(group_size:4, "
+        "group_timeout_micros:200)))";
+    runMultiThreadTest("Group File (4/200)", "elog_bench_group_4_200ms", cfg, true, 4);
+
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_group_4_500ms.log?flush_policy=(CHAIN(immediate, group(group_size:4, "
+        "group_timeout_micros:500)))";
+    runMultiThreadTest("Group File (4/500)", "elog_bench_group_4_500ms", cfg, true, 4);
+
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_group_4_1000ms.log?flush_policy=(CHAIN(immediate, group(group_size:4, "
+        "group_timeout_micros:1000)))";
+    runMultiThreadTest("Group File (4/1000)", "elog_bench_group_4_1000ms", cfg, true, 4);
+
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_group_8_100ms.log?flush_policy=(CHAIN(immediate, group(group_size:8, "
+        "group_timeout_micros:100)))";
+    runMultiThreadTest("Group File (8/100)", "elog_bench_group_8_100ms", cfg, true, 8);
+
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_group_8_200ms.log?flush_policy=(CHAIN(immediate, group(group_size:8, "
+        "group_timeout_micros:200)))";
+    runMultiThreadTest("Group File (8/200)", "elog_bench_group_8_200ms", cfg, true, 8);
+
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_group_8_500ms.log?flush_policy=(CHAIN(immediate, group(group_size:8, "
+        "group_timeout_micros:500)))";
+    runMultiThreadTest("Group File (8/500)", "elog_bench_group_8_500ms", cfg, true, 8);
+}
+
 static void testPerfCountFlushPolicy() {
     const char* cfg =
         "file:///./bench_data/elog_bench_count64.log?flush_policy=count&flush_count=64";
@@ -1777,6 +1956,9 @@ static void testPerfTimeFlushPolicy() {
         "   flush_timeout_millis = 100, "
         "   name = elog_bench"
         "}";
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_time_100ms.log?flush_policy=time&flush_timeout_millis=100";
     runMultiThreadTest("File (Time 100 ms Flush Policy)", "elog_bench_time_100ms", cfg);
 
     cfg =

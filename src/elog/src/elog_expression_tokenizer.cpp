@@ -8,7 +8,7 @@
 
 namespace elog {
 
-static const char* sSpecialChars = "{}[],=";
+static const char* sSpecialChars = "(){}[],=<>!:";
 
 inline bool isSpecialChar(char c) { return strchr(sSpecialChars, c) != nullptr; }
 
@@ -29,10 +29,58 @@ bool ELogExpressionTokenizer::nextToken(ELogExprTokenType& tokenType, std::strin
     // NOTE: must advance beyond single char token, otherwise we get stuck in same pos
     tokenPos = m_pos++;
     char tokenChar = m_sourceStr[tokenPos];
-    if (tokenChar == '(') {
-        tokenType = ELogExprTokenType::TT_OPEN_PAREN;
-    } else if (tokenChar == ')') {
-        tokenType = ELogExprTokenType::TT_CLOSE_PAREN;
+    if (isSpecialChar(tokenChar)) {
+        if (tokenChar == '(') {
+            tokenType = ELogExprTokenType::TT_OPEN_PAREN;
+            token = m_sourceStr.substr(tokenPos, 1);
+        } else if (tokenChar == ')') {
+            tokenType = ELogExprTokenType::TT_CLOSE_PAREN;
+            token = m_sourceStr.substr(tokenPos, 1);
+        } else if (tokenChar == ',') {
+            tokenType = ELogExprTokenType::TT_COMMA;
+            token = m_sourceStr.substr(tokenPos, 1);
+        } else if (tokenChar == ':') {
+            tokenType = ELogExprTokenType::TT_IS_OP;
+            token = m_sourceStr.substr(tokenPos, 1);
+        } else {
+            // parse op
+            // NOTE: there must be another char, otherwise expression syntax is bad
+            if (m_pos == m_sourceStr.length()) {
+                ELOG_REPORT_ERROR("Premature end of expression string, while parsing operator: %s",
+                                  getErrLocStr(tokenPos));
+                return false;
+            }
+            // now check if second char is also special
+            if (isSpecialChar(m_sourceStr[m_pos])) {
+                ++m_pos;
+                token = m_sourceStr.substr(tokenPos, 2);
+                if (token.compare("==") == 0) {
+                    tokenType = ELogExprTokenType::TT_EQ_OP;
+                } else if (token.compare("!=") == 0) {
+                    tokenType = ELogExprTokenType::TT_NEQ_OP;
+                } else if (token.compare("<=") == 0) {
+                    tokenType = ELogExprTokenType::TT_LE_OP;
+                } else if (token.compare(">=") == 0) {
+                    tokenType = ELogExprTokenType::TT_GE_OP;
+                } else {
+                    ELOG_REPORT_ERROR("Invalid operator token '%s': %s", token.c_str(),
+                                      getErrLocStr(tokenPos));
+                    return false;
+                }
+            } else {
+                // single char operator, can only be < or >
+                token = m_sourceStr.substr(tokenPos, 1);
+                if (token.compare("<") == 0) {
+                    tokenType = ELogExprTokenType::TT_LT_OP;
+                } else if (token.compare(">") == 0) {
+                    tokenType = ELogExprTokenType::TT_GT_OP;
+                } else {
+                    ELOG_REPORT_ERROR("Invalid operator token '%s': %s", token.c_str(),
+                                      getErrLocStr(tokenPos));
+                    return false;
+                }
+            }
+        }
     } else {
         // text token, parse until special char or white space, or end of stream
         while (m_pos < m_sourceStr.length() && !std::isspace(m_sourceStr[m_pos]) &&
@@ -40,24 +88,12 @@ bool ELogExpressionTokenizer::nextToken(ELogExprTokenType& tokenType, std::strin
             ++m_pos;
         }
         token = m_sourceStr.substr(tokenPos, m_pos - tokenPos);
-        if (token.compare("AND") == 0 || token.compare("and")) {
+        if (token.compare("AND") == 0 || token.compare("and") == 0) {
             tokenType = ELogExprTokenType::TT_AND;
         } else if (token.compare("OR") == 0 || token.compare("or") == 0) {
             tokenType = ELogExprTokenType::TT_OR;
         } else if (token.compare("NOT") == 0 || token.compare("not") == 0) {
             tokenType = ELogExprTokenType::TT_NOT;
-        } else if (token.compare("==") == 0) {
-            tokenType = ELogExprTokenType::TT_EQ_OP;
-        } else if (token.compare("!=") == 0) {
-            tokenType = ELogExprTokenType::TT_NEQ_OP;
-        } else if (token.compare("<") == 0) {
-            tokenType = ELogExprTokenType::TT_LT_OP;
-        } else if (token.compare("<=") == 0) {
-            tokenType = ELogExprTokenType::TT_LE_OP;
-        } else if (token.compare(">") == 0) {
-            tokenType = ELogExprTokenType::TT_GT_OP;
-        } else if (token.compare(">=") == 0) {
-            tokenType = ELogExprTokenType::TT_GE_OP;
         } else if (token.compare("LIKE") == 0 || token.compare("like") == 0) {
             tokenType = ELogExprTokenType::TT_LIKE_OP;
         } else if (token.compare("CONTAINS") == 0 || token.compare("contains") == 0) {
@@ -85,7 +121,8 @@ bool ELogExpressionTokenizer::isOpToken(ELogExprTokenType tokenType) {
             tokenType == ELogExprTokenType::TT_LT_OP || tokenType == ELogExprTokenType::TT_LE_OP ||
             tokenType == ELogExprTokenType::TT_GT_OP || tokenType == ELogExprTokenType::TT_GE_OP ||
             tokenType == ELogExprTokenType::TT_LIKE_OP ||
-            tokenType == ELogExprTokenType::TT_CONTAINS_OP);
+            tokenType == ELogExprTokenType::TT_CONTAINS_OP ||
+            tokenType == ELogExprTokenType::TT_IS_OP);
 }
 
 std::string ELogExpressionTokenizer::getErrLocStr(uint32_t tokenPos) const {

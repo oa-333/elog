@@ -13,13 +13,13 @@ public:
 
 protected:
     /** @brief Retrieves the underlying log record builder. */
-    ELogRecordBuilder& getRecordBuilder() final { return *m_recordBuilder; }
+    ELogRecordBuilder* getRecordBuilder() final { return m_recordBuilder; }
 
     /** @brief Retrieves the underlying log record builder. */
-    const ELogRecordBuilder& getRecordBuilder() const final { return *m_recordBuilder; }
+    const ELogRecordBuilder* getRecordBuilder() const final { return m_recordBuilder; }
 
     /** @brief Push current builder on builder stack and open a new builder. */
-    void pushRecordBuilder() final;
+    ELogRecordBuilder* pushRecordBuilder() final;
 
     /** @brief Pop current builder from builder stack and restore previous builder. */
     void popRecordBuilder() final;

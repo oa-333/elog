@@ -29,6 +29,7 @@ target_sources(elog PRIVATE
     ./elog_filter.cpp
     ./elog_flush_policy.cpp
     ./elog_formatter.cpp
+    ./elog_gc.cpp
     ./elog_grafana_json_target.cpp
     ./elog_grafana_target_provider.cpp
     ./elog_grafana_target.cpp
@@ -54,6 +55,7 @@ target_sources(elog PRIVATE
     ./elog_rate_limiter.cpp
     ./elog_record_builder.cpp
     ./elog_record.cpp
+    ./elog_rolling_bitset.cpp
     ./elog_rpc_formatter.cpp
     ./elog_rpc_schema_handler.cpp
     ./elog_schema_manager.cpp

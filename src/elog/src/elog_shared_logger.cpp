@@ -49,6 +49,15 @@ static ELogRecordBuilder* getOrCreateTlsRecordBuilder() {
 static thread_local ELogRecordBuilder* sRecordBuilderHead = nullptr;
 static thread_local ELogRecordBuilder* sRecordBuilder = nullptr;
 
+inline void ensureRecordBuilderExists() {
+    if (sRecordBuilder == nullptr) {
+        // create on-demand on a per-thread basis
+        sRecordBuilder = getOrCreateTlsRecordBuilder();
+        assert(sRecordBuilderHead == nullptr);
+        sRecordBuilderHead = sRecordBuilder;
+    }
+}
+
 bool ELogSharedLogger::createRecordBuilderKey() {
     if (sRecordBuilderKey != ELOG_INVALID_TLS_KEY) {
         ELOG_REPORT_ERROR("Cannot create record builder TLS key, already created");
@@ -69,36 +78,27 @@ bool ELogSharedLogger::destroyRecordBuilderKey() {
     return res;
 }
 
-ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() {
-    if (sRecordBuilder == nullptr) {
-        // create on-demand on a per-thread basis
-        sRecordBuilder = getOrCreateTlsRecordBuilder();
-        assert(sRecordBuilderHead == nullptr);
-        sRecordBuilderHead = sRecordBuilder;
-    }
+ELogRecordBuilder* ELogSharedLogger::getRecordBuilder() {
+    ensureRecordBuilderExists();
     // we cannot afford a failure here, this is fatal
     assert(sRecordBuilder != nullptr);
-    return *sRecordBuilder;
+    return sRecordBuilder;
 }
 
-const ELogRecordBuilder& ELogSharedLogger::getRecordBuilder() const {
-    if (sRecordBuilder == nullptr) {
-        // create on-demand on a per-thread basis
-        sRecordBuilder = getOrCreateTlsRecordBuilder();
-        assert(sRecordBuilderHead == nullptr);
-        sRecordBuilderHead = sRecordBuilder;
-    }
+const ELogRecordBuilder* ELogSharedLogger::getRecordBuilder() const {
+    ensureRecordBuilderExists();
     // we cannot afford a failure here, this is fatal
     assert(sRecordBuilder != nullptr);
-    return *sRecordBuilder;
+    return sRecordBuilder;
 }
 
-void ELogSharedLogger::pushRecordBuilder() {
+ELogRecordBuilder* ELogSharedLogger::pushRecordBuilder() {
     ELogRecordBuilder* recordBuilder =
         elogAlignedAllocObject<ELogRecordBuilder>(ELOG_CACHE_LINE, sRecordBuilder);
     if (recordBuilder != nullptr) {
         sRecordBuilder = recordBuilder;
     }
+    return sRecordBuilder;
 }
 
 void ELogSharedLogger::popRecordBuilder() {

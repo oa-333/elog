@@ -295,7 +295,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* logT
         // such as: ((count == 4096) OR (size == 1024) OR (timeoutMillis == 1000))
         // this will be distinguished from normal case by the presence of parenthesis
         if (flushPolicyCfg[0] == '(') {
-            return loadFlushPolicyExprStr(flushPolicyCfg);
+            return loadFlushPolicyExprStr(flushPolicyCfg, result);
         }
 
         // otherwise we allow the flush policy properties to be specified at the same level as the
@@ -490,7 +490,8 @@ bool ELogConfigLoader::getOptionalLogTargetBoolProperty(const ELogConfigMapNode*
     return true;
 }
 
-ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExprStr(const char* flushPolicyExpr) {
+ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExprStr(const char* flushPolicyExpr,
+                                                          bool& result) {
     ELogExpression* expr = ELogExpressionParser::parseExpressionString(flushPolicyExpr);
     if (expr == nullptr) {
         ELOG_REPORT_ERROR("Failed to parse flush policy expression: %s", flushPolicyExpr);
@@ -498,57 +499,48 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExprStr(const char* flushPolic
     }
     ELogFlushPolicy* flushPolicy = loadFlushPolicyExpr(expr);
     delete expr;
+    result = true;
     return flushPolicy;
 }
 
-ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(ELogExpression* expr) {
-    if (expr->m_type == ELogExpressionType::ET_AND_EXPR ||
-        expr->m_type == ELogExpressionType::ET_OR_EXPR) {
-        // TODO: use coherent terminology, either compound of composite
-        ELogCompositeExpression* andExpr = (ELogCompositeExpression*)expr;
-        ELogCompoundFlushPolicy* flushPolicy = nullptr;
-        if (expr->m_type == ELogExpressionType::ET_AND_EXPR) {
-            flushPolicy = new (std::nothrow) ELogAndFlushPolicy();
-        } else {
-            flushPolicy = new (std::nothrow) ELogOrFlushPolicy();
-        }
-        if (flushPolicy == nullptr) {
-            ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
-            return nullptr;
-        }
-        for (ELogExpression* subExpr : andExpr->m_expressions) {
-            ELogFlushPolicy* subFlushPolicy = loadFlushPolicyExpr(subExpr);
-            if (subFlushPolicy == nullptr) {
-                ELOG_REPORT_ERROR("Failed to load sub-flush policy from expression");
-                delete flushPolicy;
-                return nullptr;
-            }
-            flushPolicy->addFlushPolicy(subFlushPolicy);
-        }
-        return flushPolicy;
+ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(const ELogExpression* expr) {
+    // TODO: use coherent terminology, either compound of composite
+    ELogFlushPolicy* flushPolicy = nullptr;
+    if (expr->m_type == ELogExpressionType::ET_AND_EXPR) {
+        flushPolicy = new (std::nothrow) ELogAndFlushPolicy();
+    } else if (expr->m_type == ELogExpressionType::ET_OR_EXPR) {
+        flushPolicy = new (std::nothrow) ELogOrFlushPolicy();
     } else if (expr->m_type == ELogExpressionType::ET_NOT_EXPR) {
-        ELogNotExpression* notExpr = (ELogNotExpression*)expr;
-        ELogFlushPolicy* subFlushPolicy = loadFlushPolicyExpr(notExpr->m_expression);
-        if (subFlushPolicy == nullptr) {
-            ELOG_REPORT_ERROR("Failed to load sub-flush policy for NOT flush policy");
+        flushPolicy = new (std::nothrow) ELogNotFlushPolicy();
+    } else if (expr->m_type == ELogExpressionType::ET_CHAIN_EXPR) {
+        flushPolicy = new (std::nothrow) ELogChainedFlushPolicy();
+    } else if (expr->m_type == ELogExpressionType::ET_FUNC_EXPR) {
+        // the function name should be able to load a composite flush policy by name
+        ELogFunctionExpression* funcExpr = (ELogFunctionExpression*)expr;
+        flushPolicy = constructFlushPolicy(funcExpr->m_functionName.c_str());
+        if (flushPolicy == nullptr) {
+            ELOG_REPORT_ERROR("Failed to construct flush policy by name '%s'",
+                              funcExpr->m_functionName.c_str());
             return nullptr;
         }
-        ELogNotFlushPolicy* notFlushPolicy = new (std::nothrow) ELogNotFlushPolicy(subFlushPolicy);
-        if (notFlushPolicy == nullptr) {
-            ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
-            delete subFlushPolicy;
+    } else if (expr->m_type == ELogExpressionType::ET_NAME_EXPR) {
+        ELogNameExpression* nameExpr = (ELogNameExpression*)expr;
+        flushPolicy = constructFlushPolicy(nameExpr->m_name.c_str());
+        if (flushPolicy == nullptr) {
+            ELOG_REPORT_ERROR("Failed to load flush policy by name '%s", nameExpr->m_name.c_str());
             return nullptr;
         }
-        return notFlushPolicy;
     } else {
         assert(expr->m_type == ELogExpressionType::ET_OP_EXPR);
         // LHS is always the flush policy name
         // RHS is the value (size/count/time-millis), always an integer
         // OP is always "=="
         ELogOpExpression* opExpr = (ELogOpExpression*)expr;
-        if (opExpr->m_op.compare("==") != 0) {
-            ELOG_REPORT_ERROR("Invalid flush policy operation '%s', only equals operator supported",
-                              opExpr->m_op.c_str());
+        if (opExpr->m_op.compare("==") != 0 && opExpr->m_op.compare(":") != 0) {
+            ELOG_REPORT_ERROR(
+                "Invalid flush policy operation '%s', only equals (==), or assign (:) operator is "
+                "allowed in this context",
+                opExpr->m_op.c_str());
             return nullptr;
         }
         uint64_t value = 0;
@@ -557,20 +549,24 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(ELogExpression* expr) {
                               opExpr->m_rhs.c_str());
             return nullptr;
         }
-        ELogFlushPolicy* flushPolicy = constructFlushPolicy(opExpr->m_lhs.c_str());
+        flushPolicy = constructFlushPolicy(opExpr->m_lhs.c_str());
         if (flushPolicy == nullptr) {
-            ELOG_REPORT_ERROR("Failed to load flush policy by name '%s", opExpr->m_lhs.c_str());
+            ELOG_REPORT_ERROR("Failed to construct flush policy by name '%s",
+                              opExpr->m_lhs.c_str());
             return nullptr;
         }
-
-        // now have the flush policy load itself from the parsed expression
-        if (!flushPolicy->load(opExpr)) {
-            ELOG_REPORT_ERROR("Failed to load flush policy from expression");
-            delete flushPolicy;
-            return nullptr;
-        }
-        return flushPolicy;
     }
+
+    if (flushPolicy == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
+        return nullptr;
+    }
+    if (!flushPolicy->load(expr)) {
+        ELOG_REPORT_ERROR("Failed to load compound flush policy from expression");
+        delete flushPolicy;
+        flushPolicy = nullptr;
+    }
+    return flushPolicy;
 }
 
 ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,

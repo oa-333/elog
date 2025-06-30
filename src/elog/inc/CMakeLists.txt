@@ -8,6 +8,7 @@ target_sources(
             elog_async_schema_handler.h
             elog_async_target.h
             elog_async_target_provider.h
+            elog_atomic.h
             elog_base_formatter.h
             elog_buffer_receptor.h
             elog_buffer.h
@@ -31,6 +32,7 @@ target_sources(
             elog_filter.h
             elog_flush_policy.h
             elog_formatter.h
+            elog_gc.h
             elog_grafana_json_target.h
             elog_grafana_target.h
             elog_grpc_target.h
@@ -54,6 +56,7 @@ target_sources(
             elog_queued_target.h
             elog_rate_limiter.h
             elog_record.h
+            elog_rolling_bitset.h
             elog_record_builder.h
             elog_rpc_formatter.h
             elog_rpc_schema_handler.h

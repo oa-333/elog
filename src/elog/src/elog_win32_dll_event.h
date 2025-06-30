@@ -27,8 +27,11 @@ public:
     virtual bool purge(elogWin32ThreadDllEventCB callback, void* userData) = 0;
 };
 
+// listener API
 extern void registerDllListener(ELogWin32DllListener* listener);
 extern void deregisterDllListener(ELogWin32DllListener* listener);
+
+// callback API
 extern void registerDllCallback(elogWin32ThreadDllEventCB callback, void* userData);
 extern void deregisterDllCallback(elogWin32ThreadDllEventCB callback);
 extern void* getDllCallbackUserData(elogWin32ThreadDllEventCB callback);

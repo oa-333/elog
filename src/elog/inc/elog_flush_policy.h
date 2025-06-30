@@ -11,9 +11,16 @@
 
 #include "elog_config.h"
 #include "elog_expression.h"
+#include "elog_gc.h"
 #include "elog_target_spec.h"
 
 namespace elog {
+
+/** @def Default group flush size. */
+#define ELOG_DEFAULT_GROUP_FLUSH_SIZE 16
+
+/** @def Default group flush timeout (microseconds). */
+#define ELOG_DEFAULT_GROUP_FLUSH_TIME_MICROS 200
 
 // forward declaration
 class ELOG_API ELogTarget;
@@ -65,6 +72,12 @@ public:
      */
     virtual bool shouldFlush(uint32_t msgSizeBytes) = 0;
 
+    /**
+     * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group
+     * flush). By default no moderation takes place.
+     */
+    virtual void moderateFlush(ELogTarget* logTarget);
+
 protected:
     ELogFlushPolicy(bool isActive = false) : m_isActive(isActive), m_logTarget(nullptr) {}
     ELogFlushPolicy(const ELogFlushPolicy&) = delete;
@@ -78,9 +91,10 @@ protected:
     // helper for combined flush policy
     virtual void propagateLogTarget(ELogTarget* logTarget) {}
 
-    bool loadIntFlushPolicy(const ELogConfigMapNode* flushPolicyCfg, const char* filterName,
+    bool loadIntFlushPolicy(const ELogConfigMapNode* flushPolicyCfg, const char* flushPolicyName,
                             const char* propName, uint64_t& value);
-    bool loadIntFlushPolicy(const ELogExpression* expr, const char* filterName, uint64_t& value);
+    bool loadIntFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
+                            uint64_t& value, const char* propName = nullptr);
 
 private:
     bool m_isActive;
@@ -140,13 +154,13 @@ public:
     ELogCompoundFlushPolicy() {}
     ELogCompoundFlushPolicy(const ELogCompoundFlushPolicy&) = delete;
     ELogCompoundFlushPolicy(ELogCompoundFlushPolicy&&) = delete;
-    ~ELogCompoundFlushPolicy() {}
+    ~ELogCompoundFlushPolicy() override {}
 
     /** @brief Loads flush policy from configuration. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) override;
 
     /** @brief Loads flush policy from configuration. */
-    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+    bool load(const ELogConfigMapNode* flushPolicyCfg) override;
 
     inline void addFlushPolicy(ELogFlushPolicy* flushPolicy) {
         m_flushPolicies.push_back(flushPolicy);
@@ -159,12 +173,10 @@ protected:
     std::vector<ELogFlushPolicy*> m_flushPolicies;
 
     // helper for combined flush policy
-    virtual void propagateLogTarget(ELogTarget* logTarget) {
-        for (uint32_t i = 0; i < m_flushPolicies.size(); ++i) {
-            // this will get propagated to all active sub-policies
-            m_flushPolicies[i]->setLogTarget(getLogTarget());
-        }
-    }
+    void propagateLogTarget(ELogTarget* logTarget) override;
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool loadCompositeExpr(const ELogCompositeExpression* expr);
 };
 
 /** @class A combined flush policy, for enforcing all specified flush policies. */
@@ -174,6 +186,9 @@ public:
     ELogAndFlushPolicy(const ELogAndFlushPolicy&) = delete;
     ELogAndFlushPolicy(ELogAndFlushPolicy&&) = delete;
     ~ELogAndFlushPolicy() {}
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) override;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -189,6 +204,9 @@ public:
     ELogOrFlushPolicy(ELogOrFlushPolicy&&) = delete;
     ~ELogOrFlushPolicy() {}
 
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) override;
+
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
@@ -198,15 +216,17 @@ private:
 /** @brief A log flush policy that negates the result of another log flush policy. */
 class ELOG_API ELogNotFlushPolicy : public ELogFlushPolicy {
 public:
-    ELogNotFlushPolicy() : m_flushPolicy(nullptr) {}
-    ELogNotFlushPolicy(ELogFlushPolicy* flushPolicy) : m_flushPolicy(flushPolicy) {}
+    ELogNotFlushPolicy(ELogFlushPolicy* flushPolicy = nullptr) : m_flushPolicy(flushPolicy) {}
     ~ELogNotFlushPolicy() {}
 
     /** @brief Loads flush policy from property map. */
     bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads flush policy from configuration. */
-    bool load(const ELogConfigMapNode* filterCfg) final;
+    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) override;
 
     bool shouldFlush(uint32_t msgSizeBytes) final {
         return !m_flushPolicy->shouldFlush(msgSizeBytes);
@@ -362,6 +382,155 @@ private:
     bool shouldStop();
 
     ELOG_DECLARE_FLUSH_POLICY(ELogTimedFlushPolicy, time);
+};
+
+class ELOG_API ELogChainedFlushPolicy : public ELogFlushPolicy {
+public:
+    ELogChainedFlushPolicy(ELogFlushPolicy* controlPolicy = nullptr,
+                           ELogFlushPolicy* moderatePolicy = nullptr)
+        : m_controlPolicy(controlPolicy), m_moderatePolicy(moderatePolicy) {}
+    ELogChainedFlushPolicy(const ELogChainedFlushPolicy&) = delete;
+    ELogChainedFlushPolicy(ELogChainedFlushPolicy&&) = delete;
+    ~ELogChainedFlushPolicy() final {
+        setControlFlushPolicy(nullptr);
+        setModerateFlushPolicy(nullptr);
+    }
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
+    /** @brief Orders an active flush policy to start (by default no action takes place). */
+    bool start() override;
+
+    /** @brief Orders an active flush policy to stop (by default no action takes place). */
+    bool stop() override;
+
+    /** @brief Sets the control flush policy (determines whether should flush). */
+    inline void setControlFlushPolicy(ELogFlushPolicy* flushPolicy) {
+        if (m_controlPolicy != nullptr) {
+            delete m_controlPolicy;
+        }
+        m_controlPolicy = flushPolicy;
+    }
+
+    /** @brief Sets the moderate flush policy (determines how many threads flush together). */
+    inline void setModerateFlushPolicy(ELogFlushPolicy* flushPolicy) {
+        if (m_moderatePolicy != nullptr) {
+            delete m_moderatePolicy;
+        }
+        m_moderatePolicy = flushPolicy;
+    }
+
+    /**
+     * @brief Queries whether the log target should be flushed.
+     * @param msgSizeBytes The current logged message size.
+     * @return true If the log target should be flushed.
+     */
+    bool shouldFlush(uint32_t msgSizeBytes) final {
+        return m_controlPolicy->shouldFlush(msgSizeBytes);
+    }
+
+    /**
+     * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group
+     * flush). By default no moderation takes place.
+     */
+    void moderateFlush(ELogTarget* logTarget) final { m_moderatePolicy->moderateFlush(logTarget); }
+
+protected:
+    // helper for combined flush policy
+    void propagateLogTarget(ELogTarget* logTarget) override;
+
+private:
+    ELogFlushPolicy* m_controlPolicy;
+    ELogFlushPolicy* m_moderatePolicy;
+
+    ELogFlushPolicy* loadSubFlushPolicy(const char* typeName, const char* propName,
+                                        const ELogConfigMapNode* flushPolicyCfg);
+
+    ELOG_DECLARE_FLUSH_POLICY(ELogChainedFlushPolicy, CHAIN);
+};
+
+class ELOG_API ELogGroupFlushPolicy : public ELogFlushPolicy {
+public:
+    ELogGroupFlushPolicy(ELogFlushPolicy* flushPolicy = nullptr,
+                         uint32_t groupSize = ELOG_DEFAULT_GROUP_FLUSH_SIZE,
+                         uint32_t groupTimeoutMicros = ELOG_DEFAULT_GROUP_FLUSH_TIME_MICROS)
+        : m_flushPolicy(flushPolicy),
+          m_groupSize(groupSize),
+          m_groupTimeoutMicros(groupTimeoutMicros),
+          m_currentGroup(nullptr),
+          m_epoch(0) {}
+    ELogGroupFlushPolicy(const ELogGroupFlushPolicy&) = delete;
+    ELogGroupFlushPolicy(ELogGroupFlushPolicy&&) = delete;
+    ~ELogGroupFlushPolicy() final {}
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
+
+    /** @brief Orders an active flush policy to start (by default no action takes place). */
+    bool start() final;
+
+    /** @brief Orders an active flush policy to stop (by default no action takes place). */
+    bool stop() final;
+
+    /**
+     * @brief Queries whether the log target should be flushed.
+     * @param msgSizeBytes The current logged message size.
+     * @return true If the log target should be flushed.
+     */
+    bool shouldFlush(uint32_t msgSizeBytes) final;
+
+    /**
+     * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group
+     * flush). By default no moderation takes place.
+     */
+    void moderateFlush(ELogTarget* logTarget) final;
+
+private:
+    typedef std::chrono::microseconds Micros;
+
+    ELogFlushPolicy* m_flushPolicy;
+    uint64_t m_groupSize;
+    Micros m_groupTimeoutMicros;
+
+    class Group : public ELogManagedObject {
+    public:
+        Group(ELogTarget* logTarget, uint64_t groupSize, Micros groupTimeoutMicros);
+        ~Group() override {}
+
+        bool join();
+        void execLeader();
+        void execFollower();
+
+    private:
+        ELogTarget* m_logTarget;
+        uint64_t m_groupSize;
+        Micros m_groupTimeoutMicros;
+        uint64_t m_memberCount;
+        enum class State : uint32_t { WAIT, FULL, CLOSED, FLUSH_DONE, ALL_LEFT } m_state;
+        std::mutex m_lock;
+        std::condition_variable m_cv;
+        uint32_t m_leaderThreadId;
+    };
+
+    ELogGC m_gc;
+
+    std::atomic<Group*> m_currentGroup;
+    std::atomic<uint64_t> m_epoch;
+
+    ELOG_DECLARE_FLUSH_POLICY(ELogGroupFlushPolicy, group);
 };
 
 }  // namespace elog

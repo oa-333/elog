@@ -51,6 +51,12 @@ enum class ELogExprTokenType : uint32_t {
     /** @brief CONTAINS operator token. */
     TT_CONTAINS_OP,
 
+    /** @brief Colon token, representing IS operator (assign value). */
+    TT_IS_OP,
+
+    /** @brief Comma token. */
+    TT_COMMA,
+
     /** @brief A text token. */
     TT_TOKEN
 };
