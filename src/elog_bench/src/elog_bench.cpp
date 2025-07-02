@@ -1254,13 +1254,18 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         std::vector<std::thread> threads;
         std::vector<double> resVec(threadCount, 0.0);
         auto start = std::chrono::high_resolution_clock::now();
+        std::vector<elog::ELogLogger*> loggers(threadCount);
+        // create private loggers before running threads, otherwise race condition may happen (log
+        // source is not thread-safe)
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            loggers[i] = sharedLogger != nullptr
+                             ? sharedLogger
+                             : elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+        }
         uint64_t bytesStart = logTarget->getBytesWritten();
         for (uint32_t i = 0; i < threadCount; ++i) {
-            threads.emplace_back(std::thread([i, &resVec, sharedLogger, msgCount]() {
-                elog::ELogLogger* logger =
-                    sharedLogger != nullptr
-                        ? sharedLogger
-                        : elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+            elog::ELogLogger* logger = loggers[i];
+            threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_INFO_EX(logger, "Thread %u Test log %u", i, j);

@@ -520,12 +520,14 @@ public:
     /**
      * @brief Retrieves a private (can be used by only one thread) logger from a log source by its
      * qualified name. The logger is managed and should not be deleted by the caller.
+     * @note This call is NOT thread safe.
      */
     static ELogLogger* getPrivateLogger(const char* qualifiedSourceName);
 
     /**
      * @brief Retrieves a shared (can be used by more than one thread) logger from a log source by
      * its qualified name. The logger is managed and should not be deleted by the caller.
+     * @note This call is NOT thread safe.
      */
     static ELogLogger* getSharedLogger(const char* qualifiedSourceName);
 

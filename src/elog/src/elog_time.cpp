@@ -254,7 +254,7 @@ size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer) {
     auto timePoint = std::chrono::time_point_cast<std::chrono::milliseconds>(record.m_logTime);
     std::chrono::zoned_time<std::chrono::milliseconds> zt(std::chrono::current_zone(), timePoint);
     std::string timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", zt.get_local_time());
-    elog_strncpy(timeBuffer.m_buffer, timeStr.c_str(), sizeof(timeBuffer.m_buffer));
+    return elog_strncpy(timeBuffer.m_buffer, timeStr.c_str(), sizeof(timeBuffer.m_buffer));
 #else
     // this requires exactly 23 chars
     const size_t BUF_SIZE = 64;
@@ -287,6 +287,7 @@ size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer) {
     return unixELogFormatTime(timeStr, tm_info, (unsigned)(logTime.m_100nanos / 10000UL));
 #endif
 #endif
+    return 0;
 }
 
 }  // namespace elog

@@ -9,6 +9,7 @@
 #include "elog_atomic.h"
 #include "elog_def.h"
 #include "elog_rolling_bitset.h"
+#include "elog_tls.h"
 
 namespace elog {
 
@@ -23,7 +24,11 @@ public:
 /** @class A private garbage collector. */
 class ELOG_API ELogGC {
 public:
-    ELogGC() : m_gcFrequency(0), m_retireCount(0), m_traceLogger(nullptr) {}
+    ELogGC()
+        : m_gcFrequency(0),
+          m_retireCount(0),
+          m_traceLogger(nullptr),
+          m_tlsKey(ELOG_INVALID_TLS_KEY) {}
     ~ELogGC() {}
 
     /** @brief Order GC to trace its operation with this logger. */
@@ -38,10 +43,10 @@ public:
      * @param maxThreads The maximum number of threads supported by the garbage collector.
      * @param gcFrequency The frequency of running GC (once per each gcFrequency calls to retire()).
      */
-    void initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency);
+    bool initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency);
 
     /** @brief Destroys the garbage collector. */
-    void destroy();
+    bool destroy();
 
     /** @brief Let GC know that a transaction began at the given epoch. */
     void beginEpoch(uint64_t epoch);
@@ -103,6 +108,12 @@ private:
 
     // optional trace logger
     ELogLogger* m_traceLogger;
+
+    // TLS key used for getting thread going down notification
+    ELogTlsKey m_tlsKey;
+
+    // TLS destructor function used as thread exit notification
+    static void onThreadExit(void* param);
 
     // obtains a GC slot for the current thread
     uint64_t obtainSlot();

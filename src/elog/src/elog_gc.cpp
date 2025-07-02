@@ -14,9 +14,12 @@
 
 namespace elog {
 
+// TODO: using global slot id per-thread does not allow to use more than one GC, so either make the
+// GC a singleton, or use some per-thread array for that, so each GC can manage its own per-thread
+// slot id. Currently we don't have use for GC except for group flush, so this is not fixed for now
 static thread_local uint64_t sCurrentThreadGCSlotId = ELOG_INVALID_GC_SLOT_ID;
 
-void ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency) {
+bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency) {
     m_name = name;
     m_gcFrequency = gcFrequency;
     m_retireCount = 0;
@@ -24,23 +27,34 @@ void ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFreque
     m_epochSet.resizeRing(wordCount + 1);
     m_objectLists.resize(maxThreads);
     m_activeLists.resize(wordCount);
+    if (!elogCreateTls(m_tlsKey, onThreadExit)) {
+        ELOG_REPORT_ERROR("Failed to create TLS key used for GC thread exit notification");
+        return false;
+    }
+    return true;
 }
 
-void ELogGC::destroy() {
+bool ELogGC::destroy() {
+    // destroy TLS key
+    if (!elogDestroyTls(m_tlsKey)) {
+        ELOG_REPORT_ERROR("Failed to destroy TLS key used for GC thread exit notification");
+        return false;
+    }
+
     // recycle all lists
     for (ManagedObjectList& objectList : m_objectLists) {
         recycleObjectList(objectList.m_head.m_atomicValue.load(std::memory_order_relaxed));
     }
-#ifdef ELOG_ENABLE_GROUP_FLUSH_GC_TRACE
-    resetGCLogger();
-#endif
+    return true;
 }
 
-void ELogGC::beginEpoch(uint64_t epoch) { m_epochSet.insert(epoch); }
+void ELogGC::beginEpoch(uint64_t epoch) {
+    // there is no need to record transaction start, right?
+}
 
 void ELogGC::endEpoch(uint64_t epoch) {
     // mark a finished transaction epoch
-    m_epochSet.remove(epoch);
+    m_epochSet.insert(epoch);
 
     uint64_t retireCount = m_retireCount.fetch_add(1, std::memory_order_relaxed) + 1;
     if ((retireCount % m_gcFrequency) == 0) {
@@ -94,7 +108,7 @@ void ELogGC::recycleRetiredObjects() {
     // the minimum value here represents the CONSECUTIVE number of transactions that finished,
     // starting from epoch 0. in effect, the minimum value matches the minimum active transaction
     // epoch, so anything below that can be retired. we moderate GC access as configured.
-    uint64_t minActiveEpoch = m_epochSet.getMinValue();
+    uint64_t minActiveEpoch = m_epochSet.queryFullPrefix();
     if (minActiveEpoch == 0) {
         // no transaction finished at all up until now
         return;
@@ -161,6 +175,13 @@ void ELogGC::recycleRetiredObjects() {
     }
 }
 
+void ELogGC::onThreadExit(void* param) {
+    if (sCurrentThreadGCSlotId != ELOG_INVALID_GC_SLOT_ID) {
+        ELogGC* gc = (ELogGC*)param;
+        gc->setListInactive(sCurrentThreadGCSlotId);
+    }
+}
+
 uint64_t ELogGC::obtainSlot() {
     uint64_t currentThreadId = getCurrentThreadId();
     for (uint64_t i = 0; i < m_objectLists.size(); ++i) {
@@ -172,8 +193,6 @@ uint64_t ELogGC::obtainSlot() {
                                                             std::memory_order_seq_cst)) {
                 // mark list as active
                 setListActive(i);
-                // TODO: register cleanup for current thread, we use TLS dtor for that (dtor check
-                // if slot id for current thread is initialized, and then marks the slot as free)
                 return i;
             }
         }
@@ -201,6 +220,12 @@ void ELogGC::setListActive(uint64_t slotId) {
         }
         maxActiveWord = m_maxActiveWord.load(std::memory_order_relaxed);
     }
+
+    // register cleanup for current thread, so we could set the current thread is not active
+    // anymore. we use TLS dtor for that, and set the TLS value as the this pointer, since there
+    // could be many GC instances. the destructor function checks if slot id for current thread is
+    // initialized, and then marks the slot as free
+    (void)elogSetTls(m_tlsKey, this);
 }
 
 void ELogGC::setListInactive(uint64_t slotId) {
@@ -214,7 +239,27 @@ void ELogGC::setListInactive(uint64_t slotId) {
         newWord = word & ~(1 << wordOffset);
     }
 
-    // TODO: update max active word...
+    // if word is non-zero, or word index is zero we are done
+    if (newWord != 0 || wordIndex == 0) {
+        return;
+    }
+
+    // update max active word
+    uint64_t maxActiveWord = m_maxActiveWord.load(std::memory_order_acquire);
+    if (wordIndex == maxActiveWord) {
+        // move backwords until we find a non-zero word
+        for (int i = wordIndex - 1; i >= 0; --i) {
+            if (m_activeLists[i].m_atomicValue.load(std::memory_order_relaxed) != 0) {
+                // try CAS
+                m_maxActiveWord.compare_exchange_strong(maxActiveWord, i,
+                                                        std::memory_order_seq_cst);
+                // whatever happened we don't really care
+                // if we succeeded then we were able to update the max word
+                // if we failed, then someone else succeeded, so we don't need to do that
+                break;
+            }
+        }
+    }
 }
 
 bool ELogGC::isListActive(uint64_t slotId) {

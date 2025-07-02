@@ -118,12 +118,14 @@ public:
     /**
      * @brief Obtains a logger that may be invoked by more than one thread. The logger is managed
      * by the log source and should not be deleted by the caller.
+     * @note This call is NOT thread safe.
      */
     ELogLogger* createSharedLogger();
 
     /**
      * @brief Obtains a logger that can be invoked by only one thread. The logger is managed
      * by the log source and should not be deleted by the caller.
+     * @note This call is NOT thread safe.
      */
     ELogLogger* createPrivateLogger();
 

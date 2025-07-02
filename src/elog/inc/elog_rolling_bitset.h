@@ -18,10 +18,7 @@ class ELOG_API ELogLogger;
 class ELOG_API ELogRollingBitset {
 public:
     ELogRollingBitset(uint64_t ringSizeWords = 0)
-        : m_ringSize(ringSizeWords),
-          m_maxSeenValue(0),
-          m_emptiedWordCount(0),
-          m_traceLogger(nullptr) {
+        : m_ringSize(ringSizeWords), m_fullWordCount(0), m_traceLogger(nullptr) {
         m_ring.resize(m_ringSize, 0);
     }
     ~ELogRollingBitset() {}
@@ -56,31 +53,18 @@ public:
     void insert(uint64_t value);
 
     /**
-     * @brief Removes a value from the rolling bit-set. The value must have been previously inserted
-     * by a call to @ref insert().
-     * @param value The value to remove.
-     */
-    void remove(uint64_t value);
-
-    /**
      * @brief Queries whether a value was inserted into the rolling bit-set.
      * @param value The value to query.
      * @return true if the value is found, otherwise false.
      * @note It may be due to race conditions, that the value is concurrently being set, and the
-     * call to @ref query still returns false. The caller is advised to make the call again in that
-     * case, until a true result is returned (assuming values are being inserted continuously).
+     * call to @ref contains() still returns false. The caller is advised to make the call again in
+     * that case, until a true result is returned (assuming values are being inserted continuously).
      */
     bool contains(uint64_t value) const;
 
-    /**
-     * @brief Queries what is the maximum value seen thus far. It does not necessarily has to be
-     * present in the bit set at the moment of querying.
-     */
-    inline uint64_t getMaxSeenValue() { return m_maxSeenValue.load(std::memory_order_relaxed); }
-
-    /** @brief Queries the full prefix of inserted then removed values starting from zero. */
-    inline uint64_t getMinValue() const {
-        uint64_t wordId = m_emptiedWordCount.load(std::memory_order_relaxed);
+    /** @brief Queries the full prefix of inserted values starting from zero. */
+    inline uint64_t queryFullPrefix() const {
+        uint64_t wordId = m_fullWordCount.load(std::memory_order_relaxed);
         uint64_t wordRingIndex = wordId % m_ringSize;
         uint64_t word = m_ring[wordRingIndex].m_atomicValue.load(std::memory_order_relaxed);
         return wordId * WORD_SIZE + std::countr_zero(word);
@@ -89,11 +73,11 @@ public:
 private:
     uint64_t m_ringSize;
     std::vector<ELogAtomic<uint64_t>> m_ring;
-    std::atomic<uint64_t> m_maxSeenValue;
-    std::atomic<uint64_t> m_emptiedWordCount;
+    std::atomic<uint64_t> m_fullWordCount;
     ELogLogger* m_traceLogger;
 
     static const uint64_t WORD_SIZE;
+    static const uint64_t FULL_WORD;
     static const uint64_t EMPTY_WORD;
 };
 

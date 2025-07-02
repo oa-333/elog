@@ -902,7 +902,10 @@ bool ELogGroupFlushPolicy::load(const ELogExpression* expr) {
 
 bool ELogGroupFlushPolicy::start() {
     // initialize the private garbage collector
-    m_gc.initialize("Group-flush-policy GC", ELOG_MAX_THREAD_COUNT, ELOG_FLUSH_GC_FREQ);
+    if (!m_gc.initialize("Group-flush-policy GC", ELOG_MAX_THREAD_COUNT, ELOG_FLUSH_GC_FREQ)) {
+        ELOG_REPORT_ERROR("Failed to initialize private garbage collector for group flush policy");
+        return false;
+    }
 #ifdef ELOG_ENABLE_GROUP_FLUSH_GC_TRACE
     sGCLogger = getGCTraceLogger();
     m_gc.setTraceLogger(sGCLogger);
@@ -911,8 +914,11 @@ bool ELogGroupFlushPolicy::start() {
 }
 
 bool ELogGroupFlushPolicy::stop() {
-    // recycle all open groups
-    m_gc.destroy();
+    // recycle all open groups (note: trace logger is still used inside GC)
+    if (!m_gc.destroy()) {
+        ELOG_REPORT_ERROR("Failed to destroy private garbage collector for group flush policy");
+        return false;
+    }
 #ifdef ELOG_ENABLE_GROUP_FLUSH_GC_TRACE
     resetGCLogger();
 #endif

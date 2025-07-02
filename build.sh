@@ -31,9 +31,10 @@ REBUILD=0
 RE_CONFIG=0
 MEM_CHECK=0
 CLANG=0
+TRACE=0
 
 # parse options
-TEMP=$(getopt -o vdrwsfc:i:lrgma -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang -- "$@")
+TEMP=$(getopt -o vdrwsfc:i:lrgmat -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -52,6 +53,7 @@ while true; do
     -g | --reconfigure) RE_CONFIG=1; REBUILD=1; CLEAN=1; shift ;;
     -m | --mem-check) MEM_CHECK=1; shift ;;
     -a | --clang) CLANG=1; shift ;;
+    -t | --trace) TRACE=1; shift ;;
     -- ) shift; break ;;
     * ) echo "[ERROR] Invalid option $1, aborting"; exit 1; break ;;
   esac
@@ -83,6 +85,9 @@ if [ "$STACK_TRACE" == "1" ]; then
 fi
 if [ "$MEM_CHECK" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_MEM_CHECK=ON"
+fi
+if [ "$TRACE" == "1" ]; then
+    OPTS+=" -DELOG_ENABLE_GROUP_FLUSH_GC_TRACE=ON"
 fi
 if [ "$CLANG" == "1" ]; then
     export CXX=`which clang++`;
