@@ -79,26 +79,21 @@ bool ELogGC::retire(ELogManagedObject* object, uint64_t epoch) {
     }
 
     // allocate new list item to push on head
-    ManagedObjectItem* listItem = new (std::nothrow) ManagedObjectItem(object, epoch);
     if (m_traceLogger != nullptr) {
         ELOG_INFO_EX(m_traceLogger, "Retiring object %p on epoch %" PRIu64, object, epoch);
     }
-    if (listItem == nullptr) {
-        ELOG_REPORT_ERROR("Failed to allocate %s garbage collection list item, out of memory",
-                          m_name.c_str());
-        return false;
-    }
 
     // push on head
+    object->setRetireEpoch(epoch);
     ManagedObjectList& objectList = m_objectLists[slotId];
-    std::atomic<ManagedObjectItem*>& listHead = objectList.m_head.m_atomicValue;
-    ManagedObjectItem* head = listHead.load(std::memory_order_acquire);
-    listItem->m_next.store(head, std::memory_order_relaxed);
+    std::atomic<ELogManagedObject*>& listHead = objectList.m_head.m_atomicValue;
+    ELogManagedObject* head = listHead.load(std::memory_order_acquire);
+    object->setNext(head);
 
     // race until we succeed
-    while (!listHead.compare_exchange_strong(head, listItem, std::memory_order_seq_cst)) {
+    while (!listHead.compare_exchange_strong(head, object, std::memory_order_seq_cst)) {
         head = listHead.load(std::memory_order_relaxed);
-        listItem->m_next.store(head, std::memory_order_release);
+        object->setNext(head);
     }
 
     return true;
@@ -149,16 +144,15 @@ void ELogGC::recycleRetiredObjects() {
             uint64_t recycling = recyclingAtomic.load(std::memory_order_acquire);
             if (!recycling &&
                 recyclingAtomic.compare_exchange_strong(recycling, 1, std::memory_order_seq_cst)) {
-                ManagedObjectItem* itr =
+                ELogManagedObject* itr =
                     objectList.m_head.m_atomicValue.load(std::memory_order_relaxed);
                 while (itr != nullptr) {
                     // we skip head item to avoid nasty race conditions
-                    ManagedObjectItem* next = itr->m_next.load(std::memory_order_relaxed);
-                    if (next != nullptr && next->m_retireEpoch <= epoch) {
+                    ELogManagedObject* next = itr->getNext();
+                    if (next != nullptr && next->getRetireEpoch() <= epoch) {
                         // detach list suffix (save it first, because CAS can change its value)
-                        ManagedObjectItem* retireList = next;
-                        if (itr->m_next.compare_exchange_strong(next, nullptr,
-                                                                std::memory_order_seq_cst)) {
+                        ELogManagedObject* retireList = next;
+                        if (itr->detachSuffix(next)) {
                             // we won the race so now we can detach suffix
                             recycleObjectList(retireList);
                         }
@@ -269,15 +263,12 @@ bool ELogGC::isListActive(uint64_t slotId) {
     return word & (1 << wordOffset);
 }
 
-void ELogGC::recycleObjectList(ManagedObjectItem* itr) {
+void ELogGC::recycleObjectList(ELogManagedObject* itr) {
     while (itr != nullptr) {
-        ELogManagedObject* object = itr->m_object;
-        delete object;
+        ELogManagedObject* next = itr->getNext();
         if (m_traceLogger != nullptr) {
-            ELOG_INFO_EX(m_traceLogger, "Recycling object %p", object);
+            ELOG_INFO_EX(m_traceLogger, "Recycling object %p", itr);
         }
-        itr->m_object = nullptr;
-        ManagedObjectItem* next = itr->m_next.load(std::memory_order_relaxed);
         delete itr;
         itr = next;
     }

@@ -21,12 +21,18 @@ ELOG_IMPLEMENT_FLUSH_POLICY(ELogTimedFlushPolicy)
 ELOG_IMPLEMENT_FLUSH_POLICY(ELogChainedFlushPolicy)
 ELOG_IMPLEMENT_FLUSH_POLICY(ELogGroupFlushPolicy)
 
+/** @def The maximum number of flush policies types that can be defined in the system. */
 #define ELOG_MAX_FLUSH_POLICY_COUNT 100
 
+// TODO: have this configurable in the flush policy
+/** @def The default maximum number of threads used for group flush policy resource allocation. */
 #define ELOG_MAX_THREAD_COUNT 4096
 
-#define ELOG_FLUSH_GC_FREQ 128
+// TODO: have this configurable in the flush policy
+/** @def The default group flush GC recycling frequency (once every X retire calls). */
+#define ELOG_FLUSH_GC_FREQ 4096
 
+// Group flush GC tracer
 #ifdef ELOG_ENABLE_GROUP_FLUSH_GC_TRACE
 static ELogLogger* sGCLogger = nullptr;
 
@@ -56,6 +62,7 @@ static ELogLogger* getGCTraceLogger() {
 }
 #endif
 
+// implement flush policy factory by name with static registration
 struct ELogFlushPolicyNameConstructor {
     const char* m_name;
     ELogFlushPolicyConstructor* m_ctor;

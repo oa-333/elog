@@ -18,7 +18,43 @@ class ELOG_API ELogLogger;
 /** @class A GC managed parent class. */
 class ELOG_API ELogManagedObject {
 public:
+    /** @brief Virtual destructor. */
     virtual ~ELogManagedObject() {}
+
+    /** @brief Sets the retire epoch of this managed object. */
+    inline void setRetireEpoch(uint64_t epoch) { m_retireEpoch = epoch; }
+
+    /** @brief Retrieves the retire epoch. */
+    inline uint64_t getRetireEpoch() { return m_retireEpoch; }
+
+    /** @brief Sets the next managed object in a linked list. */
+    inline void setNext(ELogManagedObject* next) { m_next.store(next, std::memory_order_relaxed); }
+
+    /** @brief Retrieves the next managed object in a linked list. */
+    inline ELogManagedObject* getNext() { return m_next.load(std::memory_order_relaxed); }
+
+    /**
+     * @brief Detach list suffix.
+     * @param next The next list item, previously obtained by a call to @ref getNext().
+     * @return true If the CAS operation for detaching the suffix succeeded, otherwise false.
+     */
+    inline bool detachSuffix(ELogManagedObject* next) {
+        return m_next.compare_exchange_strong(next, nullptr, std::memory_order_seq_cst);
+    }
+
+protected:
+    /** @brief Disallow copy constructor. */
+    ELogManagedObject(const ELogManagedObject&) = delete;
+
+    /** @brief Disallow move constructor.*/
+    ELogManagedObject(ELogManagedObject&&) = delete;
+
+    ELogManagedObject(uint64_t retireEpoch = 0, ELogManagedObject* next = nullptr)
+        : m_retireEpoch(retireEpoch), m_next(next) {}
+
+private:
+    uint64_t m_retireEpoch;
+    std::atomic<ELogManagedObject*> m_next;
 };
 
 /** @class A private garbage collector. */
@@ -70,21 +106,11 @@ public:
     void recycleRetiredObjects();
 
 private:
-    // A single list item for a retired object
-    struct ManagedObjectItem {
-        ELogManagedObject* m_object;
-        uint64_t m_retireEpoch;
-        std::atomic<ManagedObjectItem*> m_next;
-
-        ManagedObjectItem(ELogManagedObject* object = nullptr, uint64_t retireEpoch = 0)
-            : m_object(object), m_retireEpoch(retireEpoch) {}
-    };
-
     // linked list of retired objects
     struct ManagedObjectList {
         ELogAtomic<uint64_t> m_ownerThreadId;
         ELogAtomic<uint64_t> m_recycling;
-        ELogAtomic<ManagedObjectItem*> m_head;
+        ELogAtomic<ELogManagedObject*> m_head;
         ManagedObjectList() : m_ownerThreadId(0), m_recycling(0), m_head(nullptr) {}
     };
 
@@ -123,7 +149,7 @@ private:
     bool isListActive(uint64_t slotId);
 
     // recycles a list suffix
-    void recycleObjectList(ManagedObjectItem* itr);
+    void recycleObjectList(ELogManagedObject* itr);
 };
 
 }  // namespace elog
