@@ -36,7 +36,7 @@ public:
 private:
     std::string& m_logMsg;
 
-    void applyJustify(const ELogFieldSpec& fieldSpec, const char* strField, uint32_t fieldLen = 0);
+    void applySpec(const ELogFieldSpec& fieldSpec, const char* strField, uint32_t fieldLen = 0);
 };
 
 }  // namespace elog

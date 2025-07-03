@@ -51,6 +51,7 @@ static const uint32_t MIN_THREAD_COUNT = 1;
 static const uint32_t MAX_THREAD_COUNT = 16;
 static const char* DEFAULT_CFG = "file:///./bench_data/elog_bench.log";
 static bool sTestConns = false;
+static bool sTestColors = false;
 static int sMsgCnt = -1;
 static int sMinThreadCnt = -1;
 static int sMaxThreadCnt = -1;
@@ -465,6 +466,7 @@ static int testConnectors() {
 #endif
     return 0;
 }
+static int testColors();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -596,6 +598,9 @@ static bool parseArgs(int argc, char* argv[]) {
         if (strcmp(argv[1], "--test-conn") == 0) {
             sTestConns = true;
             return true;
+        } else if (strcmp(argv[1], "--test-colors") == 0) {
+            sTestColors = true;
+            return true;
         }
     }
 
@@ -709,11 +714,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     if (argc == 2) {
-        if (strcmp(argv[1], "--test-conn") == 0) {
-            sTestConns = true;
+        if (sTestConns) {
             return testConnectors();
+        } else if (sTestColors) {
+            return testColors();
         }
     }
+
     fprintf(stderr, "STARTING ELOG BENCHMARK\n");
     if (sTestPerfAll || sTestPerfIdleLog) {
         testPerfPrivateLog();
@@ -1145,6 +1152,17 @@ void testDatadog() {
 }
 #endif
 
+int testColors() {
+    const char* cfg =
+        "sys://stderr?log_format=${time:text=faint} ${level:6:fg-color=green:bg-color=blue} "
+        "[${tid:text=italic}] ${src:text=underline:fg-color=bright-red} "
+        "${msg:text=cross-out,blink-rapid:fg-color=#993983}";
+    elog::ELogTarget* logTarget = initElog(cfg);
+    elog::ELogLogger* logger = elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+    ELOG_INFO_EX(logger, "This is a test message");
+    return 0;
+}
+
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput, StatData& msgPercentile,
                            uint32_t msgCount /* = MSG_COUNT */) {
@@ -1503,10 +1521,10 @@ void testPerfDeferredFile() {
         "file://./bench_data/"
         "elog_bench_deferred.log?flush_policy=count&flush_count=4096&deferred";*/
     const char* cfg =
-        "async://deferred?flush_policy=count&flush_count=4096&name=elog_bench#"
+        "async://deferred?flush_policy=count&flush_count=4096&name=elog_bench|"
         "file:///./bench_data/elog_bench_deferred.log?file_buffer_size=4096&file_lock=no";
     cfg =
-        "async://deferred?name=elog_bench#"
+        "async://deferred?name=elog_bench|"
         "file:///./bench_data/elog_bench_deferred.log?file_buffer_size=1048576&file_lock=no";
     runMultiThreadTest("Deferred (1MB Buffer)", "elog_bench_deferred", cfg);
 }
@@ -1524,10 +1542,10 @@ void testPerfQueuedFile() {
         "timeout_millis=200";*/
     const char* cfg =
         "async://queued?queue_batch_size=10000&queue_timeout_millis=200&"
-        "flush_policy=count&flush_count=4096&name=elog_bench#"
+        "flush_policy=count&flush_count=4096&name=elog_bench|"
         "file:///./bench_data/elog_bench_queued.log?file_buffer_size=4096&file_lock=no";
     cfg =
-        "async://queued?queue_batch_size=10000&queue_timeout_millis=200&name=elog_bench#"
+        "async://queued?queue_batch_size=10000&queue_timeout_millis=200&name=elog_bench|"
         "file:///./bench_data/elog_bench_queued.log?file_buffer_size=1048576&file_lock=no";
     runMultiThreadTest("Queued 100000 + 200ms (1MB Buffer)", "elog_bench_queued", cfg);
 }
@@ -1540,11 +1558,11 @@ void testPerfQuantumFile(bool privateLogger) {
     const char* cfg =
         "async://"
         "quantum?quantum_buffer_size=2000000&flush_policy=count&flush_count=4096&name=elog_bench"
-        "#file:///./bench_data/elog_bench_quantum.log?file_buffer_size=4096&file_lock=no";
+        "|file:///./bench_data/elog_bench_quantum.log?file_buffer_size=4096&file_lock=no";
     cfg =
         "async://"
         "quantum?quantum_buffer_size=2000000&name=elog_bench"
-        "#file:///./bench_data/elog_bench_quantum.log?file_buffer_size=1048576&file_lock=no";
+        "|file:///./bench_data/elog_bench_quantum.log?file_buffer_size=1048576&file_lock=no";
     runMultiThreadTest("Quantum 2000000 (1MB Buffer)", "elog_bench_quantum", cfg, privateLogger);
 }
 
@@ -1759,7 +1777,7 @@ void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
         "elog_bench_deferred_st.log?file_buffer_size=4194304&file_lock=no&flush_policy=count&flush-"
         "count=4096&deferred";*/
     const char* cfg =
-        "async://deferred?flush_policy=count&flush_count=4096&name=elog_bench#"
+        "async://deferred?flush_policy=count&flush_count=4096&name=elog_bench|"
         "file:///./bench_data/elog_bench_deferred_st.log";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
@@ -1784,7 +1802,7 @@ void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
         "timeout_millis=500";*/
     const char* cfg =
         "async://queued?queue_batch_size=10000&queue_timeout_millis=500&"
-        "flush_policy=count&flush_count=4096&name=elog_bench#"
+        "flush_policy=count&flush_count=4096&name=elog_bench|"
         "file:///./bench_data/elog_bench_queued_st.log";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;

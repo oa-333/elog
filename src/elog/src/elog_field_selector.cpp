@@ -70,6 +70,7 @@ static DWORD pid = 0;
 static pid_t pid = 0;
 #endif
 
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogStaticTextSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogRecordIdSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogTimeSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogHostNameSelector)

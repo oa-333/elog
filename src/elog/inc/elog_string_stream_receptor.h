@@ -42,7 +42,8 @@ public:
 private:
     std::stringstream m_msgStream;
 
-    void applyJustify(const ELogFieldSpec& fieldSpec);
+    void applySpec(const ELogFieldSpec& fieldSpec);
+    void applyPostSpec(const ELogFieldSpec& fieldSpec);
 };
 
 }  // namespace elog

@@ -118,14 +118,20 @@ public:                                                                         
  */
 class ELOG_API ELogStaticTextSelector : public ELogFieldSelector {
 public:
-    ELogStaticTextSelector(const char* text)
+    ELogStaticTextSelector(const char* text = "")
         : ELogFieldSelector(ELogFieldType::FT_TEXT), m_text(text) {}
+    ELogStaticTextSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
     ~ELogStaticTextSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
     std::string m_text;
+
+    // we allow having ${text} as a keyword with no text context, solely for the purpose of allowing
+    // specify text font/color specification
+    ELOG_DECLARE_FIELD_SELECTOR(ELogStaticTextSelector, text);
 };
 
 class ELOG_API ELogRecordIdSelector : public ELogFieldSelector {

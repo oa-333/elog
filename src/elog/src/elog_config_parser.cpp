@@ -486,7 +486,7 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
     // first parse the url, then convert to configuration object
     // since we may need to specify a sub-target we use the fragment part to specify a sub-target
     ELogTargetUrlSpec* subTargetUrlSpec = nullptr;
-    std::string::size_type hashPos = logTargetUrl.find('#');
+    std::string::size_type hashPos = logTargetUrl.find('|');
     if (hashPos != std::string::npos) {
         if (!parseLogTargetUrl(logTargetUrl.substr(0, hashPos), logTargetUrlSpec, basePos)) {
             ELOG_REPORT_ERROR("Failed to parse top-level log target RUL specification");

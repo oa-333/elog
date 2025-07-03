@@ -12,7 +12,7 @@ void ELogStringReceptor::receiveStringField(uint32_t typeId, const char* field,
     if (length == 0) {
         length = strlen(field);
     }
-    applyJustify(fieldSpec, field, length);
+    applySpec(fieldSpec, field, length);
 }
 
 void ELogStringReceptor::receiveIntField(uint32_t typeId, uint64_t field,
@@ -22,42 +22,55 @@ void ELogStringReceptor::receiveIntField(uint32_t typeId, uint64_t field,
     const int FIELD_SIZE = 64;
     char strField[FIELD_SIZE];
     std::to_chars(strField, strField + FIELD_SIZE, field);
-    applyJustify(fieldSpec, strField);
+    applySpec(fieldSpec, strField);
 #else
     std::string strField = std::to_string(field);
-    applyJustify(fieldSpec, strField.c_str(), strField.length());
+    applySpec(fieldSpec, strField.c_str(), strField.length());
 #endif
 }
 
 void ELogStringReceptor::receiveTimeField(uint32_t typeId, const ELogTime& logTime,
                                           const char* timeStr, const ELogFieldSpec& fieldSpec,
                                           size_t length) {
-    applyJustify(fieldSpec, timeStr, length);
+    applySpec(fieldSpec, timeStr, length);
 }
 
 void ELogStringReceptor::receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
                                               const ELogFieldSpec& fieldSpec) {
-    applyJustify(fieldSpec, elogLevelToStr(logLevel));
+    applySpec(fieldSpec, elogLevelToStr(logLevel));
 }
 
-void ELogStringReceptor::applyJustify(const ELogFieldSpec& fieldSpec, const char* strField,
-                                      uint32_t fieldLen /* = 0 */) {
+void ELogStringReceptor::applySpec(const ELogFieldSpec& fieldSpec, const char* strField,
+                                   uint32_t fieldLen /* = 0 */) {
     // update field length if needed
     if (fieldLen == 0) {
         fieldLen = strlen(strField);
     }
 
     // apply right justification if needed
-    if (fieldSpec.m_justifyMode == ELogJustifyMode::JM_RIGHT && fieldLen < fieldSpec.m_justify) {
-        m_logMsg.append(fieldSpec.m_justify - fieldLen, ' ');
+    if (fieldSpec.m_justifySpec.m_mode == ELogJustifyMode::JM_RIGHT &&
+        fieldLen < fieldSpec.m_justifySpec.m_justify) {
+        m_logMsg.append(fieldSpec.m_justifySpec.m_justify - fieldLen, ' ');
+    }
+
+    // apply text formatting (font/color)
+    if (fieldSpec.m_textSpec != nullptr) {
+        m_logMsg.append(fieldSpec.m_textSpec->m_resolvedSpec.c_str(),
+                        fieldSpec.m_textSpec->m_resolvedSpec.length());
     }
 
     // append field to log message
     m_logMsg.append(strField, fieldLen);
 
+    // auto-reset text formatting if required
+    if (fieldSpec.m_textSpec != nullptr && fieldSpec.m_textSpec->m_autoReset) {
+        m_logMsg.append(ELogTextSpec::m_resetSpec);
+    }
+
     // apply left justification if needed
-    if (fieldSpec.m_justifyMode == ELogJustifyMode::JM_LEFT && fieldLen < fieldSpec.m_justify) {
-        m_logMsg.append(fieldSpec.m_justify - fieldLen, ' ');
+    if (fieldSpec.m_justifySpec.m_mode == ELogJustifyMode::JM_LEFT &&
+        fieldLen < fieldSpec.m_justifySpec.m_justify) {
+        m_logMsg.append(fieldSpec.m_justifySpec.m_justify - fieldLen, ' ');
     }
 }
 

@@ -31,6 +31,7 @@
 #define ELOG_RATE_LIMIT_CONFIG_NAME "log_rate_limit"
 #define ELOG_AFFINITY_CONFIG_NAME "log_affinity"
 
+// simple colors for internal use
 #define RED "\x1B[31m"
 #define GRN "\x1B[32m"
 #define YEL "\x1B[33m"
