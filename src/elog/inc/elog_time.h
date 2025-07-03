@@ -34,6 +34,9 @@ typedef SYSTEMTIME ELogTime;
 typedef FILETIME ELogTime;
 #endif
 #else
+/** @brief A reference point so that we can squeeze time point into 32 bits. */
+extern ELOG_API const time_t sUnixTimeRef;
+
 struct ELOG_API ELogTime {
     uint32_t m_seconds;
     uint32_t m_100nanos;
@@ -71,9 +74,10 @@ inline void getCurrentTime(ELogTime& logTime) {
 #endif
 #else
     // NOTE: gettimeofday is obsolete, instead clock_gettime() should be used
+    // in order to squeeze time to 32 bit we save it from year 2000 offset, this way we get
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    logTime.m_seconds = ts.tv_sec;
+    logTime.m_seconds = ts.tv_sec - sUnixTimeRef;
     logTime.m_100nanos = (uint32_t)(ts.tv_nsec / 100);
 #endif
 #endif
@@ -112,7 +116,8 @@ inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime) {
     return utcTimeNanos;
 #endif
 #else
-    uint64_t utcTimeNanos = logTime.m_seconds * 1000000000ULL + logTime.m_100nanos * 100;
+    uint64_t utcTimeNanos =
+        (logTime.m_seconds + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
     return utcTimeNanos;
 #endif
 }

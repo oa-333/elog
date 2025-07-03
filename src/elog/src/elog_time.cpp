@@ -28,6 +28,15 @@ struct IntStr {
 };
 static IntStr* sDateTable = nullptr;
 
+#ifndef ELOG_MSVC
+static time_t getUnixTimeRef() {
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ts.tv_sec;
+}
+const time_t sUnixTimeRef = getUnixTimeRef();
+#endif
+
 // initialize the date table
 bool initDateTable() {
     // TODO: have this aligned to cache line or 8 bytes at least
@@ -231,9 +240,11 @@ static uint64_t win32ELogFormatTime(char* buf, SYSTEMTIME* sysTime) {
 #else
 static uint64_t unixELogFormatTime(char* buf, struct tm* tm_info, uint32_t msec) {
     // convert year to string
-    uint64_t pos = formatInt(buf, tm_info->tm_year, 4);
+    // NOTE: tm_year is the number of years since 1900
+    uint64_t pos = formatInt(buf, tm_info->tm_year + 1900, 4);
     buf[pos++] = '-';
-    pos += formatInt(buf + pos, tm_info->tm_mon, 2);
+    // NOTE: tm_mon is zero-based number of month
+    pos += formatInt(buf + pos, tm_info->tm_mon + 1, 2);
     buf[pos++] = '-';
     pos += formatInt(buf + pos, tm_info->tm_mday, 2);
     buf[pos++] = ' ';
@@ -256,9 +267,6 @@ size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer) {
     std::string timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", zt.get_local_time());
     return elog_strncpy(timeBuffer.m_buffer, timeStr.c_str(), sizeof(timeBuffer.m_buffer));
 #else
-    // this requires exactly 23 chars
-    const size_t BUF_SIZE = 64;
-    alignas(64) char timeStr[BUF_SIZE];
 #ifdef ELOG_MSVC
 #ifdef ELOG_TIME_USE_SYSTEMTIME
     // it appears that this snprintf is very costly, so we revert to internal implementation
@@ -279,12 +287,13 @@ size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer) {
     }
 #endif
 #else
-    time_t timer = logTime.m_seconds;
+    time_t timer = logTime.m_seconds + sUnixTimeRef;
     struct tm* tm_info = localtime(&timer);
     // size_t offset = strftime(timeStr, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
     // offset += snprintf(timeStr + offset, BUF_SIZE - offset, "%.3u",
     //                    (unsigned)(record.m_logTime.tv_nsec / 1000000L));
-    return unixELogFormatTime(timeStr, tm_info, (unsigned)(logTime.m_100nanos / 10000UL));
+    return unixELogFormatTime(timeBuffer.m_buffer, tm_info,
+                              (unsigned)(logTime.m_100nanos / 10000UL));
 #endif
 #endif
     return 0;
