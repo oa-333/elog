@@ -88,6 +88,11 @@ public:
     /** @brief Retrieves the log target id. */
     inline ELogTargetId getId() { return m_id; }
 
+    /** @brief Sets a pass key to the target. */
+    inline void setPassKey() { m_passKey = generatePassKey(); }
+
+    inline ELogPassKey getPassKey() const { return m_passKey; }
+
     /**
      * @brief Sets optional log target name (for identification, can be used when searching for a
      * log target by name, see @ref ELogSystem::getLogTarget()).
@@ -163,6 +168,7 @@ protected:
     ELogTarget(const char* typeName, ELogFlushPolicy* flushPolicy = nullptr)
         : m_typeName(typeName),
           m_id(ELOG_INVALID_TARGET_ID),
+          m_passKey(ELOG_NO_PASSKEY),
           m_logLevel(ELEVEL_DIAG),
           m_isRunning(false),
           m_isNativelyThreadSafe(false),
@@ -221,6 +227,7 @@ private:
     std::string m_typeName;
     std::string m_name;
     ELogTargetId m_id;
+    ELogPassKey m_passKey;
     ELogLevel m_logLevel;
     std::atomic<bool> m_isRunning;
     bool m_isNativelyThreadSafe;
@@ -247,6 +254,8 @@ private:
     inline void addBytesWritten(uint64_t bytes) {
         m_bytesWritten.fetch_add(bytes, std::memory_order_relaxed);
     }
+
+    ELogPassKey generatePassKey();
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */

@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "elog_common_def.h"
 #include "elog_level.h"
@@ -103,6 +104,20 @@ public:
         return true;
     }
 
+    /** @brief Adds a passkey to the log source. */
+    inline void addPassKey(ELogPassKey passKey) { m_passKeys.push_back(passKey); }
+
+    /** @brief Queries whether the source has a pass key. */
+    inline bool hasPassKey(ELogPassKey passKey) const {
+        // since number of passkeys is expected be quite low, we just search in array
+        for (const ELogPassKey& pk : m_passKeys) {
+            if (pk == passKey) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** @brief Removes a log target from the log target affinity mask of the log source. */
     inline bool removeLogTargetAffinity(ELogTargetId logTargetId) {
         if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY) {
@@ -140,6 +155,7 @@ private:
     ChildMap m_children;
     std::unordered_set<ELogLogger*> m_loggers;
     ELogTargetAffinityMask m_logTargetAffinityMask;
+    std::vector<ELogPassKey> m_passKeys;
 
     ELogSource(ELogSourceId sourceId, const char* name, ELogSource* parent = nullptr,
                ELogLevel logLevel = ELEVEL_INFO);

@@ -21,6 +21,12 @@ typedef uint32_t ELogTargetId;
 /** @def Invalid log target identifier value. */
 #define ELOG_INVALID_TARGET_ID ((elog::ELogTargetId)0xFFFFFFFF)
 
+/** @typedef Pass key (for source filtering, used by tracers). */
+typedef uint32_t ELogPassKey;
+
+/** @def No passkey value. */
+#define ELOG_NO_PASSKEY ((elog::ELogPassKey)0)
+
 /** @typedef Log target affinity mask. */
 typedef uint64_t ELogTargetAffinityMask;
 

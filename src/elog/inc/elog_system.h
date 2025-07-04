@@ -440,6 +440,15 @@ public:
                                                   uint32_t segmentLimitMB,
                                                   ELogFlushPolicy* flushPolicy = nullptr);
 
+    /**
+     * @brief Configures a log target from a configuration string. This could be in URL form or as a
+     * configuration string (see configuration function below for more details).
+     * @param logTargetCfg The configuration string.
+     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+     * failed.
+     */
+    static ELogTargetId configureLogTargetString(const char* logTargetCfg);
+
     /** @brief Adds standard error stream log target. */
     static ELogTargetId addStdErrLogTarget();
 
@@ -448,6 +457,25 @@ public:
 
     /** @brief Adds syslog (or Windows Event Log) target. */
     static ELogTargetId addSysLogTarget();
+
+    /** @brief Adds a dedicated */
+
+    /**
+     * @brief Adds a dedicated tracer, that receives messages only from a specific logger.
+     * @param traceFilePath The trace file path.
+     * @param traceBufferSize The trace buffer size. If buffer is full then tracing blocks until
+     * buffer has more free space (as trace messages are being written to the trace file).
+     * @param targetName The log target name used for the trace target.
+     * @param sourceName The log source name used to send messages to the trace target. All loggers
+     * originating from this source can send messages only to the trace target (bound by target
+     * affinity).
+     * @return ELogTargetId The resulting log target identifier, or @ref ELOG_INVALID_TARGET_ID in
+     * case of failure.
+     * @note The resulting trace log target will not receive log messages from any log source except
+     * for the log source configured for this target. This is done via dedicated random passkeys.
+     */
+    static ELogTargetId addTracer(const char* traceFilePath, uint32_t traceBufferSize,
+                                  const char* targetName, const char* sourceName);
 
     /** @brief Retrieves a log target by id. Returns null if not found. */
     static ELogTarget* getLogTarget(ELogTargetId targetId);
@@ -676,8 +704,9 @@ private:
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
     static bool configureRateLimit(const std::string& rateLimitCfg);
     static bool configureLogTarget(const std::string& logTargetCfg);
-    static bool configureLogTargetEx(const std::string& logTargetCfg);
-    static bool configureLogTarget(const ELogConfigMapNode* logTargetCfg);
+    static bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id = nullptr);
+    static bool configureLogTarget(const ELogConfigMapNode* logTargetCfg,
+                                   ELogTargetId* id = nullptr);
     static bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap);
 };
 

@@ -1,5 +1,7 @@
 #include "elog_target.h"
 
+#include <random>
+
 #include "elog_aligned_alloc.h"
 #include "elog_common.h"
 #include "elog_error.h"
@@ -224,6 +226,13 @@ void ELogTarget::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuf
         logBuffer.append("\n");
     }
     logBuffer.finalize();
+}
+
+ELogPassKey ELogTarget::generatePassKey() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(1, UINT32_MAX);
+    return dist(gen);
 }
 
 bool ELogCombinedTarget::startLogTarget() {

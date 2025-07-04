@@ -36,19 +36,12 @@ ELOG_IMPLEMENT_FLUSH_POLICY(ELogGroupFlushPolicy)
 #ifdef ELOG_ENABLE_GROUP_FLUSH_GC_TRACE
 static ELogLogger* sGCLogger = nullptr;
 
+#define ELOG_GROUP_FLUSH_GC_TRACE_BUFFER_SIZE 2000000
+
 static void initGCLogger() {
-    const char* cfg =
-        "{ log_target = "
-        "\"async://quantum?quantum_buffer_size=2000000&name=trace#"
-        "file:///./gc_trace.log?flush_policy=immediate\" }";
-    ELogSystem::configureFromConfigStr(cfg);
-    ELogTarget* logTarget = ELogSystem::getLogTarget("trace");
-    ELogSource* logSource = ELogSystem::defineLogSource("group-flush-gc");
-    ELogTargetAffinityMask mask;
-    ELOG_CLEAR_TARGET_AFFINITY_MASK(mask);
-    ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
-    logSource->setLogTargetAffinity(mask);
-    sGCLogger = logSource->createSharedLogger();
+    ELogTargetId id = ELogSystem::addTracer("./gc_trace.log", ELOG_GROUP_FLUSH_GC_TRACE_BUFFER_SIZE,
+                                            "trace", "group-flush-gc");
+    sGCLogger = ELogSystem::getSharedLogger("group-flush-gc");
 }
 
 static void resetGCLogger() { sGCLogger = nullptr; }

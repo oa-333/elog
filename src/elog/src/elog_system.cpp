@@ -361,7 +361,8 @@ bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
     return true;
 }
 
-bool ELogSystem::configureLogTargetEx(const std::string& logTargetCfg) {
+bool ELogSystem::configureLogTargetEx(const std::string& logTargetCfg,
+                                      ELogTargetId* id /* = nullptr */) {
     // the following formats are currently supported as a URL-like string
     //
     // sys://stdout
@@ -413,7 +414,8 @@ bool ELogSystem::configureLogTargetEx(const std::string& logTargetCfg) {
     return true;
 }
 
-bool ELogSystem::configureLogTarget(const ELogConfigMapNode* logTargetCfg) {
+bool ELogSystem::configureLogTarget(const ELogConfigMapNode* logTargetCfg,
+                                    ELogTargetId* id /* = nullptr */) {
     // load the target (common properties already configured)
     ELogTarget* logTarget = ELogConfigLoader::loadLogTarget(logTargetCfg);
     if (logTarget == nullptr) {
@@ -427,6 +429,9 @@ bool ELogSystem::configureLogTarget(const ELogConfigMapNode* logTargetCfg) {
                           logTargetCfg->getFullContext());
         delete logTarget;
         return false;
+    }
+    if (id != nullptr) {
+        *id = logTarget->getId();
     }
     return true;
 }
@@ -1147,6 +1152,14 @@ ELogTargetId ELogSystem::addSegmentedLogFileTarget(const char* logPath, const ch
     return logTargetId;
 }
 
+ELogTargetId ELogSystem::configureLogTargetString(const char* logTargetCfg) {
+    ELogTargetId id = ELOG_INVALID_TARGET_ID;
+    if (!configureLogTargetEx(logTargetCfg, &id)) {
+        return ELOG_INVALID_TARGET_ID;
+    }
+    return id;
+}
+
 ELogTargetId ELogSystem::addStdErrLogTarget() { return addLogFileTarget(stderr); }
 
 ELogTargetId ELogSystem::addStdOutLogTarget() { return addLogFileTarget(stdout); }
@@ -1158,6 +1171,46 @@ ELogTargetId ELogSystem::addSysLogTarget() {
 #else
     return ELOG_INVALID_TARGET_ID;
 #endif
+}
+ELogTargetId ELogSystem::addTracer(const char* traceFilePath, uint32_t traceBufferSize,
+                                   const char* targetName, const char* sourceName) {
+    // prepare configuration string
+    std::stringstream s;
+    s << "async://quantum?quantum_buffer_size=" << traceBufferSize << "&name=" << targetName
+      << " | file:///" << traceFilePath << "?flush_policy=immediate";
+    std::string cfg = s.str();
+
+    // add log target from configuration string
+    ELogTargetId id = ELogSystem::configureLogTargetString(cfg.c_str());
+    if (id == ELOG_INVALID_TARGET_ID) {
+        return id;
+    }
+    ELogTarget* logTarget = ELogSystem::getLogTarget(id);
+    if (logTarget == nullptr) {
+        ELOG_REPORT_ERROR("Internal error while adding tracer, log target by id %u not found", id);
+        return false;
+    }
+
+    // define a pass key to the trace target, so that normal log messages will not reach the tracer
+    logTarget->setPassKey();
+
+    // define log source
+    ELogSource* logSource = ELogSystem::defineLogSource(sourceName, true);
+    if (logSource == nullptr) {
+        ELOG_REPORT_ERROR("Failed to define tracer %s log source by name %s", targetName,
+                          sourceName);
+        return false;
+    }
+
+    // bind log source to target using affinity mask
+    ELogTargetAffinityMask mask;
+    ELOG_CLEAR_TARGET_AFFINITY_MASK(mask);
+    ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
+    logSource->setLogTargetAffinity(mask);
+
+    // add pass key to the log source
+    logSource->addPassKey(logTarget->getPassKey());
+    return id;
 }
 
 ELogTarget* ELogSystem::getLogTarget(ELogTargetId targetId) {
@@ -1487,8 +1540,13 @@ void ELogSystem::log(
         ELogTarget* logTarget = sLogTargets[logTargetId];
         if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY ||
             ELOG_HAS_TARGET_AFFINITY_MASK(logTargetAffinityMask, logTargetId)) {
-            logTarget->log(logRecord);
-            logged = true;
+            // check also pass key if present
+            ELogPassKey passKey = logTarget->getPassKey();
+            if (passKey == ELOG_NO_PASSKEY ||
+                logRecord.m_logger->getLogSource()->hasPassKey(passKey)) {
+                logTarget->log(logRecord);
+                logged = true;
+            }
         }
     }
 
