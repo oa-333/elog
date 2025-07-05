@@ -91,6 +91,8 @@ namespace elog {
 static thread_local FILE* m_usedSegment;
 static const char* LOG_SUFFIX = ".log";
 
+#define ELOG_SEGMENTED_FILE_RING_SIZE 4096
+
 #ifdef ELOG_MSVC
 static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
     // prepare search pattern
@@ -195,9 +197,7 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char
       m_segmentCount(0),
       m_bytesLogged(0),
       m_currentSegment(nullptr),
-      m_entered(0),
-      m_left(0),
-      m_currentlyOpeningSegment(0),
+      m_epoch(0),
       m_segmentOpenerId(0) {
     // open current segment (start a new one if needed)
     setNativelyThreadSafe();
@@ -207,7 +207,10 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char
 
 ELogSegmentedFileTarget::~ELogSegmentedFileTarget() {}
 
-bool ELogSegmentedFileTarget::startLogTarget() { return openSegment(); }
+bool ELogSegmentedFileTarget::startLogTarget() {
+    m_epochSet.resizeRing(ELOG_SEGMENTED_FILE_RING_SIZE);
+    return openSegment();
+}
 
 bool ELogSegmentedFileTarget::stopLogTarget() {
     if (m_currentSegment.load(std::memory_order_relaxed) != nullptr) {
@@ -221,11 +224,12 @@ bool ELogSegmentedFileTarget::stopLogTarget() {
 }
 
 void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
-    // first thing, increment the entered count
-    m_entered.fetch_add(1, std::memory_order_acquire);
+    // first thing, increment the epoch
+    uint64_t epoch = m_epoch.fetch_add(1, std::memory_order_acquire);
 
     // check if segment switch is required
-    // TODO: if message size exceeds segment size then this logic fails!
+    // NOTE: if message size exceeds segment size then the current segment will be larger than
+    // configured limit, but we are OK with that
     uint32_t msgSizeBytes = length;
     uint64_t bytesLogged = m_bytesLogged.fetch_add(msgSizeBytes, std::memory_order_relaxed);
     uint64_t prevSegmentId = bytesLogged / m_segmentLimitBytes;
@@ -233,8 +237,8 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
     if (prevSegmentId != currSegmentId) {
         // crossed a segment boundary, so open a new segment
         // in the meantime other threads push to pending message queue until new segment is ready
-        advanceSegment(currSegmentId, formattedLogMsg);
-        m_left.fetch_add(1, std::memory_order_release);
+        advanceSegment(currSegmentId, formattedLogMsg, epoch);
+        // NOTE: current thread's epoch is already closed by call to advanceSegment()
         // NOTE: after segment is advanced the log message is already logged
         return;
     } else if (currSegmentId > m_segmentCount.load(std::memory_order_relaxed)) {
@@ -243,8 +247,8 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
             std::unique_lock<std::mutex> lock(m_lock);
             m_pendingMsgQueue.push_front(formattedLogMsg);
         }
-        // don't forget to increase left counter
-        m_left.fetch_add(1, std::memory_order_release);
+        // don't forget to mark transaction epoch end
+        m_epochSet.insert(epoch);
         return;
     }
 
@@ -262,12 +266,12 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
     m_usedSegment = currentSegment;
 
     // mark log finish
-    m_left.fetch_add(1, std::memory_order_release);
+    m_epochSet.insert(epoch);
 }
 
 void ELogSegmentedFileTarget::flushLogTarget() {
-    // first thing, increment the entered count
-    m_entered.fetch_add(1, std::memory_order_acquire);
+    // first thing, increment the epoch count
+    uint64_t epoch = m_epoch.fetch_add(1, std::memory_order_acquire);
 
     // we make sure segment is not just being replaced
     // we use the same logic as if logging a zero sized message
@@ -287,8 +291,8 @@ void ELogSegmentedFileTarget::flushLogTarget() {
         // a segment is right now being replaced, so the request can be discarded
     }
 
-    // last thing, increment the left count
-    m_left.fetch_add(1, std::memory_order_release);
+    // last thing, mark transaction end
+    m_epochSet.insert(epoch);
 }
 
 bool ELogSegmentedFileTarget::openSegment() {
@@ -443,21 +447,20 @@ void ELogSegmentedFileTarget::formatSegmentPath(std::string& segmentPath, uint32
     ELOG_REPORT_TRACE("Using segment path %s", segmentPath.c_str());
 }
 
-bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::string& logMsg) {
+bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::string& logMsg,
+                                             uint64_t currentEpoch) {
     // we need to:
     // - open new segment
     // - switch segments
     // - busy wait until previous segment loggers are finished
     // - log message
-    int64_t openerCount = m_currentlyOpeningSegment.fetch_add(1, std::memory_order_relaxed) + 1;
-    ELOG_REPORT_TRACE("Opening segment %u, current opener count: %" PRId64, segmentId, openerCount);
+    ELOG_REPORT_TRACE("Opening segment %u", segmentId);
     FILE* prevSegment = m_currentSegment.load(std::memory_order_relaxed);
     std::string segmentPath;
     formatSegmentPath(segmentPath, segmentId);
     FILE* nextSegment = fopen(segmentPath.c_str(), "a");
     if (nextSegment == nullptr) {
         ELOG_REPORT_SYS_ERROR(fopen, "Failed to open segment file %s", segmentPath.c_str());
-        m_currentlyOpeningSegment.fetch_add(-1, std::memory_order_relaxed);
         return false;
     }
 
@@ -504,19 +507,24 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     // now we need to wait until all current users of the previous segment are done
     // we start measuring from this point on, so we are on the safe side (we might actually wait a
     // bit more than required, but that is ok)
-    uint64_t entered = m_entered.load(std::memory_order_relaxed);
-    ELOG_REPORT_TRACE("Entered count: %" PRIu64, entered);
+    // NOTE: this is essentially the minimum active epoch problem, so we reuse the rolling bit set
+    // from the private GC (see elog_gc.h/cpp)
+    uint64_t targetEpoch = m_epoch.load(std::memory_order_relaxed);
+    ELOG_REPORT_TRACE("Target epoch: %" PRIu64, targetEpoch);
 
-    // NOTE: other threads may also be opening a segment in parallel, each of which has incremented
-    // the 'entered' counter, so we need to add this number (the current amount of segment opener
-    // threads), otherwise we will never reach equality here, but when we see that "entered == left
-    // + currently-opening-segment" we can tell all other threads that are not opening a segment
-    // have already left (i.e. "simple" loggers), and the new ones that come will use the open
-    // segment (or keep pushing to queue if more than one thread opens a new a segment, but in that
-    // case entered will get a higher number so this thread will get out of the while loop)
+    // NOTE: as we wait for minimum active epoch to advance, the current thread's epoch (obtained at
+    // the beginning of logFormattedMsg()) is not closed, so the minimum active epoch will NEVER
+    // advance beyond the current thread's epoch, which is ALWAYS smaller than the target epoch
+    // (unless this is a single threaded scenario). For this reason we MUST close the current
+    // thread's epoch to allow it to advance to the target epoch. We can do so safely at this early
+    // stage, because it does not affect other logging threads in any way.
+    m_epochSet.insert(currentEpoch);
+
+    // as we wait for the epoch to advance, we keep moving queued messages to a local private queue
+    // NOTE: the target epoch is the epoch to be given to the next transaction, so we check for
+    // strictly lower minimum active epoch (which is actually number of finished transactions)
     uint64_t yieldCount = 0;
-    while (entered > m_left.load(std::memory_order_relaxed) +
-                         m_currentlyOpeningSegment.load(std::memory_order_relaxed)) {
+    while (targetEpoch > m_epochSet.queryFullPrefix()) {
         // check for more queued items
         std::list<std::string> logMsgs;
         {
@@ -532,10 +540,8 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
         if (logMsgs.empty()) {
             std::this_thread::yield();
             if (++yieldCount == 10000) {
-                ELOG_REPORT_TRACE("Stuck: entered = %" PRIu64 ", left = %" PRIu64
-                                  ", currently opening segment = %" PRId64,
-                                  entered, m_left.load(std::memory_order_relaxed),
-                                  m_currentlyOpeningSegment.load(std::memory_order_relaxed));
+                ELOG_REPORT_TRACE("Stuck: target epoch = %" PRIu64 ", min active epoch = %" PRIu64,
+                                  targetEpoch, m_epochSet.queryFullPrefix());
             }
         } else {
             // NOTE: we are logging to the previous segment, so that we keep order of messages. this
@@ -544,6 +550,9 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
             logMsgQueue(logMsgs, prevSegment);
         }
     }
+
+    // NOTE: from this point onward there should be no more incoming pending messages, as the epoch
+    // has advanced beyond the reference epoch point above
 
     // log the last batch, there shouldn't be any more
     {
@@ -556,9 +565,6 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
 
     // now we can let the next segment openers to advance
     m_segmentOpenerId.fetch_add(1, std::memory_order_relaxed);
-
-    // let other segment opening threads that we are done
-    m_currentlyOpeningSegment.fetch_add(-1, std::memory_order_relaxed);
 
     // NOTE: only now we can close the segment (and this should also auto-flush)
     if (fclose(prevSegment) == -1) {

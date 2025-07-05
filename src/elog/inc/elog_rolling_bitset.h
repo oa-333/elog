@@ -67,7 +67,7 @@ public:
         uint64_t wordId = m_fullWordCount.load(std::memory_order_relaxed);
         uint64_t wordRingIndex = wordId % m_ringSize;
         uint64_t word = m_ring[wordRingIndex].m_atomicValue.load(std::memory_order_relaxed);
-        return wordId * WORD_SIZE + std::countr_zero(word);
+        return wordId * WORD_SIZE + std::countr_one(word);
     }
 
 private:

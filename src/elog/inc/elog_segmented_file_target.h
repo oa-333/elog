@@ -7,6 +7,7 @@
 #include <string>
 
 #include "elog_buffered_file_writer.h"
+#include "elog_rolling_bitset.h"
 #include "elog_target.h"
 
 namespace elog {
@@ -60,12 +61,11 @@ private:
     std::atomic<uint32_t> m_segmentCount;
     std::atomic<uint64_t> m_bytesLogged;
     std::atomic<FILE*> m_currentSegment;
-    std::atomic<uint64_t> m_entered;
-    std::atomic<uint64_t> m_left;
-    std::atomic<int64_t> m_currentlyOpeningSegment;
+    std::atomic<uint64_t> m_epoch;
     std::atomic<uint64_t> m_segmentOpenerId;
     std::list<std::string> m_pendingMsgQueue;
     std::mutex m_lock;
+    ELogRollingBitset m_epochSet;
 
     bool openSegment();
     bool getSegmentCount(uint32_t& segmentCount, uint32_t& lastSegmentSizeBytes);
@@ -73,7 +73,7 @@ private:
     bool getSegmentIndex(const std::string& fileName, int32_t& segmentIndex);
     bool getFileSize(const char* filePath, uint32_t& fileSize);
     void formatSegmentPath(std::string& segmentPath, uint32_t segmentId);
-    bool advanceSegment(uint32_t segmentId, const std::string& logMsg);
+    bool advanceSegment(uint32_t segmentId, const std::string& logMsg, uint64_t currentEpoch);
     void logMsgQueue(std::list<std::string>& logMsgs, FILE* segmentFile);
 };
 
