@@ -1,6 +1,8 @@
 #ifndef __ELOG_FIELD_SELECTOR_H___
 #define __ELOG_FIELD_SELECTOR_H___
 
+#include <vector>
+
 #include "elog_field_receptor.h"
 #include "elog_field_spec.h"
 #include "elog_record.h"
@@ -8,6 +10,9 @@
 #define ELOG_INVALID_FIELD_SELECTOR_TYPE_ID ((uint32_t)-1)
 
 namespace elog {
+
+// forward declaration
+class ELOG_API ELogFilter;
 
 /** @enum Constants for field types (generic). */
 enum class ELogFieldType : uint32_t {
@@ -18,7 +23,13 @@ enum class ELogFieldType : uint32_t {
     FT_INT,
 
     /** @var Field type is date-time (can be stored as string though). */
-    FT_DATETIME
+    FT_DATETIME,
+
+    /** @var Field type is a log level (32 bit). */
+    FT_LOG_LEVEL,
+
+    /** @var Field type is a formatting escape sequence. */
+    FT_FORMAT
 };
 
 /**
@@ -40,6 +51,9 @@ public:
 
     /** @brief Retrieves the type of the selected field. */
     inline ELogFieldType getFieldType() const { return m_fieldType; }
+
+    /** @brief Retrieves the specification of the selected field. */
+    inline const ELogFieldSpec& getFieldSpec() const { return m_fieldSpec; }
 
 protected:
     ELogFieldSelector(ELogFieldType fieldType, const ELogFieldSpec& fieldSpec = ELogFieldSpec())
@@ -329,7 +343,7 @@ private:
 class ELOG_API ELogLevelSelector : public ELogFieldSelector {
 public:
     ELogLevelSelector(const ELogFieldSpec& fieldSpec)
-        : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
+        : ELogFieldSelector(ELogFieldType::FT_LOG_LEVEL, fieldSpec) {}
     ~ELogLevelSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
@@ -348,6 +362,208 @@ public:
 
 private:
     ELOG_DECLARE_FIELD_SELECTOR(ELogMsgSelector, msg);
+};
+
+/**
+ * Text Formatting virtual field selector. The following field selectors do not select fields
+ * (either from the log record, or from any other custom source), but rather output text formatting
+ * escape sequences. All format selectors output text field type (the escape code sequence).
+ */
+
+/** @brief Format text field selector. */
+class ELOG_API ELogFormatSelector : public ELogFieldSelector {
+public:
+    ELogFormatSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
+    ~ELogFormatSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    // we allow having ${fmt} as a keyword, solely for the purpose of allowing specify text
+    // font/color specification
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFormatSelector, fmt);
+};
+
+/**
+ * @brief Conditional field selector. Can be used for conditional formatting (i.e. no text emitted
+ * except for formatting escape codes).
+ */
+class ELOG_API ELogIfSelector : public ELogFieldSelector {
+public:
+    ELogIfSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_FORMAT, fieldSpec),
+          m_cond(nullptr),
+          m_trueSelector(nullptr),
+          m_falseSelector(nullptr) {}
+
+    ELogIfSelector(ELogFilter* cond, ELogFieldSelector* trueSelector,
+                   ELogFieldSelector* falseSelector = nullptr)
+        : ELogFieldSelector(trueSelector->getFieldType(), trueSelector->getFieldSpec()),
+          m_cond(cond),
+          m_trueSelector(trueSelector),
+          m_falseSelector(falseSelector) {}
+
+    ~ELogIfSelector() final;
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    // parent class's m_fieldSpec member holds all following 3 members (3rd optional)
+    ELogFilter* m_cond;
+    ELogFieldSelector* m_trueSelector;
+    ELogFieldSelector* m_falseSelector;
+
+    ELOG_DECLARE_FIELD_SELECTOR(ELogIfSelector, if);
+};
+
+/** @brief Switch-case field selector. Can be used also for conditional formatting. */
+class ELOG_API ELogSwitchSelector : public ELogFieldSelector {
+public:
+    ELogSwitchSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_FORMAT, fieldSpec),
+          m_valueExpr(nullptr),
+          m_defaultFieldSelector(nullptr) {}
+
+    ELogSwitchSelector(ELogFieldSelector* valueExpr)
+        : ELogFieldSelector(valueExpr->getFieldType(), valueExpr->getFieldSpec()),
+          m_valueExpr(valueExpr),
+          m_defaultFieldSelector(nullptr) {}
+
+    ~ELogSwitchSelector() final;
+
+    inline void addCase(ELogFieldSelector* caseValueExpr, ELogFieldSelector* caseFieldSelector) {
+        m_cases.push_back({caseValueExpr, caseFieldSelector});
+    }
+
+    inline void addDefaultCase(ELogFieldSelector* defaultFieldSelector) {
+        m_defaultFieldSelector = defaultFieldSelector;
+    }
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    // parent class's m_fieldSpec member holds all following 3 members (3rd optional)
+    ELogFieldSelector* m_valueExpr;
+    std::vector<std::pair<ELogFieldSelector*, ELogFieldSelector*>> m_cases;
+    ELogFieldSelector* m_defaultFieldSelector;
+
+    ELOG_DECLARE_FIELD_SELECTOR(ELogSwitchSelector, switch);
+};
+
+/** @brief Switch-case field selector. */
+class ELOG_API ELogExprSwitchSelector : public ELogFieldSelector {
+public:
+    ELogExprSwitchSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_FORMAT, fieldSpec), m_defaultFieldSelector(nullptr) {}
+    ELogExprSwitchSelector()
+        : ELogFieldSelector(ELogFieldType::FT_FORMAT, ELogFieldSpec("expr-switch")),
+          m_defaultFieldSelector(nullptr) {}
+    ~ELogExprSwitchSelector() final;
+
+    inline void addCase(ELogFilter* casePred, ELogFieldSelector* caseFieldSelector) {
+        m_cases.push_back({casePred, caseFieldSelector});
+    }
+
+    inline void addDefaultCase(ELogFieldSelector* defaultFieldSelector) {
+        m_defaultFieldSelector = defaultFieldSelector;
+    }
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    std::vector<std::pair<ELogFilter*, ELogFieldSelector*>> m_cases;
+    ELogFieldSelector* m_defaultFieldSelector;
+
+    // turn off clang formatting due to "expr-switch" below
+    // clang-format off
+    ELOG_DECLARE_FIELD_SELECTOR(ELogExprSwitchSelector, expr-switch);
+    // clang-format on
+};
+
+/** @brief Constant string field selector. */
+class ELOG_API ELogConstStringSelector : public ELogFieldSelector {
+public:
+    ELogConstStringSelector(const char* value)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, ELogFieldSpec("const-string")),
+          m_constString(value) {}
+    ELogConstStringSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
+    ~ELogConstStringSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    std::string m_constString;
+
+    // turn off clang formatting due to "const-string" below
+    // clang-format off
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstStringSelector, const-string);
+    // clang-format on
+};
+
+/** @brief Constant integer field selector. */
+class ELOG_API ELogConstIntSelector : public ELogFieldSelector {
+public:
+    ELogConstIntSelector(uint64_t value)
+        : ELogFieldSelector(ELogFieldType::FT_INT, ELogFieldSpec("const-int")), m_constInt(value) {}
+    ELogConstIntSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_INT, fieldSpec) {}
+    ~ELogConstIntSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    uint64_t m_constInt;
+
+    // turn off clang formatting due to "const-int" below
+    // clang-format off
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstIntSelector, const-int);
+    // clang-format on
+};
+
+/** @brief Constant time field selector. */
+class ELOG_API ELogConstTimeSelector : public ELogFieldSelector {
+public:
+    ELogConstTimeSelector(const ELogTime& value, const char* timeStr)
+        : ELogFieldSelector(ELogFieldType::FT_DATETIME, ELogFieldSpec("const-time")),
+          m_constTime(value),
+          m_timeStr(timeStr) {}
+    ELogConstTimeSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_DATETIME, fieldSpec) {}
+    ~ELogConstTimeSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELogTime m_constTime;
+    std::string m_timeStr;
+
+    // turn off clang formatting due to "const-time" below
+    // clang-format off
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstTimeSelector, const-time);
+    // clang-format on
+};
+
+/** @brief Constant log-level field selector. */
+class ELOG_API ELogConstLogLevelSelector : public ELogFieldSelector {
+public:
+    ELogConstLogLevelSelector(const ELogLevel value)
+        : ELogFieldSelector(ELogFieldType::FT_LOG_LEVEL, ELogFieldSpec("const-level")),
+          m_constLevel(value) {}
+    ELogConstLogLevelSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_LOG_LEVEL, fieldSpec) {}
+    ~ELogConstLogLevelSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELogLevel m_constLevel;
+
+    // turn off clang formatting due to "const-level" below
+    // clang-format off
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstLogLevelSelector, const-level);
+    // clang-format on
 };
 
 }  // namespace elog

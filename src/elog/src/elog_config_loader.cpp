@@ -646,26 +646,20 @@ ELogFilter* ELogConfigLoader::loadLogFilterExpr(ELogExpression* expr) {
         }
         ELogNotFilter* notFilter = new (std::nothrow) ELogNotFilter(subFilter);
         if (notFilter == nullptr) {
-            ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
+            ELOG_REPORT_ERROR("Failed to allocate filter, out of memory");
             delete subFilter;
             return nullptr;
         }
         return notFilter;
     } else {
         assert(expr->m_type == ELogExpressionType::ET_OP_EXPR);
-        // LHS is always the flush policy name
-        // RHS is the value (size/count/time-millis), always an integer
+        // LHS is always the filter name
+        // RHS is the value (int/time-str/str/log-level)
         // OP is always "=="
         ELogOpExpression* opExpr = (ELogOpExpression*)expr;
         if (opExpr->m_op.compare("==") != 0) {
-            ELOG_REPORT_ERROR("Invalid flush policy operation '%s', only equals operator supported",
+            ELOG_REPORT_ERROR("Invalid filter operation '%s', only equals operator supported",
                               opExpr->m_op.c_str());
-            return nullptr;
-        }
-        uint64_t value = 0;
-        if (!parseIntProp("", "", opExpr->m_rhs, value)) {
-            ELOG_REPORT_ERROR("Invalid flush policy argument '%s', expected integer type",
-                              opExpr->m_rhs.c_str());
             return nullptr;
         }
         ELogFilter* filter = constructFilter(opExpr->m_lhs.c_str());

@@ -40,7 +40,7 @@ protected:
 
     bool parseFormatSpec(const std::string& formatSpec);
 
-    bool parseFieldSpec(const std::string& fieldSpecStr, ELogFieldSpec& fieldSpec);
+    bool parseFieldSpec(const std::string& fieldSpecStr);
 
     /**
      * @brief Select log record fields into a receptor.
@@ -53,11 +53,52 @@ protected:
     // by default text within a format spec is transformed into static text field selector
     // but in the case of db formatter insert query this differs, so we allow this behavior to be
     // determined by derived classes
+
+    /**
+     * @brief Reacts to log format text parsed event. When overriding this method, sub-classed must
+     * call the parent method @ref ELogBaseFormatter::handleText().
+     * @note By default text within a format specification is transformed into static text field
+     * selector. Some formatters (e.g. @ref ELogDbFormatter) require further handling, so this
+     * method is made virtual.
+     * @param text The parsed text.
+     * @return The operation result.
+     */
     virtual bool handleText(const std::string& text);
 
+    /**
+     * @brief Reacts to log record field reference parsed event. When overriding this method,
+     * sub-classes must call the parent method @ref ELogBaseFormatter::handleField().
+     * @note By default field reference within a format specification is transformed into a field
+     * selector. Some formatters (e.g. @ref ELogDbFormatter) require further handling, so this
+     * method is made virtual.
+     * @param fieldSpec The parsed field.
+     * @return The operation result.
+     */
     virtual bool handleField(const ELogFieldSpec& fieldSpec);
 
+    /** @brief The field selectors. */
     std::vector<ELogFieldSelector*> m_fieldSelectors;
+
+private:
+    bool getFieldCloseBrace(const std::string& formatSpec, std::string::size_type from,
+                            std::string::size_type& closePos);
+    bool getFieldCloseParen(const std::string& formatSpec, std::string::size_type from,
+                            std::string::size_type& closePos);
+    bool parseSimpleField(const std::string& fieldSpecStr);
+    bool parseCondField(const std::string& fieldSpecStr);
+    bool parseSwitchField(const std::string& fieldSpecStr);
+    bool parseExprSwitchField(const std::string& fieldSpecStr);
+    bool parseCaseOrDefaultClause(ELogSwitchSelector* switchSelector, const std::string& caseSpec,
+                                  bool& isDefaultClause);
+    bool parseCaseClause(ELogSwitchSelector* switchSelector, const std::string& caseSpec);
+    bool parseDefaultClause(ELogSwitchSelector* switchSelector, const std::string& defaultSpec);
+    bool parseExprCaseOrDefaultClause(ELogExprSwitchSelector* switchSelector,
+                                      const std::string& caseSpec, bool& isDefaultClause);
+    bool parseExprCaseClause(ELogExprSwitchSelector* switchSelector, const std::string& caseSpec);
+    bool parseExprDefaultClause(ELogExprSwitchSelector* switchSelector,
+                                const std::string& defaultSpec);
+    ELogFieldSelector* loadSelector(const std::string& selectorSpecStr);
+    ELogFieldSelector* loadConstSelector(const std::string& fieldSpecStr);
 };
 
 }  // namespace elog

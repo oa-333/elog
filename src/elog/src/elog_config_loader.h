@@ -67,6 +67,11 @@ public:
      */
     static ELogFilter* loadLogFilter(const ELogConfigMapNode* logTargetCfg, bool& result);
 
+    /**
+     * @brief Loads a log filter from an expression string.
+     */
+    static ELogFilter* loadLogFilterExprStr(const char* filterExpr);
+
     static bool getLogTargetStringProperty(const ELogConfigMapNode* logTargetCfg,
                                            const char* scheme, const char* propName,
                                            std::string& propValue);
@@ -94,7 +99,6 @@ private:
     static ELogFlushPolicy* loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
                                             const char* flushPolicyType, bool allowNone,
                                             bool& result);
-    static ELogFilter* loadLogFilterExprStr(const char* filterExpr);
     static ELogFilter* loadLogFilterExpr(ELogExpression* expr);
     static ELogFilter* loadLogFilter(const ELogConfigMapNode* filterCfg, const char* filterType,
                                      bool& result);

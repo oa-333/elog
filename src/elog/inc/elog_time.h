@@ -83,6 +83,27 @@ inline void getCurrentTime(ELogTime& logTime) {
 #endif
 }
 
+/**
+ * @brief Checks whether to log time objects are equal
+ */
+inline bool elogTimeEquals(const ELogTime& lhs, const ELogTime& rhs) {
+#ifdef ELOG_TIME_USE_CHRONO
+    return lhs == rhs;
+#else
+#ifdef ELOG_MSVC
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+    return lhs.wMilliseconds == rhs.wMilliseconds && lhs.wSecond == rhs.wSecond &&
+           lhs.wMinute == rhs.wMinute && lhs.wHour == rhs.wHour && lhs.wDay == rhs.wDay &&
+           lhs.wMonth == rhs.wMonth && lhs.wYear == rhs.wYear;
+#else
+    return lhs.dwLowDateTime == rhs.dwLowDateTime && lhs.dwHighDateTime == rhs.dwHighDateTime;
+#endif
+#else
+    return lhs.m_seconds == rhs.m_seconds && lhs.m_100nanos == rhs.m_100nanos;
+#endif
+#endif
+}
+
 #ifdef ELOG_MSVC
 #define UNIX_MSVC_DIFF_SECONDS 11644473600LL
 #define SECONDS_TO_100NANOS(seconds) ((seconds) * 10000000LL)

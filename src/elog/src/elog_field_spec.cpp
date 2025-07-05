@@ -247,6 +247,19 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
     //
     // in order to span several fields, the begin syntax is also allowed:
     // ${text:begin-fg-color=yellow:begin-text=faint}
+    //
+    // now adding the following syntax for conditional formatting:
+    // ${if: (filter-pred): ${fmt:<format>} [: ${else:<format>}] }
+    // ${switch: (expr): ${case: (expr) : ${fmt:<format>}}, ..., ${default:${fmt: <format>}} }
+    // ${expr-switch: ${case: (filter-pred) : ${fmt:<format>}}, ..., ${default:${fmt: <format>}} }
+    // the filter predicate is ELogFilter*.
+    // the expr is ELogFieldSelector that yields int, string, level or time.
+    // it could specify a field reference, with ${level} for instance, or it could specify a
+    // constant as an integer, string, level or time. A qualified constant can be given with the
+    // field reference: ${const-int:<value>}, ${const-string:<value>}, ${const-level:<value>},
+    // and ${const-time:<value>} - so the expression is actually a field selector, and the
+    // expressions result type MUST match.
+    // the vswitch is actually a full-blown if else.
     int32_t justify = 0;
     std::string::size_type colonPos = fieldSpecStr.find(':');
     m_name = fieldSpecStr.substr(0, colonPos);

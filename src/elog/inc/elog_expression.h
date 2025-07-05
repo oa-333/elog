@@ -7,6 +7,8 @@
 
 namespace elog {
 
+// NOTE: an expression may represent a predicate or a value
+
 /** @enum Expression type constants. */
 enum class ELogExpressionType : uint32_t {
     /** @brief AND expression type. */
@@ -127,6 +129,10 @@ struct ELogOpExpression : public ELogExpression {
     ~ELogOpExpression() final {}
 };
 
+/**
+ * @brief A primitive expression having only a name and no operator/operands (e.g. 'immediate'
+ * flush policy).
+ */
 struct ELogNameExpression : public ELogExpression {
     std::string m_name;
 

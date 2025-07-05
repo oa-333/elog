@@ -52,6 +52,7 @@ static ELogSourceMap sLogSourceMap;
 static ELogLogger* sDefaultLogger = nullptr;
 static ELogTarget* sDefaultLogTarget = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
+static bool sDbgUtilInitialized = false;
 
 bool ELogSystem::initGlobals() {
     // init the error log so we can have trace messages as early as possible
@@ -164,6 +165,7 @@ bool ELogSystem::initGlobals() {
     sDbgUtilLogHandler.applyLogLevelCfg();
     initStackTrace();
     ELOG_REPORT_TRACE("Debug utility library logging initialized");
+    sDbgUtilInitialized = true;
 #endif
 
     ELOG_REPORT_TRACE("ELog initialized successfully");
@@ -188,10 +190,13 @@ void ELogSystem::termGlobals() {
     sLogTargets.clear();
 
 #ifdef ELOG_ENABLE_STACK_TRACE
-    dbgutil::DbgUtilErr rc = dbgutil::termDbgUtil();
-    if (rc != DBGUTIL_ERR_OK) {
-        // issue error and continue
-        ELOG_REPORT_ERROR("Failed to terminate Debug Util library");
+    if (sDbgUtilInitialized) {
+        dbgutil::DbgUtilErr rc = dbgutil::termDbgUtil();
+        if (rc != DBGUTIL_ERR_OK) {
+            // issue error and continue
+            ELOG_REPORT_ERROR("Failed to terminate Debug Util library");
+        }
+        sDbgUtilInitialized = false;
     }
 #endif
 

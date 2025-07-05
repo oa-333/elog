@@ -89,6 +89,14 @@ ELOG_IMPLEMENT_FIELD_SELECTOR(ELogLineSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogFunctionSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogLevelSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogMsgSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogFormatSelector);
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogIfSelector);
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogSwitchSelector);
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogExprSwitchSelector);
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogConstStringSelector);
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogConstIntSelector);
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogConstTimeSelector);
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogConstLogLevelSelector);
 
 #define ELOG_MAX_FIELD_SELECTOR_COUNT 100
 
@@ -568,6 +576,188 @@ void ELogMsgSelector::selectField(const ELogRecord& record, ELogFieldReceptor* r
     } else {
         receptor->receiveStringField(getTypeId(), record.m_logMsg, m_fieldSpec, record.m_logMsgLen);
     }
+}
+
+void ELogFormatSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    receptor->receiveStringField(getTypeId(), "", m_fieldSpec, 0);
+}
+
+ELogIfSelector::~ELogIfSelector() {
+    if (m_cond != nullptr) {
+        delete m_cond;
+        m_cond = nullptr;
+    }
+    if (m_trueSelector != nullptr) {
+        delete m_trueSelector;
+        m_trueSelector = nullptr;
+    }
+    if (m_falseSelector != nullptr) {
+        delete m_falseSelector;
+        m_falseSelector = nullptr;
+    }
+}
+
+void ELogIfSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    if (m_cond->filterLogRecord(record)) {
+        m_trueSelector->selectField(record, receptor);
+    } else if (m_falseSelector != nullptr) {
+        m_falseSelector->selectField(record, receptor);
+    }
+}
+
+class ELogFieldContainer : public ELogFieldReceptor {
+public:
+    ELogFieldContainer() : ELogFieldReceptor(ReceiveStyle::RS_BY_TYPE) {}
+    ~ELogFieldContainer() final {}
+
+    /** @brief Receives a string log record field. */
+    void receiveStringField(uint32_t typeId, const char* value, const ELogFieldSpec& fieldSpec,
+                            size_t length = 0) {
+        m_stringValue = value;
+        m_length = length;
+        m_fieldType = ELogFieldType::FT_TEXT;
+    }
+
+    /** @brief Receives an integer log record field. */
+    void receiveIntField(uint32_t typeId, uint64_t value, const ELogFieldSpec& fieldSpec) {
+        m_intValue = value;
+        m_fieldType = ELogFieldType::FT_INT;
+    }
+
+    /** @brief Receives a time log record field. */
+    void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
+                          const ELogFieldSpec& fieldSpec, size_t length = 0) {
+        m_timeValue = logTime;
+        m_fieldType = ELogFieldType::FT_DATETIME;
+    }
+
+    /** @brief Receives a log level log record field. */
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, const ELogFieldSpec& fieldSpec) {
+        m_logLevel = logLevel;
+        m_fieldType = ELogFieldType::FT_LOG_LEVEL;
+    }
+
+    /**
+     * @brief Checks whether the value contained by this container equals the value contained by
+     * another container.
+     */
+    inline bool equals(const ELogFieldContainer& value) const {
+        // should be checked during switch condition construction
+        assert(m_fieldType == value.m_fieldType);
+        switch (m_fieldType) {
+            case ELogFieldType::FT_TEXT:
+                return strcmp(m_stringValue, value.m_stringValue) == 0;
+
+            case ELogFieldType::FT_INT:
+                return m_intValue == value.m_intValue;
+
+            case ELogFieldType::FT_DATETIME:
+                return elogTimeEquals(m_timeValue, value.m_timeValue);
+
+            case ELogFieldType::FT_LOG_LEVEL:
+                return m_logLevel == value.m_logLevel;
+
+            default:
+                // should never happen
+                assert(false);
+                return false;
+        }
+    }
+
+private:
+    const char* m_stringValue;
+    size_t m_length;
+    uint64_t m_intValue;
+    ELogTime m_timeValue;
+    ELogLevel m_logLevel;
+    ELogFieldType m_fieldType;
+};
+
+ELogSwitchSelector::~ELogSwitchSelector() {
+    if (m_valueExpr != nullptr) {
+        delete m_valueExpr;
+        m_valueExpr = nullptr;
+    }
+    for (auto& entry : m_cases) {
+        delete entry.first;
+        delete entry.second;
+    }
+    m_cases.clear();
+    if (m_defaultFieldSelector != nullptr) {
+        delete m_defaultFieldSelector;
+        m_defaultFieldSelector = nullptr;
+    }
+}
+
+void ELogSwitchSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    // select the record value into a field container
+    ELogFieldContainer valueContainer;
+    m_valueExpr->selectField(record, &valueContainer);
+    bool fieldSelected = false;
+    for (auto& caseExpr : m_cases) {
+        ELogFieldContainer caseValueContainer;
+        caseExpr.first->selectField(record, &caseValueContainer);
+        if (valueContainer.equals(caseValueContainer)) {
+            caseExpr.second->selectField(record, receptor);
+            fieldSelected = true;
+            break;
+        }
+    }
+
+    // use default clause if defined and no case was matched
+    if (!fieldSelected && m_defaultFieldSelector != nullptr) {
+        m_defaultFieldSelector->selectField(record, receptor);
+    }
+}
+
+ELogExprSwitchSelector::~ELogExprSwitchSelector() {
+    for (auto& entry : m_cases) {
+        delete entry.first;
+        delete entry.second;
+    }
+    m_cases.clear();
+    if (m_defaultFieldSelector != nullptr) {
+        delete m_defaultFieldSelector;
+        m_defaultFieldSelector = nullptr;
+    }
+}
+
+void ELogExprSwitchSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    // match case expression and execute the format selector
+    bool fieldSelected = false;
+    for (auto& caseExpr : m_cases) {
+        if (caseExpr.first->filterLogRecord(record)) {
+            caseExpr.second->selectField(record, receptor);
+            fieldSelected = true;
+            break;
+        }
+    }
+
+    // use default clause if defined and no case was matched
+    if (!fieldSelected && m_defaultFieldSelector != nullptr) {
+        m_defaultFieldSelector->selectField(record, receptor);
+    }
+}
+
+void ELogConstStringSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    // we should get here only when passing value to field container
+    receptor->receiveStringField(getTypeId(), m_constString.c_str(), m_fieldSpec,
+                                 m_constString.length());
+}
+
+void ELogConstIntSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    // we should get here only when passing value to field container
+    receptor->receiveIntField(getTypeId(), m_constInt, m_fieldSpec);
+}
+
+void ELogConstTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    // we should get here only when passing value to field container
+    receptor->receiveTimeField(getTypeId(), m_constTime, m_timeStr.c_str(), m_fieldSpec);
+}
+
+void ELogConstLogLevelSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    // we should get here only when passing value to field container
+    receptor->receiveLogLevelField(getTypeId(), m_constLevel, m_fieldSpec);
 }
 
 }  // namespace elog
