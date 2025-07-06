@@ -121,6 +121,7 @@ static void writeCsvFile(const char* fileName, std::vector<double>& msgThroughpu
 static void testPerfFileFlushPolicy();
 static void testPerfBufferedFile();
 static void testPerfSegmentedFile();
+static void testPerfRotatingFile();
 static void testPerfDeferredFile();
 static void testPerfQueuedFile();
 static void testPerfQuantumFile(bool privateLogger);
@@ -158,6 +159,9 @@ void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
 void testPerfSTSegmentedFile1mb(std::vector<double>& msgThroughput,
                                 std::vector<double>& ioThroughput, std::vector<double>& msgp50,
                                 std::vector<double>& msgp95, std::vector<double>& msgp99);
+void testPerfSTRotatingFile1mb(std::vector<double>& msgThroughput,
+                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                               std::vector<double>& msgp95, std::vector<double>& msgp99);
 void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
                                  std::vector<double>& ioThroughput, std::vector<double>& msgp50,
                                  std::vector<double>& msgp95, std::vector<double>& msgp99);
@@ -477,6 +481,7 @@ static bool sTestPerfIdleLog = false;
 static bool sTestPerfFileFlush = false;
 static bool sTestPerfBufferedFile = false;
 static bool sTestPerfSegmentedFile = false;
+static bool sTestPerfRotatingFile = false;
 static bool sTestPerfDeferredFile = false;
 static bool sTestPerfQueuedFile = false;
 static bool sTestPerfQuantumPrivateFile = false;
@@ -500,6 +505,7 @@ static bool sTestSingleThreadFlushSize = false;
 static bool sTestSingleThreadFlushTime = false;
 static bool sTestSingleThreadBuffered = false;
 static bool sTestSingleThreadSegmented = false;
+static bool sTestSingleThreadRotating = false;
 static bool sTestSingleThreadDeferred = false;
 static bool sTestSingleThreadQueued = false;
 static bool sTestSingleThreadQuantum = false;
@@ -516,6 +522,8 @@ static bool getPerfParam(const char* param) {
         sTestPerfBufferedFile = true;
     } else if (strcmp(param, "segmented") == 0) {
         sTestPerfSegmentedFile = true;
+    } else if (strcmp(param, "rotating") == 0) {
+        sTestPerfRotatingFile = true;
     } else if (strcmp(param, "deferred") == 0) {
         sTestPerfDeferredFile = true;
     } else if (strcmp(param, "queued") == 0) {
@@ -570,6 +578,8 @@ static bool getSingleParam(const char* param) {
         sTestSingleThreadBuffered = true;
     } else if (strcmp(param, "segmented") == 0) {
         sTestSingleThreadSegmented = true;
+    } else if (strcmp(param, "rotating") == 0) {
+        sTestSingleThreadRotating = true;
     } else if (strcmp(param, "deferred") == 0) {
         sTestSingleThreadDeferred = true;
     } else if (strcmp(param, "queued") == 0) {
@@ -744,6 +754,9 @@ int main(int argc, char* argv[]) {
     }
     if (sTestPerfAll || sTestPerfSegmentedFile) {
         testPerfSegmentedFile();
+    }
+    if (sTestPerfAll || sTestPerfRotatingFile) {
+        testPerfRotatingFile();
     }
     if (sTestPerfAll || sTestPerfDeferredFile) {
         testPerfDeferredFile();
@@ -1601,6 +1614,26 @@ void testPerfSegmentedFile() {
     runMultiThreadTest("Segmented File (4MB segment size)", "elog_bench_segmented_4mb", cfg);
 }
 
+void testPerfRotatingFile() {
+    const char* cfg =
+        "file:///./bench_data/"
+        "elog_bench_segmented_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&"
+        "file_segment_count=5&flush_policy=none";
+    runMultiThreadTest("Rotating File (1MB segment size)", "elog_bench_segmented_1mb", cfg);
+
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_segmented_2mb.log?file_segment_size_mb=2&file_segment_count=5&"
+        "flush_policy=none";
+    runMultiThreadTest("Rotating File (2MB segment size)", "elog_bench_segmented_2mb", cfg);
+
+    cfg =
+        "file:///./bench_data/"
+        "elog_bench_segmented_4mb.log?file_segment_size_mb=4&file_segment_count=5&"
+        "flush_policy=none";
+    runMultiThreadTest("Rotating File (4MB segment size)", "elog_bench_segmented_4mb", cfg);
+}
+
 void testPerfDeferredFile() {
     /*const char* cfg =
         "file://./bench_data/"
@@ -1674,6 +1707,8 @@ static void writeSTCsv(const char* fname, const std::vector<double>& data) {
       << data[column++] << std::endl;
     f << column << " \"Segmented\\nSize=1MB\" " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
+    f << column << " \"Rotating\\nSize=1MB\" " << std::fixed << std::setprecision(2)
+      << data[column++] << std::endl;
     f << column << " Deferred " << std::fixed << std::setprecision(2) << data[column++]
       << std::endl;
     f << column << " Queued " << std::fixed << std::setprecision(2) << data[column++] << std::endl;
@@ -1711,6 +1746,9 @@ void testPerfAllSingleThread() {
     }
     if (sTestSingleAll || sTestSingleThreadSegmented) {
         testPerfSTSegmentedFile1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadRotating) {
+        testPerfSTRotatingFile1mb(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
     }
     if (sTestSingleAll || sTestSingleThreadDeferred) {
         testPerfSTDeferredCount4096(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
@@ -1873,6 +1911,26 @@ void testPerfSTSegmentedFile1mb(std::vector<double>& msgThroughput,
     double ioPerf = 0.0f;
     StatData statData;
     runSingleThreadedTest("Segmented Size=1mb", cfg, msgPerf, ioPerf, statData);
+    msgThroughput.push_back(msgPerf);
+    ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
+}
+
+void testPerfSTRotatingFile1mb(std::vector<double>& msgThroughput,
+                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                               std::vector<double>& msgp95, std::vector<double>& msgp99) {
+    const char* cfg =
+        "file:///./bench_data/"
+        "elog_bench_segmented_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&"
+        "file_segment_count=5&flush_policy=none";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Rotating Size=1mb", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
 #ifdef MEASURE_PERCENTILE

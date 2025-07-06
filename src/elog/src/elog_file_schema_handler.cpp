@@ -59,8 +59,17 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
         }
     }
 
+    // there could be optional property file_segment_count for rotation
+    uint32_t segmentCount = 0;
+    itr = logTargetSpec.m_props.find("file_segment_count");
+    if (itr != logTargetSpec.m_props.end()) {
+        if (!parseIntProp("file_segment_count", logTargetCfg, itr->second, segmentCount)) {
+            return nullptr;
+        }
+    }
+
     return createLogTarget(logTargetSpec.m_path, bufferSize, useFileLock, segmentSizeMB,
-                           segmentRingSize);
+                           segmentRingSize, segmentCount);
 }
 
 ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
@@ -113,27 +122,36 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
         return nullptr;
     }
 
-    return createLogTarget(path, bufferSize, useFileLock, segmentSizeMB, segmentRingSize);
+    // finally, there could be optional property file_segment_count to specify rotation
+    int64_t segmentCount = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "file",
+                                                           "file_segment_count", segmentCount)) {
+        return nullptr;
+    }
+
+    return createLogTarget(path, bufferSize, useFileLock, segmentSizeMB, segmentRingSize,
+                           segmentCount);
 }
 
 ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, int64_t bufferSize,
                                                    bool useFileLock, int64_t segmentSizeMB,
-                                                   int64_t segmentRingSize) {
+                                                   int64_t segmentRingSize, int64_t segmentCount) {
     ELogTarget* logTarget = nullptr;
     if (segmentSizeMB > 0) {
         std::string::size_type lastSlashPos = path.find_last_of("\\/");
         /// assuming segmented log is to be created in current folder, and path is the file name
         if (lastSlashPos == std::string::npos) {
-            logTarget = new (std::nothrow) ELogSegmentedFileTarget("", path.c_str(), segmentSizeMB,
-                                                                   segmentRingSize, bufferSize);
+            logTarget = new (std::nothrow) ELogSegmentedFileTarget(
+                "", path.c_str(), segmentSizeMB, segmentRingSize, bufferSize, segmentCount);
         } else {
             std::string logPath = path.substr(0, lastSlashPos);
             std::string logName = path.substr(lastSlashPos + 1);
             if (logName.ends_with(LOG_SUFFIX)) {
                 logName = logName.substr(0, logName.size() - strlen(LOG_SUFFIX));
             }
-            logTarget = new (std::nothrow) ELogSegmentedFileTarget(
-                logPath.c_str(), logName.c_str(), segmentSizeMB, segmentRingSize, bufferSize);
+            logTarget = new (std::nothrow)
+                ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB,
+                                        segmentRingSize, bufferSize, segmentCount);
         }
     } else {
         if (bufferSize > 0) {

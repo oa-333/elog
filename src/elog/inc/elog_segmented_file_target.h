@@ -36,6 +36,8 @@ public:
      * @param segmentLimitMB The maximum segment size in megabytes.
      * @param segmentRingSize Optional size of the pending message ring buffer used
      * during segment switch.
+     * @param segmentCount Optionally specify the maximum number of segments to use. This will cause
+     * log segments to rotate. By default no log rotation takes place.
      * @param fileBufferSizeBytes Optionally specify file buffer size to use. This will cause the
      * segmented logger to use ELog's internal implementation of buffered file, which is slightly
      * better than default fopen/fwrite functions. By default file buffering is not used.
@@ -43,7 +45,7 @@ public:
      */
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
                             uint64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
-                            uint64_t fileBufferSizeBytes = 0,
+                            uint64_t fileBufferSizeBytes = 0, uint64_t segmentCount = 0,
                             ELogFlushPolicy* flushPolicy = nullptr);
     ELogSegmentedFileTarget(const ELogSegmentedFileTarget&) = delete;
     ELogSegmentedFileTarget(ELogSegmentedFileTarget&&) = delete;
@@ -82,7 +84,8 @@ private:
               m_bufferedFileWriter(nullptr) {}
         ~SegmentData() { m_pendingMsgs.terminate(); }
 
-        bool open(const char* segmentPath, uint64_t fileBufferSizeBytes = 0, bool useLock = true);
+        bool open(const char* segmentPath, uint64_t fileBufferSizeBytes = 0, bool useLock = true,
+                  bool truncateSegment = false);
         bool log(const char* logMsg, size_t len);
         bool drain();
         bool flush();
@@ -92,6 +95,7 @@ private:
     uint64_t m_segmentLimitBytes;
     uint64_t m_segmentRingSize;
     uint64_t m_fileBufferSizeBytes;
+    uint64_t m_segmentCount;
     std::atomic<SegmentData*> m_currentSegment;
     std::atomic<uint64_t> m_epoch;
     ELogRollingBitset m_epochSet;

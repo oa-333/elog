@@ -190,8 +190,9 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 
 bool ELogSegmentedFileTarget::SegmentData::open(const char* segmentPath,
                                                 uint64_t fileBufferSizeBytes /* = 0 */,
-                                                bool useLock /* = true */) {
-    m_segmentFile = fopen(segmentPath, "a");
+                                                bool useLock /* = true */,
+                                                bool truncateSegment /* = false */) {
+    m_segmentFile = fopen(segmentPath, truncateSegment ? "w" : "a");
     if (m_segmentFile == nullptr) {
         int errCode = errno;
         ELOG_REPORT_SYS_ERROR(fopen, "Failed to open segment file %s: %d", segmentPath, errCode);
@@ -284,11 +285,13 @@ bool ELogSegmentedFileTarget::SegmentData::close() {
 ELogSegmentedFileTarget::ELogSegmentedFileTarget(
     const char* logPath, const char* logName, uint32_t segmentLimitMB,
     uint64_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
-    uint64_t fileBufferSizeBytes /* = 0 */, ELogFlushPolicy* flushPolicy /* = nullptr */)
+    uint64_t fileBufferSizeBytes /* = 0 */, uint64_t segmentCount /* = 0 */,
+    ELogFlushPolicy* flushPolicy /* = nullptr */)
     : ELogTarget("segmented-file", flushPolicy),
       m_segmentLimitBytes(segmentLimitMB * 1024 * 1024),
       m_segmentRingSize(segmentRingSize),
       m_fileBufferSizeBytes(fileBufferSizeBytes),
+      m_segmentCount(segmentCount),
       m_currentSegment(nullptr),
       m_epoch(0),
       m_logPath(logPath),
@@ -397,6 +400,14 @@ bool ELogSegmentedFileTarget::openSegment() {
         return false;
     }
 
+    if (m_segmentCount > 0 && segmentCount >= m_segmentCount) {
+        ELOG_REPORT_ERROR(
+            "Cannot initialize rotating log, found in log folder too many log segments (expecting "
+            "maximum: %" PRIu64 ", found: %u), aborting",
+            m_segmentCount, segmentCount);
+        return false;
+    }
+
     // if last segment is too large, then start a new segment
     if (lastSegmentSizeBytes > m_segmentLimitBytes) {
         ++segmentCount;
@@ -419,7 +430,8 @@ bool ELogSegmentedFileTarget::openSegment() {
     std::string segmentPath;
     formatSegmentPath(segmentPath, segmentCount);
     bool useLock = !isExternallyThreadSafe();
-    if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock)) {
+    bool truncateSegment = (m_segmentCount > 0);
+    if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment)) {
         delete segmentData;
         return false;
     }
@@ -578,6 +590,11 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     // So, considering all this, it is decided to have the segment switching thread wait for epoch
     // to advance, while evicting occasionally the pending messages queue.
 
+    // when rotating segment id should be cycling
+    if (m_segmentCount > 0) {
+        segmentId = segmentId % m_segmentCount;
+    }
+
     // open a new segment
     SegmentData* nextSegment = new (std::nothrow) SegmentData(segmentId);
     if (nextSegment == nullptr) {
@@ -593,11 +610,10 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
 
     // create segment file
     std::string segmentPath;
-    // TODO: when rotating segment id should be cycling
     formatSegmentPath(segmentPath, segmentId);
-    // TODO: when rotating should truncate file rather than append
     bool useLock = !isExternallyThreadSafe();
-    if (!nextSegment->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock)) {
+    bool truncateSegment = (m_segmentCount > 0);
+    if (!nextSegment->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment)) {
         delete nextSegment;
         return false;
     }

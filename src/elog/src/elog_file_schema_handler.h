@@ -44,7 +44,8 @@ public:
 
 private:
     ELogTarget* createLogTarget(const std::string& path, int64_t bufferSize, bool useFileLock,
-                                int64_t segmentSizeMB, int64_t segmentRingSize);
+                                int64_t segmentSizeMB, int64_t segmentRingSize,
+                                int64_t segmentCount);
 };
 
 }  // namespace elog
