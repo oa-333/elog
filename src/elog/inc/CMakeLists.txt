@@ -5,6 +5,7 @@ target_sources(
         FILE_SET publicheaders
         TYPE HEADERS
         FILES
+            elog_aligned_alloc.h
             elog_async_schema_handler.h
             elog_async_target.h
             elog_async_target_provider.h
@@ -15,6 +16,7 @@ target_sources(
             elog_buffered_file_target.h
             elog_buffered_file_writer.h
             elog_common_def.h
+            elog_concurrent_ring_buffer.h
             elog_config.h
             elog_datadog_target.h
             elog_db_formatter.h

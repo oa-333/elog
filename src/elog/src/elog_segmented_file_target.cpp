@@ -91,6 +91,7 @@ namespace elog {
 static const char* LOG_SUFFIX = ".log";
 
 #define ELOG_SEGMENTED_FILE_RING_SIZE 4096
+#define ELOG_SEGMENT_PENDING_RING_SIZE (1024 * 1024)
 
 #ifdef ELOG_MSVC
 static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
@@ -256,8 +257,8 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
             // also maximum concurrent segment count is not that high, so it is probably ok.
             // the queue per segment is again implemented as concurrent ring buffer, and here we
             // might need a larger ring buffer size. how much?
-            std::unique_lock<std::mutex> lock(segmentData->m_lock);
-            segmentData->m_pendingMsgs.push_front(formattedLogMsg);
+            // std::unique_lock<std::mutex> lock(segmentData->m_lock);
+            segmentData->m_pendingMsgs.push(formattedLogMsg);
         }
         // don't forget to mark transaction epoch end
         m_epochSet.insert(epoch);
@@ -318,6 +319,11 @@ bool ELogSegmentedFileTarget::openSegment() {
         ELOG_REPORT_ERROR("Failed to allocate segment object, out of memory");
         return false;
     }
+    if (!segmentData->m_pendingMsgs.initialize(ELOG_SEGMENT_PENDING_RING_SIZE)) {
+        ELOG_REPORT_ERROR("Failed to initialize ring buffer of segment object");
+        delete segmentData;
+        return false;
+    }
 
     // open the segment file for appending
     std::string segmentPath;
@@ -349,12 +355,13 @@ bool ELogSegmentedFileTarget::getSegmentCount(uint32_t& segmentCount,
     while (itr != fileNames.end()) {
         const std::string fileName = *itr;
         int32_t segmentIndex = -1;
-        if (!getSegmentIndex(fileName, segmentIndex)) {
-            return false;
-        }
-        if (maxSegmentIndex < segmentIndex) {
-            maxSegmentIndex = segmentIndex;
-            lastSegmentName = fileName;
+        // NOTE: if we failed to extract segment id from file - that is OK, since the directory
+        // might contain log segmented with different name scheme
+        if (getSegmentIndex(fileName, segmentIndex)) {
+            if (maxSegmentIndex < segmentIndex) {
+                maxSegmentIndex = segmentIndex;
+                lastSegmentName = fileName;
+            }
         }
         ++itr;
     }
@@ -397,7 +404,7 @@ bool ELogSegmentedFileTarget::getSegmentIndex(const std::string& fileName, int32
             // shave off prefix and suffix (and another additional dot)
             if (fileName[m_logName.length()] != '.') {
                 // unexpected file name
-                ELOG_REPORT_ERROR("Invalid segment file name: %s", fileName.c_str());
+                ELOG_REPORT_WARN("Invalid segment file name: %s", fileName.c_str());
                 return false;
             }
             std::string segmentIndexStr =
@@ -475,6 +482,11 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
                           segmentId);
         return false;
     }
+    if (!nextSegment->m_pendingMsgs.initialize(ELOG_SEGMENT_PENDING_RING_SIZE)) {
+        ELOG_REPORT_ERROR("Failed to initialize ring buffer of segment object");
+        delete nextSegment;
+        return false;
+    }
 
     // create segment file
     std::string segmentPath;
@@ -533,11 +545,11 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
         {
             // drain to a temp queue and write file outside lock scope to minimize lock waiting time
             // of other threads
-            std::unique_lock<std::mutex> lock(prevSegment->m_lock);
+            // std::unique_lock<std::mutex> lock(prevSegment->m_lock);
             while (!prevSegment->m_pendingMsgs.empty()) {
                 const std::string& logMsg = prevSegment->m_pendingMsgs.back();
                 logMsgs.push_front(logMsg);
-                prevSegment->m_pendingMsgs.pop_back();
+                prevSegment->m_pendingMsgs.pop();
             }
         }
         if (logMsgs.empty()) {
@@ -561,9 +573,16 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     {
         // drain to a temp queue and write file outside lock scope to minimize lock waiting time
         // of other threads
-        std::unique_lock<std::mutex> lock(prevSegment->m_lock);
+        // std::unique_lock<std::mutex> lock(prevSegment->m_lock);
         ELOG_REPORT_TRACE("Logging %u final pending messages", prevSegment->m_pendingMsgs.size());
-        logMsgQueue(prevSegment->m_pendingMsgs, prevSegment->m_segmentFile);
+        // logMsgQueue(prevSegment->m_pendingMsgs, prevSegment->m_segmentFile);
+        while (!prevSegment->m_pendingMsgs.empty()) {
+            const std::string& logMsg = prevSegment->m_pendingMsgs.back();
+            if (fputs(logMsg.c_str(), prevSegment->m_segmentFile) == EOF) {
+                ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
+            }
+            prevSegment->m_pendingMsgs.pop();
+        }
     }
 
     // NOTE: only now we can close the segment (and this should also auto-flush)

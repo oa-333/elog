@@ -3,11 +3,10 @@
 
 #include <atomic>
 #include <list>
-#include <mutex>
 #include <string>
 
 #include "elog_buffered_file_writer.h"
-// #include "elog_concurrent_ring_buffer.h"
+#include "elog_concurrent_ring_buffer.h"
 #include "elog_rolling_bitset.h"
 #include "elog_target.h"
 
@@ -56,21 +55,20 @@ protected:
     void flushLogTarget() final;
 
 private:
-    // typedef ELogConcurrentRingBuffer<std::string> LogMsgQueue;
-    typedef std::list<std::string> LogMsgQueue;
+    // use lock-free scalable ring buffer for saving pending messages during segment switch
+    typedef ELogConcurrentRingBuffer<std::string> LogMsgQueue;
+
+    // single segment data
     struct SegmentData {
         uint64_t m_segmentId;
         std::atomic<uint64_t> m_bytesLogged;
         FILE* m_segmentFile;
-        std::mutex m_lock;
         LogMsgQueue m_pendingMsgs;
 
         SegmentData(uint64_t segmentId, uint64_t bytesLogged = 0)
             : m_segmentId(segmentId), m_bytesLogged(bytesLogged), m_segmentFile(nullptr) {}
+        ~SegmentData() { m_pendingMsgs.terminate(); }
     };
-
-    // typedef ELogConcurrentRingBuffer<SegmentData> SegmentRingBuffer;
-    // SegmentRingBuffer m_segmentRingBuffer;
 
     std::string m_logPath;
     std::string m_logName;
