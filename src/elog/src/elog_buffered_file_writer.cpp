@@ -15,7 +15,7 @@ namespace elog {
 
 void ELogBufferedFileWriter::setFileHandle(FILE* fileHandle) {
     m_fd = fileno(fileHandle);
-    m_logBuffer.resize(m_bufferSize);
+    m_logBuffer.resize(m_bufferSizeBytes);
     m_bufferOffset = 0;
 }
 
@@ -28,7 +28,7 @@ bool ELogBufferedFileWriter::logMsg(const char* formattedLogMsg, size_t length) 
     }
 }
 
-bool ELogBufferedFileWriter::finishLog() {
+bool ELogBufferedFileWriter::flushLogBuffer() {
     // no locking is required here
     if (m_bufferOffset > 0) {
         if (!writeToFile(&m_logBuffer[0], m_bufferOffset)) {
@@ -43,10 +43,9 @@ bool ELogBufferedFileWriter::logMsgUnlocked(const char* formattedLogMsg, size_t 
     // write buffer to file if there is not enough room (this way only whole messages are written to
     // log file)
     if (m_bufferOffset + length > m_logBuffer.size()) {
-        if (!writeToFile(&m_logBuffer[0], m_bufferOffset)) {
+        if (!flushLogBuffer()) {
             return false;
         }
-        m_bufferOffset = 0;
     }
 
     // if there is still no room them write entire message directly to file
@@ -66,8 +65,8 @@ bool ELogBufferedFileWriter::logMsgUnlocked(const char* formattedLogMsg, size_t 
 
 bool ELogBufferedFileWriter::writeToFile(const char* buffer, uint32_t length) {
     // NOTE: in case the buffer size is zero, and we have direct write to file, the documentation
-    // states that write() is atomic and doe snot require a lock, BUT it does not guarantee that all
-    // bytes a re written, so in case log messages are not to be mixed with each other in a
+    // states that write() is atomic and does not require a lock, BUT it does not guarantee that all
+    // bytes are written, so in case log messages are not to be mixed with each other in a
     // multi-threaded scenario, a lock is needed
 
     // in case the buffer size is greater than zero, and a buffer is used, then a lock is required,
@@ -82,6 +81,8 @@ bool ELogBufferedFileWriter::writeToFile(const char* buffer, uint32_t length) {
         ssize_t res = write(m_fd, buffer + pos, length - pos);
 #endif
         if (res == -1) {
+            // TODO: this might cause log flooding, consider a better way, i.e. some
+            // attenuation/aggregation (log 1 message in X time) as well statistics counter update
             int errCode = errno;
             ELOG_REPORT_ERROR("Failed to write %u bytes to log file: system error %d", length,
                               errCode);

@@ -33,7 +33,7 @@ bool ELogBufferedFileTarget::startLogTarget() {
 
 bool ELogBufferedFileTarget::stopLogTarget() {
     if (m_fileHandle != nullptr && m_shouldClose) {
-        if (!m_fileWriter.finishLog()) {
+        if (!m_fileWriter.flushLogBuffer()) {
             ELOG_REPORT_ERROR("Failed to write last buffer data into log file");
             return false;
         }

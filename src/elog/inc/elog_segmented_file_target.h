@@ -36,10 +36,14 @@ public:
      * @param segmentLimitMB The maximum segment size in megabytes.
      * @param segmentRingSize Optional size of the pending message ring buffer used
      * during segment switch.
+     * @param fileBufferSizeBytes Optionally specify file buffer size to use. This will cause the
+     * segmented logger to use ELog's internal implementation of buffered file, which is slightly
+     * better than default fopen/fwrite functions. By default file buffering is not used.
      * @param flushPolicy Optional flush policy to be used in conjunction with this log target.
      */
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
-                            int64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
+                            uint64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
+                            uint64_t fileBufferSizeBytes = 0,
                             ELogFlushPolicy* flushPolicy = nullptr);
     ELogSegmentedFileTarget(const ELogSegmentedFileTarget&) = delete;
     ELogSegmentedFileTarget(ELogSegmentedFileTarget&&) = delete;
@@ -68,15 +72,26 @@ private:
         uint64_t m_segmentId;
         std::atomic<uint64_t> m_bytesLogged;
         FILE* m_segmentFile;
+        ELogBufferedFileWriter* m_bufferedFileWriter;
         LogMsgQueue m_pendingMsgs;
 
         SegmentData(uint64_t segmentId, uint64_t bytesLogged = 0)
-            : m_segmentId(segmentId), m_bytesLogged(bytesLogged), m_segmentFile(nullptr) {}
+            : m_segmentId(segmentId),
+              m_bytesLogged(bytesLogged),
+              m_segmentFile(nullptr),
+              m_bufferedFileWriter(nullptr) {}
         ~SegmentData() { m_pendingMsgs.terminate(); }
+
+        bool open(const char* segmentPath, uint64_t fileBufferSizeBytes = 0, bool useLock = true);
+        bool log(const char* logMsg, size_t len);
+        bool drain();
+        bool flush();
+        bool close();
     };
 
     uint64_t m_segmentLimitBytes;
     uint64_t m_segmentRingSize;
+    uint64_t m_fileBufferSizeBytes;
     std::atomic<SegmentData*> m_currentSegment;
     std::atomic<uint64_t> m_epoch;
     ELogRollingBitset m_epochSet;

@@ -124,16 +124,16 @@ ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, int6
         std::string::size_type lastSlashPos = path.find_last_of("\\/");
         /// assuming segmented log is to be created in current folder, and path is the file name
         if (lastSlashPos == std::string::npos) {
-            logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget("", path.c_str(), segmentSizeMB, segmentRingSize);
+            logTarget = new (std::nothrow) ELogSegmentedFileTarget("", path.c_str(), segmentSizeMB,
+                                                                   segmentRingSize, bufferSize);
         } else {
             std::string logPath = path.substr(0, lastSlashPos);
             std::string logName = path.substr(lastSlashPos + 1);
             if (logName.ends_with(LOG_SUFFIX)) {
                 logName = logName.substr(0, logName.size() - strlen(LOG_SUFFIX));
             }
-            logTarget = new (std::nothrow) ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(),
-                                                                   segmentSizeMB, segmentRingSize);
+            logTarget = new (std::nothrow) ELogSegmentedFileTarget(
+                logPath.c_str(), logName.c_str(), segmentSizeMB, segmentRingSize, bufferSize);
         }
     } else {
         if (bufferSize > 0) {

@@ -1586,7 +1586,8 @@ void testPerfBufferedFile() {
 void testPerfSegmentedFile() {
     const char* cfg =
         "file:///./bench_data/"
-        "elog_bench_segmented_1mb.log?file_segment_size_mb=1&flush_policy=none";
+        "elog_bench_segmented_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&flush_policy="
+        "none";
     runMultiThreadTest("Segmented File (1MB segment size)", "elog_bench_segmented_1mb", cfg);
 
     cfg =

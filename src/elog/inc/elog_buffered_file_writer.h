@@ -16,8 +16,8 @@ class ELOG_API ELogBufferedFileWriter {
 public:
     /**
      * @brief Construct a new ELogBufferedFileWriter object.
-     * @param bufferSize The size of the buffer use when writing data. Specify zero size to disable
-     * buffering altogether.
+     * @param bufferSizeBytes The size of the buffer in bytes to use when writing data. Specify zero
+     * size to disable buffering altogether.
      * @param useLock Specifies whether to use locking. When buffering is enabled, a lock is
      * required in multi-threaded scenario, and failing to use a lock will result in undefined
      * behavior. If the buffering is disabled, then normally locking is not required, even with
@@ -30,8 +30,8 @@ public:
      * file, then the log message is appended to the buffer. If the log message is larger than the
      * buffer size, then it is written directly to file without buffering.
      */
-    ELogBufferedFileWriter(uint32_t bufferSize, bool useLock)
-        : m_fd(0), m_bufferSize(bufferSize), m_bufferOffset(0), m_useLock(useLock) {}
+    ELogBufferedFileWriter(uint32_t bufferSizeBytes, bool useLock)
+        : m_fd(0), m_bufferSizeBytes(bufferSizeBytes), m_bufferOffset(0), m_useLock(useLock) {}
     ELogBufferedFileWriter(const ELogBufferedFileWriter&) = delete;
     ELogBufferedFileWriter(ELogBufferedFileWriter&&) = delete;
     ~ELogBufferedFileWriter() {}
@@ -50,12 +50,12 @@ public:
      */
     bool logMsg(const char* formattedLogMsg, size_t length);
 
-    /** @brief Write whatever is left from the buffer to the log. */
-    bool finishLog();
+    /** @brief Flush current buffer contents to the log (no file flushing). */
+    bool flushLogBuffer();
 
 private:
     int m_fd;
-    uint32_t m_bufferSize;
+    uint32_t m_bufferSizeBytes;
     uint32_t m_bufferOffset;
     std::vector<char> m_logBuffer;
     bool m_useLock;

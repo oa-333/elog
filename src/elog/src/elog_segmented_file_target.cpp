@@ -92,6 +92,8 @@ static const char* LOG_SUFFIX = ".log";
 
 #define ELOG_SEGMENT_EPOCH_RING_SIZE 4096
 
+#define MEGA_BYTE (1024 * 1024)
+
 #ifdef ELOG_MSVC
 static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
     // prepare search pattern
@@ -186,17 +188,111 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 }
 #endif
 
+bool ELogSegmentedFileTarget::SegmentData::open(const char* segmentPath,
+                                                uint64_t fileBufferSizeBytes /* = 0 */,
+                                                bool useLock /* = true */) {
+    m_segmentFile = fopen(segmentPath, "a");
+    if (m_segmentFile == nullptr) {
+        int errCode = errno;
+        ELOG_REPORT_SYS_ERROR(fopen, "Failed to open segment file %s: %d", segmentPath, errCode);
+        return false;
+    }
+
+    // use buffered file if configured to do so
+    if (fileBufferSizeBytes > 0) {
+        m_bufferedFileWriter =
+            new (std::nothrow) ELogBufferedFileWriter(fileBufferSizeBytes, useLock);
+        if (m_bufferedFileWriter == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to allocate buffered writer during log segment initialization, out of "
+                "memory");
+            fclose(m_segmentFile);
+            m_segmentFile = nullptr;
+            return false;
+        } else {
+            m_bufferedFileWriter->setFileHandle(m_segmentFile);
+        }
+    }
+    return true;
+}
+
+bool ELogSegmentedFileTarget::SegmentData::log(const char* logMsg, size_t len) {
+    // NOTE: we do not log error message to avoid log flooding
+    if (m_bufferedFileWriter != nullptr) {
+        return m_bufferedFileWriter->logMsg(logMsg, len);
+    } else {
+        // NOTE: the following call to fputs() is guaranteed to be atomic according to POSIX
+        return (fputs(logMsg, m_segmentFile) != EOF);
+    }
+}
+
+bool ELogSegmentedFileTarget::SegmentData::drain() {
+    bool res = true;
+    while (!m_pendingMsgs.empty()) {
+        const std::string& logMsg = m_pendingMsgs.back();
+        if (!log(logMsg.c_str(), logMsg.length())) {
+            // NOTE: do not log error message to avoid log flooding (can consider some
+            // attenuation/aggregation - log 1 error message within X time)
+            // ELOG_REPORT_ERROR("Failed to write to segment log file");
+            // TODO: we can add this to some statistics object (log-error-count)
+            res = false;
+        }
+        m_pendingMsgs.pop();
+    }
+    return res;
+}
+
+bool ELogSegmentedFileTarget::SegmentData::flush() {
+    if (m_bufferedFileWriter != nullptr) {
+        if (!m_bufferedFileWriter->flushLogBuffer()) {
+            ELOG_REPORT_ERROR("Failed to flush buffered writer");
+            return false;
+        }
+    }
+    if (fflush(m_segmentFile) == EOF) {
+        ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
+        return false;
+    }
+    return true;
+}
+
+bool ELogSegmentedFileTarget::SegmentData::close() {
+    // drain pending messages first
+    if (!drain()) {
+        return false;
+    }
+
+    // flush buffered writer (if any), then flush file
+    if (!flush()) {
+        return false;
+    }
+
+    // now close file
+    if (fclose(m_segmentFile) == -1) {
+        ELOG_REPORT_SYS_ERROR(fclose, "Failed to close segment log file");
+    }
+
+    // cleanup members
+    if (m_bufferedFileWriter != nullptr) {
+        delete m_bufferedFileWriter;
+        m_bufferedFileWriter = nullptr;
+    }
+    m_segmentFile = nullptr;
+    return true;
+}
+
 ELogSegmentedFileTarget::ELogSegmentedFileTarget(
     const char* logPath, const char* logName, uint32_t segmentLimitMB,
-    int64_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
-    ELogFlushPolicy* flushPolicy /* = nullptr */)
+    uint64_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
+    uint64_t fileBufferSizeBytes /* = 0 */, ELogFlushPolicy* flushPolicy /* = nullptr */)
     : ELogTarget("segmented-file", flushPolicy),
-      m_logPath(logPath),
-      m_logName(logName),
       m_segmentLimitBytes(segmentLimitMB * 1024 * 1024),
       m_segmentRingSize(segmentRingSize),
+      m_fileBufferSizeBytes(fileBufferSizeBytes),
       m_currentSegment(nullptr),
-      m_epoch(0) {
+      m_epoch(0),
+      m_logPath(logPath),
+      m_logName(logName) {
     // open current segment (start a new one if needed)
     if (m_segmentRingSize == 0) {
         m_segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
@@ -215,20 +311,16 @@ bool ELogSegmentedFileTarget::startLogTarget() {
 bool ELogSegmentedFileTarget::stopLogTarget() {
     SegmentData* segmentData = m_currentSegment.load(std::memory_order_acquire);
     if (segmentData != nullptr) {
-        // log pending messages (there shouldn't be any, since if all threads stopped, then even
-        // during segment switch, the thread doing the switch will drain all pending messages before
-        // returning - but this is just for safety)
-        while (!segmentData->m_pendingMsgs.empty()) {
-            const std::string& logMsg = segmentData->m_pendingMsgs.back();
-            fputs(logMsg.c_str(), segmentData->m_segmentFile);
-            segmentData->m_pendingMsgs.pop();
-        }
-        if (fclose(segmentData->m_segmentFile) == -1) {
-            ELOG_REPORT_SYS_ERROR(fopen, "Failed to close log segment");
+        // NOTE: the following call logs all pending messages, although there shouldn't be any,
+        // since if all threads stopped, then even during segment switch, the thread doing the
+        // switch will drain all pending messages before returning - but this is just for safety
+        if (!segmentData->close()) {
+            ELOG_REPORT_ERROR("Failed to close log segment");
             return false;
         }
 
         // NOTE: it is expected that at this point no thread is trying to log messages anymore
+        // this is the user's responsibility
         delete segmentData;
         m_currentSegment.store(nullptr, std::memory_order_release);
     }
@@ -262,12 +354,12 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
     }
 
     // NOTE: the following call to fputs() is guaranteed to be atomic according to POSIX
-    if (fputs(formattedLogMsg, segmentData->m_segmentFile) == EOF) {
+    if (!segmentData->log(formattedLogMsg, length)) {
         // TODO: in order to avoid log flooding, this error message must be emitted only once!
         // alternatively, the log target should be marked as unusable and reject all requests to log
         // messages. This is true for all log targets.
         // for the time being we avoid emitting this error message
-        // ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
+        // ELOG_REPORT_ERROR("Failed to write to segment log file");
     }
 
     // mark log finish
@@ -285,8 +377,9 @@ void ELogSegmentedFileTarget::flushLogTarget() {
     if (bytesLogged < m_segmentLimitBytes) {
         // we are safe because epoch was taken BEFORE current segment pointer, even if segment is
         // now being replaced
-        if (fflush(segmentData->m_segmentFile) == EOF) {
-            ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
+        // NOTE: no pending message draining takes place here, since this is external periodic flush
+        if (!segmentData->flush()) {
+            ELOG_REPORT_ERROR("Failed to flush segment log file");
         }
     } else {
         // a segment is right now being replaced, so the request can be discarded
@@ -325,11 +418,8 @@ bool ELogSegmentedFileTarget::openSegment() {
     // open the segment file for appending
     std::string segmentPath;
     formatSegmentPath(segmentPath, segmentCount);
-    segmentData->m_segmentFile = fopen(segmentPath.c_str(), "a");
-    if (segmentData->m_segmentFile == nullptr) {
-        int errCode = errno;
-        ELOG_REPORT_SYS_ERROR(fopen, "Failed to open segment file %s: %d", segmentPath.c_str(),
-                              errCode);
+    bool useLock = !isExternallyThreadSafe();
+    if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock)) {
         delete segmentData;
         return false;
     }
@@ -506,9 +596,8 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     // TODO: when rotating segment id should be cycling
     formatSegmentPath(segmentPath, segmentId);
     // TODO: when rotating should truncate file rather than append
-    nextSegment->m_segmentFile = fopen(segmentPath.c_str(), "a");
-    if (nextSegment->m_segmentFile == nullptr) {
-        ELOG_REPORT_SYS_ERROR(fopen, "Failed to open segment file %s", segmentPath.c_str());
+    bool useLock = !isExternallyThreadSafe();
+    if (!nextSegment->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock)) {
         delete nextSegment;
         return false;
     }
@@ -527,8 +616,9 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
 
     // first write this thread's log message
     // NOTE: we write to the previous segment
-    if (fputs(logMsg.c_str(), prevSegment->m_segmentFile) == EOF) {
-        ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
+    if (!prevSegment->log(logMsg.c_str(), logMsg.length())) {
+        // NOTE: this will not cause log flooding
+        ELOG_REPORT_ERROR("Failed to write to segment log file");
         // nevertheless continue
     }
 
@@ -582,25 +672,10 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     // NOTE: from this point onward there should be no more incoming pending messages, as the epoch
     // has advanced beyond the reference epoch point above
 
-    // log the last batch, there shouldn't be any more
-    {
-        // drain to a temp queue and write file outside lock scope to minimize lock waiting time
-        // of other threads
-        // std::unique_lock<std::mutex> lock(prevSegment->m_lock);
-        ELOG_REPORT_TRACE("Logging %u final pending messages", prevSegment->m_pendingMsgs.size());
-        // logMsgQueue(prevSegment->m_pendingMsgs, prevSegment->m_segmentFile);
-        while (!prevSegment->m_pendingMsgs.empty()) {
-            const std::string& logMsg = prevSegment->m_pendingMsgs.back();
-            if (fputs(logMsg.c_str(), prevSegment->m_segmentFile) == EOF) {
-                ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
-            }
-            prevSegment->m_pendingMsgs.pop();
-        }
-    }
-
-    // NOTE: only now we can close the segment (and this should also auto-flush)
-    if (fclose(prevSegment->m_segmentFile) == -1) {
-        ELOG_REPORT_SYS_ERROR(fclose, "Failed to close segment log file");
+    // NOTE: only now we can close the segment (and this should also auto-drain/flush)
+    ELOG_REPORT_TRACE("Logging %u final pending messages", prevSegment->m_pendingMsgs.size());
+    if (!prevSegment->close()) {
+        ELOG_REPORT_ERROR("Failed to close segment log file");
         // nevertheless continue
     }
 
