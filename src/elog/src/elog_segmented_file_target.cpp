@@ -90,8 +90,7 @@
 namespace elog {
 static const char* LOG_SUFFIX = ".log";
 
-#define ELOG_SEGMENTED_FILE_RING_SIZE 4096
-#define ELOG_SEGMENT_PENDING_RING_SIZE (1024 * 1024)
+#define ELOG_SEGMENT_EPOCH_RING_SIZE 4096
 
 #ifdef ELOG_MSVC
 static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
@@ -187,16 +186,21 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 }
 #endif
 
-ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char* logName,
-                                                 uint32_t segmentLimitMB,
-                                                 ELogFlushPolicy* flushPolicy)
+ELogSegmentedFileTarget::ELogSegmentedFileTarget(
+    const char* logPath, const char* logName, uint32_t segmentLimitMB,
+    int64_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
+    ELogFlushPolicy* flushPolicy /* = nullptr */)
     : ELogTarget("segmented-file", flushPolicy),
       m_logPath(logPath),
       m_logName(logName),
       m_segmentLimitBytes(segmentLimitMB * 1024 * 1024),
+      m_segmentRingSize(segmentRingSize),
       m_currentSegment(nullptr),
       m_epoch(0) {
     // open current segment (start a new one if needed)
+    if (m_segmentRingSize == 0) {
+        m_segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
+    }
     setNativelyThreadSafe();
     setAddNewLine(true);
 }
@@ -204,18 +208,28 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(const char* logPath, const char
 ELogSegmentedFileTarget::~ELogSegmentedFileTarget() {}
 
 bool ELogSegmentedFileTarget::startLogTarget() {
-    m_epochSet.resizeRing(ELOG_SEGMENTED_FILE_RING_SIZE);
+    m_epochSet.resizeRing(ELOG_SEGMENT_EPOCH_RING_SIZE);
     return openSegment();
 }
 
 bool ELogSegmentedFileTarget::stopLogTarget() {
-    // TODO: log pending messages
     SegmentData* segmentData = m_currentSegment.load(std::memory_order_acquire);
     if (segmentData != nullptr) {
+        // log pending messages (there shouldn't be any, since if all threads stopped, then even
+        // during segment switch, the thread doing the switch will drain all pending messages before
+        // returning - but this is just for safety)
+        while (!segmentData->m_pendingMsgs.empty()) {
+            const std::string& logMsg = segmentData->m_pendingMsgs.back();
+            fputs(logMsg.c_str(), segmentData->m_segmentFile);
+            segmentData->m_pendingMsgs.pop();
+        }
         if (fclose(segmentData->m_segmentFile) == -1) {
             ELOG_REPORT_SYS_ERROR(fopen, "Failed to close log segment");
             return false;
         }
+
+        // NOTE: it is expected that at this point no thread is trying to log messages anymore
+        delete segmentData;
         m_currentSegment.store(nullptr, std::memory_order_release);
     }
     return true;
@@ -241,25 +255,7 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
         return;
     } else if (bytesLogged > m_segmentLimitBytes) {
         // new segment is not ready yet, so push into pending queue
-        {
-            // TODO: refactor concurrent ring buffer from quantum log target, make it a template and
-            // reuse in both cases. here we need a pair fo log msg and segment id. the thread
-            // advancing segment should pull messages from the ring buffer and write to segment
-            // until epoch advances. if the buffer indicates that a message from a new segment is
-            // there, then it should not be pulled out (so we need peek() method), and the wait for
-            // target epoch can end, because we know the pending messages for the segment are done.
-            // BUT THIS IS WRONG
-            // pending messages from different segments may be mixed due to unfortunate timing.
-            // how do we fix that? should we open queue per segment? so a segment now is a small
-            // object instead of FILE* pointer. it has file pointer, pending message queue, segment
-            // id. we can put all active segments somewhere - again concurrent ring buffer?
-            // with this solution, we only need refactor concurrent ring buffer, no need for peek.
-            // also maximum concurrent segment count is not that high, so it is probably ok.
-            // the queue per segment is again implemented as concurrent ring buffer, and here we
-            // might need a larger ring buffer size. how much?
-            // std::unique_lock<std::mutex> lock(segmentData->m_lock);
-            segmentData->m_pendingMsgs.push(formattedLogMsg);
-        }
+        segmentData->m_pendingMsgs.push(formattedLogMsg);
         // don't forget to mark transaction epoch end
         m_epochSet.insert(epoch);
         return;
@@ -267,10 +263,11 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
 
     // NOTE: the following call to fputs() is guaranteed to be atomic according to POSIX
     if (fputs(formattedLogMsg, segmentData->m_segmentFile) == EOF) {
-        ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
         // TODO: in order to avoid log flooding, this error message must be emitted only once!
         // alternatively, the log target should be marked as unusable and reject all requests to log
         // messages. This is true for all log targets.
+        // for the time being we avoid emitting this error message
+        // ELOG_REPORT_SYS_ERROR(fputs, "Failed to write to log file");
     }
 
     // mark log finish
@@ -319,7 +316,7 @@ bool ELogSegmentedFileTarget::openSegment() {
         ELOG_REPORT_ERROR("Failed to allocate segment object, out of memory");
         return false;
     }
-    if (!segmentData->m_pendingMsgs.initialize(ELOG_SEGMENT_PENDING_RING_SIZE)) {
+    if (!segmentData->m_pendingMsgs.initialize(m_segmentRingSize)) {
         ELOG_REPORT_ERROR("Failed to initialize ring buffer of segment object");
         delete segmentData;
         return false;
@@ -462,18 +459,34 @@ void ELogSegmentedFileTarget::formatSegmentPath(std::string& segmentPath, uint32
 bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::string& logMsg,
                                              uint64_t currentEpoch) {
     // quickly open a new segment, then switch segments
-    // finally retire to GC previous segment
-    // the segment data destructor is responsible for logging pending messages and closing segment
-    // file in an orderly fashion
-    // this method releases the current thread to do other stuff
 
-    // TODO:
-    // we might choose to have this configurable:
-    // wait for epoch
-    // OR
-    // retire and go + GC recycle frequency
-    // so if the recycle frequency is 0, it means wait for epoch
-    // default value is zero, so we wait
+    // NOTE: we could have used a GC here, and retire the segment object, having its destructor log
+    // all pending messages and close the segment. although this looks like a nice idea, in reality
+    // it has a few major drawbacks:
+    //
+    // 1. a random thread would be the victim and would pay the price for logging pending messages.
+    // this is more complex then simply having the segment switching thread wait and do it,
+    // especially when needing to debug. Complexity can be suffered only when the added value is
+    // worth it.
+    //
+    // 2. Without tight waiting by the segment switching thread, the segment may be recycled not as
+    // soon as possible, and this depends on the GC frequency and the number of logging threads.
+    // This will first cause the segment file to be left open for more time. in case of imminent
+    // crash we prefer log files to contain data as soon as possible (that is the whole idea of
+    // logging, right?) - BTW, it is planned in the future to add "emergency dump" feature, such
+    // that during crash/core-dump, we catch the signal, and dump all log buffers in all threads
+    // into an emergency log file (we can do that since all log buffers are accessible from loggers
+    // through log sources).
+    //
+    // 3. During this delayed segment closing period, the pending messages ring buffer gets filled.
+    // if it becomes full, then logging threads will get stuck. In fact we may end up in a deadlock
+    // here, since logging threads increment the epoch, and if they get stuck the epoch will get
+    // stuck, and the GC will not kick in, and the segment will not be recycled, meaning that the
+    // ring buffer of the segment will remain full, because pending messages will not be pulled
+    // (according to this design they get pulled during segment recycling).
+
+    // So, considering all this, it is decided to have the segment switching thread wait for epoch
+    // to advance, while evicting occasionally the pending messages queue.
 
     // open a new segment
     SegmentData* nextSegment = new (std::nothrow) SegmentData(segmentId);
@@ -482,7 +495,7 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
                           segmentId);
         return false;
     }
-    if (!nextSegment->m_pendingMsgs.initialize(ELOG_SEGMENT_PENDING_RING_SIZE)) {
+    if (!nextSegment->m_pendingMsgs.initialize(m_segmentRingSize)) {
         ELOG_REPORT_ERROR("Failed to initialize ring buffer of segment object");
         delete nextSegment;
         return false;

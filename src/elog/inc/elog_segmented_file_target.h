@@ -12,6 +12,9 @@
 
 namespace elog {
 
+/** @def The default ring buffer size used for pending messages during segment switch. */
+#define ELOG_DEFAULT_SEGMENT_RING_SIZE (1024 * 1024)
+
 /**
  * @brief A lock-free segmented log file target, that breaks log file into segments by a configured
  * segment size limit. The segmented log file target can be combined with a user specified flush
@@ -31,11 +34,13 @@ public:
      * @param logName The base name of the log file segments. This should not include ".log"
      * extension, as it is being automatically added.
      * @param segmentLimitMB The maximum segment size in megabytes.
-     * @param useLock Specifies whether to use a lock during logging.
-     * @param flushPolicy Any flush policy to be used in conjunction with this log target.
+     * @param segmentRingSize Optional size of the pending message ring buffer used
+     * during segment switch.
+     * @param flushPolicy Optional flush policy to be used in conjunction with this log target.
      */
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
-                            ELogFlushPolicy* flushPolicy);
+                            int64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
+                            ELogFlushPolicy* flushPolicy = nullptr);
     ELogSegmentedFileTarget(const ELogSegmentedFileTarget&) = delete;
     ELogSegmentedFileTarget(ELogSegmentedFileTarget&&) = delete;
 
@@ -70,12 +75,13 @@ private:
         ~SegmentData() { m_pendingMsgs.terminate(); }
     };
 
-    std::string m_logPath;
-    std::string m_logName;
     uint64_t m_segmentLimitBytes;
+    uint64_t m_segmentRingSize;
     std::atomic<SegmentData*> m_currentSegment;
     std::atomic<uint64_t> m_epoch;
     ELogRollingBitset m_epochSet;
+    std::string m_logPath;
+    std::string m_logName;
 
     bool openSegment();
     bool getSegmentCount(uint32_t& segmentCount, uint32_t& lastSegmentSizeBytes);

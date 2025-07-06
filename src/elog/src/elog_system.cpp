@@ -998,8 +998,8 @@ ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const ch
                                                    ELogFlushPolicy* flushPolicy /* = nullptr */,
                                                    bool printBanner /* = true */) {
     // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
+    ELogTarget* logTarget = new (std::nothrow)
+        ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, 0, flushPolicy);
     if (logTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create segmented log file target, out of memory");
         return ELOG_INVALID_TARGET_ID;
@@ -1143,8 +1143,8 @@ ELogTargetId ELogSystem::addSegmentedLogFileTarget(const char* logPath, const ch
                                                    uint32_t segmentLimitMB,
                                                    ELogFlushPolicy* flushPolicy /* = nullptr */) {
     // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, flushPolicy);
+    ELogTarget* logTarget = new (std::nothrow)
+        ELogSegmentedFileTarget(logPath, logName, segmentLimitMB, 0, flushPolicy);
     if (logTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create segmented log file target, out of memory");
         return ELOG_INVALID_TARGET_ID;

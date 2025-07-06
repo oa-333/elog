@@ -50,7 +50,17 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
         }
     }
 
-    return createLogTarget(logTargetSpec.m_path, bufferSize, useFileLock, segmentSizeMB);
+    // there could be optional property file_segment_ring_size
+    uint64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
+    itr = logTargetSpec.m_props.find("file_segment_ring_size");
+    if (itr != logTargetSpec.m_props.end()) {
+        if (!parseIntProp("file_segment_ring_size", logTargetCfg, itr->second, segmentRingSize)) {
+            return nullptr;
+        }
+    }
+
+    return createLogTarget(logTargetSpec.m_path, bufferSize, useFileLock, segmentSizeMB,
+                           segmentRingSize);
 }
 
 ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
@@ -96,26 +106,34 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
         return nullptr;
     }
 
-    return createLogTarget(path, bufferSize, useFileLock, segmentSizeMB);
+    // there could be optional property file_segment_ring_size
+    int64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
+    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+            logTargetCfg, "file", "file_segment_ring_size", segmentRingSize)) {
+        return nullptr;
+    }
+
+    return createLogTarget(path, bufferSize, useFileLock, segmentSizeMB, segmentRingSize);
 }
 
 ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, int64_t bufferSize,
-                                                   bool useFileLock, int64_t segmentSizeMB) {
+                                                   bool useFileLock, int64_t segmentSizeMB,
+                                                   int64_t segmentRingSize) {
     ELogTarget* logTarget = nullptr;
     if (segmentSizeMB > 0) {
         std::string::size_type lastSlashPos = path.find_last_of("\\/");
         /// assuming segmented log is to be created in current folder, and path is the file name
         if (lastSlashPos == std::string::npos) {
             logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget("", path.c_str(), segmentSizeMB, nullptr);
+                ELogSegmentedFileTarget("", path.c_str(), segmentSizeMB, segmentRingSize);
         } else {
             std::string logPath = path.substr(0, lastSlashPos);
             std::string logName = path.substr(lastSlashPos + 1);
             if (logName.ends_with(LOG_SUFFIX)) {
                 logName = logName.substr(0, logName.size() - strlen(LOG_SUFFIX));
             }
-            logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB, nullptr);
+            logTarget = new (std::nothrow) ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(),
+                                                                   segmentSizeMB, segmentRingSize);
         }
     } else {
         if (bufferSize > 0) {
