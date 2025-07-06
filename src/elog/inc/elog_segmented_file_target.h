@@ -7,6 +7,7 @@
 #include <string>
 
 #include "elog_buffered_file_writer.h"
+// #include "elog_concurrent_ring_buffer.h"
 #include "elog_rolling_bitset.h"
 #include "elog_target.h"
 
@@ -55,16 +56,27 @@ protected:
     void flushLogTarget() final;
 
 private:
+    // typedef ELogConcurrentRingBuffer<std::string> LogMsgQueue;
+    typedef std::list<std::string> LogMsgQueue;
+    struct SegmentData {
+        uint64_t m_segmentId;
+        std::atomic<uint64_t> m_bytesLogged;
+        FILE* m_segmentFile;
+        std::mutex m_lock;
+        LogMsgQueue m_pendingMsgs;
+
+        SegmentData(uint64_t segmentId, uint64_t bytesLogged = 0)
+            : m_segmentId(segmentId), m_bytesLogged(bytesLogged), m_segmentFile(nullptr) {}
+    };
+
+    // typedef ELogConcurrentRingBuffer<SegmentData> SegmentRingBuffer;
+    // SegmentRingBuffer m_segmentRingBuffer;
+
     std::string m_logPath;
     std::string m_logName;
-    uint32_t m_segmentLimitBytes;
-    std::atomic<uint32_t> m_segmentCount;
-    std::atomic<uint64_t> m_bytesLogged;
-    std::atomic<FILE*> m_currentSegment;
+    uint64_t m_segmentLimitBytes;
+    std::atomic<SegmentData*> m_currentSegment;
     std::atomic<uint64_t> m_epoch;
-    std::atomic<uint64_t> m_segmentOpenerId;
-    std::list<std::string> m_pendingMsgQueue;
-    std::mutex m_lock;
     ELogRollingBitset m_epochSet;
 
     bool openSegment();

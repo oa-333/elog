@@ -108,65 +108,85 @@ void ELogGC::recycleRetiredObjects() {
         // no transaction finished at all up until now
         return;
     }
-    uint64_t epoch = minActiveEpoch - 1;
-
-    // go over all thread slots, and for each group/epoch pair release the group if the epoch is
-    // large enough
-    // this requires some kind of lock-free list, where we push on head, then we traverse from head
-    // until we find the point where the epoch is small enough, so we can detach the list suffix,
-    // and then release all suffix groups one by one
-    // releasing list head is tricky and could be avoided for safety
-    // this kind of GC should actually be implemented in separate and can be used as a private GC
-    // the list heads can be freed during GC destruction
 
     // traverse all lists and search for objects eligible for recycling
     // we use lock-free bit-set to tell quickly which lists are active
     // we do so in 64-bit batches
     if (m_traceLogger != nullptr) {
-        ELOG_INFO_EX(m_traceLogger, "Recycling objects by epoch %" PRIu64, epoch);
+        ELOG_INFO_EX(m_traceLogger, "Recycling objects by min-active-epoch %" PRIu64,
+                     minActiveEpoch);
     }
     uint64_t wordCount = m_activeLists.size();
     uint64_t listCount = m_objectLists.size();
     uint64_t maxActiveWord = m_maxActiveWord.load(std::memory_order_relaxed);
     for (uint64_t wordIndex = 0; wordIndex <= maxActiveWord; ++wordIndex) {
+        // each bitset word has several bits raised, each for one thread
+        // we use countr_zero to find out first non-zero bit and then reset it and find the next
         uint64_t word = m_activeLists[wordIndex].m_atomicValue.load(std::memory_order_relaxed);
-        // we use count_rzero to find out first non-zero bit and then reset it and find the next
         while (word != 0) {
             uint64_t bitOffset = std::countr_zero(word);
             uint64_t listIndex = wordIndex * ELOG_WORD_SIZE + bitOffset;
             if (listIndex >= listCount) {
+                // be careful with last word not to exceed list count
                 return;
             }
 
             // process current list, skip if currently being recycled by another thread
-            ManagedObjectList& objectList = m_objectLists[listIndex];
-            std::atomic<uint64_t>& recyclingAtomic = objectList.m_recycling.m_atomicValue;
-            uint64_t recycling = recyclingAtomic.load(std::memory_order_acquire);
-            if (!recycling &&
-                recyclingAtomic.compare_exchange_strong(recycling, 1, std::memory_order_seq_cst)) {
-                ELogManagedObject* itr =
-                    objectList.m_head.m_atomicValue.load(std::memory_order_relaxed);
-                while (itr != nullptr) {
-                    // we skip head item to avoid nasty race conditions
-                    ELogManagedObject* next = itr->getNext();
-                    if (next != nullptr && next->getRetireEpoch() <= epoch) {
-                        // detach list suffix (save it first, because CAS can change its value)
-                        ELogManagedObject* retireList = next;
-                        if (itr->detachSuffix(next)) {
-                            // we won the race so now we can detach suffix
-                            recycleObjectList(retireList);
-                        }
-                    } else {
-                        itr = next;
-                    }
-                }
-                recyclingAtomic.store(0, std::memory_order_release);
-            }
+            processObjectList(m_objectLists[listIndex], minActiveEpoch);
 
             // reset bit
             word &= ~(1 << bitOffset);
         }
     }
+}
+
+void ELogGC::processObjectList(ManagedObjectList& objectList, uint64_t minActiveEpoch) {
+    std::atomic<uint64_t>& recyclingAtomic = objectList.m_recycling.m_atomicValue;
+    uint64_t recycling = recyclingAtomic.load(std::memory_order_acquire);
+    if (recycling ||
+        !recyclingAtomic.compare_exchange_strong(recycling, 1, std::memory_order_seq_cst)) {
+        // another thread is already recycling this list, so we back off
+        return;
+    }
+
+    // at this point we may have race here with another thread trying to retire objects
+    ELogManagedObject* itr = objectList.m_head.m_atomicValue.load(std::memory_order_relaxed);
+
+    // NOTE: tackle list head case separately
+    bool recycled = false;
+    if (itr != nullptr && itr->getRetireEpoch() < minActiveEpoch) {
+        // entire list can be recycled, but we need to be careful due to race
+        ELogManagedObject* retireList = itr;
+        if (objectList.m_head.m_atomicValue.compare_exchange_strong(itr, nullptr,
+                                                                    std::memory_order_seq_cst)) {
+            recycleObjectList(retireList);
+            recycled = true;
+        }
+    }
+
+    if (!recycled) {
+        while (itr != nullptr) {
+            // skip head item
+            ELogManagedObject* next = itr->getNext();
+            if (next != nullptr && next->getRetireEpoch() < minActiveEpoch) {
+                // detach list suffix (save it first, because CAS can change its value)
+                // NOTE: there is no race here at all, because no other thread is recycling the
+                // list, and the thread that retires object to this list can only push objects on
+                // list head, so the suffix is not affected
+                ELogManagedObject* retireList = next;
+                if (itr->detachSuffix(next)) {
+                    recycleObjectList(retireList);
+                }
+                // however things turned out, we are done with this list
+                break;
+            } else {
+                itr = next;
+            }
+        }
+    }
+
+    // reset recycling flag
+    recyclingAtomic.store(0, std::memory_order_release);
 }
 
 void ELogGC::onThreadExit(void* param) {

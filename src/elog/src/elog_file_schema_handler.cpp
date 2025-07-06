@@ -9,6 +9,8 @@
 
 namespace elog {
 
+static const char* LOG_SUFFIX = ".log";
+
 ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
                                               const ELogTargetSpec& logTargetSpec) {
     // path should be already parsed
@@ -48,29 +50,7 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
         }
     }
 
-    ELogTarget* logTarget = nullptr;
-    if (segmentSizeMB > 0) {
-        std::string::size_type lastSlashPos = logTargetSpec.m_path.find_last_of("\\/");
-        /// assuming segmented log is to be created in current folder, and path is the file name
-        if (lastSlashPos == std::string::npos) {
-            logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget("", logTargetSpec.m_path.c_str(), segmentSizeMB, nullptr);
-        } else {
-            std::string logPath = logTargetSpec.m_path.substr(0, lastSlashPos);
-            std::string logName = logTargetSpec.m_path.substr(lastSlashPos + 1);
-            logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB, nullptr);
-        }
-    } else {
-        if (bufferSize > 0) {
-            logTarget = new (std::nothrow)
-                ELogBufferedFileTarget(logTargetSpec.m_path.c_str(), bufferSize, useFileLock);
-        } else {
-            logTarget = new (std::nothrow) ELogFileTarget(logTargetSpec.m_path.c_str());
-        }
-    }
-
-    return logTarget;
+    return createLogTarget(logTargetSpec.m_path, bufferSize, useFileLock, segmentSizeMB);
 }
 
 ELogTarget* ELogFileSchemaHandler::loadTarget(const std::string& logTargetCfg,
@@ -116,6 +96,11 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
         return nullptr;
     }
 
+    return createLogTarget(path, bufferSize, useFileLock, segmentSizeMB);
+}
+
+ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, int64_t bufferSize,
+                                                   bool useFileLock, int64_t segmentSizeMB) {
     ELogTarget* logTarget = nullptr;
     if (segmentSizeMB > 0) {
         std::string::size_type lastSlashPos = path.find_last_of("\\/");
@@ -126,6 +111,9 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
         } else {
             std::string logPath = path.substr(0, lastSlashPos);
             std::string logName = path.substr(lastSlashPos + 1);
+            if (logName.ends_with(LOG_SUFFIX)) {
+                logName = logName.substr(0, logName.size() - strlen(LOG_SUFFIX));
+            }
             logTarget = new (std::nothrow)
                 ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB, nullptr);
         }

@@ -41,6 +41,10 @@ public:
      * @return ELogTarget* The resulting log target or null if failed.
      */
     ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
+
+private:
+    ELogTarget* createLogTarget(const std::string& path, int64_t bufferSize, bool useFileLock,
+                                int64_t segmentSizeMB);
 };
 
 }  // namespace elog

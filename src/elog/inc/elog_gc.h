@@ -138,6 +138,9 @@ private:
     // TLS key used for getting thread going down notification
     ELogTlsKey m_tlsKey;
 
+    // process retire list and check for possible recycling
+    void processObjectList(ManagedObjectList& objectList, uint64_t minActiveEpoch);
+
     // TLS destructor function used as thread exit notification
     static void onThreadExit(void* param);
 
