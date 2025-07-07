@@ -81,64 +81,7 @@ shift
 IF "%1" == "--" shift & GOTO SET_OPTS
 IF NOT "%1" == "" GOTO GET_OPTS
 
-IF %HELP% EQU 1 (
-    echo.
-    echo ELog build script syntax:
-    echo.
-    echo build.bat [BUILD MODE] [EXTENSIONS] [BUILD OPTIONS] [DEBUG OPTIONS] [MISC OPTIONS]
-    echo.
-    echo.
-    echo BUILD MODE OPTIONS
-    echo.
-    echo       -r^|--release                Build in release mode.
-    echo       -d^|--debug                  Build in debug mode.
-    echo       -w^|--rel-with-debug-info    Build in release mode with debug symbols.
-    echo.
-    echo If none is specified, then the default is debug build mode.
-    echo.
-    echo.
-    echo EXTENSIONS OPTIONS
-    echo.
-    echo       -c^|--conn CONNECTOR_NAME    Enables connector.
-    echo       -s^|--stack-trace            Enable stack trace logging API.
-    echo       -f^|--full                   Enable all connectors and stack trace logging API.
-    echo.
-    echo By default no connector is enabled, and stack trace logging is disabled.
-    echo The following connectors are currently supported:
-    echo.
-    echo   Name            Connector
-    echo   ----            ---------
-    echo   grafana         Grafana-Loki connector
-    echo   sentry          Sentry connector
-    echo   datadog         Datadog connector
-    echo   sqlite          SQLite database connector
-    echo   mysql           MySQL database connector (experimental)
-    echo   postgresql      PostgreSQL database connector
-    echo   kafka           Kafka topic connector
-    echo   grpc            gRPC connector
-    echo   all             Enables all connectors
-    echo.
-    echo.
-    echo BUILD OPTIONS
-    echo.
-    echo       -v^|--verbose        Issue verbose messages during build
-    echo       -l^|--clean          Cleans previous build
-    echo       -g^|--reconfigure    Forces rerunning configuration phase of CMake.
-    echo       -a^|--clang          Use clang toolchain for builder, rather than default gcc.
-    echo       -i^|--install-dir INSTALL_PATH   Specifies installation directory.
-    echo.
-    echo.
-    echo DEBUG OPTIONS
-    echo.
-    echo       -t^|--trace          Enable trace logging of some components.
-    echo       -m^|--mem-check      Enables address sanitizers to perform memory checks.
-    echo.
-    echo.
-    echo MISC OPTIONS
-    echo.
-    echo       -h^|--help           Prints this help screen.
-    exit /b 0
-)
+IF %HELP% EQU 1 GOTO PRINT_HELP
 
 :SET_OPTS
 echo [DEBUG] Parsed args:
@@ -316,3 +259,61 @@ exit /b 0
 :HANDLE_ERROR
 echo Build failed, see errors above, aborting
 exit /b 1
+
+:PRINT_HELP
+echo.
+echo ELog build script syntax:
+echo.
+echo build.bat [BUILD MODE] [EXTENSIONS] [BUILD OPTIONS] [DEBUG OPTIONS] [MISC OPTIONS]
+echo.
+echo.
+echo BUILD MODE OPTIONS
+echo.
+echo       -r^|--release                Build in release mode.
+echo       -d^|--debug                  Build in debug mode.
+echo       -w^|--rel-with-debug-info    Build in release mode with debug symbols.
+echo.
+echo If none is specified, then the default is debug build mode.
+echo.
+echo.
+echo EXTENSIONS OPTIONS
+echo.
+echo       -c^|--conn CONNECTOR_NAME    Enables connector.
+echo       -s^|--stack-trace            Enable stack trace logging API.
+echo       -f^|--full                   Enable all connectors and stack trace logging API.
+echo.
+echo By default no connector is enabled, and stack trace logging is disabled.
+echo The following connectors are currently supported:
+echo.
+echo   Name            Connector
+echo   ----            ---------
+echo   grafana         Grafana-Loki connector
+echo   sentry          Sentry connector
+echo   datadog         Datadog connector
+echo   sqlite          SQLite database connector
+echo   mysql           MySQL database connector (experimental)
+echo   postgresql      PostgreSQL database connector
+echo   kafka           Kafka topic connector
+echo   grpc            gRPC connector
+echo   all             Enables all connectors
+echo.
+echo.
+echo BUILD OPTIONS
+echo.
+echo       -v^|--verbose        Issue verbose messages during build
+echo       -l^|--clean          Cleans previous build
+echo       -g^|--reconfigure    Forces rerunning configuration phase of CMake.
+echo       -a^|--clang          Use clang toolchain for builder, rather than default gcc.
+echo       -i^|--install-dir INSTALL_PATH   Specifies installation directory.
+echo.
+echo.
+echo DEBUG OPTIONS
+echo.
+echo       -t^|--trace          Enable trace logging of some components.
+echo       -m^|--mem-check      Enables address sanitizers to perform memory checks.
+echo.
+echo.
+echo MISC OPTIONS
+echo.
+echo       -h^|--help           Prints this help screen.
+exit /b 0
