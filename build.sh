@@ -198,6 +198,10 @@ do
     fi
 done
 
+if [ $VERBOSE -eq 1 ]; then
+    VERBOSE_OPT=--verbose
+fi
+
 # prepare build directory
 BUILD_DIR=cmake_build/${PLATFORM}-${BUILD_TYPE}
 echo "[INFO] Using build directory: '$BUILD_DIR'"
@@ -206,7 +210,7 @@ pushd $BUILD_DIR > /dev/null
 
 if [ $CLEAN -eq 1 ]; then
     echo "[INFO] Running target clean"
-    cmake --build . -j --verbose --target clean
+    cmake --build . -j $VERBOSE_OPT --target clean
     if [ $? -ne 0 ]; then
         echo "[ERROR] Clean failed, see errors above, aborting"
         popd > /dev/null
@@ -236,7 +240,7 @@ fi
 
 # build phase
 echo "[INFO] Building target elog"
-cmake --build . -j --verbose
+cmake --build . -j $VERBOSE_OPT
 if [ $? -ne 0 ]; then
     echo "[ERROR] Build phase failed, see errors above, aborting"
     popd > /dev/null

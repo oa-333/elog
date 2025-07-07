@@ -29,17 +29,11 @@ bool ELogJsonFormatter::parseJson(const std::string& jsonStr) {
                 }
 
                 // extract field spec string and parse
+                // NOTE: the call to parseFieldSpec() already triggers a call to handleField()
                 std::string valueStr = value.substr(2, value.size() - 2);
-                ELogFieldSpec fieldSpec;
-                if (!parseFieldSpec(valueStr, fieldSpec)) {
+                if (!parseFieldSpec(valueStr)) {
                     ELOG_REPORT_ERROR("Failed to parse json value '%s' for key '%s'",
                                       item.value().dump().c_str(), item.key().c_str());
-                    return false;
-                }
-
-                // now collect the field
-                ELOG_REPORT_TRACE("Extracted field spec: %s", fieldSpec.m_name.c_str());
-                if (!handleField(fieldSpec)) {
                     return false;
                 }
             } else {

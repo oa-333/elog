@@ -20,15 +20,6 @@ public:
      * @param targetSpec The parsed configuration string.
      * @return ELogMonTarget* The resulting monitoring tool log target, or null of failed.
      */
-    virtual ELogMonTarget* loadTarget(const std::string& logTargetCfg,
-                                      const ELogTargetSpec& targetSpec) = 0;
-
-    /**
-     * @brief Loads a target from configuration.
-     * @param logTargetCfg The configuration string.
-     * @param targetSpec The parsed configuration string.
-     * @return ELogMonTarget* The resulting monitoring tool log target, or null of failed.
-     */
     virtual ELogMonTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) = 0;
 
 protected:

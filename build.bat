@@ -180,9 +180,9 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         vcpkg add port sentry-native
     )
 )
-echo [DEBUG] Parsed connections
-echo [DEBUG] Current options: %OPTS%
-echo [DEBUG] MYSQL_ROOT=%MYSQL_ROOT%
+REM echo [DEBUG] Parsed connections
+REM echo [DEBUG] Current options: %OPTS%
+REM echo [DEBUG] MYSQL_ROOT=%MYSQL_ROOT%
 
 REM prepare build directory
 SET BUILD_DIR=cmake_build\%PLATFORM%-%BUILD_TYPE%
@@ -233,11 +233,15 @@ IF errorlevel 1 (
     GOTO HANDLE_ERROR
 )
 
+if %VERBOSE% EQU 1 (
+    SET VERBOSE_OPT=--verbose
+)
+
 REM build phase
 REM NOTE: On windows MSVC (multi-config system), then configuration to build should be specified in build command
 echo [INFO]  Building
 echo [INFO] Executing command: cmake --build . -j --verbose --config %BUILD_TYPE%
-cmake --build . -j --verbose --config %BUILD_TYPE%
+cmake --build . -j %VERBOSE_OPT% --config %BUILD_TYPE%
 IF errorlevel 1 (
     echo [ERROR] Build phase failed, see errors above, aborting
     popd > NUL
@@ -246,7 +250,7 @@ IF errorlevel 1 (
 
 REM install phase
 echo [INFO]  Installing
-cmake --install . --verbose --config %BUILD_TYPE%
+cmake --install . %VERBOSE_OPT% --config %BUILD_TYPE%
 IF errorlevel 1 (
     echo [ERROR] Install phase failed, see errors above, aborting
     popd > NUL

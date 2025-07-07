@@ -313,59 +313,6 @@ bool ELogSystem::configureRateLimit(const std::string& rateLimitCfg) {
     return setRateLimit(maxMsgPerSec);
 }
 
-bool ELogSystem::configureLogTarget(const std::string& logTargetCfg) {
-    // the following formats are currently supported as a URL-like string
-    //
-    // sys://stdout
-    // sys://stderr
-    // sys://syslog
-    //
-    // file://path
-    // file://path?segment-size-mb=<segment-size-mb>
-    //
-    // optional parameters (each set is mutually exclusive with other sets)
-    // defer (no value associated)
-    // queue_batch_size=<batch-size>,queue_timeout_millis=<timeout-millis>
-    // quantum_buffer_size=<buffer-size>
-    //
-    // future provision:
-    // tcp://host:port
-    // udp://host:port
-    // db://db-name?conn_string=<conn-string>&insert-statement=<insert-statement>
-    // msgq://message-broker-name?conn_string=<conn-string>&queue=<queue-name>&msgq_topic=<topic-name>
-    //
-    // additionally the following nested format is accepted:
-    //
-    // log_target = { scheme=db, db-name=postgresql, ...}
-    // log_target = { scheme = async, type = deferred, log_target = { scheme = file, path = ...}}
-    // log_target = { scheme = async, type = quantum, quantum_buffer_size = 10000,
-    //      log_target = [{ scheme = file, path = ...}, {}, {}]}
-    //
-    // in theory nesting level is not restricted, but it doesn't make sense to have more than 2
-
-    ELogTargetSpecStyle specStyle = ELogTargetSpecStyle::ELOG_STYLE_URL;
-    ELogTargetNestedSpec logTargetNestedSpec;
-    if (!ELogConfigParser::parseLogTargetSpec(logTargetCfg, logTargetNestedSpec, specStyle)) {
-        return false;
-    }
-
-    // load the target (common properties already configured)
-    ELogTarget* logTarget =
-        ELogConfigLoader::loadLogTarget(logTargetCfg, logTargetNestedSpec, specStyle);
-    if (logTarget == nullptr) {
-        return false;
-    }
-
-    // finally add the log target
-    if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
-        ELOG_REPORT_ERROR("Failed to add log target for scheme %s: %s",
-                          logTargetNestedSpec.m_spec.m_scheme.c_str(), logTargetCfg.c_str());
-        delete logTarget;
-        return false;
-    }
-    return true;
-}
-
 bool ELogSystem::configureLogTargetEx(const std::string& logTargetCfg,
                                       ELogTargetId* id /* = nullptr */) {
     // the following formats are currently supported as a URL-like string
@@ -528,7 +475,7 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
         // check for log target
         if (prop.first.compare(ELOG_TARGET_CONFIG_NAME) == 0) {
             // configure log target
-            if (!configureLogTarget(prop.second)) {
+            if (!configureLogTargetEx(prop.second)) {
                 return false;
             }
             continue;

@@ -16,11 +16,6 @@ public:
     ELogPGSQLDbTargetProvider(ELogPGSQLDbTargetProvider&&) = delete;
     ~ELogPGSQLDbTargetProvider() final {}
 
-    ELogDbTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
-                             const std::string& connString, const std::string& insertQuery,
-                             ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads,
-                             uint32_t reconnectTimeoutMillis) final;
-
     ELogDbTarget* loadTarget(const ELogConfigMapNode* logTargetCfg, const std::string& connString,
                              const std::string& insertQuery, ELogDbTarget::ThreadModel threadModel,
                              uint32_t maxThreads, uint32_t reconnectTimeoutMillis) final;

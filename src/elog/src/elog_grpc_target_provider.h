@@ -16,10 +16,6 @@ public:
     ELogGRPCTargetProvider(ELogGRPCTargetProvider&&) = delete;
     ~ELogGRPCTargetProvider() final;
 
-    ELogRpcTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
-                              const std::string& server, const std::string& host, int port,
-                              const std::string& functionName, const std::string& params) final;
-
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration object.

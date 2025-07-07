@@ -8,10 +8,6 @@
 #include <grpcpp/security/credentials.h>
 #include <grpcpp/support/interceptor.h>
 
-#ifdef ELOG_MSVC
-#define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
-#endif
-
 #define ELOG_INVALID_REQUEST_ID ((uint64_t)-1)
 #define ELOG_FLUSH_REQUEST_ID ((uint64_t)-2)
 

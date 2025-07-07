@@ -4,6 +4,7 @@
 
 #include "elog_common.h"
 #include "elog_error.h"
+#include "elog_json_receptor.h"
 
 namespace elog {
 

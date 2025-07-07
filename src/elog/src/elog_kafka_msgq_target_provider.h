@@ -16,9 +16,6 @@ public:
     ELogKafkaMsgQTargetProvider(ELogKafkaMsgQTargetProvider&&) = delete;
     ~ELogKafkaMsgQTargetProvider() final {}
 
-    ELogMsgQTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec,
-                               const std::string& topic, const std::string& headers) final;
-
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration object.

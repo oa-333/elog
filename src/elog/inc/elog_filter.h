@@ -14,11 +14,6 @@ public:
     virtual ~ELogFilter() {}
 
     /** @brief Loads filter from configuration. */
-    virtual bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) {
-        return true;
-    }
-
-    /** @brief Loads filter from configuration. */
     virtual bool load(const ELogConfigMapNode* filterCfg) { return true; }
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
@@ -88,9 +83,6 @@ public:
     ELogNotFilter(ELogFilter* filter) : m_filter(filter) {}
     ~ELogNotFilter() final;
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -124,9 +116,6 @@ public:
 
     /** @brief Adds a sub-filter to the filter set. */
     inline void addFilter(ELogFilter* filter) { m_filters.push_back(filter); }
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -222,9 +211,6 @@ public:
         : ELogCmpFilter(cmpOp), m_recordId(recordId) {}
     ~ELogRecordIdFilter() override {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -251,9 +237,6 @@ public:
     ELogRecordTimeFilter(ELogTime logTime, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_GE)
         : ELogCmpFilter(cmpOp), m_logTime(logTime) {}
     ~ELogRecordTimeFilter() override {}
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -286,9 +269,6 @@ public:
         : ELogCmpFilter(cmpOp), m_hostName(hostName) {}
     ~ELogHostNameFilter() override {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -314,9 +294,6 @@ public:
     ELogUserNameFilter(const char* userName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_userName(userName) {}
     ~ELogUserNameFilter() override {}
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -344,9 +321,6 @@ public:
         : ELogCmpFilter(cmpOp), m_programName(programName) {}
     ~ELogProgramNameFilter() override {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -373,9 +347,6 @@ public:
         : ELogCmpFilter(cmpOp), m_processIdName(processIdName) {}
     ~ELogProcessIdFilter() override {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -401,9 +372,6 @@ public:
     ELogThreadIdFilter(const char* threadIdName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_threadIdName(threadIdName) {}
     ~ELogThreadIdFilter() override {}
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -432,9 +400,6 @@ public:
         : ELogCmpFilter(cmpOp), m_threadName(threadName) {}
     ~ELogThreadNameFilter() final {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -460,9 +425,6 @@ public:
     ELogSourceFilter(const char* logSourceName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_logSourceName(logSourceName) {}
     ~ELogSourceFilter() final {}
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -490,9 +452,6 @@ public:
         : ELogCmpFilter(cmpOp), m_logModuleName(logModuleName) {}
     ~ELogModuleFilter() final {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -518,9 +477,6 @@ public:
     ELogFileNameFilter(const char* fileName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_fileName(fileName) {}
     ~ELogFileNameFilter() final {}
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -550,9 +506,6 @@ public:
         : ELogCmpFilter(cmpOp), m_lineNumber(lineNumber) {}
     ~ELogLineNumberFilter() final {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -578,9 +531,6 @@ public:
     ELogFunctionNameFilter(const char* functionName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_functionName(functionName) {}
     ~ELogFunctionNameFilter() final {}
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -610,9 +560,6 @@ public:
         : ELogCmpFilter(cmpOp), m_logLevel(logLevel) {}
     ~ELogLevelFilter() final {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -638,9 +585,6 @@ public:
     ELogMsgFilter(const char* logMsg = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_logMsg(logMsg) {}
     ~ELogMsgFilter() final {}
-
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;

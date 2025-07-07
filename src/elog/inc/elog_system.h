@@ -703,7 +703,6 @@ private:
     static void termGlobals();
     static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
     static bool configureRateLimit(const std::string& rateLimitCfg);
-    static bool configureLogTarget(const std::string& logTargetCfg);
     static bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id = nullptr);
     static bool configureLogTarget(const ELogConfigMapNode* logTargetCfg,
                                    ELogTargetId* id = nullptr);

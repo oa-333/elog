@@ -31,26 +31,6 @@ public:
     /**
      * @brief Adds a log target from target specification (internal use only).
      */
-    static ELogTarget* loadLogTarget(const std::string& logTargetCfg,
-                                     const ELogTargetNestedSpec& logTargetNestedSpec,
-                                     ELogTargetSpecStyle specStyle);
-
-    /**
-     * @brief Loads a flush policy from target specification using nested style (internal use only).
-     */
-    static ELogFlushPolicy* loadFlushPolicy(const std::string& logTargetCfg,
-                                            const ELogTargetNestedSpec& logTargetNestedSpec,
-                                            bool allowNone, bool& result);
-
-    /**
-     * @brief Loads a log filter from target specification using nested style (internal use only).
-     */
-    static ELogFilter* loadLogFilter(const std::string& logTargetCfg,
-                                     const ELogTargetNestedSpec& logTargetNestedSpec, bool& result);
-
-    /**
-     * @brief Adds a log target from target specification (internal use only).
-     */
     static ELogTarget* loadLogTarget(const ELogConfigMapNode* logTargetCfg);
 
     /**
@@ -102,20 +82,6 @@ private:
     static ELogFilter* loadLogFilterExpr(ELogExpression* expr);
     static ELogFilter* loadLogFilter(const ELogConfigMapNode* filterCfg, const char* filterType,
                                      bool& result);
-    static bool configureLogTargetCommon(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                         const ELogTargetNestedSpec& logTargetSpec);
-    static void applyTargetName(ELogTarget* logTarget, const ELogTargetSpec& logTargetSpec);
-    static bool applyTargetLogLevel(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                    const ELogTargetSpec& logTargetSpec);
-    static bool applyTargetLogFormat(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                     const ELogTargetSpec& logTargetSpec);
-    static bool applyTargetFlushPolicy(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                       const ELogTargetNestedSpec& logTargetSpec);
-    static bool applyTargetFilter(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                  const ELogTargetNestedSpec& logTargetSpec);
-    static ELogTarget* applyCompoundTarget(ELogTarget* logTarget, const std::string& logTargetCfg,
-                                           const ELogTargetSpec& logTargetSpec,
-                                           bool& errorOccurred);
 
     static bool configureLogTargetCommon(ELogTarget* logTarget,
                                          const ELogConfigMapNode* logTargetCfg);

@@ -159,49 +159,6 @@ bool ELogFlushPolicy::loadIntFlushPolicy(const ELogExpression* expr, const char*
     return true;
 }
 
-bool ELogCompoundFlushPolicy::load(const std::string& logTargetCfg,
-                                   const ELogTargetNestedSpec& logTargetSpec) {
-    // we expect to find a nested property 'flush_policy_args' with one or more array item
-    ELogTargetNestedSpec::SubSpecMap::const_iterator itr =
-        logTargetSpec.m_subSpec.find("flush_policy_args");
-    if (itr == logTargetSpec.m_subSpec.end()) {
-        ELOG_REPORT_ERROR(
-            "Missing 'flush_policy_args' nested property required for compound flush policy: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-
-    const ELogTargetNestedSpec::SubSpecList& subSpecList = itr->second;
-    if (subSpecList.empty()) {
-        ELOG_REPORT_ERROR(
-            "Nested property 'flush_policy_args' (required for compound flush policy) is empty: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    for (uint32_t i = 0; i < subSpecList.size(); ++i) {
-        const ELogTargetNestedSpec& subSpec = subSpecList[i];
-        bool result = true;
-        ELogFlushPolicy* flushPolicy =
-            ELogConfigLoader::loadFlushPolicy(logTargetCfg, subSpec, false, result);
-        if (!result) {
-            ELOG_REPORT_ERROR(
-                "Failed to load %uth sub-flush-policy for compound flush policy: %s (see previous "
-                "errors)",
-                i, logTargetCfg.c_str());
-            return false;
-        }
-        if (flushPolicy == nullptr) {
-            ELOG_REPORT_ERROR(
-                "Failed to load %uth sub-flush-policy for compound flush policy, policy "
-                "specification not found: %s",
-                i, logTargetCfg.c_str());
-            return false;
-        }
-        addFlushPolicy(flushPolicy);
-    }
-    return true;
-}
-
 bool ELogCompoundFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     // we expect to find a nested property 'flush_policy_args' with one or more array item
     const ELogConfigValue* cfgValue = flushPolicyCfg->getValue("flush_policy_args");
@@ -315,51 +272,6 @@ bool ELogOrFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     return false;
 }
 
-bool ELogNotFlushPolicy::load(const std::string& logTargetCfg,
-                              const ELogTargetNestedSpec& logTargetSpec) {
-    // we expect to find a nested property 'flush_policy_args' with one array item
-    ELogTargetNestedSpec::SubSpecMap::const_iterator itr =
-        logTargetSpec.m_subSpec.find("flush_policy_args");
-    if (itr == logTargetSpec.m_subSpec.end()) {
-        ELOG_REPORT_ERROR(
-            "Missing 'flush_policy_args' nested property required for NOT flush policy: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-
-    const ELogTargetNestedSpec::SubSpecList& subSpecList = itr->second;
-    if (subSpecList.empty()) {
-        ELOG_REPORT_ERROR(
-            "Nested property 'flush_policy_args' (required for NOT flush policy) is empty: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (subSpecList.size() > 1) {
-        ELOG_REPORT_ERROR(
-            "Nested property 'flush_policy_args' (required for NOT flush policy) has more than one "
-            "item: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    const ELogTargetNestedSpec& subSpec = subSpecList[0];
-    bool result = false;
-    m_flushPolicy = ELogConfigLoader::loadFlushPolicy(logTargetCfg, subSpec, false, result);
-    if (!result) {
-        ELOG_REPORT_ERROR(
-            "Failed to load sub-flush policy for NOT flush policy: %s (see errors above)",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (m_flushPolicy == nullptr) {
-        ELOG_REPORT_ERROR(
-            "Failed to load sub-flush policy for NOT flush policy, flush policy specification not "
-            "found: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    return true;
-}
-
 bool ELogNotFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     // we expect to find a nested property 'args' with one array item
     const ELogConfigValue* cfgValue = flushPolicyCfg->getValue("flush_policy_args");
@@ -438,26 +350,6 @@ bool ELogImmediateFlushPolicy::shouldFlush(uint32_t msgSizeBytes) { return true;
 
 bool ELogNeverFlushPolicy::shouldFlush(uint32_t msgSizeBytes) { return false; }
 
-bool ELogCountFlushPolicy::load(const std::string& logTargetCfg,
-                                const ELogTargetNestedSpec& logTargetSpec) {
-    ELogPropertyMap::const_iterator itr = logTargetSpec.m_spec.m_props.find("flush_count");
-    if (itr == logTargetSpec.m_spec.m_props.end()) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, missing expected flush_count property for "
-            "flush_policy=count: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (!parseIntProp("flush_count", logTargetCfg, itr->second, m_logCountLimit, true)) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, flush_count property value '%s' is an "
-            "ill-formed integer: %s",
-            itr->second.c_str(), logTargetCfg.c_str());
-        return false;
-    }
-    return true;
-}
-
 bool ELogCountFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return loadIntFlushPolicy(flushPolicyCfg, "count", "flush_count", m_logCountLimit);
 }
@@ -469,26 +361,6 @@ bool ELogCountFlushPolicy::load(const ELogExpression* expr) {
 bool ELogCountFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     uint64_t logCount = m_currentLogCount.fetch_add(1, std::memory_order_relaxed);
     return ((logCount + 1) % m_logCountLimit == 0);
-}
-
-bool ELogSizeFlushPolicy::load(const std::string& logTargetCfg,
-                               const ELogTargetNestedSpec& logTargetSpec) {
-    ELogPropertyMap::const_iterator itr = logTargetSpec.m_spec.m_props.find("flush_size_bytes");
-    if (itr == logTargetSpec.m_spec.m_props.end()) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, missing expected flush_size_bytes "
-            "property for flush_policy=size: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (!parseIntProp("flush_size_bytes", logTargetCfg, itr->second, m_logSizeLimitBytes, true)) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, flush_size_bytes property value '%s' is "
-            "an ill-formed integer: %s",
-            itr->second.c_str(), logTargetCfg.c_str());
-        return false;
-    }
-    return true;
 }
 
 bool ELogSizeFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
@@ -519,29 +391,6 @@ ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarg
       m_stopTimer(false) {}
 
 ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
-
-bool ELogTimedFlushPolicy::load(const std::string& logTargetCfg,
-                                const ELogTargetNestedSpec& logTargetSpec) {
-    ELogPropertyMap::const_iterator itr = logTargetSpec.m_spec.m_props.find("flush_timeout_millis");
-    if (itr == logTargetSpec.m_spec.m_props.end()) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, missing expected flush_timeout_millis "
-            "property for flush_policy=time: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    uint64_t logTimeLimitMillis = 0;
-    if (!parseIntProp("flush_timeout_millis", logTargetCfg, itr->second, logTimeLimitMillis,
-                      true)) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, flush_timeout_millis property value '%s' "
-            "is an ill-formed integer: %s",
-            itr->second.c_str(), logTargetCfg.c_str());
-        return false;
-    }
-    m_logTimeLimitMillis = Millis(logTimeLimitMillis);
-    return true;
-}
 
 bool ELogTimedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     bool found = false;
@@ -618,70 +467,6 @@ void ELogTimedFlushPolicy::onTimer() {
 bool ELogTimedFlushPolicy::shouldStop() {
     std::unique_lock<std::mutex> lock(m_lock);
     return m_stopTimer;
-}
-
-bool ELogChainedFlushPolicy::load(const std::string& logTargetCfg,
-                                  const ELogTargetNestedSpec& logTargetSpec) {
-    // we expect to find a nested property 'flush_policy_args' with two array item
-    ELogTargetNestedSpec::SubSpecMap::const_iterator itr =
-        logTargetSpec.m_subSpec.find("flush_policy_args");
-    if (itr == logTargetSpec.m_subSpec.end()) {
-        ELOG_REPORT_ERROR(
-            "Missing 'flush_policy_args' nested property required for CHAIN flush policy: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-
-    const ELogTargetNestedSpec::SubSpecList& subSpecList = itr->second;
-    if (subSpecList.empty()) {
-        ELOG_REPORT_ERROR(
-            "Nested property 'flush_policy_args' (required for CHAIN flush policy) is empty: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (subSpecList.size() != 2) {
-        ELOG_REPORT_ERROR(
-            "Nested property 'flush_policy_args' (required for CHAIN flush policy) does not have "
-            "exactly two items: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    const ELogTargetNestedSpec& controlSubSpec = subSpecList[0];
-    const ELogTargetNestedSpec& moderateSubSpec = subSpecList[1];
-    bool result = false;
-    m_controlPolicy =
-        ELogConfigLoader::loadFlushPolicy(logTargetCfg, moderateSubSpec, false, result);
-    if (!result) {
-        ELOG_REPORT_ERROR(
-            "Failed to load control sub-flush policy for CHAIN flush policy: %s (see errors above)",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (m_controlPolicy == nullptr) {
-        ELOG_REPORT_ERROR(
-            "Failed to load control sub-flush policy for CHAIN flush policy, flush policy "
-            "specification not found: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-
-    m_moderatePolicy =
-        ELogConfigLoader::loadFlushPolicy(logTargetCfg, moderateSubSpec, false, result);
-    if (!result) {
-        ELOG_REPORT_ERROR(
-            "Failed to load moderate sub-flush policy for CHAIN flush policy: %s (see errors "
-            "above)",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (m_moderatePolicy == nullptr) {
-        ELOG_REPORT_ERROR(
-            "Failed to load moderate sub-flush policy for CHAIN flush policy, flush policy "
-            "specification not found: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    return true;
 }
 
 bool ELogChainedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
@@ -801,44 +586,6 @@ void ELogChainedFlushPolicy::propagateLogTarget(ELogTarget* logTarget) {
     if (m_moderatePolicy->isActive()) {
         m_moderatePolicy->setLogTarget(logTarget);
     }
-}
-
-bool ELogGroupFlushPolicy::load(const std::string& logTargetCfg,
-                                const ELogTargetNestedSpec& logTargetSpec) {
-    ELogPropertyMap::const_iterator itr = logTargetSpec.m_spec.m_props.find("group_size");
-    if (itr == logTargetSpec.m_spec.m_props.end()) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, missing expected group_size property for "
-            "flush_policy=group: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    if (!parseIntProp("group_size", logTargetCfg, itr->second, m_groupSize, true)) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, group_size property value '%s' is an ill-formed "
-            "integer: %s",
-            itr->second.c_str(), logTargetCfg.c_str());
-        return false;
-    }
-    itr = logTargetSpec.m_spec.m_props.find("group_timeout_micros");
-    if (itr == logTargetSpec.m_spec.m_props.end()) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, missing expected group_timeout_micros "
-            "property for flush_policy=group: %s",
-            logTargetCfg.c_str());
-        return false;
-    }
-    uint64_t groupTimeoutMicros = 0;
-    if (!parseIntProp("group_timeout_micros", logTargetCfg, itr->second, groupTimeoutMicros,
-                      true)) {
-        ELOG_REPORT_ERROR(
-            "Invalid flush policy configuration, group_timeout_micros property value '%s' "
-            "is an ill-formed integer: %s",
-            itr->second.c_str(), logTargetCfg.c_str());
-        return false;
-    }
-    m_groupTimeoutMicros = Micros(groupTimeoutMicros);
-    return true;
 }
 
 bool ELogGroupFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {

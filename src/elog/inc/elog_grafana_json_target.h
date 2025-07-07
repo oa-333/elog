@@ -28,7 +28,7 @@ namespace elog {
 
 class ELOG_API ELogGrafanaJsonTarget : public ELogGrafanaTarget {
 public:
-    ELogGrafanaJsonTarget(const std::string& lokiEndpoint, uint32_t connectTimeoutMillis,
+    ELogGrafanaJsonTarget(const char* lokiEndpoint, uint32_t connectTimeoutMillis,
                           uint32_t writeTimeoutMillis, uint32_t readTimeoutMillis,
                           const char* labels, const char* logLineMetadata)
         : ELogGrafanaTarget(lokiEndpoint, connectTimeoutMillis, writeTimeoutMillis,

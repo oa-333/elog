@@ -69,37 +69,6 @@ bool ELogMonSchemaHandler::registerMonTargetProvider(const char* monitorName,
     return m_providerMap.insert(ProviderMap::value_type(monitorName, provider)).second;
 }
 
-ELogTarget* ELogMonSchemaHandler::loadTarget(const std::string& logTargetCfg,
-                                             const ELogTargetSpec& targetSpec) {
-    // the path represents the monitoring tool type
-    // current predefined types are supported:
-    // grafana_loki
-    const std::string& monType = targetSpec.m_path;
-
-    ProviderMap::iterator providerItr = m_providerMap.find(monType);
-    if (providerItr != m_providerMap.end()) {
-        ELogMonTargetProvider* provider = providerItr->second;
-        return provider->loadTarget(logTargetCfg, targetSpec);
-    }
-
-    ELOG_REPORT_ERROR("Invalid monitoring tool log target specification, unsupported type %s: %s",
-                      monType.c_str(), logTargetCfg.c_str());
-    return nullptr;
-}
-
-ELogTarget* ELogMonSchemaHandler::loadTarget(const std::string& logTargetCfg,
-                                             const ELogTargetNestedSpec& targetNestedSpec) {
-    // first make sure there ar no log target sub-specs
-    if (targetNestedSpec.m_subSpec.find("log_target") != targetNestedSpec.m_subSpec.end()) {
-        ELOG_REPORT_ERROR("Monitoring tool log target cannot have sub-targets: %s",
-                          logTargetCfg.c_str());
-        return nullptr;
-    }
-
-    // no difference, just call URL style loading
-    return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
-}
-
 ELogTarget* ELogMonSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // the path represents the monitoring tool type
     // current predefined types are supported:

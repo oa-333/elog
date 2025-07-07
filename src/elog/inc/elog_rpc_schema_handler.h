@@ -25,23 +25,6 @@ public:
     bool registerRpcTargetProvider(const char* providerName, ELogRpcTargetProvider* provider);
 
     /**
-     * @brief Loads a log target by a specification.
-     * @param logTargetCfg The log target string specification.
-     * @param targetSpec The log target specification.
-     * @return ELogTarget* The resulting log target or null if failed.
-     */
-    ELogTarget* loadTarget(const std::string& logTargetCfg, const ELogTargetSpec& targetSpec) final;
-
-    /**
-     * @brief Loads a log target by a specification.
-     * @param logTargetCfg The log target string specification.
-     * @param targetNestedSpec The log target nested specification.
-     * @return ELogTarget* The resulting log target or null if failed.
-     */
-    ELogTarget* loadTarget(const std::string& logTargetCfg,
-                           const ELogTargetNestedSpec& targetNestedSpec) final;
-
-    /**
      * @brief Loads a log target from a configuration object.
      * @param logTargetCfg The log target configuration object.
      * @return ELogTarget* The resulting log target or null if failed.

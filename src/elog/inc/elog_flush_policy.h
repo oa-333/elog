@@ -35,11 +35,6 @@ public:
     virtual ~ELogFlushPolicy() {}
 
     /** @brief Loads flush policy from configuration. */
-    virtual bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) {
-        return true;
-    }
-
-    /** @brief Loads flush policy from configuration. */
     virtual bool load(const ELogConfigMapNode* flushPolicyCfg) { return true; }
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
@@ -157,9 +152,6 @@ public:
     ~ELogCompoundFlushPolicy() override {}
 
     /** @brief Loads flush policy from configuration. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) override;
-
-    /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) override;
 
     inline void addFlushPolicy(ELogFlushPolicy* flushPolicy) {
@@ -218,9 +210,6 @@ class ELOG_API ELogNotFlushPolicy : public ELogFlushPolicy {
 public:
     ELogNotFlushPolicy(ELogFlushPolicy* flushPolicy = nullptr) : m_flushPolicy(flushPolicy) {}
     ~ELogNotFlushPolicy() {}
-
-    /** @brief Loads flush policy from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
@@ -283,9 +272,6 @@ public:
     ~ELogCountFlushPolicy() {}
 
     /** @brief Loads flush policy from configuration. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
-
-    /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
@@ -311,9 +297,6 @@ public:
     ELogSizeFlushPolicy(const ELogSizeFlushPolicy&) = delete;
     ELogSizeFlushPolicy(ELogSizeFlushPolicy&&) = delete;
     ~ELogSizeFlushPolicy() {}
-
-    /** @brief Loads flush policy from configuration. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
@@ -342,9 +325,6 @@ public:
     ELogTimedFlushPolicy(const ELogTimedFlushPolicy&) = delete;
     ELogTimedFlushPolicy(ELogTimedFlushPolicy&&) = delete;
     ~ELogTimedFlushPolicy();
-
-    /** @brief Loads flush policy from configuration. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
@@ -395,9 +375,6 @@ public:
         setControlFlushPolicy(nullptr);
         setModerateFlushPolicy(nullptr);
     }
-
-    /** @brief Loads flush policy from configuration. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
@@ -469,9 +446,6 @@ public:
     ELogGroupFlushPolicy(const ELogGroupFlushPolicy&) = delete;
     ELogGroupFlushPolicy(ELogGroupFlushPolicy&&) = delete;
     ~ELogGroupFlushPolicy() final {}
-
-    /** @brief Loads flush policy from configuration. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;

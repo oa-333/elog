@@ -86,7 +86,8 @@
         "xstring": "cpp",
         "cstdalign": "cpp",
         "xutility": "cpp",
-        "xhash": "cpp"
+        "xhash": "cpp",
+        "*.def": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

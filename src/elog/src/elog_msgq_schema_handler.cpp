@@ -46,61 +46,6 @@ bool ELogMsgQSchemaHandler::registerMsgQTargetProvider(const char* brokerName,
     return m_providerMap.insert(ProviderMap::value_type(brokerName, provider)).second;
 }
 
-ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
-                                              const ELogTargetSpec& targetSpec) {
-    // the path represents the message queue provider type name
-    // current predefined types are supported:
-    // kafka
-    const std::string& msgQType = targetSpec.m_path;
-
-    // in addition, we expect at least 'msgq_topic' property and optional 'msgq_headers'
-    if (targetSpec.m_props.size() < 1) {
-        ELOG_REPORT_ERROR(
-            "Invalid message queue log target specification, expected at least one property: %s",
-            logTargetCfg.c_str());
-        return nullptr;
-    }
-
-    ELogPropertyMap::const_iterator itr = targetSpec.m_props.find("msgq_topic");
-    if (itr == targetSpec.m_props.end()) {
-        ELOG_REPORT_ERROR(
-            "Invalid message queue log target specification, missing property msgq_topic: %s",
-            logTargetCfg.c_str());
-        return nullptr;
-    }
-    const std::string& topic = itr->second;
-
-    std::string headers;
-    itr = targetSpec.m_props.find("msgq_headers");
-    if (itr != targetSpec.m_props.end()) {
-        headers = itr->second;
-    }
-
-    ProviderMap::iterator providerItr = m_providerMap.find(msgQType);
-    if (providerItr != m_providerMap.end()) {
-        ELogMsgQTargetProvider* provider = providerItr->second;
-        return provider->loadTarget(logTargetCfg, targetSpec, topic, headers);
-    }
-
-    ELOG_REPORT_ERROR(
-        "Invalid message queue log target specification, unsupported message queue type %s: %s",
-        msgQType.c_str(), logTargetCfg.c_str());
-    return nullptr;
-}
-
-ELogTarget* ELogMsgQSchemaHandler::loadTarget(const std::string& logTargetCfg,
-                                              const ELogTargetNestedSpec& targetNestedSpec) {
-    // first make sure there ar no log target sub-specs
-    if (targetNestedSpec.m_subSpec.find("log_target") != targetNestedSpec.m_subSpec.end()) {
-        ELOG_REPORT_ERROR("Message queue log target cannot have sub-targets: %s",
-                          logTargetCfg.c_str());
-        return nullptr;
-    }
-
-    // implementation is identical to URL style
-    return loadTarget(logTargetCfg, targetNestedSpec.m_spec);
-}
-
 ELogTarget* ELogMsgQSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // the path represents the message queue provider type name
     // current predefined types are supported:

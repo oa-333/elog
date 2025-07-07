@@ -17,17 +17,21 @@
 namespace elog {
 
 /** @brief Log rate limiter. */
-class ELOG_API ELogRateLimiter : public ELogFilter {
+class ELOG_API ELogRateLimiter : public ELogCmpFilter {
 public:
     ELogRateLimiter(uint64_t maxMsgPerSecond = 0)
-        : m_maxMsgPerSecond(maxMsgPerSecond),
+        : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ),
+          m_maxMsgPerSecond(maxMsgPerSecond),
           m_currSecond(0),
           m_currSecondCount(0),
           m_prevSecondCount(0) {}
     ~ELogRateLimiter() final {}
 
-    /** @brief Loads filter from property map. */
-    bool load(const std::string& logTargetCfg, const ELogTargetNestedSpec& logTargetSpec) final;
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool load(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.

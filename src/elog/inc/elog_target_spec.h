@@ -8,6 +8,7 @@
 
 namespace elog {
 
+#if 0
 /** @struct Log Target specification (used for loading from configuration). */
 struct ELOG_API ELogTargetSpec {
     /** @brief The target scheme (sys, file, db, msgq, etc.) */
@@ -58,6 +59,7 @@ struct ELOG_API ELogTargetNestedSpec {
      */
     SubSpecMap m_subSpec;
 };
+#endif
 
 /** @struct Log Target URL specification (used for loading from configuration). */
 struct ELOG_API ELogTargetUrlSpec {
