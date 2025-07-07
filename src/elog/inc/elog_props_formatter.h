@@ -7,7 +7,7 @@ namespace elog {
 
 class ELOG_API ELogPropsFormatter : public ELogBaseFormatter {
 public:
-    ELogPropsFormatter() : m_lastFieldType(FieldType::FT_NONE) {}
+    ELogPropsFormatter() {}
     ELogPropsFormatter(const ELogPropsFormatter&) = delete;
     ELogPropsFormatter(ELogPropsFormatter&&) = delete;
     ~ELogPropsFormatter() final {}
@@ -24,15 +24,8 @@ public:
 
     inline const std::vector<std::string>& getPropNames() const { return m_propNames; }
 
-protected:
-    bool handleText(const std::string& text) override;
-
-    bool handleField(const ELogFieldSpec& fieldSpec) override;
-
 private:
     std::vector<std::string> m_propNames;
-    enum class FieldType : uint32_t { FT_NONE, FT_TEXT, FT_FIELD };
-    FieldType m_lastFieldType;
 };
 
 }  // namespace elog

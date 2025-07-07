@@ -118,7 +118,7 @@ inline bool elogTimeEquals(const ELogTime& lhs, const ELogTime& rhs) {
 // 116444736000000000LL)
 #endif
 
-inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime) {
+inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime, bool useLocalTime = false) {
 #ifdef ELOG_TIME_USE_CHRONO
     auto epochNanos =
         std::chrono::duration_cast<std::chrono::nanoseconds>(logTime.time_since_epoch());
@@ -128,8 +128,16 @@ inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime) {
 #ifdef ELOG_TIME_USE_SYSTEMTIME
     FILETIME ft = {};
     if (SystemTimeToFileTime(&logTime, &ft)) {
-        uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ft);
-        return utcTimeNanos;
+        if (useLocalTime) {
+            FILETIME ftLocal;
+            if (FileTimeToLocalFileTime(&ft, &ftLocal)) {
+                uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ftLocal);
+                return utcTimeNanos;
+            }
+        } else {
+            uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ft);
+            return utcTimeNanos;
+        }
     }
     return 0;
 #else
@@ -143,8 +151,8 @@ inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime) {
 #endif
 }
 
-inline uint64_t elogTimeToUTCSeconds(const ELogTime& logTime) {
-    return elogTimeToUTCNanos(logTime) / 1000000000ULL;
+inline uint64_t elogTimeToUTCSeconds(const ELogTime& logTime, bool useLocalTime = false) {
+    return elogTimeToUTCNanos(logTime, useLocalTime) / 1000000000ULL;
 }
 
 /**

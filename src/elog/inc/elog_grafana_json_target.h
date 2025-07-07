@@ -21,8 +21,10 @@
 #endif
 #endif
 
+#include <nlohmann/json.hpp>
+
 #include "elog_grafana_target.h"
-#include "elog_json_formatter.h"
+#include "elog_props_formatter.h"
 
 namespace elog {
 
@@ -54,11 +56,11 @@ private:
     std::string m_labels;
     std::string m_logLineMetadata;
     nlohmann::json m_logEntry;
-    ELogJsonFormatter m_labelFormatter;
-    ELogJsonFormatter m_metadataFormatter;
+    ELogPropsFormatter m_labelFormatter;
+    ELogPropsFormatter m_metadataFormatter;
 
     inline bool parseLabels(const std::string& labels) {
-        return m_labelFormatter.parseJson(labels);
+        return m_labelFormatter.parseProps(labels);
     }
 
     inline const std::vector<std::string>& getLabelNames() const {
@@ -70,7 +72,7 @@ private:
     }
 
     inline bool parseMetadata(const std::string& labels) {
-        return m_metadataFormatter.parseJson(labels);
+        return m_metadataFormatter.parseProps(labels);
     }
 
     inline const std::vector<std::string>& getMetadataNames() const {

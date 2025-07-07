@@ -135,13 +135,12 @@ bool ELogExpressionTokenizer::parseExpectedToken(ELogExprTokenType expectedToken
     uint32_t pos = 0;
     ELogExprTokenType tokenType;
     if (!hasMoreTokens() || !nextToken(tokenType, token, pos)) {
-        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
+        ELOG_REPORT_ERROR("Unexpected enf of expression specification");
         return false;
     }
     if (tokenType != expectedTokenType) {
-        ELOG_REPORT_ERROR(
-            "Invalid token in nested log target specification, expected %s, at pos %u: %s",
-            expectedStr, pos, getSourceStr());
+        ELOG_REPORT_ERROR("Invalid token in expression specification, expected %s, at pos %u: %s",
+                          expectedStr, pos, getSourceStr());
         ELOG_REPORT_ERROR("Error location: %s", getErrLocStr(pos).c_str());
         return false;
     }
@@ -154,12 +153,12 @@ bool ELogExpressionTokenizer::parseExpectedToken2(ELogExprTokenType expectedToke
                                                   uint32_t& tokenPos, const char* expectedStr1,
                                                   const char* expectedStr2) {
     if (!hasMoreTokens() || !nextToken(tokenType, token, tokenPos)) {
-        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
+        ELOG_REPORT_ERROR("Unexpected enf of expression specification");
         return false;
     }
     if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2) {
         ELOG_REPORT_ERROR(
-            "Invalid token in nested log target specification, expected either %s or %s, at pos "
+            "Invalid token in expression specification, expected either %s or %s, at pos "
             "%u: %s",
             expectedStr1, expectedStr2, tokenPos, getSourceStr());
         ELOG_REPORT_ERROR("Error location: %s", getErrLocStr(tokenPos).c_str());
@@ -176,13 +175,13 @@ bool ELogExpressionTokenizer::parseExpectedToken3(ELogExprTokenType expectedToke
                                                   const char* expectedStr2,
                                                   const char* expectedStr3) {
     if (!hasMoreTokens() || !nextToken(tokenType, token, tokenPos)) {
-        ELOG_REPORT_ERROR("Unexpected enf of log target nested specification");
+        ELOG_REPORT_ERROR("Unexpected enf of expression specification");
         return false;
     }
     if (tokenType != expectedTokenType1 && tokenType != expectedTokenType2 &&
         tokenType != expectedTokenType3) {
         ELOG_REPORT_ERROR(
-            "Invalid token in nested log target specification, expected either %s, %s, or %s, at "
+            "Invalid token in expression specification, expected either %s, %s, or %s, at "
             "pos %u: %s",
             expectedStr1, expectedStr2, expectedStr3, tokenPos, getSourceStr());
         ELOG_REPORT_ERROR("Error location: %s", getErrLocStr(tokenPos).c_str());

@@ -76,6 +76,9 @@ protected:
      */
     virtual bool handleField(const ELogFieldSpec& fieldSpec);
 
+    /** @brief Parses a value either as a reference token, or text. */
+    bool parseValue(const std::string& value);
+
     /** @brief The field selectors. */
     std::vector<ELogFieldSelector*> m_fieldSelectors;
 

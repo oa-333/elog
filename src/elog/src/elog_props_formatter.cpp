@@ -5,7 +5,7 @@
 
 namespace elog {
 
-bool ELogPropsFormatter ::parseProps(const std::string& props) {
+bool ELogPropsFormatter::parseProps(const std::string& props) {
     // props is expected to wrapped with curly braces
     std::string trimmedProps = trim(props);
     if (trimmedProps[0] != '{' || trimmedProps[trimmedProps.length() - 1] != '}') {
@@ -15,50 +15,45 @@ bool ELogPropsFormatter ::parseProps(const std::string& props) {
         return false;
     }
     trimmedProps = trimmedProps.substr(1, trimmedProps.length() - 2);
-    return initialize(trimmedProps.c_str());
-}
 
-bool ELogPropsFormatter::handleText(const std::string& text) {
-    // ignore all white space parts
-    if (trim(text).empty()) {
-        return true;
-    }
+    // connecting to base formatter logic is awkward, we simply parse a comma separated list
+    std::string::size_type prevPos = 0;  // always 1 past previous comma
+    std::string::size_type commaPos = 0;
+    do {
+        commaPos = trimmedProps.find(',', prevPos);
+        std::string propPair = trimmedProps.substr(prevPos, commaPos);
 
-    // verify text and field references are alternating
-    if (m_lastFieldType == FieldType::FT_TEXT) {
-        ELOG_REPORT_ERROR(
-            "Invalid properties specification, missing field reference after property name: %s",
-            text.c_str());
-        return false;
-    }
+        // search for '=' or ':' separator between property name and value
+        std::string::size_type sepPos = propPair.find('=');
+        if (sepPos == std::string::npos) {
+            // try also ':', as in JSON like format, but more permissive
+            sepPos = propPair.find(':');
+            if (sepPos == std::string::npos) {
+                ELOG_REPORT_ERROR(
+                    "Failed to parse property list, property '%s' missing expected equal or colon "
+                    "sign between property name and value: %s",
+                    propPair.c_str(), props.c_str());
+                return false;
+            }
+        }
 
-    // the text here is <prop-name> = (optionally prepended with a comma)
-    std::string::size_type startPos = 0;
-    std::string::size_type commaPos = text.find(',');
-    if (commaPos != std::string::npos) {
-        startPos = commaPos + 1;
-    }
-    std::string::size_type equalPos = text.find('=', startPos);
-    if (equalPos == std::string::npos) {
-        ELOG_REPORT_ERROR("Header name text '%s' missing expected equal sign", text.c_str());
-        return false;
-    }
-    std::string propName = trim(text.substr(startPos, equalPos - startPos));
-    m_propNames.push_back(propName);
-    m_lastFieldType = FieldType::FT_TEXT;
+        // extract property name and value
+        std::string propName = trim(propPair.substr(0, sepPos));
+        std::string propValue = trim(propPair.substr(sepPos + 1));
+        m_propNames.push_back(propName);
+
+        // parse value, this already triggers handle field/text
+        if (!parseValue(propValue)) {
+            ELOG_REPORT_ERROR("Failed to parse property value '%s' for key '%s'", propValue.c_str(),
+                              propName.c_str());
+            return false;
+        }
+
+        if (commaPos != std::string::npos) {
+            prevPos = commaPos + 1;
+        }
+    } while (commaPos != std::string::npos);
     return true;
-}
-
-bool ELogPropsFormatter::handleField(const ELogFieldSpec& fieldSpec) {
-    // we expect alternating prop name and field, so verify that
-    if (m_lastFieldType != FieldType::FT_TEXT) {
-        ELOG_REPORT_ERROR(
-            "Invalid properties specification, missing property name before field reference: %s",
-            fieldSpec.m_name.c_str());
-        return false;
-    }
-    m_lastFieldType = FieldType::FT_FIELD;
-    return ELogBaseFormatter::handleField(fieldSpec);
 }
 
 }  // namespace elog

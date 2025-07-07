@@ -37,8 +37,9 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
     auto& values = m_logEntry["streams"][0]["values"];
     uint32_t logLineCount = values.size();
     auto& logLine = values[logLineCount];
-    logLine[0] =
-        std::to_string(std::chrono::nanoseconds(elogTimeToUTCNanos(logRecord.m_logTime)).count());
+    // need to send local time, other Loki complains that timestamp is too new
+    logLine[0] = std::to_string(
+        std::chrono::nanoseconds(elogTimeToUTCNanos(logRecord.m_logTime, true)).count());
 
     // log line
     std::string logMsg;

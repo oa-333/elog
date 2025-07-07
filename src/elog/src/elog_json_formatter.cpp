@@ -18,30 +18,11 @@ bool ELogJsonFormatter::parseJson(const std::string& jsonStr) {
             m_propNames.push_back(item.key());
             std::string value = trim(((std::string)item.value().get<std::string>()));
 
-            // check if this is a field reference
-            if (value.find("${") == 0) {
-                // verify field reference syntax
-                if (value.back() != '}') {
-                    ELOG_REPORT_ERROR(
-                        "Invalid field specification, missing closing curly brace, while parsing "
-                        "JSON string '%s'");
-                    return false;
-                }
-
-                // extract field spec string and parse
-                // NOTE: the call to parseFieldSpec() already triggers a call to handleField()
-                std::string valueStr = value.substr(2, value.size() - 2);
-                if (!parseFieldSpec(valueStr)) {
-                    ELOG_REPORT_ERROR("Failed to parse json value '%s' for key '%s'",
-                                      item.value().dump().c_str(), item.key().c_str());
-                    return false;
-                }
-            } else {
-                // otherwise, this is plain static text
-                ELOG_REPORT_TRACE("Extracted static text value: %s", value.c_str());
-                if (!handleText(value)) {
-                    return false;
-                }
+            // check if this is a field reference, this already triggers handle field/text
+            if (!parseValue(value)) {
+                ELOG_REPORT_ERROR("Failed to parse json value '%s' for key '%s'",
+                                  item.value().dump().c_str(), item.key().c_str());
+                return false;
             }
             ELOG_REPORT_TRACE("Parsed json property: %s=%s", item.key().c_str(), value.c_str());
         }

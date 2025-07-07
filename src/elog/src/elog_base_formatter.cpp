@@ -106,6 +106,33 @@ bool ELogBaseFormatter::handleField(const ELogFieldSpec& fieldSpec) {
     return true;
 }
 
+bool ELogBaseFormatter::parseValue(const std::string& value) {
+    // check if this is a field reference
+    if (value.find("${") == 0) {
+        // verify field reference syntax
+        if (value.back() != '}') {
+            ELOG_REPORT_ERROR("Invalid field specification %s, missing closing curly brace",
+                              value.c_str());
+            return false;
+        }
+
+        // extract field spec string and parse
+        // NOTE: the call to parseFieldSpec() already triggers a call to handleField()
+        std::string valueStr = value.substr(2, value.size() - 2);
+        if (!parseFieldSpec(valueStr)) {
+            ELOG_REPORT_ERROR("Failed to parse field value '%s'", valueStr.c_str());
+            return false;
+        }
+    } else {
+        // otherwise, this is plain static text
+        ELOG_REPORT_TRACE("Extracted static text value: %s", value.c_str());
+        if (!handleText(value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // TODO: should this entire loading/parsing code be moved to config loader/parser?
 
 bool ELogBaseFormatter::getFieldCloseBrace(const std::string& formatSpec,
