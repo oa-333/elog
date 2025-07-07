@@ -3,6 +3,8 @@
 The ELog (Error Log) library is a simple, lightweight, yet robust, high-performant and feature-rich C++ logging library.  
 The library was designed such that it can be extended for a broad range of use cases, and it supports a wide range of options for configuration from file or connection string (see examples below).
 
+The project is still in pre-Beta phase, and more is expected to come.
+
 ## Basic Examples
 
 Simple [logging macros](#logging-macros):
@@ -35,7 +37,7 @@ Initialize elog and configure an asynchronous rotating file log target (log segm
     // all log messages are now directed to the asynchronous rotating logger
     ELOG_INFO("App starting");
 
-Add asynchronous log target to send log lines to Grafana-Loki, while flushing each 100 log lines or 5 seconds, while restricting log shipping to ERROR log level:
+Add asynchronous log target to send log lines to Grafana-Loki, while flushing each 100 log lines or 5 seconds, and restricting log shipping to ERROR log level:
 
     elog::configureTargetFromStr(
         "async://quantum?quantum_buffer_size=1000&log_level=ERROR | "
@@ -54,20 +56,20 @@ When stack trace are enabled, a stack trace containing file and line can be dump
 
     ELOG_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing current thread stack trace");
 
-Sample output (Windows):
+Sample output (Linux):
 
-    2025-07-06 18:49:05.746 INFO   [26016] {main} <elog_root> [Thread 26016 (0x65a0) <main> stack trace]
-
-    0# 00007FFE4DE3EECA dbgutil::Win32StackTraceProvider::walkStack() +106 at win32_stack_trace.cpp:46 (dbgutil.dll)
-    1# 00007FFE4DDDFA63 dbgutil::printStackTraceContext() +275   at dbg_stack_trace.cpp:185 (dbgutil.dll)
-    2# 00007FFE4F230059 dbgutil::printStackTrace() +41           at dbg_stack_trace.h:237 (elog.dll)
-    3# 00007FFE4F224528 elog::ELogSystem::logStackTrace() +152   at elog_system.cpp:1526 (elog.dll)
-    4# 00007FF6771CAAFD initRecovery() +1069                     at waL_test.cpp:298 (wal_test.exe)
-    5# 00007FF6771C99E6 testLoadWALRecord() +102                 at waL_test.cpp:122 (wal_test.exe)
-    6# 00007FF6771C9849 runTest() +57                            at waL_test.cpp:95 (wal_test.exe)
-    7# 00007FF6771CB149 main() +345                              at waL_test.cpp:75 (wal_test.exe)
-    8# 00007FF6771CD1F9 invoke_main() +57                        at exe_common.inl:79 (wal_test.exe)
-    9# 00007FF6771CD0A2 __scrt_common_main_seh() +306            at exe_common.inl:288 (wal_test.exe)
+    2025-07-07 09:53:14.816 INFO   [46748] {main} <elog_root> [Thread 46748 (0xb69c) <main> stack trace]
+ 
+    0# 0x716a4879e618 dbgutil::printStackTraceContext() +185   at dbg_stack_trace.cpp:185 (libdbgutil.so)
+    1# 0x716a4903b8cf dbgutil::printStackTrace() +46           at dbg_stack_trace.h:238 (libelog.so)
+    2# 0x716a4903b1c1 elog::ELogSystem::logStackTrace() +101   at elog_system.cpp:1527 (libelog.so)
+    3# 0x5c4bddcbfb30 initRecovery() +973                      at waL_test.cpp:299 (wal_test_linux)
+    4# 0x5c4bddcbeb04 testLoadWALRecord() +120                 at waL_test.cpp:122 (wal_test_linux)
+    5# 0x5c4bddcbe96d runTest() +51                            at waL_test.cpp:95 (wal_test_linux)
+    6# 0x5c4bddcbe8da main() +389                              at waL_test.cpp:74 (wal_test_linux)
+    7# 0x716a4842a1ca N/A                                      at <N/A>  (libc.so.6)
+    8# 0x716a4842a28b __libc_start_main()                      at <N/A>  (libc.so.6)
+    9# 0x5c4bddcba745 _start() +37                             at <N/A>  (wal_test_linux)
 
 It is also possible to dump stack trace of all running thread (experimental):
 
