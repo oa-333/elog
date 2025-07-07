@@ -1,7 +1,90 @@
 # ELog Logging Library
 
-The ELog (Error Log) library is a simple, lightweight, yet robust and high-performant library for application message logging in C++.  
-The library was designed such that it can be extended for a broad range of use cases.
+The ELog (Error Log) library is a simple, lightweight, yet robust, high-performant and feature-rich C++ logging library.  
+The library was designed such that it can be extended for a broad range of use cases, and it supports a wide range of options for configuration from file or connection string (see examples below).
+
+## Basic Examples
+
+Simple [logging macros](#logging-macros):
+
+    ELOG_INFO("App starting");
+    ELOG_INFO("This is an unsigned integer %u and a string '%s'", 5, "hi");
+
+Possible output:
+
+    2025-07-05 10:35:18.311 INFO   [32680] This is an unsigned integer 5 and a string 'hi'
+
+Logging with a designated [logger](#defining-log-sources-and-loggers) (no error checking):
+
+    // initialize a thread-safe shared logger
+    elog::ELogSource* logSource = elog::defineLogSource("core");
+    elog::ELogLogger* logger = logSource->createSharedLogger();
+
+    // user logger with ELOG_xxx_EX macro family:
+    ELOG_INFO_EX(logger, "Obtained a logger from source %s with id %u",
+            logSource->getQualifiedName(), 
+            logSource->getId());
+
+Initialize elog and configure an asynchronous rotating file log target (log segment size 4M, 20 log segments at most):
+
+    elog::initialize();
+    elog::configureTargetFromStr(
+        "async://quantum?quantum_buffer_size=1000 | "
+        "file:///./app.log?file_segment_size_mb=4&file_segment_count=20");
+
+    // all log messages are now directed to the asynchronous rotating logger
+    ELOG_INFO("App starting");
+
+Add asynchronous log target to send log lines to Grafana-Loki, while flushing each 100 log lines or 5 seconds, while restricting log shipping to ERROR log level:
+
+    elog::configureTargetFromStr(
+        "async://quantum?quantum_buffer_size=1000&log_level=ERROR | "
+        "mon://grafana?mode=json&"
+        "loki_endpoint=http://192.168.108.111:3100&"
+        "labels={\"app\": \"${app}$\"}&"
+        "log_line_metadata={\"log_source\": \"${src}\", \"thread_name\": \"${tname}\"}&"
+        "flush_policy=((count == 100) OR (time == 5000))");
+
+Each log line is accompanied by:
+
+- "app" label, which equals to configured application name (see [field reference tokens](#log-record-field-reference-tokens) for more details)
+- Log line metadata, containing the log source and thread name issuing the log message
+
+When stack trace are enabled, a stack trace containing file and line can be dumped (so when Grafana-Loki connector is configured, for instance, this stack trace is sent to Grafana-Loki as well):
+
+    ELOG_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing current thread stack trace");
+
+Sample output (Windows):
+
+    2025-07-06 18:49:05.746 INFO   [26016] {main} <elog_root> [Thread 26016 (0x65a0) <main> stack trace]
+
+    0# 00007FFE4DE3EECA dbgutil::Win32StackTraceProvider::walkStack() +106 at win32_stack_trace.cpp:46 (dbgutil.dll)
+    1# 00007FFE4DDDFA63 dbgutil::printStackTraceContext() +275   at dbg_stack_trace.cpp:185 (dbgutil.dll)
+    2# 00007FFE4F230059 dbgutil::printStackTrace() +41           at dbg_stack_trace.h:237 (elog.dll)
+    3# 00007FFE4F224528 elog::ELogSystem::logStackTrace() +152   at elog_system.cpp:1526 (elog.dll)
+    4# 00007FF6771CAAFD initRecovery() +1069                     at waL_test.cpp:298 (wal_test.exe)
+    5# 00007FF6771C99E6 testLoadWALRecord() +102                 at waL_test.cpp:122 (wal_test.exe)
+    6# 00007FF6771C9849 runTest() +57                            at waL_test.cpp:95 (wal_test.exe)
+    7# 00007FF6771CB149 main() +345                              at waL_test.cpp:75 (wal_test.exe)
+    8# 00007FF6771CD1F9 invoke_main() +57                        at exe_common.inl:79 (wal_test.exe)
+    9# 00007FF6771CD0A2 __scrt_common_main_seh() +306            at exe_common.inl:288 (wal_test.exe)
+
+It is also possible to dump stack trace of all running thread (experimental):
+
+    ELOG_APP_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing application stack trace");
+
+
+Configure [log line format](#configuring-log-line-format):
+
+    elog::configureLogFormat("${time} ${level:6} [${tid}] ${src} ${msg}");
+
+The effect is the following line format:
+
+- time stamp
+- followed by log level aligned to the left using width of 6 characters
+- followed by thread id, log source name and log message
+
+## Features
 
 The ELog library provides the following notable features:
 
@@ -15,11 +98,17 @@ The ELog library provides the following notable features:
     - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free, scalable in multi-threaded scenarios)
     - Check out the [benchmarks](#Benchmarks) below
 - Connectivity to external systems
-    - **Grafana Loki, Kafka, PostgreSQL**, SQLite, MySQL
+    - [Grafana Loki](https://grafana.com/oss/loki/)
+    - [Sentry](https://sentry.io/welcome/)
+    - [Datadog](https://www.datadoghq.com/)
+    - [Kafka](#connecting-to-kafka-topic)
+    - [PostgreSQL](#connecting-to-postgresql)
+    - [SQLite](#connecting-to-sqlite)
+    - [MySQL](#connecting-to-mysql-experimental)
 - Multiple platform support
     - **Linux, Windows, MinGW**
 - Designed for external extendibility
-    - Special connectors can be developed by user and get registered into the ELog system
+    - Special connectors can be developed by the user and get registered into the ELog system
 - Configurable from file or properties map
     - Most common use case scenarios are fully configurable from config file
 
@@ -33,15 +122,14 @@ Additional features:
     - In addition, it can be configured such that only FATAL messages are sent to syslog
 - Optional rate limiting (global and/or per log target)
 - Configurable flush policy (global and/or per log target)
+- Configurable log filtering (global and/or per log target)
 
-Planned Features:
+Planned/considered future features:
 
-- Connectivity to SEntry, Kibana and other monitoring/observability tools
 - Connectivity to Windows Event Log
 - Connectivity to SMTP
 - Support on MacOS
 - Optional handling of signals
-- Going fully configurable from file or properties array
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
@@ -64,7 +152,8 @@ Pay attention that simply using a queue guarded by a mutex is not scalable (chec
 
 ### External Systems Connectivity
 
-The ELog system also allows directing log messages to several destinations, so tapping to external log analysis tools, for instance, in addition to doing regular logging to file, is also rather straightforward.
+The ELog system also allows directing log messages to several destinations, so tapping to external log analysis tools, for instance, in addition to doing regular logging to file, is also rather straightforward.  
+See [dependencies](#external-dependencies) below for a comprehensive list of external systems integrated with elog out of the box.
 
 ### Library Development
 
@@ -74,15 +163,15 @@ In this case, the ELog can be used to log messages inside the library, and the u
 the ELog system to redirect and adapt library log message to its own logging system.
 This can be done actually quite easily and with much flexibility.
 
-For more information, see documentation below.
+For more information, see [documentation](#documentation) below.
 
-# Getting Started
+## Getting Started
 
 In order to use the library, include the main header "elog_system.h", which is the library facade.  
 In the application code, make sure to call one of the elog::ElogSystem::initializeXXX() functions before using any of the logging macros. After this, you can use ELOG_INFO() and the rest of the macros.  
 At application exit make sure to call elog::ELogSystem::terminate().
 
-## Dependencies
+### External Dependencies
 
 The ELog system has no special dependencies, unless connecting to one of the external systems listed above.
 In particular the following compile/runtime dependencies exist in each case:
@@ -91,12 +180,19 @@ In particular the following compile/runtime dependencies exist in each case:
 - PostgreSQL connector requires libpq.so
 - SQLite connector requires libsqlite3.so
 - MySQL connector requires mysqlcppconn.lib for compile and mysqlcppconn-10-vs14.dll for runtime (Windows only)
+- gRPC connector depends on gRPC and protobuf libraries
+- Grafana/Loki and Datadog connectors requires json/nlohmann and httplib
+- Sentry connector requires the Sentry native library
+- Stack trace logging requires [dbgutil](https://github.com/oa-333/dbgutil)
 
-## Installing
+### Installing
 
 The library can be built and installed by running:
 
-    make -j INSTALL_DIR=<install-path> install
+    build.sh --install-dir <install-path>
+    build.bat --install-dir <install-path>
+
+(Checkout the possible options with --help switch).
 
 Add to compiler include path:
 
@@ -106,13 +202,15 @@ Add to linker flags:
 
     -L<install-path>/bin -lelog
 
+According to requirements, in the future it may be uploaded to package managers (e.g. vcpkg).
+
 ## Help
 
 See [documentation](#Documentation) section below, and documentation in header files for more information.
 
 ## Authors
 
-Oren Amor (oren.amor@gmail.com)
+Oren A. (oa.github.333@gmail.com)
 
 ## License
 
@@ -126,6 +224,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Logging Macros](#logging-macros)
     - [Defining Log Sources and Loggers](#defining-log-sources-and-loggers)
     - [Configuring Log Line Format](#configuring-log-line-format)
+    - [Log Record Field Reference Tokens](#log-record-field-reference-tokens)
     - [Extending The Formatting Scheme](#extending-the-formatting-scheme)
     - [Filtering Log Messages](#filtering-log-messages)
     - [Limiting Log Rate](#limiting-log-rate)
@@ -142,7 +241,11 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Connecting to SQLite](#connecting-to-sqlite)
     - [Connecting to MySQL (experimental)](#connecting-to-mysql-experimental)
     - [Connecting to Kafka Topic](#connecting-to-kafka-topic)
+    - [Connecting to Grafana-Loki](#connecting-to-grafana-loki)
+    - [Connecting to Sentry](#connecting-to-sentry)
+    - [Connecting to Datadog](#connecting-to-datadog)
     - [Nested Specification Style](#nested-specification-style)
+    - [Terminal Formatting Syntax](#terminal-formatting-syntax)
 - [Benchmarks](#benchmarks)
     - [Benchmark Highlights](#benchmark-highlights)
     - [Empty Logging Benchmark](#empty-logging-benchmark)
@@ -264,7 +367,7 @@ The core.files, and core.net log sources will inherit the NOTICE level from the 
 In order to enable better level of control over the log level of the log source hierarchy, the log source  
 provides the setLogLevel() method, which allows specifying how to propagate the log level to child log sources:
 
-    void setLogLevel(ELogLevel logLevel, PropagateMode propagateMode);
+    void setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode);
 
 In particular there are 4 propagation modes:
 
@@ -286,6 +389,10 @@ In code, it can be done as follows:
 
     elog::ELogSystem::configureLogFormat("${time} ${level:6} [${tid}] ${msg}");
 
+In configuration (globally or per log target), it can be done as follows:
+
+    log_format=${time} ${level:6} [${tid}] ${msg}
+
 This format in reality gets expanded to something like this:
 
     2025-04-08 11:40:58.807 INFO   [49108] Thread pool of 10 workers started
@@ -297,13 +404,18 @@ We see here all 4 components expanded:
 - logging thread id, enclosed with brackets
 - formatted log message
 
+### Log Record Field Reference Tokens
+
 The following special log field reference tokens are understood by the ELog system:
 
 - ${rid} - the log record id.
 - ${time} - the logging time.
 - ${host} - the host name.
 - ${user} - the logged in user.
-- ${prog} - the program name.
+- ${os_name} - the operating system name.
+- ${os_ver} - the operating system version.
+- ${app} - configurable application name.
+- ${prog} - the program name (extracted from executable image file name).
 - ${pid} - the process id.
 - ${tid} - the logging thread id.
 - ${tname} - the logging thread name (requires user collaboration).
@@ -317,6 +429,9 @@ The following special log field reference tokens are understood by the ELog syst
 
 Tokens may contain justification number, where positive means justify to the left,  
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
+
+An extended syntax for reference token was defined for special terminal formatting escape sequences (colors and fonts).
+See 
 
 ### Extending The Formatting Scheme
 
@@ -750,6 +865,109 @@ In case of simply limiting the rate for all incoming messages, the configuration
         filter = rate_limiter,
         max_msg_per_sec = 10
     }
+
+### Terminal Formatting Syntax
+
+When logging to terminal (stdout or stderr), it is possible to specify special formatting for the log line.  
+For instance, consider the following log target specification:
+
+    "sys://stderr?log_format=${time:text=faint} ${level:6:fg-color=green:bg-color=blue} "
+        "[${tid:text=italic}] ${src:text=underline:fg-color=bright-red} "
+        "${msg:text=cross-out,blink-rapid:fg-color=#993983}";
+
+Here is the breakdown of this configuration URL:
+
+- The time part is in faint (opposite of bold) font
+- Log level color is green, and background is blue
+- Thread id field is in italic font
+- Log source name is underlined, and having bright red color
+- The message has cross-out (strike-through, not supported on all terminals)
+- The message blinks rapidly and has magenta like color specified by RGB value #993983
+
+Following is the output in VSCode console:
+
+![plot](./src/doc/image1.png)
+
+Conditional formatting is supported as well. For instance:
+
+    "sys://stderr?log_format=${time:text=faint} "
+        "${if: (log_level == INFO): ${fmt:begin-fg-color=green}: ${fmt:begin-fg-color=red}}"
+        "${level:6}${fmt:default} "
+        "[${tid:text=italic}] ${src:text=underline:fg-color=bright-red} "
+        "${msg:text=cross-out,blink-rapid:fg-color=#993983}";
+
+In this example, the log level color is green in case the log level is INFO, otherwise it is red.
+This is how it looks on VSCode console:
+
+![plot](./src/doc/image2.png)
+
+Please note that:
+
+- Conditional formatting is specified with ${if ...} special syntax
+- Formatting uses ${fmt ...} special syntax
+- Formatting is reset to default with ${fmt:default}
+
+Following is a formal specification of the terminal formatting syntax.
+
+### Terminal Formatting Formal Syntax Specification
+
+The extended reference token syntax follows the general form:
+
+    ${<field-name>:<colon separated list of format specifiers>}
+
+The field-name could be any one of the [predefined reference token names](#log-record-field-reference-tokens).  
+It could also be \${fmt} which exists only for formatting purposes (no text emitted, only ANSI C escape sequences).  
+Additional field names are for conditional formatting: \${if}, \${switch}, \${expr-switch}.
+
+The format specifier list could be any of the following, and may be repeated (overriding previous specification):
+
+    justify-left = <justify-count>
+    justify-right = <justify-count>
+    fg-color = <color-specification>
+    bg-color = <color-specification>
+    font = <font-specification>
+    <positive integer value for left justification>
+    <negative integer value for right justification>
+
+The color specification may be specified in any of the following ways:
+
+- Simple color: black, red, green, yellow, blue, magenta, cyan, white
+- Bright color may be specified with "bright" prefix: bright-red, bright-blue, etc.
+- VGA color: vga#RRGGBB where each pair is a hexadecimal value specifying component intensity, and cannot exceed 1F
+- Gray-scale color: grey#<0-23>, or gray#<0-23>, where the value in the range [0-23] specifies the intensity, zero being dark, and 23 being light
+- SVGA RGB color: #RRGGBB where each pair is a hexadecimal value specifying component intensity
+- Font type: bold/faint/normal, italic/no-italic, underline/no-underline, cross-out/no-cross-out (strike-through/no-strike-through), slow-blink/rapid-blink/no-blink
+
+Note that strike-through is a synonym for cross-out, although it has not been possible to observe this formatting in effect.
+
+#### Spanning Formatting over Several Fields
+
+When specifying formatting within a field reference token, the formatting applies only to that field, and formatting is automatically reset to default for the rest of the formatted log message.  
+If it is desired to span formatting over a few fields, then the "begin" prefix may be used, terminated with a default/reset specifier:
+
+    ${time:font=begin-bold} [${level:6:font=default}]
+
+In this example, both time and level have bold font.
+It is possible to use pure formatting reference token instead:
+
+    ${fmt:font=begin-bold}${time} [${level:6}]${fmt:default}
+
+Here is where usage of normal, no-italic, no-underline, etc. makes sense:
+
+    ${fmt:font=begin-bold,begin-italic}${time} [${level:6}]${fmt:normal}
+
+When 'normal' (resets bold/faint specification) is specified, 'italic' is still in effect.
+
+#### Conditional Formatting Syntax
+
+Conditional formatting takes place in three main forms:
+
+    
+    ${if: (filter-pred): ${name:<true format>} [: ${name:< false format>}] }
+    ${switch: (expr): ${case: (expr) : ${fmt:<format>}}, ..., ${default:${fmt: <format>}} }
+    ${expr-switch: ${case: (filter-pred) : ${fmt:<format>}}, ..., ${default:${fmt: <format>}} }
+
+TODO: finish this after documenting filter predicates.
 
 ## Benchmarks
 

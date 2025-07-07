@@ -28,16 +28,18 @@ SET REBUILD=0
 SET RE_CONFIG=0
 SET MEM_CHECK=0
 SET TRACE=0
+SET HELP=0
 
 SET CONN_INDEX=0
 SET CONNS[0]=tmp
-echo [DEBUG] Parsing args
+REM echo [DEBUG] Parsing args
 :GET_OPTS
+REM Remove extra spaces from arguments
 SET ARG1=%1
 SET ARG1=%ARG1: =%
 SET ARG2=%2
 SET ARG2=%ARG2: =%
-echo [DEBUG] processing option "%ARG1%" "%ARG2%"
+REM echo [DEBUG] processing option "%ARG1%" "%ARG2%"
 IF /I "%ARG1%" == "-v" SET VERBOSE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--verbose" SET VERBOSE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-d" SET BUILD_TYPE=Debug & GOTO CHECK_OPTS
@@ -64,6 +66,9 @@ IF /I "%ARG1%" == "-m" SET MEM_CHECK=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--mem-check" SET MEM_CHECK=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-t" SET TRACE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--trace" SET TRACE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-h" SET HELP=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--help" SET HELP=1 & GOTO CHECK_OPTS
+REM echo [DEBUG] "%ARG1%" Not matched
 
 REM handle invalid option
 IF NOT "%1" == "" (
@@ -75,6 +80,65 @@ IF NOT "%1" == "" (
 shift
 IF "%1" == "--" shift & GOTO SET_OPTS
 IF NOT "%1" == "" GOTO GET_OPTS
+
+IF %HELP% EQU 1 (
+    echo.
+    echo ELog build script syntax:
+    echo.
+    echo build.bat [BUILD MODE] [EXTENSIONS] [BUILD OPTIONS] [DEBUG OPTIONS] [MISC OPTIONS]
+    echo.
+    echo.
+    echo BUILD MODE OPTIONS
+    echo.
+    echo       -r^|--release                Build in release mode.
+    echo       -d^|--debug                  Build in debug mode.
+    echo       -w^|--rel-with-debug-info    Build in release mode with debug symbols.
+    echo.
+    echo If none is specified, then the default is debug build mode.
+    echo.
+    echo.
+    echo EXTENSIONS OPTIONS
+    echo.
+    echo       -c^|--conn CONNECTOR_NAME    Enables connector.
+    echo       -s^|--stack-trace            Enable stack trace logging API.
+    echo       -f^|--full                   Enable all connectors and stack trace logging API.
+    echo.
+    echo By default no connector is enabled, and stack trace logging is disabled.
+    echo The following connectors are currently supported:
+    echo.
+    echo   Name            Connector
+    echo   ----            ---------
+    echo   grafana         Grafana-Loki connector
+    echo   sentry          Sentry connector
+    echo   datadog         Datadog connector
+    echo   sqlite          SQLite database connector
+    echo   mysql           MySQL database connector (experimental)
+    echo   postgresql      PostgreSQL database connector
+    echo   kafka           Kafka topic connector
+    echo   grpc            gRPC connector
+    echo   all             Enables all connectors
+    echo.
+    echo.
+    echo BUILD OPTIONS
+    echo.
+    echo       -v^|--verbose        Issue verbose messages during build
+    echo       -l^|--clean          Cleans previous build
+    echo       -g^|--reconfigure    Forces rerunning configuration phase of CMake.
+    echo       -a^|--clang          Use clang toolchain for builder, rather than default gcc.
+    echo       -i^|--install-dir INSTALL_PATH   Specifies installation directory.
+    echo.
+    echo.
+    echo DEBUG OPTIONS
+    echo.
+    echo       -t^|--trace          Enable trace logging of some components.
+    echo       -m^|--mem-check      Enables address sanitizers to perform memory checks.
+    echo.
+    echo.
+    echo MISC OPTIONS
+    echo.
+    echo       -h^|--help           Prints this help screen.
+    exit /b 0
+)
 
 :SET_OPTS
 echo [DEBUG] Parsed args:

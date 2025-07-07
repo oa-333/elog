@@ -13,6 +13,7 @@
 # -r|--rebuild (no reconfigure)
 # -g|--reconfigure
 # -m|--mem-check
+# -h|--help
 
 # set default values
 PLATFORM=$(uname -s)
@@ -32,9 +33,10 @@ RE_CONFIG=0
 MEM_CHECK=0
 CLANG=0
 TRACE=0
+HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwsfc:i:lrgmat -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace -- "$@")
+TEMP=$(getopt -o vdrwsfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -54,10 +56,67 @@ while true; do
     -m | --mem-check) MEM_CHECK=1; shift ;;
     -a | --clang) CLANG=1; shift ;;
     -t | --trace) TRACE=1; shift ;;
+    -h | --help) HELP=1; shift ;;
     -- ) shift; break ;;
     * ) echo "[ERROR] Invalid option $1, aborting"; exit 1; break ;;
   esac
 done
+
+if [ "$HELP" -eq "1" ]; then
+    echo ""
+    echo "build.sh [BUILD MODE] [EXTENSIONS] [BUILD OPTIONS] [DEBUG OPTIONS] [MISC OPTIONS]"
+    echo ""
+    echo ""
+    echo "BUILD MODE OPTIONS"
+    echo ""
+    echo "      -r|--release                Build in release mode."
+    echo "      -d|--debug                  Build in debug mode."
+    echo "      -w|--rel-with-debug-info    Build in release mode with debug symbols."
+    echo ""
+    echo "If none is specified, then the default is debug build mode."
+    echo ""
+    echo ""
+    echo "EXTENSIONS OPTIONS"
+    echo ""
+    echo "      -c|--conn CONNECTOR_NAME    Enables connector."
+    echo "      -s|--stack-trace            Enable stack trace logging API."
+    echo "      -f|--full                   Enable all connectors and stack trace logging API."
+    echo ""
+    echo "By default no connector is enabled, and stack trace logging is disabled."
+    echo "The following connectors are currently supported:"
+    echo "  Name            Connector"
+    echo "  ----            ---------"
+    echo "  grafana         Grafana-Loki connector"
+    echo "  sentry          Sentry connector"
+    echo "  datadog         Datadog connector"
+    echo "  sqlite          SQLite database connector"
+    echo "  mysql           MySQL database connector (experimental)"
+    echo "  postgresql      PostgreSQL database connector"
+    echo "  kafka           Kafka topic connector"
+    echo "  grpc            gRPC connector"
+    echo "  all             Enables all connectors"
+    echo ""
+    echo ""
+    echo "BUILD OPTIONS"
+    echo ""
+    echo "      -v|--verbose        Issue verbose messages during build"
+    echo "      -l|--clean          Cleans previous build"
+    echo "      -g|--reconfigure    Forces rerunning configuration phase of CMake."
+    echo "      -a|--clang          Use clang toolchain for builder, rather than default gcc."
+    echo "      -i|--install-dir INSTALL_PATH   Specifies installation directory."
+    echo ""
+    echo ""
+    echo "DEBUG OPTIONS"
+    echo ""
+    echo "      -t|--trace          Enable trace logging of some components."
+    echo "      -m|--mem-check      Enables address sanitizers to perform memory checks."
+    echo ""
+    echo ""
+    echo "MISC OPTIONS"
+    echo ""
+    echo "      -h|--help           Prints this help screen."
+    exit 0
+fi
 
 if [ "$FULL" -eq "1" ]; then
     echo "[INFO] Configuring FULL options"
