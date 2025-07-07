@@ -128,7 +128,9 @@ public:
     }
 
     /** @brief Retrieves the log target affinity mask configured for this log source. */
-    inline ELogTargetId getLogTargetAffinityMask() const { return m_logTargetAffinityMask; }
+    inline ELogTargetAffinityMask getLogTargetAffinityMask() const {
+        return m_logTargetAffinityMask;
+    }
 
     /**
      * @brief Obtains a logger that may be invoked by more than one thread. The logger is managed
