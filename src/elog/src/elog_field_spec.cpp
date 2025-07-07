@@ -302,7 +302,7 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
             if (!parseTokenColor("bg-color", specToken, m_textSpec->m_bgColorSpec)) {
                 return false;
             }
-        } else if (specToken.starts_with("text")) {
+        } else if (specToken.starts_with("font")) {
             if (!allocTextFormat(*this, autoReset)) {
                 return false;
             }
