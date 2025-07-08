@@ -21,7 +21,7 @@ bool ELogPropsFormatter::parseProps(const std::string& props) {
     std::string::size_type commaPos = 0;
     do {
         commaPos = trimmedProps.find(',', prevPos);
-        std::string propPair = trimmedProps.substr(prevPos, commaPos);
+        std::string propPair = trim(trimmedProps.substr(prevPos, commaPos - prevPos));
 
         // search for '=' or ':' separator between property name and value
         std::string::size_type sepPos = propPair.find('=');

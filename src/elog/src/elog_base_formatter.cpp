@@ -118,7 +118,7 @@ bool ELogBaseFormatter::parseValue(const std::string& value) {
 
         // extract field spec string and parse
         // NOTE: the call to parseFieldSpec() already triggers a call to handleField()
-        std::string valueStr = value.substr(2, value.size() - 2);
+        std::string valueStr = value.substr(2, value.size() - 3);
         if (!parseFieldSpec(valueStr)) {
             ELOG_REPORT_ERROR("Failed to parse field value '%s'", valueStr.c_str());
             return false;
