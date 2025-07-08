@@ -243,7 +243,7 @@ template <typename ServiceType = elog_grpc::ELogGRPCService, typename StubType =
           typename MessageType = elog_grpc::ELogGRPCRecordMsg,
           typename ResponseType = elog_grpc::ELogGRPCStatus,
           typename ReceptorType = ELogGRPCReceptor>
-class ELOG_API ELogGRPCBaseTarget : public ELogRpcTarget {
+class ELogGRPCBaseTarget : public ELogRpcTarget {
 public:
     ELogGRPCBaseTarget(ELogErrorHandler* errorHandler, const std::string& server,
                        const std::string& params, const std::string& serverCA,
@@ -361,7 +361,7 @@ registerGRPCTargetConstructor(const char* name, ELogGRPCBaseTargetConstructor* t
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-class ELOG_API ELogGRPCTargetConstructor : public ELogGRPCBaseTargetConstructor {
+class ELogGRPCTargetConstructor : public ELogGRPCBaseTargetConstructor {
 public:
     ELogGRPCTargetConstructor() {}
     ~ELogGRPCTargetConstructor() final {}

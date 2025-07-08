@@ -127,6 +127,7 @@ endif()
 # TODO: this should change after moving to public repo
 if (ELOG_ENABLE_STACK_TRACE)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_STACK_TRACE)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_STACK_TRACE)
     # add dbg util dependency
     if (MSVC OR MINGW)
         target_include_directories(elog PRIVATE "C:\\install\\dbgutil\\include")
@@ -174,7 +175,7 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
     set(elog_platform_proto_path "${elog_proto_path}/${SYSTEM_NAME}")
     make_directory(${elog_platform_proto_path})
 
-    # Generated sources
+    # Generated sources path
     set(elog_proto_srcs "${elog_platform_proto_path}/elog.pb.cc")
     set(elog_proto_hdrs "${elog_platform_proto_path}/elog.pb.h")
     set(elog_grpc_srcs "${elog_platform_proto_path}/elog.grpc.pb.cc")
@@ -183,23 +184,70 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
     target_include_directories(elog_bench PRIVATE ${elog_platform_proto_path})
 
     # generate files command
+
+    # NOTE: on Windows/MSVC we have a severe problem.
+    # elog_bench fails during link with missing definitions for generated protobuf classes
+    # (both protocol and gRPC files, due to missing dll export).
+    # Since the protobuf/grpc generated classes do not have DLL export/import annotation, one might 
+    # think it suffices to add the generated source files also to the elog_bench project, but that 
+    # causes runtime error, since now we have duplicate message definitions, which in turn causes 
+    # assert during protobuf static initialization.
+    #
+    # The correct solution would be to export the generated classes.
+    # the recommended workaround by protobuf/protoc community is as follows:
+    # use the following command line syntax: --cpp_out=dllexport_decl=<MACRO NAME>:<path>
+    # with this ELOG_API can be added to all generated message classes.
+    # This causes build to fail though, due to missing definition of ELOG_API.
+    # the suggested workaround for that is to force compiler to add include for each file, like this:
+    #
+    # Windows: /FIproject/Config.h
+    # Linux: -include project/Config.h
+    #
+    # This workaround is good only for protobuf and not for gRPC generated classes (because there
+    # is no way to add dll export to gRPC generated files), but that is ok, because we can include 
+    # gRPC generated source also in bench_data (no static initialization issue there).
     add_custom_command(
         OUTPUT "${elog_proto_srcs}" "${elog_proto_hdrs}" "${elog_grpc_srcs}" "${elog_grpc_hdrs}"
         COMMAND ${_PROTOBUF_PROTOC}
         ARGS --grpc_out="${elog_platform_proto_path}"
-            --cpp_out="${elog_platform_proto_path}"
+            --cpp_out=dllexport_decl=ELOG_API:"${elog_platform_proto_path}"
             -I "${elog_proto_path}"
             --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
             "${elog_proto}"
         DEPENDS "${elog_proto}")
 
-    # add generated headers to public interface
-    target_sources(elog PUBLIC FILE_SET grpcpublicheaders TYPE HEADERS FILES ${elog_proto_hdrs} ${elog_grpc_hdrs})
+    # NOTE: normally we would add generated source to the project on the fly, but for some obscure 
+    # reason, when doing so, the generated files fail to get the compiler option to force inclusion 
+    # of elog_def.h. This problem exists only on Windows platform.
+    #
+    # The workaround found for the meantime, is to add these files statically through 
+    # add_subdirectory() directive (each platform has its own generated files, due to different 
+    # versions of protoc).
+    #
+    # Therefore, the following target_sources() directives are commented out.
 
-    # add generated sources to library and test bench
-    target_sources(elog PRIVATE ${elog_proto_srcs} ${elog_grpc_srcs})
+    # add generated headers to public interface (commented out, see comment above)
+    # target_sources(elog PUBLIC FILE_SET grpcpublicheaders TYPE HEADERS FILES ${elog_proto_hdrs} ${elog_grpc_hdrs})
+
+    # add generated sources to library (commented out, see comment above)
+    # target_sources(elog PRIVATE ${elog_proto_srcs} ${elog_grpc_srcs})
     if (MSVC)
-        target_sources(elog_bench PRIVATE ${elog_proto_srcs} ${elog_grpc_srcs})
+        # add gRPC sources to target elog_bench on Windows (because they cannot be exported, due to 
+        # protoc limitation), but not proto sources (see big comment above)
+        target_sources(elog_bench PRIVATE ${elog_grpc_srcs})
+        # NOTE: we do not add protobuf generates message source (because they can be exported)
+    endif()
+
+    # force include of elog_def.h so that protobuf generates code can compile (see big comment above)
+    if(MSVC)
+        message(STATUS "Forcing inclusion of elog_def.h")
+        target_compile_options(elog PRIVATE /FI${CMAKE_SOURCE_DIR}\\src\\elog\\inc\\elog_def.h)
+        # NOTE: we need to force inclusion of elog_def.h for elog_bench as well, since it compiles
+        # gRPC generated sources, and therefore includes generated protobuf message headers, which
+        # now contain ELOG_API definition in each class declaration
+        target_compile_options(elog_bench PRIVATE /FI${CMAKE_SOURCE_DIR}\\src\\elog\\inc\\elog_def.h)
+    else()
+        target_compile_options(elog PRIVATE -include ${CMAKE_SOURCE_DIR}/src/elog/inc/elog_def.h)
     endif()
 
     # make sure elog is linked against required libraries
@@ -413,6 +461,7 @@ endif()
 # source folders
 add_subdirectory(src/elog/src)
 add_subdirectory(src/elog_bench/src)
+add_subdirectory(src/elog/proto)
 
 # public headers
 add_subdirectory(src/elog/inc)
