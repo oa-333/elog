@@ -212,9 +212,9 @@ if [ $CLEAN -eq 1 ]; then
     echo "[INFO] Running target clean"
     cmake --build . -j $VERBOSE_OPT --target clean
     if [ $? -ne 0 ]; then
-        echo "[ERROR] Clean failed, see errors above, aborting"
-        popd > /dev/null
-        exit 1
+        echo "[WARN] Clean failed, see errors above, build continues"
+        # popd > /dev/null
+        # exit 1
     fi
     if [ $REBUILD -eq 0 ]; then
         popd > /dev/null

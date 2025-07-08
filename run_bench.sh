@@ -33,6 +33,7 @@ if [ "$OS" = "Msys" ]; then
     echo "[DEBUG] Running command ./elog_bench_mingw.exe $*"
     ./elog_bench_mingw.exe $*
 else
+    export LD_LIBRARY_PATH=.
     echo "[DEBUG] Running command ./elog_bench $*"
     ./elog_bench $*
 fi

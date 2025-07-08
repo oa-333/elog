@@ -1,7 +1,7 @@
 #!/ucrt64/bin/gnuplot
 
 reset
-set terminal png size 1000,700
+set terminal png size 1200,700
 set output "./log_st.png"
 
 set label "Logging Method" at 100,100 center

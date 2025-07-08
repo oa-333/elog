@@ -1,4 +1,4 @@
-if(MINGW)
+if(MINGW AND ELOG_ENABLE_GRPC_CONNECTOR)
     target_sources(
         elog
         PUBLIC

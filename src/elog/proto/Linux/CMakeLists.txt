@@ -1,4 +1,4 @@
-if(LINUX)
+if(LINUX AND ELOG_ENABLE_GRPC_CONNECTOR)
     target_sources(
         elog
         PUBLIC

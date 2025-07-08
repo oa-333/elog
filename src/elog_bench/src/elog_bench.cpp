@@ -6,12 +6,15 @@
 #include <iostream>
 #include <thread>
 
-#ifdef ELOG_ENABLE_GRPC_CONNECTOR
-#include "absl/log/initialize.h"
-#include "elog.grpc.pb.h"
-#include "elog.pb.h"
-#endif
+// #define DEFAULT_SERVER_ADDR "192.168.108.111"
+#define DEFAULT_SERVER_ADDR "192.168.56.102"
+
+// include elog system first, then any possible connector
 #include "elog_system.h"
+
+#ifdef ELOG_ENABLE_GRPC_CONNECTOR
+#include "elog_grpc_target.h"
+#endif
 
 #if defined(ELOG_MSVC) || defined(ELOG_MINGW)
 #ifdef __clang__
@@ -51,6 +54,7 @@ static const uint32_t MIN_THREAD_COUNT = 1;
 static const uint32_t MAX_THREAD_COUNT = 16;
 static const char* DEFAULT_CFG = "file:///./bench_data/elog_bench.log";
 static bool sTestConns = false;
+static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
 static int sMsgCnt = -1;
 static int sMinThreadCnt = -1;
@@ -79,9 +83,6 @@ static void testGRPCStream();
 static void testGRPCAsync();
 static void testGRPCAsyncCallbackUnary();
 static void testGRPCAsyncCallbackStream();
-#endif
-#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
-static void testGrafana();
 #endif
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 static void testMySQL();
@@ -614,9 +615,12 @@ static bool parseArgs(int argc, char* argv[]) {
         sTestPerfAll = true;
         return true;
     }
-    if (argc == 2) {
+    if (argc >= 2) {
         if (strcmp(argv[1], "--test-conn") == 0) {
             sTestConns = true;
+            if (argc >= 3 && strcmp(argv[2], "--server-addr") == 0) {
+                sServerAddr = argv[3];
+            }
             return true;
         } else if (strcmp(argv[1], "--test-colors") == 0) {
             sTestColors = true;
@@ -790,7 +794,7 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     }
     fprintf(stderr, "ELog system initialized\n");
     if (sTestConns) {
-        elog::ELogSystem::addStdErrLogTarget();
+        // elog::ELogSystem::addStdErrLogTarget();
         elog::ELogSystem::setCurrentThreadName("elog_bench_main");
         elog::ELogSystem::setAppName("elog_bench_app");
     }
@@ -957,8 +961,9 @@ void testGRPCSimple() {
         "${msg})";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC (unary)", cfg, msgPerf, ioPerf);
-    runMultiThreadTest("gRPC (unary)", "elog_bench_grpc_unary", cfg);
+    StatData statData;
+    runSingleThreadedTest("gRPC (unary)", cfg, msgPerf, ioPerf, statData);
+    runMultiThreadTest("gRPC (unary)", "elog_bench_grpc_unary", cfg, true, 1, 4);
 
     server->Shutdown();
     t.join();
@@ -979,8 +984,9 @@ void testGRPCStream() {
         "${msg})&grpc_client_mode=stream";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC (stream)", cfg, msgPerf, ioPerf);
-    runMultiThreadTest("gRPC (stream)", "elog_bench_grpc_stream", cfg);
+    StatData statData;
+    runSingleThreadedTest("gRPC (stream)", cfg, msgPerf, ioPerf, statData);
+    runMultiThreadTest("gRPC (stream)", "elog_bench_grpc_stream", cfg, true, 1, 4);
 
     server->Shutdown();
     t.join();
@@ -1002,8 +1008,9 @@ void testGRPCAsync() {
         "${msg})&grpc_client_mode=async";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC (async)", cfg, msgPerf, ioPerf);
-    runMultiThreadTest("gRPC (async)", "elog_bench_grpc_async", cfg);
+    StatData statData;
+    runSingleThreadedTest("gRPC (async)", cfg, msgPerf, ioPerf, statData);
+    runMultiThreadTest("gRPC (async)", "elog_bench_grpc_async", cfg, true, 1, 4);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -1026,7 +1033,8 @@ void testGRPCAsyncCallbackUnary() {
         "${msg})&grpc_client_mode=async_callback_unary";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC (async callback unary)", cfg, msgPerf, ioPerf);
+    StatData statData;
+    runSingleThreadedTest("gRPC (async callback unary)", cfg, msgPerf, ioPerf, statData);
     runMultiThreadTest("gRPC (async callback unary)", "elog_bench_grpc_async_cb_unary", cfg, true,
                        1, 4);
 
@@ -1051,8 +1059,10 @@ void testGRPCAsyncCallbackStream() {
         "count&flush_count=1024";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
-    runSingleThreadedTest("gRPC (async callback stream)", cfg, msgPerf, ioPerf);
-    runMultiThreadTest("gRPC (async callback stream)", "elog_bench_grpc_async_cb_stream", cfg);
+    StatData statData;
+    runSingleThreadedTest("gRPC (async callback stream)", cfg, msgPerf, ioPerf, statData);
+    runMultiThreadTest("gRPC (async callback stream)", "elog_bench_grpc_async_cb_stream", cfg, true,
+                       1, 4);
 
     // test is over, order server to shut down
     server->Shutdown();
@@ -1090,22 +1100,24 @@ void testSQLite() {
 
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 void testPostgreSQL() {
-    const char* cfg =
-        "db://postgresql?conn_string=192.168.108.111&port=5432&db=mydb&user=oren&passwd=1234&"
+    std::string cfg =
+        std::string("db://postgresql?conn_string=") + sServerAddr +
+        "&port=5432&db=mydb&user=oren&passwd=1234&"
         "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, ${user},"
         "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
         "db_thread_model=conn-per-thread";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("PostgreSQL", cfg, msgPerf, ioPerf, statData, 10);
+    runSingleThreadedTest("PostgreSQL", cfg.c_str(), msgPerf, ioPerf, statData, 10);
 }
 #endif
 
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 void testKafka() {
-    const char* cfg =
-        "msgq://kafka?kafka_bootstrap_servers=192.168.108.111:9092&"
+    std::string cfg =
+        std::string("msgq://kafka?kafka_bootstrap_servers=") + sServerAddr +
+        ":9092&"
         "msgq_topic=log_records&"
         "kafka_flush_timeout_millis=50&"
         "flush_policy=immediate&"
@@ -1117,20 +1129,18 @@ void testKafka() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("Kafka", cfg, msgPerf, ioPerf, statData, 10);
+    runSingleThreadedTest("Kafka", cfg.c_str(), msgPerf, ioPerf, statData, 10);
 }
 #endif
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 void testGrafana() {
-    const char* cfg =
-        "mon://grafana?mode=json&"
-        "loki_endpoint=http://192.168.108.111:3100&"
-        "labels={\"app\": \"test\"}";
+    std::string cfg = std::string("mon://grafana?mode=json&loki_endpoint=http://") + sServerAddr +
+                      ":3100&labels={app: test}";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("Grafana-Loki", cfg, msgPerf, ioPerf, statData, 10);
+    runSingleThreadedTest("Grafana-Loki", cfg.c_str(), msgPerf, ioPerf, statData, 10);
 }
 #endif
 
@@ -1617,21 +1627,21 @@ void testPerfSegmentedFile() {
 void testPerfRotatingFile() {
     const char* cfg =
         "file:///./bench_data/"
-        "elog_bench_segmented_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&"
+        "elog_bench_rotating_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&"
         "file_segment_count=5&flush_policy=none";
-    runMultiThreadTest("Rotating File (1MB segment size)", "elog_bench_segmented_1mb", cfg);
+    runMultiThreadTest("Rotating File (1MB segment size)", "elog_bench_rotating_1mb", cfg);
 
     cfg =
         "file:///./bench_data/"
-        "elog_bench_segmented_2mb.log?file_segment_size_mb=2&file_segment_count=5&"
+        "elog_bench_rotating_2mb.log?file_segment_size_mb=2&file_segment_count=5&"
         "flush_policy=none";
-    runMultiThreadTest("Rotating File (2MB segment size)", "elog_bench_segmented_2mb", cfg);
+    runMultiThreadTest("Rotating File (2MB segment size)", "elog_bench_rotating_2mb", cfg);
 
     cfg =
         "file:///./bench_data/"
-        "elog_bench_segmented_4mb.log?file_segment_size_mb=4&file_segment_count=5&"
+        "elog_bench_rotating_4mb.log?file_segment_size_mb=4&file_segment_count=5&"
         "flush_policy=none";
-    runMultiThreadTest("Rotating File (4MB segment size)", "elog_bench_segmented_4mb", cfg);
+    runMultiThreadTest("Rotating File (4MB segment size)", "elog_bench_rotating_4mb", cfg);
 }
 
 void testPerfDeferredFile() {
@@ -1925,7 +1935,7 @@ void testPerfSTRotatingFile1mb(std::vector<double>& msgThroughput,
                                std::vector<double>& msgp95, std::vector<double>& msgp99) {
     const char* cfg =
         "file:///./bench_data/"
-        "elog_bench_segmented_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&"
+        "elog_bench_rotating_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&"
         "file_segment_count=5&flush_policy=none";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
