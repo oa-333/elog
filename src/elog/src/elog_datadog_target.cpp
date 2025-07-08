@@ -107,7 +107,7 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
         return 0;
     }*/
 
-    fprintf(stderr, "Log message for Datadog is ready, body: %s\n", m_logItemArray.dump().c_str());
+    ELOG_REPORT_TRACE("Log message for Datadog is ready, body: %s", m_logItemArray.dump().c_str());
     return logMsg.size();
 }
 
@@ -122,6 +122,8 @@ void ELogDatadogTarget::flushLogTarget() {
         headers.insert(httplib::Headers::value_type("Content-Encoding", "gzip"));
         headers.insert(httplib::Headers::value_type("Content-Length", std::to_string(body.size())));
     }
+    // TODO: allow configure retry policy in case of failure to send (retry frequency, how much to
+    // save before starting to discard, etc.). This should pertain to all http/net connectors.
     httplib::Result res =
         m_client->Post("/api/v2/logs", headers, body.data(), body.size(), "application/json");
     ELOG_REPORT_TRACE("POST done");

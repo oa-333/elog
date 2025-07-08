@@ -65,30 +65,51 @@ endif()
 
 # get HTTP client if needed
 if (ELOG_ENABLE_HTTP)
+    message(STATUS "Enabling http")
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_HTTP)
     # add dependency on httplib
     # NOTE: on Windows/MinGW find_package works after vcpkg/pacman package install
     # but on Linux this fails, especially beware of installing libzstd-dev
     if (MSVC1)
+        message(STATUS "Searching for httplib")
         find_package(httplib CONFIG REQUIRED)
         target_link_libraries(elog httplib::httplib)
     else()
         # on Linux we need to use fetch content method instead
-        message("Getting httplib")
+        message(STATUS "Getting httplib")
         FetchContent_Declare(httplib SYSTEM
             GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
-            GIT_TAG 3af7f2c16147f3fbc6e4d717032daf505dc1652c # v0.20.1
+            GIT_TAG v0.20.1
             GIT_SHALLOW TRUE)
         FetchContent_MakeAvailable(httplib)
 
         target_link_libraries(elog httplib)
     endif()
+    
+    # get gzip headers path (for HTTP clients requiring compression)
+    # NOTE: on Linux/MingW we need to get gzip-hpp explicitly (not sure why)
+    if (NOT MSVC)
+        message(STATUS "Getting gzip-hpp")
+        FetchContent_Declare(gzip-hpp
+            SYSTEM 
+            EXCLUDE_FROM_ALL # NOTE: without this, gzip-hpp benchmark gets compiled into the project
+            GIT_REPOSITORY https://github.com/mapbox/gzip-hpp
+            GIT_TAG v0.1.0
+            GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(gzip-hpp)
+    endif()
 
-    # we also add here gzip for HTTP clients requiring compression
-    find_path(GZIP_HPP_INCLUDE_DIRS "gzip/compress.hpp")
+    # now we can get gzip headers path
+    find_path(GZIP_HPP_INCLUDE_DIRS gzip/compress.hpp)
+    if (NOT GZIP_HPP_INCLUDE_DIRS)
+        # This is a temporary workaround, not sure why find_path() fails on Linux/MinGW
+        set(GZIP_HPP_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/_deps/gzip-hpp-src/include)
+    endif()
+    message(STATUS "Adding gzip include path: ${GZIP_HPP_INCLUDE_DIRS}")
     target_include_directories(elog PRIVATE ${GZIP_HPP_INCLUDE_DIRS})
 
     # gzip requires zlib
+    message(STATUS "Searching for required package ZLIB")
     find_package(ZLIB REQUIRED)
     target_link_libraries(elog ZLIB::ZLIB)
     target_compile_definitions(elog PRIVATE ZLIB_CONST)
