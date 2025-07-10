@@ -79,7 +79,7 @@ void ELogDbgUtilLogHandler::onUnregisterLogger(uint32_t loggerId) {
 }
 
 void ELogDbgUtilLogHandler::onMsg(dbgutil::LogSeverity severity, uint32_t loggerId,
-                                  const char* msg) {
+                                  const char* loggerName, const char* msg) {
     // locate logger by id
     ELogLogger* logger = nullptr;
     if (loggerId < m_dbgUtilLoggers.size()) {

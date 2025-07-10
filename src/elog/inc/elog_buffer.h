@@ -32,16 +32,10 @@ class ELOG_API ELogBuffer {
 public:
     /** @brief Constructor. */
     ELogBuffer()
-        : m_dynamicBuffer(nullptr),
-          m_bufferSize(ELOG_BUFFER_SIZE),
-          m_offset(0),
-          m_bufferFull(false) {}
+        : m_dynamicBuffer(nullptr), m_bufferSize(ELOG_BUFFER_SIZE), m_offset(0), m_bufferFull(0) {}
 
     ELogBuffer(const ELogBuffer& buffer)
-        : m_dynamicBuffer(nullptr),
-          m_bufferSize(ELOG_BUFFER_SIZE),
-          m_offset(0),
-          m_bufferFull(false) {
+        : m_dynamicBuffer(nullptr), m_bufferSize(ELOG_BUFFER_SIZE), m_offset(0), m_bufferFull(0) {
         assign(buffer.getRef(), buffer.getOffset());
     }
 

@@ -8,12 +8,8 @@
 
 namespace elog {
 
-// ATTENTION: the following thread local variables cannot be class members, because these causes
-// some conflict in TLS destruction under MinGW (the logger object in which they might be defined is
-// overwritten with dead-land bit pattern when destroyed, so when C runtime TLS destruction runs for
-// some thread when thread exits, the destructor of the TLS variable runs with an object whose
-// contents is dead-land and the application crashes)
-
+// use TLS instead of thread_local due to MinGW bug (static thread_local variable destruction
+// sometimes takes place twice, not clear under which conditions)
 static ELogTlsKey sRecordBuilderKey = ELOG_INVALID_TLS_KEY;
 
 inline ELogRecordBuilder* allocRecordBuilder() {

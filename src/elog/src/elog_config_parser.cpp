@@ -92,6 +92,18 @@ bool ELogConfigParser::parseLogAffinityList(const char* affinityListStr,
 }
 
 ELogConfig* ELogConfigParser::parseLogTargetConfig(const std::string& logTargetUrl) {
+    // the configuration string may be give as a URL or in nested form
+    // we distinguish between the cases by the appearance of enclosing curly braces
+    std::string trimmedUrl = trim(logTargetUrl);
+    if (trimmedUrl.starts_with("{") && trimmedUrl.ends_with("}")) {
+        ELogConfig* config = ELogConfig::loadFromString(trimmedUrl.c_str());
+        if (config != nullptr) {
+            return config;
+        }
+    }
+
+    // if we failed, we default to URL parsing
+
     // first parse the url, then convert to configuration object
     // NOTE: if asynchronous log target specification is embedded, it is now done through the
     // fragment part of the URL (which can theoretically be repeated)
@@ -99,22 +111,6 @@ ELogConfig* ELogConfigParser::parseLogTargetConfig(const std::string& logTargetU
     if (!parseLogTargetUrl(logTargetUrl, urlSpec)) {
         return nullptr;
     }
-
-    // TODO: we need to prepare a configuration object
-    // normally this would be a simple single-level map node, but in case there is an asynchronous
-    // target specification (i.e. deferred, queued, quantum, etc.), in which case we get a two-level
-    // configuration object, so we first parse the URL as scheme://path?key=value&key=value...
-    // that is to say, a simple key/value map. Next we should check for asynchronous target keys,
-    // and if found, build a two-level configuration. the only caveat here is to allow for the async
-    // schema to infer by itself whether this is an asynchronous target URL
-    // since this design is complicated, not generic (what is async schema rules change?), it was
-    // decided to put any sub-log target specification in the fragment part of the URL. Although
-    // this is not an orthodox solution, this choice currently preferred
-
-    // each level should be converted to a map node, each sub-level should be linked to a log_target
-    // property, the process is iterative, descending as deep as needed. finally we link the top
-    // level map node as the root node for the configuration. The only thing we miss is property
-    // locations, so this needs to be embedded within the URL spec.
 
     ELogConfig* config = new (std::nothrow) ELogConfig();
     if (config == nullptr) {

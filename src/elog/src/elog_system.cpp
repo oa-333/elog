@@ -156,7 +156,8 @@ bool ELogSystem::initGlobals() {
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     // connect to debug util library
-    dbgutil::DbgUtilErr rc = dbgutil::initDbgUtil(&sDbgUtilLogHandler, dbgutil::LS_INFO);
+    dbgutil::DbgUtilErr rc =
+        dbgutil::initDbgUtil(nullptr, &sDbgUtilLogHandler, dbgutil::LS_INFO, DBGUTIL_FLAGS_ALL);
     if (rc != DBGUTIL_ERR_OK) {
         ELOG_REPORT_ERROR("Failed to initialize dbgutil library");
         termGlobals();

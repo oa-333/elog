@@ -33,7 +33,8 @@ public:
      * @param loggerId The identifier used to refer to this logger.
      * @param msg The log message.
      */
-    void onMsg(dbgutil::LogSeverity severity, uint32_t loggerId, const char* msg) final;
+    void onMsg(dbgutil::LogSeverity severity, uint32_t loggerId, const char* loggerName,
+               const char* msg) final;
 
     /**
      * @brief Applies delayed log level configuration (including propagation) for different

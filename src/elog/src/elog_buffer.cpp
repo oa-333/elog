@@ -9,6 +9,8 @@
 namespace elog {
 
 ELogBuffer::~ELogBuffer() {
+    // TODO: what is this? is this because of static thread_local issues, if so that was already
+    // solved, so we can remove ifdef (check this)
 #ifndef __MINGW32__
     reset();
 #endif
