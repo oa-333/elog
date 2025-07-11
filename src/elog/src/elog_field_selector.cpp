@@ -24,6 +24,16 @@
 #define PROG_NAME_MAX 256
 #define THREAD_NAME_MAX 256
 
+// windows version hack
+#ifdef ELOG_WINDOWS
+// For more info regarding theses constants, refer to:
+// https://www.codeproject.com/Articles/5336372/Windows-Version-Detection
+#define WIN32_VERSION_BASE_ADDR 0x7FFE0000
+#define WIN32_VERSION_MAJOR_OFFSET 0x26c
+#define WIN32_VERSION_MINOR_OFFSET 0x270
+#define WIN32_VERSION_BUILD_NUM_OFFSET 0x260
+#endif
+
 #include <climits>
 #include <cstring>
 #include <format>
@@ -280,9 +290,22 @@ static void initOsNameAndVersion() {
     verInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
     GetVersionExA((LPOSVERSIONINFOA)&verInfo);
 
+    // TODO: This is a hack, since embedding manifest is very awkward and does not work...
+    auto sharedUserData = (BYTE*)WIN32_VERSION_BASE_ADDR;
+    auto majorVerPtr = (ULONG*)(sharedUserData + WIN32_VERSION_MAJOR_OFFSET);
+    auto minorVerPtr = (ULONG*)(sharedUserData + WIN32_VERSION_MINOR_OFFSET);
+    auto buildNumPtr = (ULONG*)(sharedUserData + WIN32_VERSION_BUILD_NUM_OFFSET);
+    if (!IsBadReadPtr(majorVerPtr, sizeof(ULONG)) && !IsBadReadPtr(minorVerPtr, sizeof(ULONG)) &&
+        !IsBadReadPtr(buildNumPtr, sizeof(ULONG))) {
+        verInfo.dwMajorVersion = *majorVerPtr;
+        verInfo.dwMinorVersion = *minorVerPtr;
+        verInfo.dwBuildNumber = *buildNumPtr;
+    }
+    // Done hack stuff
+
     // format OS name
     std::stringstream s;
-    s << getWin32OSName(&verInfo);
+    s << getWin32OSName(&verInfo) << " " << getWin32ProductName(&verInfo);
 #ifdef ELOG_MINGW
     s << " MSYS2";
 #endif
@@ -291,9 +314,7 @@ static void initOsNameAndVersion() {
 
     // format version
     s.str(std::string());  // clear string stream contents
-    s << verInfo.dwMajorVersion << "." << verInfo.dwMinorVersion << "." << verInfo.dwBuildNumber
-      << " " << verInfo.szCSDVersion << getWin32SuiteName(&verInfo) << " "
-      << getWin32ProductName(&verInfo);
+    s << verInfo.dwMajorVersion << "." << verInfo.dwMinorVersion << "." << verInfo.dwBuildNumber;
     std::string osVer = s.str();
     elog_strncpy(sOsVersion, osVer.c_str(), OS_VERSION_MAX);
 #else
