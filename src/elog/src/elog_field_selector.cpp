@@ -307,7 +307,7 @@ static void initOsNameAndVersion() {
     std::stringstream s;
     s << getWin32OSName(&verInfo) << " " << getWin32ProductName(&verInfo);
 #ifdef ELOG_MINGW
-    s << " MSYS2";
+    s << " (MSYS2)";
 #endif
     std::string osName = s.str();
     elog_strncpy(sOsName, osName.c_str(), OS_NAME_MAX);
