@@ -17,6 +17,9 @@ namespace elog {
  */
 #define ELOG_BUFFER_SIZE (1024 - 3 * sizeof(uint64_t))
 
+/** @def The maximum size allowed for a single log message buffer. */
+#define ELOG_MAX_BUFFER_SIZE (16 * 1024)
+
 // TODO: fix terminology here - capacity, size, resize/reserve, offset/length, etc.
 
 /**
@@ -77,6 +80,9 @@ public:
 
     /** @brief Assigns a string value to the buffer. Discards previous contents. */
     inline bool assign(const char* msg, size_t len = 0) {
+        if (len >= ELOG_MAX_BUFFER_SIZE) {
+            return false;
+        }
         reset();
         return append(msg, len);
     }
@@ -87,13 +93,17 @@ public:
     }
 
     /** @brief Appends a formatted message to the log buffer. */
-    bool appendV(const char* fmt, va_list ap);
+    bool appendV(const char* fmt, va_list args);
 
-    /** @brief Appends a string to the log buffer. */
+    /**
+     * @brief Appends a string to the log buffer.
+     * @note Type size_t is used here for caller's convenience, but size limit @ref
+     * ELOG_MAX_BUFFER_SIZE is still enforced.
+     */
     bool append(const char* msg, size_t len = 0);
 
     /** @brief Appends a char repeatedly to the log buffer. */
-    inline bool append(size_t count, char c) {
+    inline bool append(uint32_t count, char c) {
         if (m_bufferFull) {
             return false;
         }

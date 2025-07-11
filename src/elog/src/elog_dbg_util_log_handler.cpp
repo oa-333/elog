@@ -52,11 +52,9 @@ dbgutil::LogSeverity ELogDbgUtilLogHandler::onRegisterLogger(dbgutil::LogSeverit
                               logSource->getQualifiedName(), elogLevelToStr(logLevel),
                               (uint32_t)propagateMode);
             logSource->setLogLevel(logLevel, propagateMode);
-            dbgutil::setLoggerSeverity(loggerId, severity);
+            severity = logLevelToSeverity(logLevel);
             m_logLevelCfg.push_back({logSource, logLevel, propagateMode, loggerId, severity});
         }
-
-        severity = logLevelToSeverity(logLevel);
     }
 
     return severity;

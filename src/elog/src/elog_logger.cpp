@@ -25,10 +25,10 @@ static std::atomic<uint64_t> sNextRecordId = 0;
 
 void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const char* function,
                            const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    logFormatV(logLevel, file, line, function, fmt, ap);
-    va_end(ap);
+    va_list args;
+    va_start(args, fmt);
+    logFormatV(logLevel, file, line, function, fmt, args);
+    va_end(args);
 }
 
 void ELogLogger::logFormatV(ELogLevel logLevel, const char* file, int line, const char* function,
@@ -55,15 +55,15 @@ void ELogLogger::logNoFormat(ELogLevel logLevel, const char* file, int line, con
 
 void ELogLogger::startLog(ELogLevel logLevel, const char* file, int line, const char* function,
                           const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
+    va_list args;
+    va_start(args, fmt);
     ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
         recordBuilder = pushRecordBuilder();
     }
     startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function);
-    appendMsgV(recordBuilder, fmt, ap);
-    va_end(ap);
+    appendMsgV(recordBuilder, fmt, args);
+    va_end(args);
 }
 
 void ELogLogger::startLogNoFormat(ELogLevel logLevel, const char* file, int line,
@@ -77,18 +77,18 @@ void ELogLogger::startLogNoFormat(ELogLevel logLevel, const char* file, int line
 }
 
 void ELogLogger::appendLog(const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
+    va_list args;
+    va_start(args, fmt);
     ELogRecordBuilder* recordBuilder = getRecordBuilder();
     if (isLogging(recordBuilder)) {
-        appendMsgV(recordBuilder, fmt, ap);
+        appendMsgV(recordBuilder, fmt, args);
     } else {
         fprintf(stderr, "Attempt to append log message without start-log being issued first: ");
-        vfprintf(stderr, fmt, ap);
+        vfprintf(stderr, fmt, args);
         fputs("\n", stderr);
         fflush(stderr);
     }
-    va_end(ap);
+    va_end(args);
 }
 
 void ELogLogger::appendLogNoFormat(const char* msg) {

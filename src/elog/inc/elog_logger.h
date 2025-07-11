@@ -135,11 +135,11 @@ private:
 
     void finishLog(ELogRecordBuilder* recordBuilder);
 
-    inline void appendMsgV(ELogRecordBuilder* recordBuilder, const char* fmt, va_list ap) {
-        va_list apCopy;
-        va_copy(apCopy, ap);
-        (void)recordBuilder->appendV(fmt, ap);
-        va_end(apCopy);
+    inline void appendMsgV(ELogRecordBuilder* recordBuilder, const char* fmt, va_list args) {
+        va_list argsCopy;
+        va_copy(argsCopy, args);
+        (void)recordBuilder->appendV(fmt, args);
+        va_end(argsCopy);
     }
 
     inline void appendMsg(ELogRecordBuilder* recordBuilder, const char* msg) {

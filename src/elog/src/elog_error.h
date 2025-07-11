@@ -55,7 +55,7 @@ private:
     enum ReportType { RT_ERROR, RT_WARN, RT_TRACE };
 
     /** @brief Reports an error/warn/trace message. */
-    static void reportV(ReportType reportType, const char* msgFmt, va_list ap);
+    static void reportV(ReportType reportType, const char* msgFmt, va_list args);
 
     friend class ELogSystem;
 };

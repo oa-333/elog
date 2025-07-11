@@ -121,60 +121,60 @@ void ELogError::setTraceMode(bool enableTrace) { sErrorHandler->setTraceMode(ena
 bool ELogError::isTraceEnabled() { return sErrorHandler->isTraceEnabled(); }
 
 void ELogError::reportError(const char* errorMsgFmt, ...) {
-    va_list ap;
-    va_start(ap, errorMsgFmt);
-    reportV(RT_ERROR, errorMsgFmt, ap);
-    va_end(ap);
+    va_list args;
+    va_start(args, errorMsgFmt);
+    reportV(RT_ERROR, errorMsgFmt, args);
+    va_end(args);
 }
 
 void ELogError::reportSysError(const char* sysCall, const char* errorMsgFmt, ...) {
     int errCode = errno;
     ELOG_REPORT_ERROR("System call %s() failed: %d (%s)", sysCall, errCode, sysErrorToStr(errCode));
 
-    va_list ap;
-    va_start(ap, errorMsgFmt);
-    ELOG_REPORT_ERROR(errorMsgFmt, ap);
-    va_end(ap);
+    va_list args;
+    va_start(args, errorMsgFmt);
+    ELOG_REPORT_ERROR(errorMsgFmt, args);
+    va_end(args);
 }
 
 void ELogError::reportSysErrorCode(const char* sysCall, int errCode, const char* errorMsgFmt, ...) {
     ELOG_REPORT_ERROR("System call %s() failed: %d (%s)", sysCall, errCode, sysErrorToStr(errCode));
 
-    va_list ap;
-    va_start(ap, errorMsgFmt);
-    ELOG_REPORT_ERROR(errorMsgFmt, ap);
-    va_end(ap);
+    va_list args;
+    va_start(args, errorMsgFmt);
+    ELOG_REPORT_ERROR(errorMsgFmt, args);
+    va_end(args);
 }
 
 void ELogError::reportWarn(const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    reportV(RT_WARN, fmt, ap);
-    va_end(ap);
+    va_list args;
+    va_start(args, fmt);
+    reportV(RT_WARN, fmt, args);
+    va_end(args);
 }
 
 void ELogError::reportTrace(const char* fmt, ...) {
     static thread_local bool isTracing = false;
     if (sErrorHandler->isTraceEnabled() && !isTracing) {
         isTracing = true;
-        va_list ap;
-        va_start(ap, fmt);
+        va_list args;
+        va_start(args, fmt);
 
         // check how many bytes are required
-        va_list apCopy;
-        va_copy(apCopy, ap);
-        uint32_t requiredBytes = (vsnprintf(nullptr, 0, fmt, apCopy) + 1);
+        va_list argsCopy;
+        va_copy(argsCopy, args);
+        uint32_t requiredBytes = (vsnprintf(nullptr, 0, fmt, argsCopy) + 1);
 
         // format trace message
         char* traceMsg = (char*)malloc(requiredBytes);
-        vsnprintf(traceMsg, requiredBytes, fmt, ap);
+        vsnprintf(traceMsg, requiredBytes, fmt, args);
 
         // report error
         sErrorHandler->onTrace(traceMsg);
         free(traceMsg);
-        va_end(apCopy);
+        va_end(argsCopy);
 
-        va_end(ap);
+        va_end(args);
         isTracing = false;
     }
 }
@@ -223,15 +223,15 @@ void ELogError::initError() {
     }
 }
 
-void ELogError::reportV(ReportType reportType, const char* msgFmt, va_list ap) {
+void ELogError::reportV(ReportType reportType, const char* msgFmt, va_list args) {
     // compute error message length, this requires copying variadic argument pointer
-    va_list apCopy;
-    va_copy(apCopy, ap);
-    uint32_t requiredBytes = (vsnprintf(nullptr, 0, msgFmt, apCopy) + 1);
+    va_list argsCopy;
+    va_copy(argsCopy, args);
+    uint32_t requiredBytes = (vsnprintf(nullptr, 0, msgFmt, argsCopy) + 1);
 
     // format error message
     char* formattedMsg = (char*)malloc(requiredBytes);
-    vsnprintf(formattedMsg, requiredBytes, msgFmt, ap);
+    vsnprintf(formattedMsg, requiredBytes, msgFmt, args);
 
     // report error
     ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
@@ -254,7 +254,7 @@ void ELogError::reportV(ReportType reportType, const char* msgFmt, va_list ap) {
     }
 
     free(formattedMsg);
-    va_end(apCopy);
+    va_end(argsCopy);
 }
 
 }  // namespace elog

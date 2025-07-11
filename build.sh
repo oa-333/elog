@@ -249,7 +249,7 @@ fi
 
 # install phase
 echo "[INFO] Installing"
-cmake --install .
+cmake --install . $VERBOSE_OPT
 if [ $? -ne 0 ]; then
     echo "[ERROR] Install phase failed, see errors above, aborting"
     popd > /dev/null

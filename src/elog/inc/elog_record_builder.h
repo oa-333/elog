@@ -30,7 +30,7 @@ public:
     inline void reset() { m_buffer.reset(); }
 
     /** @brief Appends a formatted message to the log buffer. */
-    inline bool appendV(const char* fmt, va_list ap) { return m_buffer.appendV(fmt, ap); }
+    inline bool appendV(const char* fmt, va_list args) { return m_buffer.appendV(fmt, args); }
 
     /** @brief Appends a string to the log buffer. */
     inline bool append(const char* msg, size_t len = 0) { return m_buffer.append(msg, len); }

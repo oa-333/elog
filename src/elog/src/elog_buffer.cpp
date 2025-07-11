@@ -17,6 +17,11 @@ ELogBuffer::~ELogBuffer() {
 }
 
 bool ELogBuffer::resize(uint32_t newSize) {
+    if (newSize > ELOG_MAX_BUFFER_SIZE) {
+        ELOG_REPORT_ERROR("Cannot resize log buffer to size %u, exceeding maximum allowed %u",
+                          newSize, (unsigned)ELOG_MAX_BUFFER_SIZE);
+        return false;
+    }
     if (m_bufferSize < newSize) {
         // allocate a bit more so we avoid another realloc and copy if possible
         uint32_t actualNewSize = m_bufferSize;
@@ -47,24 +52,23 @@ void ELogBuffer::reset() {
     m_bufferFull = false;
 }
 
-// TODO: replace ap with args everywhere
-bool ELogBuffer::appendV(const char* fmt, va_list ap) {
+bool ELogBuffer::appendV(const char* fmt, va_list args) {
     if (m_bufferFull) {
         return false;
     }
 
-    // NOTE: if buffer is too small then ap is corrupt and cannot be reused, so we have no option
+    // NOTE: if buffer is too small then args is corrupt and cannot be reused, so we have no option
     // but prepare a copy in advance, even though mostly it will not be used
-    va_list apCopy;
-    va_copy(apCopy, ap);
-    size_t sizeLeft = size() - m_offset;
-    int res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, ap);
+    va_list argsCopy;
+    va_copy(argsCopy, args);
+    uint32_t sizeLeft = size() - m_offset;
+    int res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, args);
     // return value does not include the terminating null, and number of copied characters,
     // including the terminating null, will not exceed size, so if res==size it means size - 1
     // characters were copied and one more terminating null, meaning one character was lost.
     // if res > size if definitely means buffer was too small, and res shows the required size
     if (res < sizeLeft) {
-        va_end(apCopy);
+        va_end(argsCopy);
         m_offset += res;
         return true;
     }
@@ -75,8 +79,8 @@ bool ELogBuffer::appendV(const char* fmt, va_list ap) {
     }
     // this time we must succeed
     sizeLeft = size() - m_offset;
-    res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, apCopy);
-    va_end(apCopy);
+    res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, argsCopy);
+    va_end(argsCopy);
     if (res >= sizeLeft) {
         ELOG_REPORT_ERROR("Failed to format string second time");
         return false;
@@ -92,7 +96,11 @@ bool ELogBuffer::append(const char* msg, size_t len /* = 0 */) {
     if (len == 0) {
         len = strlen(msg);
     }
-    if (!ensureBufferLength(len)) {
+    // NOTE: be careful of size truncation
+    if (len >= UINT32_MAX) {
+        return false;
+    }
+    if (!ensureBufferLength((uint32_t)len)) {
         return false;
     }
     m_offset += elog_strncpy(getRef() + m_offset, msg, size() - m_offset, len);
