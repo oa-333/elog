@@ -54,7 +54,6 @@ target_sources(elog PRIVATE
     ./elog_queued_target.cpp
     ./elog_queued_target_provider.cpp
     ./elog_rate_limiter.cpp
-    ./elog_record_builder.cpp
     ./elog_record.cpp
     ./elog_rolling_bitset.cpp
     ./elog_rpc_formatter.cpp
