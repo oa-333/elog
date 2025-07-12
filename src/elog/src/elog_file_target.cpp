@@ -56,8 +56,9 @@ ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolic
     setAddNewLine(true);
 }
 
-ELogFileTarget::ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy /* = nullptr */)
-    : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(false) {
+ELogFileTarget::ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy /* = nullptr */,
+                               bool shouldClose /* = false */)
+    : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(shouldClose) {
     if (fileHandle == stderr) {
         setName("stderr");
     } else if (fileHandle == stdout) {

@@ -63,6 +63,11 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
 ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, int64_t bufferSize,
                                                    bool useFileLock, int64_t segmentSizeMB,
                                                    int64_t segmentRingSize, int64_t segmentCount) {
+    // when invoked from ELogSystem, the ring size is zero, so we fix it to default value
+    if (segmentRingSize == 0) {
+        segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
+    }
+
     ELogTarget* logTarget = nullptr;
     if (segmentSizeMB > 0) {
         std::string::size_type lastSlashPos = path.find_last_of("\\/");

@@ -23,9 +23,11 @@ public:
      * @note This constructor is usually used for logging to the standard error and output streams.
      * @param fileHandle The open file handle to use.
      * @param flushPolicy Optional flush policy to use.
+     * @param shouldClose Optionally specify whether the file handle should be closed when done.
      * @see @ref ELofBufferedFileWriter.
      */
-    ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr);
+    ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr,
+                   bool shouldClose = false);
 
     ELogFileTarget(const ELogFileTarget&) = delete;
     ELogFileTarget(ELogFileTarget&&) = delete;

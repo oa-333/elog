@@ -22,57 +22,15 @@ namespace elog {
 class ELOG_API ELogSystem {
 public:
     /**
-     * @brief Initializes the ELog system with defaults (log to standard error stream).
+     * @brief Initializes the ELog library.
+     * @param configFile Optional configuration file, matching the format specified by @ref
+     * configureByFile().
      * @param errorHandler Optional error handler. If none specified, then all internal errors are
      * sent to the standard output stream.
      * @return true If succeeded, otherwise false.
      */
-    static bool initialize(ELogErrorHandler* errorHandler = nullptr);
-
-    /**
-     * @brief Initializes the ELog system for logging to a log file.
-     * @param logFilePath The log file path (including lgo file name).
-     * @param bufferSize Optional buffer size for file buffering. Specify zero to disable buffering.
-     * @param useLock (Relevant only for buffered logging) Optionally specify use of lock. By
-     * default none is used. Pay attention that when buffering is used in a multi-threaded scenario,
-     * using a lock is mandatory, and without a lock behavior is undefined.
-     * @param errorHandler Optional error handler. If none specified, then all internal errors are
-     * sent to the standard output stream.
-     * @param flushPolicy Optional flush policy. If not specified default is used (which
-     * flushes after event log message).
-     * @param logFilter Optional log filter. If none specified, all messages are written to
-     * log.
-     * @param logFormatter Optional log formatter. If none specified default log line format is
-     * used.
-     * @return true If succeeded, otherwise false.
-     */
-    static bool initializeLogFile(const char* logFilePath, uint32_t bufferSize = 0,
-                                  bool useLock = false, ELogErrorHandler* errorHandler = nullptr,
-                                  ELogFlushPolicy* flushPolicy = nullptr,
-                                  ELogFilter* logFilter = nullptr,
-                                  ELogFormatter* logFormatter = nullptr);
-
-    /**
-     * @brief Initializes the ELog system for logging to a segmented log file.
-     * @param errorHandler Optional error handler. If none specified, then all internal errors are
-     * sent to the standard output stream.
-     * @param logPath The log path (path to directory for log segments).
-     * @param logName The base segment name (including file extension if desired).
-     * @param segmentLimitMB The size limit of each log segment.
-     * @param flushPolicy Optional flush policy. If not specified default is used (which
-     * flushes after event log message).
-     * @param logFilter Optional log filter. If none specified, all messages are written to
-     * log.
-     * @param logFormatter Optional log formatter. If none specified default log line format is
-     * used.
-     * @return true If succeeded, otherwise false.
-     */
-    static bool initializeSegmentedLogFile(const char* logPath, const char* logName,
-                                           uint32_t segmentLimitMB,
-                                           ELogErrorHandler* errorHandler = nullptr,
-                                           ELogFlushPolicy* flushPolicy = nullptr,
-                                           ELogFilter* logFilter = nullptr,
-                                           ELogFormatter* logFormatter = nullptr);
+    static bool initialize(const char* configFile = nullptr,
+                           ELogErrorHandler* errorHandler = nullptr);
 
     /** @brief Releases all resources allocated for the ELogSystem. */
     static void terminate();
@@ -91,12 +49,27 @@ public:
 
     /**
      * @brief Configures the ELog System from a properties configuration file.
+     *
+     * The expected file format is as follows:
+     *
+     * Each property specification appears in a single line.
+     * Each property is specified as: KEY = VALUE.
+     * Whitespace and empty lines are allowed.
+     * Commented lines begin with '#' character (may be preceded by whitespace).
+     *
      * The following properties are recognized:
+     *
      * - log_format: log line format specification. See @ref configureLogFormat() for more details.
+     * - rate_limit: Specified log rate limit (maximum allowed per second).
      * - log_level: expected value is any log level string (without the "ELEVEL_" prefix).
      *   Determines the global (root source) log level.
      * - <qualified-source-name>.log_level: Log level of a log source.
+     * - <qualified-source-name>.log_affinity: Affinity of a log source to log targets.
      * - log_target: expected log target URL.
+     *
+     * Other properties are disregarded, so it is ok to put elog definitions within a larger
+     * property file.
+     *
      * @param props The properties map.
      * @param defineLogSources[opt] Optional parameter specifying whether each log source
      * configuration item triggers creation of the log source.
@@ -105,8 +78,8 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromFile(const char* configPath, bool defineLogSources = false,
-                                  bool defineMissingPath = false);
+    static bool configureByPropFile(const char* configPath, bool defineLogSources = false,
+                                    bool defineMissingPath = false);
 
     /**
      * @brief Configures the ELog System from a properties map.
@@ -124,9 +97,8 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromProperties(const ELogPropertySequence& props,
-                                        bool defineLogSources = false,
-                                        bool defineMissingPath = false);
+    static bool configureByProps(const ELogPropertySequence& props, bool defineLogSources = false,
+                                 bool defineMissingPath = false);
 
     /**
      * @brief Configures the ELog System from a properties configuration file (extended
@@ -146,8 +118,8 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromFileEx(const char* configPath, bool defineLogSources = false,
-                                    bool defineMissingPath = false);
+    static bool configureByPropFileEx(const char* configPath, bool defineLogSources = false,
+                                      bool defineMissingPath = false);
 
     /**
      * @brief Configures the ELog System from a properties map (extended functionality, loading
@@ -166,9 +138,8 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromPropertiesEx(const ELogPropertyPosSequence& props,
-                                          bool defineLogSources = false,
-                                          bool defineMissingPath = false);
+    static bool configureByPropsEx(const ELogPropertyPosSequence& props,
+                                   bool defineLogSources = false, bool defineMissingPath = false);
 
     /**
      * @brief Configures the ELog System from a configuration file (see README for format).
@@ -188,8 +159,8 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromConfigFile(const char* configPath, bool defineLogSources = false,
-                                        bool defineMissingPath = false);
+    static bool configureByFile(const char* configPath, bool defineLogSources = false,
+                                bool defineMissingPath = false);
 
     /**
      * @brief Configures the ELog System from a configuration string (see README for format).
@@ -208,8 +179,8 @@ public:
      * to leaf is missing, then the call fails.
      * @return true If configuration succeeded, otherwise false.
      */
-    static bool configureFromConfigStr(const char* configStr, bool defineLogSources = false,
-                                       bool defineMissingPath = false);
+    static bool configureByStr(const char* configStr, bool defineLogSources = false,
+                               bool defineMissingPath = false);
 
     /**
      * @brief Configures the ELog System from a configuration object.
@@ -236,112 +207,6 @@ public:
      */
 
     /**
-     * @brief Replaces all currently configured log targets with the given log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param target The log target.
-     * @param printBanner Optionally specifies whether to print a banner (if not specified none is
-     * printed).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId setLogTarget(ELogTarget* target, bool printBanner = false);
-
-    /**
-     * @brief Utility method for replacing all currently configured log targets with a file log
-     * target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param logFilePath The path to the log file.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @param printBanner Optionally specifies whether to print a banner (by default printed).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId setLogFileTarget(const char* logFilePath,
-                                         ELogFlushPolicy* flushPolicy = nullptr,
-                                         bool printBanner = true);
-
-    /**
-     * @brief Utility method for replacing all currently configured log targets with a file log
-     * target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param fileHandle An open file handle. Standard output or error stream handles can be
-     * specified here. The caller is responsible for closing the handle when done if needed.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @param printBanner Optionally specifies whether to print a banner (if not specified none is
-     * printed).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId setLogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr,
-                                         bool printBanner = false);
-
-    /**
-     * @brief Utility method for replacing all currently configured log targets with a buffered file
-     * log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param logFilePath The path to the log file.
-     * @param bufferSize Buffer size for file buffering. Cannot be zero.
-     * @param useLock Optionally disable use of lock. By default a lock is used because the buffered
-     * file log target is not thread-safe. If lock is disabled, and caller does not take care of
-     * thread-safety then behavior is undefined.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @param printBanner Optionally specifies whether to print a banner (by default printed).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId setBufferedLogFileTarget(const char* logFilePath, uint32_t bufferSize,
-                                                 bool useLock = true,
-                                                 ELogFlushPolicy* flushPolicy = nullptr,
-                                                 bool printBanner = true);
-
-    /**
-     * @brief Utility method for replacing all currently configured log targets with a buffered file
-     * log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param fileHandle An open file handle. Standard output or error stream handles can be
-     * specified here. The caller is responsible for closing the handle when done if needed.
-     * @param bufferSize Buffer size for file buffering. Cannot be zero.
-     * @param useLock Optionally disable use of lock. By default a lock is used because the buffered
-     * file log target is not thread-safe. If lock is disabled, and caller does not take care of
-     * thread-safety then behavior is undefined.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @param printBanner Optionally specifies whether to print a banner (by default printed).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId setBufferedLogFileTarget(FILE* fileHandle, uint32_t bufferSize,
-                                                 bool useLock = true,
-                                                 ELogFlushPolicy* flushPolicy = nullptr,
-                                                 bool printBanner = true);
-
-    /**
-     * @brief Utility method for replacing all currently configured log targets with a segmented
-     * file log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param logPath The directory for log file segments.
-     * @param logName The base name for log file segments.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @param printBanner Optionally specifies whether to print a banner (by default printed).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId setSegmentedLogFileTarget(const char* logPath, const char* logName,
-                                                  uint32_t segmentLimitMB,
-                                                  ELogFlushPolicy* flushPolicy = nullptr,
-                                                  bool printBanner = true);
-
-    /**
      * @brief Adds a log target to existing log targets.
      * @note This API call is not thread-safe, and is recommended to take place during application
      * initialization phase.
@@ -352,113 +217,103 @@ public:
     static ELogTargetId addLogTarget(ELogTarget* target);
 
     /**
-     * @brief Utility method for adding a file log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param logFilePath The path to the log file.
-     * @param bufferSize Optional buffer size for file buffering. Specify zero to disable buffering.
-     * @param useLock (Relevant only for buffered logging) Optionally specify use of lock. By
-     * default none is used. Pay attention that when buffering is used in a multi-threaded scenario,
-     * using a lock is mandatory, and without a lock behavior is undefined.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize = 0,
-                                         bool useLock = false,
-                                         ELogFlushPolicy* flushPolicy = nullptr);
-
-    /**
-     * @brief Utility method for adding a file log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param fileHandle An open file handle. Standard output or error stream handles can be
-     * specified here. The caller is responsible for closing the handle when done if needed.
-     * @param bufferSize Optional buffer size for file buffering. Specify zero to disable buffering.
-     * @param useLock (Relevant only for buffered logging) Optionally specify use of lock. By
-     * default none is used. Pay attention that when buffering is used in a multi-threaded scenario,
-     * using a lock is mandatory, and without a lock behavior is undefined.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId addLogFileTarget(FILE* fileHandle, uint32_t bufferSize = 0,
-                                         bool useLock = false,
-                                         ELogFlushPolicy* flushPolicy = nullptr);
-
-    /**
-     * @brief Utility method for adding a buffered file log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param logFilePath The path to the log file.
-     * @param bufferSize Buffer size for file buffering. Cannot be zero.
-     * @param useLock Optionally disable use of lock. By default a lock is used because the buffered
-     * file log target is not thread-safe. If lock is disabled, and caller does not take care of
-     * thread-safety then behavior is undefined.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId addBufferedLogFileTarget(const char* logFilePath, uint32_t bufferSize,
-                                                 bool useLock = true,
-                                                 ELogFlushPolicy* flushPolicy = nullptr);
-
-    /**
-     * @brief Utility method for adding a buffered file log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param fileHandle An open file handle. Standard output or error stream handles can be
-     * specified here. The caller is responsible for closing the handle when done if needed.
-     * @param bufferSize Buffer size for file buffering. Cannot be zero.
-     * @param useLock Optionally disable use of lock. By default a lock is used because the buffered
-     * file log target is not thread-safe. If lock is disabled, and caller does not take care of
-     * thread-safety then behavior is undefined.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId addBufferedLogFileTarget(FILE* fileHandle, uint32_t bufferSize,
-                                                 bool useLock = true,
-                                                 ELogFlushPolicy* flushPolicy = nullptr);
-
-    /**
-     * @brief Adds a segmented file log target.
-     * @note This API call is not thread-safe, and is recommended to take place during application
-     * initialization phase.
-     * @param logPath The directory for log file segments.
-     * @param logName The base name for log file segments.
-     * @param flushPolicy Optional flush policy (if not specified then flush after each log
-     * message).
-     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
-     * failed.
-     */
-    static ELogTargetId addSegmentedLogFileTarget(const char* logPath, const char* logName,
-                                                  uint32_t segmentLimitMB,
-                                                  ELogFlushPolicy* flushPolicy = nullptr);
-
-    /**
      * @brief Configures a log target from a configuration string. This could be in URL form or as a
-     * configuration string (see configuration function below for more details).
+     * configuration string (see configuration function above for more details).
+     * @note This is the recommended API for adding log targets, as it allows for adding log
+     * targets, with very complex configuration, in just one connection-string/URL like parameter.
      * @param logTargetCfg The configuration string.
      * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
      * failed.
      */
     static ELogTargetId configureLogTargetString(const char* logTargetCfg);
 
+    /**
+     * @brief Adds a file log target, optionally buffered, segmented or rotating.
+     * @param logFilePath The log file path (including lgo file name).
+     * @param bufferSize Optional buffer size for file buffering. Specify zero to disable buffering.
+     * @param useLock (Relevant only for buffered logging) Optionally specify use of lock. By
+     * default none is used. If it is known that logging will take place in a thread-safe manner
+     * (e.g. behind a global lock), then there is no need for the file target to make use of its own
+     * lock. Pay attention that when buffering is used in a multi-threaded scenario, using a lock is
+     * mandatory, and without a lock behavior is undefined.
+     * @param segmentSizeMB Optionally specify a segment size limit, which will cause the log file
+     * to be divided into segments. That is, when log file exceeds this limit, the log file segment
+     * is closed, and a new log file segment is created.
+     * @param segmentCount Optionally specify segment count limit (relevant only when a segment size
+     * limit is specified). The effect of this would be a rotating log file, such that when the
+     * amount of log segments has been used up, the first log segment is begin reused (thus
+     * discarding old segments' log data).
+     * @param logLevel Optional log level restriction. All messages with lower log level will not be
+     * passed to the lgo target.
+     * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
+     * in which case flushing takes place autonomously (e.g. when an internal buffer is full).
+     * @param logFilter Optional log filter. If none specified, all messages are passed to the log
+     * target.
+     * @param logFormatter Optional log formatter. If none specified the global log line formatter
+     * is used.
+     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+     * failed.
+     * @note In case of success, the log target object becomes the owner of the flush policy, filter
+     * and log formatter, such that during termination, the log target is responsible for deleting
+     * these objects. In case of failure to create the log target, the caller is STILL the owner of
+     * these objects, and is responsible for deleting them.
+     */
+    static ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize = 0,
+                                         bool useLock = false, uint32_t segmentLimitMB = 0,
+                                         uint32_t segmentCount = 0,
+                                         ELogLevel logLevel = ELEVEL_INFO,
+                                         ELogFlushPolicy* flushPolicy = nullptr,
+                                         ELogFilter* logFilter = nullptr,
+                                         ELogFormatter* logFormatter = nullptr);
+
+    /**
+     * @brief Adds a file log target, while attaching to an open file object.
+     * @param fileHandle The open file handle. Caller is responsible for closing the file handle
+     * when done, unless @ref closeHandleWhenDone is passed as true.
+     * @param closeHandleWhenDone Specifies whether to close the file handle when done.
+     * @param bufferSize Optional buffer size for file buffering. Specify zero to disable buffering.
+     * In this case, file buffering takes place at the OS level, rather than by ELog.
+     * @param useLock (Relevant only for buffered logging) Optionally specify use of lock. By
+     * default none is used. If it is known that logging will take place in a thread-safe manner
+     * (e.g. behind a global lock), then there is no need for the file target to make use of its own
+     * lock. Pay attention that when buffering is used in a multi-threaded scenario, using a lock is
+     * mandatory, and without a lock behavior is undefined.
+     * @param logLevel Optional log level restriction. All messages with lower log level will not be
+     * passed to the lgo target.
+     * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
+     * in which case flushing takes place autonomously (e.g. when an internal buffer is full).
+     * @param logFilter Optional log filter. If none specified, all messages are passed to the log
+     * target.
+     * @param logFormatter Optional log formatter. If none specified the global log line formatter
+     * is used.
+     * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+     * failed.
+     * @note In case of success, the log target object becomes the owner of the flush policy, filter
+     * and log formatter, such that during termination, the log target is responsible for deleting
+     * these objects. In case of failure to create the log target, the caller is STILL the owner of
+     * these objects, and is responsible for deleting them.
+     */
+    static ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone = false,
+                                            uint32_t bufferSize = 0, bool useLock = false,
+                                            ELogLevel logLevel = ELEVEL_INFO,
+                                            ELogFlushPolicy* flushPolicy = nullptr,
+                                            ELogFilter* logFilter = nullptr,
+                                            ELogFormatter* logFormatter = nullptr);
+
     /** @brief Adds standard error stream log target. */
-    static ELogTargetId addStdErrLogTarget();
+    static ELogTargetId addStdErrLogTarget(ELogLevel logLevel = ELEVEL_INFO,
+                                           ELogFilter* logFilter = nullptr,
+                                           ELogFormatter* logFormatter = nullptr);
 
     /** @brief Adds standard output stream log target. */
-    static ELogTargetId addStdOutLogTarget();
+    static ELogTargetId addStdOutLogTarget(ELogLevel logLevel = ELEVEL_INFO,
+                                           ELogFilter* logFilter = nullptr,
+                                           ELogFormatter* logFormatter = nullptr);
 
     /** @brief Adds syslog (or Windows Event Log) target. */
-    static ELogTargetId addSysLogTarget();
-
-    /** @brief Adds a dedicated */
+    static ELogTargetId addSysLogTarget(ELogLevel logLevel = ELEVEL_INFO,
+                                        ELogFilter* logFilter = nullptr,
+                                        ELogFormatter* logFormatter = nullptr);
 
     /**
      * @brief Adds a dedicated tracer, that receives messages only from a specific logger.

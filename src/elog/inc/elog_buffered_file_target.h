@@ -32,14 +32,15 @@ public:
      * @param useLock Specifies whether to use lock. If buffering is used in a multi-threaded
      * scenario, the a lock is required, and without a lock behavior is undefined.
      * @param flushPolicy Optional flush policy to use.
+     * @param shouldClose Optionally specify whether the file handle should be closed when done.
      * @see @ref ELofBufferedFileWriter.
      */
     ELogBufferedFileTarget(FILE* fileHandle, uint32_t bufferSize = 0, bool useLock = true,
-                           ELogFlushPolicy* flushPolicy = nullptr)
+                           ELogFlushPolicy* flushPolicy = nullptr, bool shouldClose = false)
         : ELogTarget("buffered-file", flushPolicy),
           m_fileWriter(bufferSize, useLock),
           m_fileHandle(nullptr),
-          m_shouldClose(false) {
+          m_shouldClose(shouldClose) {
         if (useLock) {
             setNativelyThreadSafe();
         }

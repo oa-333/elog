@@ -25,10 +25,25 @@ public:
      */
     ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
 
-private:
-    ELogTarget* createLogTarget(const std::string& path, int64_t bufferSize, bool useFileLock,
-                                int64_t segmentSizeMB, int64_t segmentRingSize,
-                                int64_t segmentCount);
+    /**
+     * @brief Create a file log target object.
+     *
+     * @param path The file path. In case of segmented/rotating file, the containing directory is
+     * used for log segments. Log segments name following ordinal number, where first segment has no
+     * number, second segment has number 2, and so on.
+     * @param bufferSize File buffer size.
+     * @param useFileLock Specifies whether file buffer requires a lock.
+     * @param segmentSizeMB Segment size limit in MB. Specify zero for not using segmented file log
+     * target.
+     * @param segmentRingSize The pending log messages ring buffer size used by segmented file
+     * target when switching segments.
+     * @param segmentCount Segment count limitation, in effect turning the segmented file target
+     * into a rotating file target.
+     * @return ELogTarget* The resulting log target or null if failed.
+     */
+    static ELogTarget* createLogTarget(const std::string& path, int64_t bufferSize,
+                                       bool useFileLock, int64_t segmentSizeMB,
+                                       int64_t segmentRingSize, int64_t segmentCount);
 };
 
 }  // namespace elog

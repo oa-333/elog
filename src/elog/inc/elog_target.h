@@ -148,7 +148,17 @@ public:
     /** @brief Retrieve the installed flush policy. */
     inline ELogFlushPolicy* getFlushPolicy() { return m_flushPolicy; }
 
-    /** @brief As log target may be chained as in a list. This retrieves the final log target. */
+    /**
+     * @brief Detaches the log target from its flush-policy/fiter/formatter without deleting them.
+     */
+    inline void detach() {
+        m_flushPolicy = nullptr;
+        m_logFilter = nullptr;
+        m_logFormatter = nullptr;
+    }
+
+    /** @brief As log target may be chained as in a list. This retrieves the final log target.
+     */
     virtual ELogTarget* getEndLogTarget() { return this; }
 
     /**

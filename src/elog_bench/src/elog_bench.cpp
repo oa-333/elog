@@ -822,15 +822,15 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
             elog::ELogStringPropertyPos* prop =
                 new elog::ELogStringPropertyPos(namedCfg.c_str(), 0, 0);
             props.m_sequence.push_back({"log_target", prop});
-            res = elog::ELogSystem::configureFromPropertiesEx(props);
+            res = elog::ELogSystem::configureByPropsEx(props);
         } else {
             std::string cfgStr = "{ log_target = \"";
             cfgStr += namedCfg + "\"}";
             fprintf(stderr, "Using configuration: log_target = %s\n", namedCfg.c_str());
-            res = elog::ELogSystem::configureFromConfigStr(cfgStr.c_str());
+            res = elog::ELogSystem::configureByStr(cfgStr.c_str());
         }
     } else {
-        res = elog::ELogSystem::configureFromConfigStr(cfg);
+        res = elog::ELogSystem::configureByStr(cfg);
     }
     if (!res) {
         fprintf(stderr, "Failed to initialize elog system with log target config: %s\n", cfg);

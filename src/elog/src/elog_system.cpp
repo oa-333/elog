@@ -17,6 +17,7 @@
 #include "elog_dbg_util_log_handler.h"
 #include "elog_error.h"
 #include "elog_field_selector_internal.h"
+#include "elog_file_schema_handler.h"
 #include "elog_file_target.h"
 #include "elog_filter_internal.h"
 #include "elog_flush_policy.h"
@@ -227,64 +228,15 @@ void ELogSystem::termGlobals() {
     termDateTable();
 }
 
-bool ELogSystem::initialize(ELogErrorHandler* errorHandler /* = nullptr */) {
-    setErrorHandler(errorHandler);
-    return initGlobals();
-}
-
-// TODO: refactor init code
-bool ELogSystem::initializeLogFile(const char* logFilePath, uint32_t bufferSize /* = 0 */,
-                                   bool useLock /* = false */,
-                                   ELogErrorHandler* errorHandler /* = nullptr */,
-                                   ELogFlushPolicy* flushPolicy /* = nullptr */,
-                                   ELogFilter* logFilter /* = nullptr */,
-                                   ELogFormatter* logFormatter /* = nullptr */) {
+bool ELogSystem::initialize(const char* configFile /* = nullptr */,
+                            ELogErrorHandler* errorHandler /* = nullptr */) {
     setErrorHandler(errorHandler);
     if (!initGlobals()) {
         return false;
     }
-    if (bufferSize > 0) {
-        if (!setBufferedLogFileTarget(logFilePath, bufferSize, useLock, flushPolicy)) {
-            termGlobals();
-            return false;
-        }
-    } else {
-        if (setLogFileTarget(logFilePath, flushPolicy) == ELOG_INVALID_TARGET_ID) {
-            termGlobals();
-            return false;
-        }
-    }
-
-    if (logFilter != nullptr) {
-        setLogFilter(logFilter);
-    }
-    if (logFormatter != nullptr) {
-        setLogFormatter(logFormatter);
-    }
-    return true;
-}
-
-bool ELogSystem::initializeSegmentedLogFile(const char* logPath, const char* logName,
-                                            uint32_t segmentLimitMB,
-                                            ELogErrorHandler* errorHandler /* = nullptr */,
-                                            ELogFlushPolicy* flushPolicy /* = nullptr */,
-                                            ELogFilter* logFilter /* = nullptr */,
-                                            ELogFormatter* logFormatter /* = nullptr */) {
-    setErrorHandler(errorHandler);
-    if (!initGlobals()) {
-        return false;
-    }
-    if (setSegmentedLogFileTarget(logPath, logName, segmentLimitMB, flushPolicy) ==
-        ELOG_INVALID_TARGET_ID) {
+    if (configFile != nullptr && !configureByFile(configFile)) {
         termGlobals();
         return false;
-    }
-
-    if (logFilter != nullptr) {
-        setLogFilter(logFilter);
-    }
-    if (logFormatter != nullptr) {
-        setLogFormatter(logFormatter);
     }
     return true;
 }
@@ -389,19 +341,19 @@ bool ELogSystem::configureLogTarget(const ELogConfigMapNode* logTargetCfg,
     return true;
 }
 
-bool ELogSystem::configureFromFile(const char* configPath, bool defineLogSources /* = false */,
-                                   bool defineMissingPath /* = false */) {
+bool ELogSystem::configureByPropFile(const char* configPath, bool defineLogSources /* = false */,
+                                     bool defineMissingPath /* = false */) {
     // elog requires properties in order due to log level propagation
     ELogPropertySequence props;
     if (!ELogConfigLoader::loadFileProperties(configPath, props)) {
         return false;
     }
-    return configureFromProperties(props, defineLogSources, defineMissingPath);
+    return configureByProps(props, defineLogSources, defineMissingPath);
 }
 
-bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
-                                         bool defineLogSources /* = false */,
-                                         bool defineMissingPath /* = false */) {
+bool ELogSystem::configureByProps(const ELogPropertySequence& props,
+                                  bool defineLogSources /* = false */,
+                                  bool defineMissingPath /* = false */) {
     // TODO: Allow override from env also log_format, log_filter, and perhaps global flush policy
 
     // configure log format (unrelated to order of appearance)
@@ -540,8 +492,8 @@ bool ELogSystem::configureFromProperties(const ELogPropertySequence& props,
     return true;
 }
 
-bool ELogSystem::configureFromFileEx(const char* configPath, bool defineLogSources /* = false */,
-                                     bool defineMissingPath /* = false */) {
+bool ELogSystem::configureByPropFileEx(const char* configPath, bool defineLogSources /* = false */,
+                                       bool defineMissingPath /* = false */) {
     // elog requires properties in order due to log level propagation
     ELogConfig* config = ELogConfig::loadFromPropFile(configPath);
     if (config == nullptr) {
@@ -553,9 +505,9 @@ bool ELogSystem::configureFromFileEx(const char* configPath, bool defineLogSourc
     return res;
 }
 
-bool ELogSystem::configureFromPropertiesEx(const ELogPropertyPosSequence& props,
-                                           bool defineLogSources /* = false */,
-                                           bool defineMissingPath /* = false */) {
+bool ELogSystem::configureByPropsEx(const ELogPropertyPosSequence& props,
+                                    bool defineLogSources /* = false */,
+                                    bool defineMissingPath /* = false */) {
     // we first convert properties to configuration object and then load from cfg object
     ELogConfig* config = ELogConfig::loadFromProps(props);
     if (config == nullptr) {
@@ -567,9 +519,8 @@ bool ELogSystem::configureFromPropertiesEx(const ELogPropertyPosSequence& props,
     return res;
 }
 
-bool ELogSystem::configureFromConfigFile(const char* configPath,
-                                         bool defineLogSources /* = false */,
-                                         bool defineMissingPath /* = false */) {
+bool ELogSystem::configureByFile(const char* configPath, bool defineLogSources /* = false */,
+                                 bool defineMissingPath /* = false */) {
     // elog requires properties in order due to log level propagation
     ELogConfig* config = ELogConfig::loadFromFile(configPath);
     if (config == nullptr) {
@@ -636,8 +587,8 @@ bool ELogSystem::augmentConfigFromEnv(ELogConfigMapNode* cfgMap) {
     return true;
 }
 
-bool ELogSystem::configureFromConfigStr(const char* configStr, bool defineLogSources /* = false */,
-                                        bool defineMissingPath /* = false */) {
+bool ELogSystem::configureByStr(const char* configStr, bool defineLogSources /* = false */,
+                                bool defineMissingPath /* = false */) {
     ELogConfig* config = ELogConfig::loadFromString(configStr);
     if (config == nullptr) {
         ELOG_REPORT_ERROR("Failed to load configuration from string: %s", configStr);
@@ -833,134 +784,6 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
     return true;
 }
 
-ELogTargetId ELogSystem::setLogTarget(ELogTarget* logTarget, bool printBanner /* = false */) {
-    // first start the log target
-    if (!logTarget->start()) {
-        ELOG_REPORT_ERROR("Failed to start log target");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    // check if this is the first log target or not
-    if (!sLogTargets.empty()) {
-        for (ELogTarget* logTarget : sLogTargets) {
-            if (logTarget != nullptr) {
-                logTarget->stop();
-            }
-        }
-        sLogTargets.clear();
-    }
-
-    sLogTargets.push_back(logTarget);
-    if (printBanner) {
-        ELOG_INFO("======================================================");
-    }
-    return (ELogTargetId)(sLogTargets.size() - 1);
-}
-
-ELogTargetId ELogSystem::setLogFileTarget(const char* logFilePath,
-                                          ELogFlushPolicy* flushPolicy /* = nullptr */,
-                                          bool printBanner /* = true */) {
-    // create new log target
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log file target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::setLogFileTarget(FILE* fileHandle,
-                                          ELogFlushPolicy* flushPolicy /* = nullptr */,
-                                          bool printBanner /* = false */) {
-    // create new log target
-    ELogFileTarget* logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::setBufferedLogFileTarget(const char* logFilePath, uint32_t bufferSize,
-                                                  bool useLock /* = true */,
-                                                  ELogFlushPolicy* flushPolicy /* = nullptr */,
-                                                  bool printBanner /* = false */) {
-    // verify parameters
-    if (bufferSize == 0) {
-        ELOG_REPORT_ERROR("Invalid zero buffer size for buffered file log target");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogBufferedFileTarget(logFilePath, bufferSize, useLock, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log file target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::setBufferedLogFileTarget(FILE* fileHandle, uint32_t bufferSize,
-                                                  bool useLock /* = true */,
-                                                  ELogFlushPolicy* flushPolicy /* = nullptr */,
-                                                  bool printBanner /* = false */) {
-    // verify parameters
-    if (bufferSize == 0) {
-        ELOG_REPORT_ERROR("Invalid zero buffer size for buffered file log target");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log file target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::setSegmentedLogFileTarget(const char* logPath, const char* logName,
-                                                   uint32_t segmentLimitMB,
-                                                   ELogFlushPolicy* flushPolicy /* = nullptr */,
-                                                   bool printBanner /* = true */) {
-    // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create segmented log file target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = setLogTarget(logTarget, printBanner);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    logTarget->setFlushPolicy(flushPolicy);
-    return logTargetId;
-}
-
 ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
     // TODO: should we guard against duplicate names (they are used in search by name and in log
     // affinity mask building) - this might require API change (returning at least bool)
@@ -995,118 +818,6 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
     return logTargetId;
 }
 
-ELogTargetId ELogSystem::addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 0 */,
-                                          bool useLock /* = false */,
-                                          ELogFlushPolicy* flushPolicy /* = nullptr */) {
-    // create new log target
-    ELogTarget* logTarget = nullptr;
-    if (bufferSize > 0) {
-        logTarget = new (std::nothrow)
-            ELogBufferedFileTarget(logFilePath, bufferSize, useLock, flushPolicy);
-    } else {
-        logTarget = new (std::nothrow) ELogFileTarget(logFilePath, flushPolicy);
-    }
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = addLogTarget(logTarget);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::addLogFileTarget(FILE* fileHandle, uint32_t bufferSize /* = 0 */,
-                                          bool useLock /* = false */,
-                                          ELogFlushPolicy* flushPolicy /* = nullptr */) {
-    ELogTarget* logTarget = nullptr;
-    if (bufferSize > 0) {
-        logTarget =
-            new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock, flushPolicy);
-    } else {
-        logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy);
-    }
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = addLogTarget(logTarget);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::addBufferedLogFileTarget(const char* logFilePath, uint32_t bufferSize,
-                                                  bool useLock /* = true */,
-                                                  ELogFlushPolicy* flushPolicy /* = nullptr */) {
-    // verify parameters
-    if (bufferSize == 0) {
-        ELOG_REPORT_ERROR("Invalid zero buffer size for buffered file log target");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogBufferedFileTarget(logFilePath, bufferSize, useLock, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log file target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = addLogTarget(logTarget);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::addBufferedLogFileTarget(FILE* fileHandle, uint32_t bufferSize,
-                                                  bool useLock /* = true */,
-                                                  ELogFlushPolicy* flushPolicy /* = nullptr */) {
-    // verify parameters
-    if (bufferSize == 0) {
-        ELOG_REPORT_ERROR("Invalid zero buffer size for buffered file log target");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock, flushPolicy);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create log file target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = addLogTarget(logTarget);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    return logTargetId;
-}
-
-ELogTargetId ELogSystem::addSegmentedLogFileTarget(const char* logPath, const char* logName,
-                                                   uint32_t segmentLimitMB,
-                                                   ELogFlushPolicy* flushPolicy /* = nullptr */) {
-    // create new log target
-    ELogTarget* logTarget =
-        new (std::nothrow) ELogSegmentedFileTarget(logPath, logName, segmentLimitMB);
-    if (logTarget == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create segmented log file target, out of memory");
-        return ELOG_INVALID_TARGET_ID;
-    }
-
-    ELogTargetId logTargetId = addLogTarget(logTarget);
-    if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        delete logTarget;
-    }
-    logTarget->setFlushPolicy(flushPolicy);
-    return logTargetId;
-}
-
 ELogTargetId ELogSystem::configureLogTargetString(const char* logTargetCfg) {
     ELogTargetId id = ELOG_INVALID_TARGET_ID;
     if (!configureLogTargetEx(logTargetCfg, &id)) {
@@ -1115,18 +826,123 @@ ELogTargetId ELogSystem::configureLogTargetString(const char* logTargetCfg) {
     return id;
 }
 
-ELogTargetId ELogSystem::addStdErrLogTarget() { return addLogFileTarget(stderr); }
+ELogTargetId ELogSystem::addLogFileTarget(
+    const char* logFilePath, uint32_t bufferSize /* = 0 */, bool useLock /* = false */,
+    uint32_t segmentLimitMB /* = 0 */, uint32_t segmentCount /* = 0 */,
+    ELogLevel logLevel /* = ELEVEL_INFO */, ELogFlushPolicy* flushPolicy /* = nullptr */,
+    ELogFilter* logFilter /* = nullptr */, ELogFormatter* logFormatter /* = nullptr */) {
+    // we delegate to the schema handler
+    ELogTarget* logTarget = ELogFileSchemaHandler::createLogTarget(logFilePath, bufferSize, useLock,
+                                                                   segmentLimitMB, 0, segmentCount);
+    if (logTarget == nullptr) {
+        return ELOG_INVALID_TARGET_ID;
+    }
 
-ELogTargetId ELogSystem::addStdOutLogTarget() { return addLogFileTarget(stdout); }
+    logTarget->setLogLevel(logLevel);
+    if (flushPolicy != nullptr) {
+        logTarget->setFlushPolicy(flushPolicy);
+    }
+    if (logFilter != nullptr) {
+        logTarget->setLogFilter(logFilter);
+    }
+    if (logFormatter != nullptr) {
+        logTarget->setLogFormatter(logFormatter);
+    }
 
-ELogTargetId ELogSystem::addSysLogTarget() {
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        // NOTE: detach from policy/filter/formatter before delete, because in case of failure
+        // caller is still owner of these objects.
+        logTarget->detach();
+        delete logTarget;
+    }
+
+    return logTargetId;
+}
+
+ELogTargetId ELogSystem::attachLogFileTarget(
+    FILE* fileHandle, bool closeHandleWhenDone /* = false */, uint32_t bufferSize /* = 0 */,
+    bool useLock /* = false */, ELogLevel logLevel /* = ELEVEL_INFO */,
+    ELogFlushPolicy* flushPolicy /* = nullptr */, ELogFilter* logFilter /* = nullptr */,
+    ELogFormatter* logFormatter /* = nullptr */) {
+    ELogTarget* logTarget = nullptr;
+    if (bufferSize > 0) {
+        logTarget = new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock,
+                                                              flushPolicy, closeHandleWhenDone);
+    } else {
+        logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy, closeHandleWhenDone);
+    }
+    if (logTarget == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create log target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    logTarget->setLogLevel(logLevel);
+    if (flushPolicy != nullptr) {
+        logTarget->setFlushPolicy(flushPolicy);
+    }
+    if (logFilter != nullptr) {
+        logTarget->setLogFilter(logFilter);
+    }
+    if (logFormatter != nullptr) {
+        logTarget->setLogFormatter(logFormatter);
+    }
+
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        // NOTE: detach from policy/filter/formatter before delete, because in case of failure
+        // caller is still owner of these objects.
+        logTarget->detach();
+        delete logTarget;
+    }
+
+    return logTargetId;
+}
+
+ELogTargetId ELogSystem::addStdErrLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                                            ELogFilter* logFilter /* = nullptr */,
+                                            ELogFormatter* logFormatter /* = nullptr */) {
+    return attachLogFileTarget(stderr, false, 0, false, logLevel, nullptr, logFilter, logFormatter);
+}
+
+ELogTargetId ELogSystem::addStdOutLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                                            ELogFilter* logFilter /* = nullptr */,
+                                            ELogFormatter* logFormatter /* = nullptr */) {
+    return attachLogFileTarget(stdout, false, 0, false, logLevel, nullptr, logFilter, logFormatter);
+}
+
+ELogTargetId ELogSystem::addSysLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                                         ELogFilter* logFilter /* = nullptr */,
+                                         ELogFormatter* logFormatter /* = nullptr */) {
 #ifdef ELOG_LINUX
     ELogSysLogTarget* logTarget = new (std::nothrow) ELogSysLogTarget();
-    return addLogTarget(logTarget);
+    if (logTarget == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create syslog target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    logTarget->setLogLevel(logLevel);
+    if (logFilter != nullptr) {
+        logTarget->setLogFilter(logFilter);
+    }
+    if (logFormatter != nullptr) {
+        logTarget->setLogFormatter(logFormatter);
+    }
+
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        // NOTE: detach from policy/filter/formatter before delete, because in case of failure
+        // caller is still owner of these objects.
+        logTarget->detach();
+        delete logTarget;
+    }
+
+    return logTargetId;
 #else
     return ELOG_INVALID_TARGET_ID;
 #endif
 }
+
 ELogTargetId ELogSystem::addTracer(const char* traceFilePath, uint32_t traceBufferSize,
                                    const char* targetName, const char* sourceName) {
     // prepare configuration string
