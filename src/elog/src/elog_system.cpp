@@ -1031,7 +1031,7 @@ void ELogSystem::removeLogTarget(ELogTargetId targetId) {
     // find largest suffix of removed log targets
     int lastLogTarget = -1;
     for (int i = sLogTargets.size() - 1; i >= 0; --i) {
-        if (sLogTargets[targetId] != nullptr) {
+        if (sLogTargets[i] != nullptr) {
             // at least one log target active, so we can return
             lastLogTarget = i;
             break;

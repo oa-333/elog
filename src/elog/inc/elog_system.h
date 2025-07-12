@@ -16,6 +16,10 @@
 #include "dbg_stack_trace.h"
 #endif
 
+#ifdef ELOG_ENABLE_FMT_LIB
+#include <fmt/format.h>
+#endif
+
 namespace elog {
 
 /** @brief The elog module facade. */
@@ -569,6 +573,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
 
 }  // namespace elog
 
+/** @def Define a unified function name macro */
+#ifdef ELOG_GCC
+#define ELOG_FUNCTION __PRETTY_FUNCTION__
+#elif defined(ELOG_MSVC)
+#define ELOG_FUNCTION __FUNCSIG__
+#else
+#define ELOG_FUNCTION __func__
+#endif
+
 /**
  * @brief Logs a formatted message to the server log.
  * @param logger The logger used for message formatting.
@@ -576,20 +589,17 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#ifdef ELOG_GCC
-#define ELOG_EX(logger, level, fmt, ...)                                                       \
-    if (logger != nullptr && logger->canLog(level)) {                                          \
-        logger->logFormat(level, __FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__); \
+#define ELOG_EX(logger, level, fmt, ...)                                                 \
+    if (logger != nullptr && logger->canLog(level)) {                                    \
+        logger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
     }
-#elif defined(ELOG_MSVC)
-#define ELOG_EX(logger, level, fmt, ...)                                               \
+
+/** @brief Logs a formatted message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_EX(logger, level, fmtStr, ...)                                        \
     if (logger != nullptr && logger->canLog(level)) {                                  \
-        logger->logFormat(level, __FILE__, __LINE__, __FUNCSIG__, fmt, ##__VA_ARGS__); \
-    }
-#else
-#define ELOG_EX(logger, level, fmt, ...)                                            \
-    if (logger != nullptr && logger->canLog(level)) {                               \
-        logger->logFormat(level, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); \
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                       \
+        logger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
     }
 #endif
 
@@ -601,6 +611,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_FATAL_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a fatal message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_FATAL_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs an error message to the server log.
  * @param logger The logger used for message formatting.
@@ -608,6 +624,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param ... Log message format string parameters.
  */
 #define ELOG_ERROR_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_ERROR_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#endif
 
 /**
  * @brief Logs a warning message to the server log.
@@ -617,6 +639,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_WARN_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a warning message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_WARN_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs a notice message to the server log.
  * @param logger The logger used for message formatting.
@@ -624,6 +652,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param ... Log message format string parameters.
  */
 #define ELOG_NOTICE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a notice message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_NOTICE_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#endif
 
 /**
  * @brief Logs an informational message to the server log.
@@ -633,6 +667,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_INFO_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
 
+/** @brief Logs an informational message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_INFO_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs a trace message to the server log.
  * @param logger The logger used for message formatting.
@@ -640,6 +680,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param ... Log message format string parameters.
  */
 #define ELOG_TRACE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a trace message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_TRACE_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#endif
 
 /**
  * @brief Logs a debug message to the server log.
@@ -649,6 +695,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_DEBUG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a debug message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_DEBUG_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs a diagnostic message to the server log.
  * @param logger The logger used for message formatting.
@@ -657,6 +709,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_DIAG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a diagnostic message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_DIAG_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Begins a multi-part log message.
  * @param logger The logger used for message formatting.
@@ -664,20 +722,17 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#ifdef ELOG_GCC
-#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                                \
-    if (logger != nullptr && logger->canLog(level)) {                                         \
-        logger->startLog(level, __FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__); \
+#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                          \
+    if (logger != nullptr && logger->canLog(level)) {                                   \
+        logger->startLog(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
     }
-#elif defined(ELOG_MSVC)
-#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                        \
-    if (logger != nullptr && logger->canLog(level)) {                                 \
-        logger->startLog(level, __FILE__, __LINE__, __FUNCSIG__, fmt, ##__VA_ARGS__); \
-    }
-#else
-#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                     \
-    if (logger != nullptr && logger->canLog(level)) {                              \
-        logger->startLog(level, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); \
+
+/** @brief Begins a multi-part log message (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_BEGIN_EX(logger, level, fmtStr, ...)                                       \
+    if (logger != nullptr && logger->canLog(level)) {                                       \
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                            \
+        logger->startLogNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
     }
 #endif
 
@@ -691,6 +746,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
     if (logger != nullptr) {                   \
         logger->appendLog(fmt, ##__VA_ARGS__); \
     }
+
+/** @brief Appends formatted message to a multi-part log message (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_APPEND_EX(logger, fmtStr, ...)                  \
+    if (logger != nullptr && logger->canLog(level)) {            \
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__); \
+        logger->appendLogNoFormat(logMsg.c_str());               \
+    }
+#endif
 
 /**
  * @brief Appends unformatted message to a multi-part log message.
@@ -726,6 +790,16 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                  \
     }
 
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                \
+    if (logger != nullptr) {                                                        \
+        ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
+                      elog::ELogSystem::sysErrorToStr(sysErr));                     \
+        ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                              \
+    }
+#endif
+
 /**
  * @brief Logs a system error message to the server log.
  * @param logger The logger used for message formatting.
@@ -740,6 +814,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         int sysErr = errno;                                                 \
         ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
     }
+
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_SYS_ERROR_EX(logger, syscall, fmt, ...)                        \
+    {                                                                           \
+        int sysErr = errno;                                                     \
+        ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
+#endif
 
 #ifdef ELOG_WINDOWS
 /**
@@ -759,6 +842,18 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                          \
     }
 
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                      \
+    if (logger != nullptr) {                                                                \
+        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                        \
+        ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
+                      errStr);                                                              \
+        elog::ELogSystem::win32FreeErrorStr(errStr);                                        \
+        ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                      \
+    }
+#endif
+
 /**
  * @brief Logs a system error message to the server log.
  * @param logger The logger used for message formatting.
@@ -770,6 +865,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_WIN32_ERROR_EX(logger, syscall, fmt, ...) \
     ELOG_WIN32_ERROR_NUM_EX(logger, syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_WIN32_ERROR_EX(logger, syscall, fmt, ...) \
+    ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+#endif
 
 #endif  // ELOG_WINDOWS
 
@@ -785,12 +886,26 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         ELOG_EX(logger, level, fmt, ##__VA_ARGS__);                      \
     }
 
+/** @brief Logs a formatted message to the server log, using default logger (fmtlib-style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT(level, fmt, ...)                                        \
+    {                                                                    \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger(); \
+        ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);                  \
+    }
+#endif
+
 /**
  * @brief Logs a fatal message to the server log.
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
 #define ELOG_FATAL(fmt, ...) ELOG(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a fatal message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_FATAL(fmt, ...) ELOG_FMT(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#endif
 
 /**
  * @brief Logs an error message to the server log.
@@ -799,12 +914,22 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_ERROR(fmt, ...) ELOG(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_ERROR(fmt, ...) ELOG_FMT(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs a warning message to the server log.
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
 #define ELOG_WARN(fmt, ...) ELOG(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a warning message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_WARN(fmt, ...) ELOG_FMT(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#endif
 
 /**
  * @brief Logs a notice message to the server log.
@@ -813,12 +938,22 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_NOTICE(fmt, ...) ELOG(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a notice message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_NOTICE(fmt, ...) ELOG_FMT(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs an informational message to the server log.
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
 #define ELOG_INFO(fmt, ...) ELOG(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+
+/** @brief Logs an informational message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_INFO(fmt, ...) ELOG_FMT(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#endif
 
 /**
  * @brief Logs a trace message to the server log.
@@ -827,6 +962,11 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_TRACE(fmt, ...) ELOG(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a trace message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_TRACE(fmt, ...) ELOG_FMT(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs a debug message to the server log.
  * @param fmt The log message format string.
@@ -834,12 +974,22 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_DEBUG(fmt, ...) ELOG(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
 
+/** @brief Logs a debug message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_DEBUG(fmt, ...) ELOG_FMT(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#endif
+
 /**
  * @brief Logs a diagnostic message to the server log.
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
 #define ELOG_DIAG(fmt, ...) ELOG(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a diagnostic message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_DIAG(fmt, ...) ELOG_FMT(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
 
 /**
  * @brief Begins a multi-part log message.
@@ -853,6 +1003,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         ELOG_BEGIN_EX(logger, level, fmt, ##__VA_ARGS__);                \
     }
 
+/** @brief Begins a multi-part log message (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_BEGIN(level, fmt, ...)                                  \
+    {                                                                    \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger(); \
+        ELOG_FMT_BEGIN_EX(logger, level, fmt, ##__VA_ARGS__);            \
+    }
+#endif
+
 /**
  * @brief Appends formatted message to a multi-part log message.
  * @param fmt The message format.
@@ -860,6 +1019,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_APPEND(fmt, ...) \
     ELOG_APPEND_EX(elog::ELogSystem::getDefaultLogger(), fmt, ##__VA_ARGS__);
+
+/** @brief Appends formatted message to a multi-part log message (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_APPEND(fmt, ...) \
+    ELOG_FMT_APPEND_EX(elog::ELogSystem::getDefaultLogger(), fmt, ##__VA_ARGS__);
+#endif
 
 /**
  * @brief Appends unformatted message to a multi-part log message.
@@ -885,6 +1050,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
     }
 
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_SYS_ERROR_NUM(syscall, sysErr, fmt, ...)                       \
+    {                                                                           \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();        \
+        ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
+#endif
+
 /**
  * @brief Logs a system error message to the server log.
  * @param syscall The system call that failed.
@@ -898,6 +1072,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         int sysErr = errno;                                      \
         ELOG_SYS_ERROR_NUM(syscall, sysErr, fmt, ##__VA_ARGS__); \
     }
+
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_SYS_ERROR(syscall, fmt, ...)                        \
+    {                                                                \
+        int sysErr = errno;                                          \
+        ELOG_FMT_SYS_ERROR_NUM(syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
+#endif
 
 #ifdef ELOG_WINDOWS
 /**
@@ -913,6 +1096,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
     }
 
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_WIN32_ERROR_NUM(syscall, sysErr, fmt, ...)                       \
+    {                                                                             \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();          \
+        ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
+#endif
+
 /**
  * @brief Logs a system error message to the server log.
  * @param syscall The system call that failed.
@@ -923,6 +1115,12 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  */
 #define ELOG_WIN32_ERROR(syscall, fmt, ...) \
     ELOG_WIN32_ERROR_NUM(syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+
+/** @brief Logs a system error message to the server log (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_WIN32_ERROR(syscall, fmt, ...) \
+    ELOG_FMT_WIN32_ERROR_NUM(syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+#endif
 
 #endif  // ELOG_WINDOWS
 
@@ -943,6 +1141,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         elog::ELogSystem::logStackTrace(level, title, skip);      \
     }
 
+/** @brief Logs the stack trace of the current thread (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
+    if (logger != nullptr && logger->canLog(level)) {                 \
+        ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);               \
+        elog::ELogSystem::logStackTrace(level, title, skip);          \
+    }
+#endif
+
 /**
  * @brief Logs the stack trace of all running threads in the application.
  * @param logger The logger used to log.
@@ -959,6 +1166,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         elog::ELogSystem::logAppStackTrace(level, title, skip);       \
     }
 
+/** @brief Logs the stack trace of all running threads in the application (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
+    if (logger != nullptr && logger->canLog(level)) {                     \
+        ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);                   \
+        elog::ELogSystem::logAppStackTrace(level, title, skip);           \
+    }
+#endif
+
 /**
  * @brief Logs the stack trace of the current thread (using default logger).
  * @param level The log level.
@@ -974,6 +1190,15 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
     }
 
+/** @brief Logs the stack trace of the current thread, using default logger (fmtlib style). */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_STACK_TRACE(level, title, skip, fmt, ...)                       \
+    {                                                                            \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();         \
+        ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
+    }
+#endif
+
 /**
  * @brief Logs the stack trace of all running threads in the application (using default logger).
  * @param level The log level.
@@ -988,7 +1213,20 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
         elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();         \
         ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
     }
+
+/**
+ * @brief Logs the stack trace of all running threads in the application, using default logger
+ * (fmtlib style).
+ */
+#ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_FMT_APP_STACK_TRACE(level, title, skip, fmt, ...)                       \
+    {                                                                                \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger();             \
+        ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
+    }
 #endif
+
+#endif  // ELOG_ENABLE_STACK_TRACE
 
 /** @brief Utility macro for importing frequent names. */
 #define ELOG_USING()           \

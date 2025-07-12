@@ -6,6 +6,7 @@
 # -r|--release
 # -w|--rel-with-debug-info
 # -s|--stack-trace
+# -b|--fmt-lib
 # -f|--full
 # -c|--conn sqlite|mysql|postgresql|kafka
 # -i|--install-dir <INSTALL_DIR>
@@ -25,6 +26,7 @@ else
     INSTALL_DIR=~/install/elog
 fi
 STACK_TRACE=0
+FMT_LIB=0
 VERBOSE=0
 FULL=0
 CLEAN=0
@@ -36,7 +38,7 @@ TRACE=0
 HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwsfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,stack-trace,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
+TEMP=$(getopt -o vdrwsbfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,stack-trace,fmt-lib,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -47,6 +49,7 @@ while true; do
     -r | --release ) BUILD_TYPE=Release; shift ;;
     -w | --rel-with-debug-info ) BUILD_TYPE=RelWithDebInfo; shift ;;
     -s | --stack-trace ) STACK_TRACE=1; shift ;;
+    -b | --fmt-lib ) FMT_LIB=1; shift ;;
     -f | --full ) FULL=1; shift;;
     -c | --conn ) CONNS+=($2); shift 2 ;;
     -i | --install-dir) INSTALL_DIR="$2"; shift 2 ;;
@@ -80,6 +83,7 @@ if [ "$HELP" -eq "1" ]; then
     echo ""
     echo "      -c|--conn CONNECTOR_NAME    Enables connector."
     echo "      -s|--stack-trace            Enable stack trace logging API."
+    echo "      -b|--fmt-lib                Enable fmtlib formatting style support."
     echo "      -f|--full                   Enable all connectors and stack trace logging API."
     echo ""
     echo "By default no connector is enabled, and stack trace logging is disabled."
@@ -128,6 +132,7 @@ fi
 echo "[INFO] Build type: $BUILD_TYPE"
 echo "[INFO] Install dir: $INSTALL_DIR"
 echo "[INFO] Stack trace: $STACK_TRACE"
+echo "[INFO] fmtlib: $FMT_LIB"
 echo "[INFO] Verbose: $VERBOSE"
 echo "[INFO] Full: $FULL"
 echo "[INFO] Clean: $CLEAN"
@@ -141,6 +146,9 @@ if [ "$VERBOSE" == "1" ]; then
 fi
 if [ "$STACK_TRACE" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_STACK_TRACE=ON"
+fi
+if [ "$FMT_LIB" == "1" ]; then
+    OPTS+=" -DELOG_ENABLE_FMT_LIB=ON"
 fi
 if [ "$MEM_CHECK" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_MEM_CHECK=ON"

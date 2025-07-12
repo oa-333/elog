@@ -24,6 +24,7 @@ endif()
 
 # optional compilation features
 option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
+option(ELOG_ENABLE_FMT_LIB "ELog fmtlib formatting style support" OFF)
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
 option(ELOG_ENABLE_PGSQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
@@ -61,6 +62,22 @@ endif()
 
 if (ELOG_ENABLE_GROUP_FLUSH_GC_TRACE)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_GROUP_FLUSH_GC_TRACE)
+endif()
+
+# get fmtlib if needed
+if (ELOG_ENABLE_FMT_LIB)
+    message(STATUS "Enabling fmtlib")
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_FMT_LIB)
+    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_FMT_LIB)
+
+    FetchContent_Declare(fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_TAG 11.2.0
+    )
+    FetchContent_MakeAvailable(fmt)
+
+    # use non-header-only version (faster compile, smaller binary files, but runtime dependency)
+    target_link_libraries(elog fmt::fmt)
 endif()
 
 # get HTTP client if needed

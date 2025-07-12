@@ -848,6 +848,12 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     elog::ELogTargetAffinityMask mask = 0;
     ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
     logSource->setLogTargetAffinity(mask);
+#ifdef ELOG_ENABLE_FMT_LIB
+    elog::ELogTargetId id = elog::ELogSystem::addStdErrLogTarget();
+    int someInt = 5;
+    ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
+    elog::ELogSystem::removeLogTarget(id);
+#endif
     return logTarget;
 }
 
