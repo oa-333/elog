@@ -1017,25 +1017,39 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The message format.
  * @param ... The message arguments.
  */
-#define ELOG_APPEND(fmt, ...) \
-    ELOG_APPEND_EX(elog::ELogSystem::getDefaultLogger(), fmt, ##__VA_ARGS__);
+#define ELOG_APPEND(fmt, ...)                                            \
+    {                                                                    \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger(); \
+        ELOG_APPEND_EX(logger, fmt, ##__VA_ARGS__);                      \
+    }
 
 /** @brief Appends formatted message to a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_APPEND(fmt, ...) \
-    ELOG_FMT_APPEND_EX(elog::ELogSystem::getDefaultLogger(), fmt, ##__VA_ARGS__);
+#define ELOG_FMT_APPEND(fmt, ...)                                        \
+    {                                                                    \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger(); \
+        ELOG_FMT_APPEND_EX(logger, fmt, ##__VA_ARGS__);                  \
+    }
 #endif
 
 /**
  * @brief Appends unformatted message to a multi-part log message.
  * @param msg The log message.
  */
-#define ELOG_APPEND_NF(msg) ELOG_APPEND_NF_EX(elog::ELogSystem::getDefaultLogger(), msg)
+#define ELOG_APPEND_NF(msg)                                              \
+    {                                                                    \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger(); \
+        ELOG_APPEND_NF_EX(logger, msg);                                  \
+    }
 
 /**
  * @brief Terminates a multi-part log message and writes it to the server log.
  */
-#define ELOG_END() ELOG_END_EX(elog::ELogSystem::getDefaultLogger())
+#define ELOG_END()                                                       \
+    {                                                                    \
+        elog::ELogLogger* logger = elog::ELogSystem::getDefaultLogger(); \
+        ELOG_END_EX(logger);                                             \
+    }
 
 /**
  * @brief Logs a system error message to the server log.
