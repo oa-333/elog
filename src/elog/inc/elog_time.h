@@ -62,7 +62,7 @@ struct ELOG_API ELOG_CACHE_ALIGN ELogTimeBuffer {
 };
 
 /** @brief Retrieves the current time. */
-inline void getCurrentTime(ELogTime& logTime) {
+inline void elogGetCurrentTime(ELogTime& logTime) {
 #ifdef ELOG_TIME_USE_CHRONO
     logTime = std::chrono::system_clock::now();
 #else

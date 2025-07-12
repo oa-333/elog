@@ -49,7 +49,8 @@ inline int64_t elog_rdtscp() {
 
 // so we need to fix counters management for that
 
-static const uint64_t MSG_COUNT = 10000;
+static const uint64_t MT_MSG_COUNT = 10000;
+static const uint64_t ST_MSG_COUNT = 1000000;
 static const uint32_t MIN_THREAD_COUNT = 1;
 static const uint32_t MAX_THREAD_COUNT = 16;
 static const char* DEFAULT_CFG = "file:///./bench_data/elog_bench.log";
@@ -108,7 +109,7 @@ static void testDatadog();
 
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                                   double& ioThroughput, StatData& msgPercentile,
-                                  uint32_t msgCount = MSG_COUNT);
+                                  uint32_t msgCount = ST_MSG_COUNT);
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
                                bool privateLogger = true, uint32_t minThreads = MIN_THREAD_COUNT,
                                uint32_t maxThreads = MAX_THREAD_COUNT);
@@ -734,6 +735,8 @@ static bool parseArgs(int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
+    ELOG_INFO("Accumulated message 1");
+    ELOG_ERROR("Accumulated message 2");
     if (!parseArgs(argc, argv)) {
         return 1;
     }
@@ -849,10 +852,12 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
     logSource->setLogTargetAffinity(mask);
 #ifdef ELOG_ENABLE_FMT_LIB
+    // elog::ELogSystem::discardAccumulatedLogMessages();
     elog::ELogTargetId id = elog::ELogSystem::addStdErrLogTarget();
     int someInt = 5;
     ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
     elog::ELogSystem::removeLogTarget(id);
+    elog::ELogSystem::discardAccumulatedLogMessages();
 #endif
     return logTarget;
 }
@@ -876,7 +881,7 @@ void testPerfPrivateLog() {
     auto start = std::chrono::high_resolution_clock::now();
 
     // run test
-    for (uint64_t i = 0; i < MSG_COUNT; ++i) {
+    for (uint64_t i = 0; i < ST_MSG_COUNT; ++i) {
         ELOG_DEBUG_EX(privateLogger, "Test log %u", i);
     }
 
@@ -892,7 +897,7 @@ void testPerfPrivateLog() {
     // print test result
     fprintf(stderr, "Test time: %u usec\n", (unsigned)testTime.count());
 
-    double throughput = MSG_COUNT / (double)testTime.count() * 1000000.0f;
+    double throughput = ST_MSG_COUNT / (double)testTime.count() * 1000000.0f;
     fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", throughput);
 
     throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
@@ -916,7 +921,7 @@ void testPerfSharedLogger() {
     auto start = std::chrono::high_resolution_clock::now();
 
     // run test
-    for (uint64_t i = 0; i < MSG_COUNT; ++i) {
+    for (uint64_t i = 0; i < ST_MSG_COUNT; ++i) {
         ELOG_DEBUG_EX(sharedLogger, "Test log %u", i);
     }
 
@@ -932,7 +937,7 @@ void testPerfSharedLogger() {
     // print test result
     fprintf(stderr, "Test time: %u usec\n", (unsigned)testTime.count());
 
-    double throughput = MSG_COUNT / (double)testTime.count() * 1000000.0f;
+    double throughput = ST_MSG_COUNT / (double)testTime.count() * 1000000.0f;
     fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", throughput);
 
     throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
@@ -1265,7 +1270,7 @@ int testColors() {
 
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput, StatData& msgPercentile,
-                           uint32_t msgCount /* = MSG_COUNT */) {
+                           uint32_t msgCount /* = ST_MSG_COUNT */) {
     if (sMsgCnt > 0) {
         msgCount = sMsgCnt;
     }
@@ -1340,7 +1345,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
     if (sMaxThreadCnt > 0) {
         maxThreads = sMaxThreadCnt;
     }
-    uint32_t msgCount = MSG_COUNT;
+    uint32_t msgCount = MT_MSG_COUNT;
     if (sMsgCnt > 0) {
         msgCount = sMsgCnt;
     }

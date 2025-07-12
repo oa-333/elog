@@ -95,7 +95,11 @@ public:
     }
 
     /** @brief Queries whether the logger can issue log message with the given level. */
-    inline bool canLog(ELogLevel logLevel) const { return m_logSource->canLog(logLevel); }
+    inline bool canLog(ELogLevel logLevel) const {
+        // for the sake of pre-init logger we allow all log messages to be logged in case log source
+        // is null
+        return m_logSource == nullptr ? true : m_logSource->canLog(logLevel);
+    }
 
     /** @brief Retrieves the controlling log source. */
     inline ELogSource* getLogSource() { return m_logSource; }
@@ -122,6 +126,9 @@ protected:
     /** @brief Pop current builder from builder stack and restore previous builder. */
     virtual void popRecordBuilder() = 0;
 
+    /** @brief Finish logging (default behavior: finalize formatting and send to log target). */
+    virtual void finishLog(ELogRecordBuilder* recordBuilder);
+
 private:
     /** @var The originating log source. */
     ELogSource* m_logSource;
@@ -132,8 +139,6 @@ private:
      */
     void startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file, int line,
                         const char* function);
-
-    void finishLog(ELogRecordBuilder* recordBuilder);
 
     inline void appendMsgV(ELogRecordBuilder* recordBuilder, const char* fmt, va_list args) {
         va_list argsCopy;

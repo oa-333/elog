@@ -39,6 +39,22 @@ public:
     /** @brief Releases all resources allocated for the ELogSystem. */
     static void terminate();
 
+    /** @brief Queries whether the ELog library is initialized. */
+    static bool isInitialized();
+
+    /**
+     * @brief Retrieves the logger that is used to accumulate log messages while the ELog library
+     * has not initialized yet.
+     */
+    static ELogLogger* getPreInitLogger();
+
+    /**
+     * @brief Discards all accumulated log messages. This will prevent from log targets added in
+     * the future to receive all log messages that were accumulated before the ELog library was
+     * initialized.
+     */
+    static void discardAccumulatedLogMessages();
+
     /** @brief Installs an error handler. */
     static void setErrorHandler(ELogErrorHandler* errorHandler);
 
@@ -514,36 +530,42 @@ public:
 #ifdef ELOG_ENABLE_STACK_TRACE
     /**
      * @brief Prints stack trace to log with the given log level.
+     * @param logger The logger to use for printing the stack trace.
      * @param logLevel[opt] The log level.
      * @param title[opt] The title to print before each thread stack trace.
      * @param skip[opt] The number of frames to skip.
      * @param formatter[opt] Optional stack entry formatter. Pass null to use default formatting.
      */
-    static void logStackTrace(ELogLevel logLevel = ELEVEL_INFO, const char* title = "",
-                              int skip = 0, dbgutil::StackEntryFormatter* formatter = nullptr);
+    static void logStackTrace(ELogLogger* logger, ELogLevel logLevel = ELEVEL_INFO,
+                              const char* title = "", int skip = 0,
+                              dbgutil::StackEntryFormatter* formatter = nullptr);
 
     /**
      * @brief Prints stack trace to log with the given log level. Context is either captured by
      * calling thread, or is passed by OS through an exception/signal handler.
+     * @param logger The logger to use for printing the stack trace.
      * @param context[opt] OS-specific thread context. Pass null to log current thread call stack.
      * @param logLevel[opt] The log level.
      * @param title[opt] The title to print before each thread stack trace.
      * @param skip[opt] The number of frames to skip.
      * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
      */
-    static void logStackTraceContext(void* context = nullptr, ELogLevel logLevel = ELEVEL_INFO,
-                                     const char* title = "", int skip = 0,
+    static void logStackTraceContext(ELogLogger* logger, void* context = nullptr,
+                                     ELogLevel logLevel = ELEVEL_INFO, const char* title = "",
+                                     int skip = 0,
                                      dbgutil::StackEntryFormatter* formatter = nullptr);
 
     /**
      * @brief Prints stack trace of all running threads to log with the given log level.
+     * @param logger The logger to use for printing the stack trace.
      * @param logLevel[opt] The log level.
      * @param title[opt] The title to print before each thread stack trace.
      * @param skip[opt] The number of frames to skip.
      * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
      */
-    static void logAppStackTrace(ELogLevel logLevel = ELEVEL_INFO, const char* title = "",
-                                 int skip = 0, dbgutil::StackEntryFormatter* formatter = nullptr);
+    static void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel = ELEVEL_INFO,
+                                 const char* title = "", int skip = 0,
+                                 dbgutil::StackEntryFormatter* formatter = nullptr);
 #endif
 
     /** @brief Converts system error code to string. */
@@ -568,6 +590,16 @@ private:
     static bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap);
 };
 
+inline ELogLogger* getValidLogger(ELogLogger* logger) {
+    if (logger != nullptr) {
+        return logger;
+    } else if (ELogSystem::isInitialized()) {
+        return ELogSystem::getDefaultLogger();
+    } else {
+        return ELogSystem::getPreInitLogger();
+    }
+}
+
 /** @brief Queries whether the default logger can log a record with a given log level. */
 inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->canLog(logLevel); }
 
@@ -589,18 +621,48 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_EX(logger, level, fmt, ...)                                                 \
-    if (logger != nullptr && logger->canLog(level)) {                                    \
-        logger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
+#define ELOG_EX(logger, level, fmt, ...)                                                          \
+    {                                                                                             \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                             \
+        if (validLogger->canLog(level)) {                                                         \
+            validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
+        }                                                                                         \
     }
+
+#if 0
+#define ELOG_EX(logger, level, fmt, ...) if (logger != nullptr) {
+    if (logger->canLog(level)) {
+        logger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__);
+    }
+} else if (!elog::ELogSystem::isInitialized()) {
+    elog::ELogSystem::getPreInitLogger()->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt,
+                                                    ##__VA_ARGS__);
+}
+#endif
 
 /** @brief Logs a formatted message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_EX(logger, level, fmtStr, ...)                                        \
-    if (logger != nullptr && logger->canLog(level)) {                                  \
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                       \
-        logger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
+#define ELOG_FMT_EX(logger, level, fmtStr, ...)                                                 \
+    {                                                                                           \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                           \
+        if (validLogger->canLog(level)) {                                                       \
+            std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                            \
+            validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
+        }                                                                                       \
     }
+
+#if 0
+if (logger != nullptr) {
+    if (logger->canLog(level)) {
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
+        logger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str());
+    }
+} else if (!elog::ELogSystem::isInitialized()) {
+    std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
+    elog::ELogSystem::getPreInitLogger()->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION,
+                                                      logMsg.c_str());
+}
+#endif  // if 0
 #endif
 
 /**
@@ -722,18 +784,49 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                          \
-    if (logger != nullptr && logger->canLog(level)) {                                   \
-        logger->startLog(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
+#define ELOG_BEGIN_EX(logger, level, fmt, ...)                                                   \
+    {                                                                                            \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
+        if (validLogger->canLog(level)) {                                                        \
+            validLogger->startLog(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
+        }                                                                                        \
     }
+
+#if 0
+    if (logger != nullptr) {                                                                     \
+        if (logger->canLog(level)) {                                                             \
+            logger->startLog(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__);      \
+        }                                                                                        \
+    } else if (!elog::ELogSystem::isInitialized()) {                                             \
+        elog::ELogSystem::getPreInitLogger()->startLog(level, __FILE__, __LINE__, ELOG_FUNCTION, \
+                                                       fmt, ##__VA_ARGS__);                      \
+    }
+#endif
 
 /** @brief Begins a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_BEGIN_EX(logger, level, fmtStr, ...)                                       \
-    if (logger != nullptr && logger->canLog(level)) {                                       \
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                            \
-        logger->startLogNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
+#define ELOG_FMT_BEGIN_EX(logger, level, fmtStr, ...)                               \
+    {                                                                               \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);               \
+        if (validLogger->canLog(level)) {                                           \
+            std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                \
+            validLogger->startLogNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
+                                          logMsg.c_str());                          \
+        }                                                                           \
     }
+
+#if 0
+if (logger != nullptr) {
+    if (logger->canLog(level)) {
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
+        logger->startLogNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str());
+    }
+} else if (!elog::ELogSystem::isInitialized()) {
+    std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
+    elog::ELogSystem::getPreInitLogger()->startLogNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION,
+                                                           logMsg.c_str());
+}
+#endif  // if 0
 #endif
 
 /**
@@ -742,18 +835,33 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The message format.
  * @param ... The message arguments.
  */
-#define ELOG_APPEND_EX(logger, fmt, ...)       \
-    if (logger != nullptr) {                   \
-        logger->appendLog(fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_APPEND_EX(logger, fmt, ...) elog::getValidLogger(logger)->appendLog(fmt, ##__VA_ARGS__)
+
+#if 0
+if (logger != nullptr) {
+    logger->appendLog(fmt, ##__VA_ARGS__);
+} else if (!elog::ELogSystem::isInitialized()) {
+    elog::ELogSystem::getPreInitLogger()->appendLog(fmt, ##__VA_ARGS__);
+}
+#endif
 
 /** @brief Appends formatted message to a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_APPEND_EX(logger, fmtStr, ...)                  \
-    if (logger != nullptr && logger->canLog(level)) {            \
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__); \
-        logger->appendLogNoFormat(logMsg.c_str());               \
+#define ELOG_FMT_APPEND_EX(logger, fmtStr, ...)                          \
+    {                                                                    \
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);         \
+        elog::getValidLogger(logger)->appendLogNoFormat(logMsg.c_str()); \
     }
+
+#if 0
+    if (logger != nullptr) {                                                     \
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                 \
+        logger->appendLogNoFormat(logMsg.c_str());                               \
+    } else if (!elog::ELogSystem::isInitialized()) {                             \
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                 \
+        elog::ELogSystem::getPreInitLogger()->appendLogNoFormat(logMsg.c_str()); \
+    }
+#endif  // if 0
 #endif
 
 /**
@@ -761,19 +869,29 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param logger The logger used for message formatting.
  * @param msg The log message.
  */
-#define ELOG_APPEND_NF_EX(logger, msg)  \
-    if (logger != nullptr) {            \
-        logger->appendLogNoFormat(msg); \
+#define ELOG_APPEND_NF_EX(logger, msg) elog::getValidLogger(logger)->appendLogNoFormat(msg)
+
+#if 0
+    if (logger != nullptr) {                                          \
+        logger->appendLogNoFormat(msg);                               \
+    } else if (!elog::ELogSystem::isInitialized()) {                  \
+        elog::ELogSystem::getPreInitLogger()->appendLogNoFormat(msg); \
     }
+#endif
 
 /**
  * @brief Terminates a multi-part log message and writes it to the server log.
  * @param logger The logger used for message formatting.
  */
-#define ELOG_END_EX(logger)  \
-    if (logger != nullptr) { \
-        logger->finishLog(); \
+#define ELOG_END_EX(logger) elog::getValidLogger(logger)->finishLog()
+
+#if 0
+    if (logger != nullptr) {                               \
+        logger->finishLog();                               \
+    } else if (!elog::ELogSystem::isInitialized()) {       \
+        elog::ELogSystem::getPreInitLogger()->finishLog(); \
     }
+#endif
 
 /**
  * @brief Logs a system error message to the server log.
@@ -783,21 +901,39 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                    \
-    if (logger != nullptr) {                                                        \
+#define ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                         \
+    {                                                                                    \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                    \
+        ELOG_ERROR_EX(validLogger, "System call " #syscall "() failed: %d (%s)", sysErr, \
+                      elog::ELogSystem::sysErrorToStr(sysErr));                          \
+        ELOG_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                  \
+    }
+
+#if 0
+    if (logger != nullptr || !elog::ELogSystem::isInitialized()) {                  \
         ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
                       elog::ELogSystem::sysErrorToStr(sysErr));                     \
         ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                  \
     }
+#endif
 
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                \
-    if (logger != nullptr) {                                                        \
+#define ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                     \
+    {                                                                                    \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                    \
+        ELOG_ERROR_EX(validLogger, "System call " #syscall "() failed: %d (%s)", sysErr, \
+                      elog::ELogSystem::sysErrorToStr(sysErr));                          \
+        ELOG_FMT_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                              \
+    }
+
+#if 0
+    if (logger != nullptr || !elog::ELogSystem::isInitialized()) {                  \
         ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
                       elog::ELogSystem::sysErrorToStr(sysErr));                     \
         ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                              \
     }
+#endif  // if 0
 #endif
 
 /**
@@ -833,25 +969,47 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                          \
-    if (logger != nullptr) {                                                                \
+#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                               \
+    {                                                                                            \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
+        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                             \
+        ELOG_ERROR_EX(validLogger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
+                      errStr);                                                                   \
+        elog::ELogSystem::win32FreeErrorStr(errStr);                                             \
+        ELOG_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                          \
+    }
+
+#if 0
+    if (logger != nullptr || !elog::ELogSystem::isInitialized()) {                          \
         char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                        \
         ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
                       errStr);                                                              \
         elog::ELogSystem::win32FreeErrorStr(errStr);                                        \
         ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                          \
     }
+#endif
 
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                      \
-    if (logger != nullptr) {                                                                \
+#define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                           \
+    {                                                                                            \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
+        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                             \
+        ELOG_ERROR_EX(validLogger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
+                      errStr);                                                                   \
+        elog::ELogSystem::win32FreeErrorStr(errStr);                                             \
+        ELOG_FMT_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                      \
+    }
+
+#if 0
+    if (logger != nullptr || !elog::ELogSystem::isInitialized()) {                          \
         char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                        \
         ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
                       errStr);                                                              \
         elog::ELogSystem::win32FreeErrorStr(errStr);                                        \
         ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                      \
     }
+#endif
 #endif
 
 /**
@@ -1149,19 +1307,49 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
-    if (logger != nullptr && logger->canLog(level)) {             \
-        ELOG_EX(logger, level, fmt, ##__VA_ARGS__);               \
-        elog::ELogSystem::logStackTrace(level, title, skip);      \
+#define ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)        \
+    {                                                                    \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);    \
+        if (logger->canLog(level)) {                                     \
+            ELOG_EX(logger, level, fmt, ##__VA_ARGS__);                  \
+            elog::ELogSystem::logStackTrace(logger, level, title, skip); \
+        }                                                                \
     }
+
+#if 0
+if (logger != nullptr) {
+    if (logger->canLog(level)) {
+        ELOG_EX(logger, level, fmt, ##__VA_ARGS__);
+        elog::ELogSystem::logStackTrace(logger, level, title, skip);
+    }
+} else if (!elog::ELogSystem::isInitialized()) {
+    ELOG_EX(logger, level, fmt, ##__VA_ARGS__);
+    elog::ELogSystem::logStackTrace(elog::ELogSystem::getPreInitLogger(), level, title, skip);
+}
+#endif
 
 /** @brief Logs the stack trace of the current thread (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
-    if (logger != nullptr && logger->canLog(level)) {                 \
-        ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);               \
-        elog::ELogSystem::logStackTrace(level, title, skip);          \
+#define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)    \
+    {                                                                    \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);    \
+        if (logger->canLog(level)) {                                     \
+            ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);              \
+            elog::ELogSystem::logStackTrace(logger, level, title, skip); \
+        }                                                                \
     }
+
+#if 0
+    if (logger != nullptr) {                                                                       \
+        if (logger->canLog(level)) {                                                               \
+            ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);                                        \
+            elog::ELogSystem::logStackTrace(logger, level, title, skip);                           \
+        }                                                                                          \
+    } else if (!elog::ELogSystem::isInitialized()) {                                               \
+        ELOG_FMT_EX(elog::ELogSystem::getPreInitLogger(), level, fmt, ##__VA_ARGS__);              \
+        elog::ELogSystem::logStackTrace(elog::ELogSystem::getPreInitLogger(), level, title, skip); \
+    }
+#endif  // if 0
 #endif
 
 /**
@@ -1174,19 +1362,45 @@ inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
-    if (logger != nullptr && logger->canLog(level)) {                 \
-        ELOG_EX(logger, level, fmt, ##__VA_ARGS__);                   \
-        elog::ELogSystem::logAppStackTrace(level, title, skip);       \
+#define ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)       \
+    {                                                                       \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);       \
+        if (logger->canLog(level)) {                                        \
+            ELOG_EX(logger, level, fmt, ##__VA_ARGS__);                     \
+            elog::ELogSystem::logAppStackTrace(logger, level, title, skip); \
+        }                                                                   \
     }
+
+#if 0
+    if (logger != nullptr) {                                                                   \
+        if (logger->canLog(level)) {                                                           \
+            ELOG_EX(logger, level, fmt, ##__VA_ARGS__);                                        \
+            elog::ELogSystem::logAppStackTrace(level, title, skip);                            \
+        }                                                                                      \
+    } else if (!elog::ELogSystem::isInitialized()) {                                           \
+        ELOG_EX(elog::ELogSystem::getPreInitLogger(), level, fmt, ##__VA_ARGS__);              \
+        elog::ELogSystem::logAppStackTrace(elog::ELogSystem::getPreInitLogger(), level, title, \
+                                           skip);                                              \
+    }
+#endif
 
 /** @brief Logs the stack trace of all running threads in the application (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
+#define ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)   \
+    {                                                                       \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);       \
+        if (logger->canLog(level)) {                                        \
+            ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);                 \
+            elog::ELogSystem::logAppStackTrace(logger, level, title, skip); \
+        }                                                                   \
+    }
+
+#if 0
     if (logger != nullptr && logger->canLog(level)) {                     \
         ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);                   \
         elog::ELogSystem::logAppStackTrace(level, title, skip);           \
     }
+#endif  // if 0
 #endif
 
 /**

@@ -231,7 +231,7 @@ protected:
     virtual void logFormattedMsg(const char* formattedLogMsg, size_t length) {}
 
     /** @brief Helper method for querying whether the log record can be written to log. */
-    inline bool canLog(const ELogRecord& logRecord) { return logRecord.m_logLevel <= m_logLevel; }
+    bool canLog(const ELogRecord& logRecord);
 
 private:
     std::string m_typeName;

@@ -131,7 +131,7 @@ void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const
     logRecord.m_file = file;
     logRecord.m_line = line;
     logRecord.m_function = function;
-    getCurrentTime(logRecord.m_logTime);
+    elogGetCurrentTime(logRecord.m_logTime);
     logRecord.m_threadId = getCurrentThreadId();
     logRecord.m_logger = this;
 }

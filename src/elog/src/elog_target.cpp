@@ -228,6 +228,11 @@ void ELogTarget::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuf
     logBuffer.finalize();
 }
 
+bool ELogTarget::canLog(const ELogRecord& logRecord) {
+    return logRecord.m_logLevel <= m_logLevel &&
+           (m_logFilter == nullptr || m_logFilter->filterLogRecord(logRecord));
+}
+
 ELogPassKey ELogTarget::generatePassKey() {
     std::random_device rd;
     std::mt19937 gen(rd());

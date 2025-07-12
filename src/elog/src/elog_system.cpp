@@ -23,6 +23,7 @@
 #include "elog_flush_policy.h"
 #include "elog_flush_policy_internal.h"
 #include "elog_level_cfg.h"
+#include "elog_pre_init_logger.h"
 #include "elog_rate_limiter.h"
 #include "elog_schema_manager.h"
 #include "elog_segmented_file_target.h"
@@ -38,6 +39,8 @@ namespace elog {
 static ELogDbgUtilLogHandler sDbgUtilLogHandler;
 #endif
 
+static bool sInitialized = false;
+static ELogPreInitLogger sPreInitLogger;
 static ELogFilter* sGlobalFilter = nullptr;
 static std::vector<ELogTarget*> sLogTargets;
 static std::atomic<ELogSourceId> sNextLogSourceId;
@@ -226,10 +229,15 @@ void ELogSystem::termGlobals() {
         ELOG_REPORT_ERROR("Failed to destroy log buffer thread-local storage");
     }
     termDateTable();
+    sPreInitLogger.discardAccumulatedLogMessages();
 }
 
 bool ELogSystem::initialize(const char* configFile /* = nullptr */,
                             ELogErrorHandler* errorHandler /* = nullptr */) {
+    if (sInitialized) {
+        ELOG_REPORT_ERROR("Duplicate attempt to initialize rejected");
+        return false;
+    }
     setErrorHandler(errorHandler);
     if (!initGlobals()) {
         return false;
@@ -238,10 +246,24 @@ bool ELogSystem::initialize(const char* configFile /* = nullptr */,
         termGlobals();
         return false;
     }
+    sInitialized = true;
     return true;
 }
 
-void ELogSystem::terminate() { termGlobals(); }
+void ELogSystem::terminate() {
+    if (!sInitialized) {
+        ELOG_REPORT_ERROR("Duplicate attempt to terminate ignored");
+        return;
+    }
+    termGlobals();
+    sInitialized = false;
+}
+
+bool ELogSystem::isInitialized() { return sInitialized; }
+
+ELogLogger* ELogSystem::getPreInitLogger() { return &sPreInitLogger; }
+
+void ELogSystem::discardAccumulatedLogMessages() { sPreInitLogger.discardAccumulatedLogMessages(); }
 
 void ELogSystem::setErrorHandler(ELogErrorHandler* errorHandler) {
     ELogError::setErrorHandler(errorHandler);
@@ -815,6 +837,9 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
         logTarget->setId(ELOG_INVALID_TARGET_ID);
         return ELOG_INVALID_TARGET_ID;
     }
+
+    // write accumulated log messages if there are such
+    sPreInitLogger.writeAccumulatedLogMessages(logTarget);
     return logTargetId;
 }
 
@@ -1251,54 +1276,60 @@ bool ELogSystem::filterLogMsg(const ELogRecord& logRecord) {
 /** @brief Stack entry printer to log. */
 class LogStackEntryPrinter : public dbgutil::StackEntryPrinter {
 public:
-    LogStackEntryPrinter(ELogLevel logLevel, const char* title)
-        : m_logLevel(logLevel), m_title(title) {}
+    LogStackEntryPrinter(ELogLogger* logger, ELogLevel logLevel, const char* title)
+        : m_logger(logger), m_logLevel(logLevel), m_title(title) {}
+
     void onBeginStackTrace(dbgutil::os_thread_id_t threadId) override {
         // std::string threadName;
         // getThreadName(threadId, threadName);
         std::string threadName = getThreadNameField(threadId);
         if (m_title.empty()) {
             if (threadName.empty()) {
-                ELOG_BEGIN(m_logLevel, "[Thread %" PRItid " (0x%" PRItidx ") stack trace]\n",
-                           threadId, threadId);
+                ELOG_BEGIN_EX(m_logger, m_logLevel,
+                              "[Thread %" PRItid " (0x%" PRItidx ") stack trace]\n", threadId,
+                              threadId);
             } else {
-                ELOG_BEGIN(m_logLevel, "[Thread %" PRItid " (0x%" PRItidx ") <%s> stack trace]\n",
-                           threadId, threadId, threadName.c_str());
+                ELOG_BEGIN_EX(m_logger, m_logLevel,
+                              "[Thread %" PRItid " (0x%" PRItidx ") <%s> stack trace]\n", threadId,
+                              threadId, threadName.c_str());
             }
         } else {
             if (threadName.empty()) {
-                ELOG_BEGIN(m_logLevel, "%s:\n[Thread %" PRItid " (0x%" PRItidx ") stack trace]\n",
-                           m_title.c_str(), threadId, threadId);
+                ELOG_BEGIN_EX(m_logger, m_logLevel,
+                              "%s:\n[Thread %" PRItid " (0x%" PRItidx ") stack trace]\n",
+                              m_title.c_str(), threadId, threadId);
             } else {
-                ELOG_BEGIN(m_logLevel,
-                           "%s:\n[Thread %" PRItid " (0x%" PRItidx ") <%s> stack trace]\n",
-                           m_title.c_str(), threadId, threadId, threadName.c_str());
+                ELOG_BEGIN_EX(m_logger, m_logLevel,
+                              "%s:\n[Thread %" PRItid " (0x%" PRItidx ") <%s> stack trace]\n",
+                              m_title.c_str(), threadId, threadId, threadName.c_str());
             }
         }
     }
-    void onEndStackTrace() override { ELOG_END(); }
-    void onStackEntry(const char* stackEntry) { ELOG_APPEND("%s\n", stackEntry); }
+    void onEndStackTrace() override { ELOG_END_EX(m_logger); }
+    void onStackEntry(const char* stackEntry) { ELOG_APPEND_EX(m_logger, "%s\n", stackEntry); }
 
 private:
+    ELogLogger* m_logger;
     std::string m_title;
     ELogLevel m_logLevel;
 };
 
-void ELogSystem::logStackTrace(ELogLevel logLevel, const char* title, int skip,
+void ELogSystem::logStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title, int skip,
                                dbgutil::StackEntryFormatter* formatter) {
-    LogStackEntryPrinter printer(logLevel, title == nullptr ? "" : title);
+    LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
     dbgutil::printStackTrace(skip, &printer, formatter);
 }
 
-void ELogSystem::logStackTraceContext(void* context, ELogLevel logLevel, const char* title,
-                                      int skip, dbgutil::StackEntryFormatter* formatter) {
-    LogStackEntryPrinter printer(logLevel, title == nullptr ? "" : title);
+void ELogSystem::logStackTraceContext(ELogLogger* logger, void* context, ELogLevel logLevel,
+                                      const char* title, int skip,
+                                      dbgutil::StackEntryFormatter* formatter) {
+    LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
     dbgutil::printStackTraceContext(context, skip, &printer, formatter);
 }
 
-void ELogSystem::logAppStackTrace(ELogLevel logLevel, const char* title, int skip,
-                                  dbgutil::StackEntryFormatter* formatter) {
-    LogStackEntryPrinter printer(logLevel, title == nullptr ? "" : title);
+void ELogSystem::logAppStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title,
+                                  int skip, dbgutil::StackEntryFormatter* formatter) {
+    LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
     dbgutil::printAppStackTrace(skip, &printer, formatter);
 }
 #endif

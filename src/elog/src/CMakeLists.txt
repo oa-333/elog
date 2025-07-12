@@ -45,8 +45,9 @@ target_sources(elog PRIVATE
     ./elog_msgq_schema_handler.cpp
     ./elog_mysql_db_target.cpp
     ./elog_mysql_db_target_provider.cpp
-    ./elog_pgsql_db_target.cpp
     ./elog_pgsql_db_target_provider.cpp
+    ./elog_pgsql_db_target.cpp
+    ./elog_pre_init_logger.cpp
     ./elog_private_logger.cpp
     ./elog_props_formatter.cpp
     ./elog_quantum_target.cpp
