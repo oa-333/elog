@@ -55,6 +55,7 @@ static const uint32_t MIN_THREAD_COUNT = 1;
 static const uint32_t MAX_THREAD_COUNT = 16;
 static const char* DEFAULT_CFG = "file:///./bench_data/elog_bench.log";
 static bool sTestConns = false;
+static bool sTestException = false;
 static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
 static int sMsgCnt = -1;
@@ -477,6 +478,7 @@ static int testConnectors() {
     return 0;
 }
 static int testColors();
+static int testException();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -626,6 +628,9 @@ static bool parseArgs(int argc, char* argv[]) {
         } else if (strcmp(argv[1], "--test-colors") == 0) {
             sTestColors = true;
             return true;
+        } else if (strcmp(argv[1], "--test-exception") == 0) {
+            sTestException = true;
+            return true;
         }
     }
 
@@ -745,6 +750,8 @@ int main(int argc, char* argv[]) {
             return testConnectors();
         } else if (sTestColors) {
             return testColors();
+        } else if (sTestException) {
+            return testException();
         }
     }
 
@@ -800,6 +807,9 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
         // elog::ELogSystem::addStdErrLogTarget();
         elog::ELogSystem::setCurrentThreadName("elog_bench_main");
         elog::ELogSystem::setAppName("elog_bench_app");
+    }
+    if (sTestException) {
+        elog::ELogSystem::addStdErrLogTarget();
     }
 
     elog::ELogPropertyPosSequence props;
@@ -1268,6 +1278,13 @@ int testColors() {
     return 0;
 }
 
+int testException() {
+    sTestSingleAll = false;
+    sTestSingleThreadQuantum = true;
+    testPerfAllSingleThread();
+    return 0;
+}
+
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput, StatData& msgPercentile,
                            uint32_t msgCount /* = ST_MSG_COUNT */) {
@@ -1287,6 +1304,15 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     std::vector<double> samples(msgCount, 0.0f);
 #endif
     ELOG_ERROR_EX(logger, "This is a test error message");
+
+    if (sTestException) {
+        int msg = 0;
+        fprintf(stderr, "Exception test\n");
+        uint64_t inverse = 1 / msg;
+        uint64_t* ptr = nullptr;
+        *ptr = inverse;
+    }
+
     uint64_t bytesStart = logTarget->getBytesWritten();
     auto start = std::chrono::high_resolution_clock::now();
     for (uint64_t i = 0; i < msgCount; ++i) {
