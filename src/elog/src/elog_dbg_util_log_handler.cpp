@@ -86,7 +86,7 @@ void ELogDbgUtilLogHandler::onMsg(dbgutil::LogSeverity severity, uint32_t logger
     if (logger != nullptr) {
         ELogLevel logLevel = severityToLogLevel(severity);
         if (logger->canLog(logLevel)) {
-            logger->logFormat(logLevel, "", 0, "", msg);
+            logger->logNoFormat(logLevel, "", 0, "", msg);
         } else {
             ELOG_TRACE("Discarded dbgutil log source %s message %s, severity %u",
                        logger->getLogSource()->getQualifiedName(), msg, (unsigned)severity);

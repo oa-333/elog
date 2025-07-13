@@ -1130,6 +1130,13 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
         }
         if (childSource == nullptr) {
             // TODO: partial failures are left as dangling sources, is that ok?
+            if (defineMissingPath) {
+                ELOG_REPORT_ERROR("Failed to define log source %s: failed to define path part %s",
+                                  qualifiedName, namePath[i].c_str());
+            } else {
+                ELOG_REPORT_ERROR("Cannot define log source %s: missing path part %s",
+                                  qualifiedName, namePath[i].c_str());
+            }
             return nullptr;
         }
         currSource = childSource;
@@ -1144,6 +1151,11 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
 
     // otherwise create it and add it
     logSource = addChildSource(currSource, logSourceName);
+    if (logSource == nullptr) {
+        ELOG_REPORT_ERROR("Failed to define log source %s: failed to add child %s to parent %s",
+                          logSourceName, currSource->getQualifiedName());
+        return nullptr;
+    }
 
     // in case of a new log source, we check if there is an environment variable for configuring
     // its log level. The expected format is: <qualified-log-source-name>_log_level =
@@ -1170,6 +1182,8 @@ ELogSource* ELogSystem::getLogSource(const char* qualifiedName) {
     for (uint32_t i = 0; i < namecount; ++i) {
         currSource = currSource->getChild(namePath[i].c_str());
         if (currSource == nullptr) {
+            ELOG_REPORT_ERROR("Cannot retrieve log source %s: missing path part %s", qualifiedName,
+                              namePath[i].c_str());
             break;
         }
     }
