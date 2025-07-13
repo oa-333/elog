@@ -38,6 +38,7 @@ target_sources(
             elog_grafana_json_target.h
             elog_grafana_target.h
             elog_grpc_target.h
+            elog_http_client.h
             elog_json_formatter.h
             elog_json_receptor.h
             elog_kafka_msgq_target.h

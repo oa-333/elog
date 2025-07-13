@@ -451,9 +451,6 @@ static int testConnectors() {
     testGRPCAsyncCallbackUnary();
     testGRPCAsyncCallbackStream();
 #endif
-#ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
-    testGrafana();
-#endif
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
     testMySQL();
 #endif
@@ -1156,12 +1153,12 @@ void testKafka() {
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 void testGrafana() {
-    std::string cfg = std::string("mon://grafana?mode=json&loki_endpoint=http://") + sServerAddr +
-                      ":3100&labels={app: test}";
+    std::string cfg = std::string("mon://grafana?mode=json&loki_address=http://") + sServerAddr +
+                      ":3100&labels={app: test}&flush_policy=count&flush_count=10";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("Grafana-Loki", cfg.c_str(), msgPerf, ioPerf, statData, 10);
+    runSingleThreadedTest("Grafana-Loki", cfg.c_str(), msgPerf, ioPerf, statData, 100);
 }
 #endif
 

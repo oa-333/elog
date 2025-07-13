@@ -19,10 +19,6 @@ bool ELogGrafanaJsonTarget::startLogTarget() {
 }
 
 uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
-    if (m_client == nullptr) {
-        return 0;
-    }
-
     ELOG_REPORT_TRACE("Preapring log message for Grafana Loki");
     if (m_logEntry.empty()) {
         // apply labels (once per batch)
@@ -55,23 +51,18 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
         }
     }
 
+    // NOTE: log data is being aggregated until flush, which sends HTTP message to server
+
     ELOG_REPORT_TRACE("Log message for Grafana Loki is ready");
     return logMsg.size();
 }
 
 void ELogGrafanaJsonTarget::flushLogTarget() {
-    ELOG_REPORT_TRACE("POST log message for Grafana Loki: %s", m_logEntry.dump().c_str());
-    httplib::Result res =
-        m_client->Post("/loki/api/v1/push", m_logEntry.dump(), "application/json");
-    ELOG_REPORT_TRACE("POST done");
-    if (!res) {
-        ELOG_REPORT_ERROR("Failed to POST HTTP request to Grafana Loki: %s",
-                          httplib::to_string(res.error()).c_str());
-    } else if (res->status != 204) {  // 204 is: request processed, no server content
-        ELOG_REPORT_ERROR("Received status %d from Grafana server", res->status);
-    }
-
+    std::string jsonBody = m_logEntry.dump();
+    ELOG_REPORT_TRACE("POST log message for Grafana Loki: %s", jsonBody.c_str());
+    m_client.post("/loki/api/v1/push", jsonBody.data(), jsonBody.length(), "application/json");
     // clear the log entry for next round
+    // NOTE: if resend needs to take place, then the body has already been copied tp the backlog)
     m_logEntry.clear();
 }
 

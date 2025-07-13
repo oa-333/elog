@@ -35,6 +35,8 @@ target_sources(elog PRIVATE
     ./elog_grafana_target_provider.cpp
     ./elog_grafana_target.cpp
     ./elog_grpc_target_provider.cpp
+    ./elog_http_client.cpp
+    ./elog_http_config_loader.cpp
     ./elog_json_formatter.cpp
     ./elog_json_receptor.cpp
     ./elog_kafka_msgq_target.cpp
