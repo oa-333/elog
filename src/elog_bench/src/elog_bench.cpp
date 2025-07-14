@@ -1190,7 +1190,7 @@ void testSentry() {
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
 void testDatadog() {
     const char* cfg =
-        "mon://datadog?endpoint=https://http-intake.logs.datadoghq.eu&"
+        "mon://datadog?address=https://http-intake.logs.datadoghq.eu&"
         "api_key=670d32934fa0d393561050a42c6ef7db&"
         "source=elog&"
         "service=elog_bench&"

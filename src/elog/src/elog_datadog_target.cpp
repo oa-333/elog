@@ -2,8 +2,6 @@
 
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
 
-#include <gzip/compress.hpp>
-
 #include "elog_common.h"
 #include "elog_error.h"
 #include "elog_field_selector_internal.h"
@@ -16,48 +14,41 @@
 
 namespace elog {
 
+static const int ELOG_DATADOG_HTTP_SUCCESS_STATUS = 204;
+
+ELogDatadogTarget::ELogDatadogTarget(const char* serverAddress, const char* apiKey,
+                                     const ELogHttpConfig& config, const char* source /* = "" */,
+                                     const char* service /* = "" */, const char* tags /* = "" */,
+                                     bool stackTrace /* = false */, bool compress /* = false */)
+    : ELogHttpClientAssistant("Datadog", ELOG_DATADOG_HTTP_SUCCESS_STATUS),
+      m_apiKey(apiKey),
+      m_source(source),
+      m_service(service),
+      m_tags(tags),
+      m_stackTrace(stackTrace),
+      m_compress(compress) {
+    ELOG_REPORT_TRACE("Creating HTTP client to Datadog at: %s", serverAddress);
+    m_client.initialize(serverAddress, "Datadog", config, this);
+}
+
+void ELogDatadogTarget::embedHeaders(httplib::Headers& headers) {
+    headers.insert(httplib::Headers::value_type("DD-API-KEY", m_apiKey));
+}
+
 bool ELogDatadogTarget::startLogTarget() {
     if (!m_tags.empty() && !parseTags(m_tags)) {
         return false;
     }
 
-    ELOG_REPORT_TRACE("Creating HTTP client to Datadog at: %s", m_endpoint.c_str());
-    m_client = new httplib::Client(m_endpoint);
-    ELOG_REPORT_TRACE("HTTP client created");
-    if (!m_client->is_valid()) {
-        ELOG_REPORT_ERROR("Connection to Datadog endpoint %s is not valid", m_endpoint.c_str());
-        delete m_client;
-        m_client = nullptr;
-        return false;
-    }
-
-    // set timeouts
-    ELOG_REPORT_TRACE("Datadog log target setting connect timeout millis to %u",
-                      m_connectTimeoutMillis);
-    m_client->set_connection_timeout(
-        std::chrono::milliseconds(m_connectTimeoutMillis));  // micro-seconds
-    m_client->set_write_timeout(std::chrono::milliseconds(m_writeTimeoutMillis));
-    m_client->set_read_timeout(std::chrono::milliseconds(m_readTimeoutMillis));
-
     // make sure the json object is of array type
     m_logItemArray = nlohmann::json::array();
 
-    return true;
+    return m_client.start();
 }
 
-bool ELogDatadogTarget::stopLogTarget() {
-    if (m_client != nullptr) {
-        delete m_client;
-        m_client = nullptr;
-    }
-    return true;
-}
+bool ELogDatadogTarget::stopLogTarget() { return m_client.stop(); }
 
 uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
-    if (m_client == nullptr) {
-        return 0;
-    }
-
     ELOG_REPORT_TRACE("Preapring log message for Datadog");
     uint32_t index = m_logItemArray.size();
 
@@ -112,33 +103,13 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
 }
 
 void ELogDatadogTarget::flushLogTarget() {
-    ELOG_REPORT_TRACE("POST log message for Datadog: %s", m_logItemArray.dump().c_str());
-    httplib::Headers headers;
-    headers.insert(httplib::Headers::value_type("DD-API-KEY", m_apiKey));
     std::string body =
         m_logItemArray.size() == 1 ? m_logItemArray[0].dump() : m_logItemArray.dump();
-    if (m_compress) {
-        body = gzip::compress(body.data(), body.size(), Z_BEST_COMPRESSION);
-        headers.insert(httplib::Headers::value_type("Content-Encoding", "gzip"));
-        headers.insert(httplib::Headers::value_type("Content-Length", std::to_string(body.size())));
-    }
-    // TODO: allow configure retry policy in case of failure to send (retry frequency, how much to
-    // save before starting to discard, etc.). This should pertain to all http/net connectors.
-    httplib::Result res =
-        m_client->Post("/api/v2/logs", headers, body.data(), body.size(), "application/json");
-    ELOG_REPORT_TRACE("POST done");
-    if (!res) {
-        ELOG_REPORT_ERROR("Failed to POST HTTP request to Datadog: %s",
-                          httplib::to_string(res.error()).c_str());
-    } else if (res->status != 202) {  // 202 is: Request accepted for processing
-        ELOG_REPORT_ERROR("Received status %d from Datadog server, body: %s, reason: %s",
-                          res->status, res->body.c_str(), res->reason.c_str());
-        for (const auto& header : res->headers) {
-            ELOG_REPORT_ERROR("Header: %s = %s", header.first.c_str(), header.second.c_str());
-        }
-    }
+    ELOG_REPORT_TRACE("POST log message for Datadog: %s", body.c_str());
+    m_client.post("/api/v2/logs", body.data(), body.size(), "application/json", m_compress);
 
     // clear the log entry for next round
+    // NOTE: if resend needs to take place, then the body has already been copied tp the backlog)
     m_logItemArray = nlohmann::json::array();
 }
 
@@ -165,4 +136,4 @@ bool ELogDatadogTarget::prepareTagsString(const std::vector<std::string>& propNa
 
 }  // namespace elog
 
-#endif  // ELOG_ENABLE_GRAFANA_CONNECTOR
+#endif  // ELOG_ENABLE_DATADOG_CONNECTOR

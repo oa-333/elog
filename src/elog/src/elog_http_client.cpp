@@ -8,28 +8,28 @@
 
 namespace elog {
 
-void ELogHttpClient::initialize(
-    const char* serverAddress, ELogHttpResultHandler* resultHandler /* = nullptr */,
-    uint32_t connectTimeoutMillis /* = ELOG_HTTP_DEFAULT_CONNECT_TIMEOUT_MILLIS */,
-    uint32_t writeTimeoutMillis /* = ELOG_HTTP_DEFAULT_WRITE_TIMEOUT_MILLIS */,
-    uint32_t readTimeoutMillis /* = ELOG_HTTP_DEFAULT_READ_TIMEOUT_MILLIS */,
-    uint32_t resendPeriodMillis /* = ELOG_HTTP_DEFAULT_RESEND_TIMEOUT_MILLIS */,
-    uint32_t backlogSizeBytes /* = ELOG_HTTP_DEFAULT_BACKLOG_SIZE_BYTES */,
-    uint32_t shutdownTimeoutMillis /* = ELOG_HTTP_DEFAULT_SHUTDOWN_TIMEOUT_MILLIS */,
-    const char** headerNames /* = nullptr */, const char** headerValues /* = nullptr */,
-    size_t headerCount /* = 0 */) {
+bool ELogHttpClientAssistant::handleResult(const httplib::Result& result) {
+    if (result->status != m_status) {
+        ELOG_REPORT_ERROR(
+            "Received error status %d from %s server (expecting %d), body: %s, reason: %s",
+            result->status, m_logTargetName.c_str(), m_status, result->body.c_str(),
+            result->reason.c_str());
+        for (const auto& header : result->headers) {
+            ELOG_REPORT_ERROR("Header: %s = %s", header.first.c_str(), header.second.c_str());
+        }
+        return false;
+    }
+    return true;
+}
+
+void ELogHttpClient::initialize(const char* serverAddress, const char* logTargetName,
+                                const ELogHttpConfig& httpConfig,
+                                ELogHttpClientAssistant* assistant /* = nullptr */) {
     // save configuration
     m_serverAddress = serverAddress;
-    m_resultHandler = resultHandler;
-    m_connectTimeoutMillis = connectTimeoutMillis;
-    m_writeTimeoutMillis = writeTimeoutMillis;
-    m_readTimeoutMillis = readTimeoutMillis;
-    m_resendPeriodMillis = resendPeriodMillis;
-    m_backlogLimitBytes = backlogSizeBytes;
-    m_shutdownTimeoutMillis = shutdownTimeoutMillis;
-    for (size_t i = 0; i < headerCount; ++i) {
-        m_headers.insert(httplib::Headers::value_type(headerNames[i], headerValues[i]));
-    }
+    m_logTargetName = logTargetName;
+    m_config = httpConfig;
+    m_assistant = assistant;
 }
 
 bool ELogHttpClient::start() {
@@ -65,16 +65,13 @@ bool ELogHttpClient::stop() {
 
 std::pair<bool, int> ELogHttpClient::post(const char* endpoint, const char* body, size_t len,
                                           const char* contentType /* = "application/json" */,
-                                          const char** headerNames /* = nullptr */,
-                                          const char** headerValues /* = nullptr */,
-                                          size_t headerCount /* = 0 */,
                                           bool compress /* = false */) {
     // start with default headers specified in initialize(), and add additional headers if any
-    ELOG_REPORT_TRACE("POST log data to HTTP address/endpoint: %s/%s", m_serverAddress.c_str(),
-                      endpoint);
-    httplib::Headers headers = m_headers;
-    for (size_t i = 0; i < headerCount; ++i) {
-        headers.insert(httplib::Headers::value_type(headerNames[i], headerValues[i]));
+    ELOG_REPORT_TRACE("POST log data to %s at HTTP address/endpoint: %s/%s",
+                      m_logTargetName.c_str(), m_serverAddress.c_str(), endpoint);
+    httplib::Headers headers;
+    if (m_assistant != nullptr) {
+        m_assistant->embedHeaders(headers);
     }
 
     // compress body if needed
@@ -84,18 +81,19 @@ std::pair<bool, int> ELogHttpClient::post(const char* endpoint, const char* body
         headers.insert(httplib::Headers::value_type("Content-Encoding", "gzip"));
         headers.insert(
             httplib::Headers::value_type("Content-Length", std::to_string(compressedBody.size())));
-        ELOG_REPORT_TRACE("Compressed HTTP log data from %zu to %zu", len, compressedBody.size());
+        ELOG_REPORT_TRACE("Compressed %s HTTP log data from %zu to %zu", m_logTargetName.c_str(),
+                          len, compressedBody.size());
         body = compressedBody.c_str();
         len = compressedBody.size();
     }
 
     // POST HTTP message
-    ELOG_REPORT_TRACE("Sending data to HTTP server %s/%s via POST", m_serverAddress.c_str(),
-                      endpoint);
+    ELOG_REPORT_TRACE("Sending data to %s at HTTP server %s/%s via POST", m_logTargetName.c_str(),
+                      m_serverAddress.c_str(), endpoint);
     httplib::Result res = m_client->Post(endpoint, headers, body, len, contentType);
     ELOG_REPORT_TRACE("POST done");
     if (!res) {
-        ELOG_REPORT_ERROR("Failed to POST HTTP request: %s",
+        ELOG_REPORT_ERROR("Failed to POST HTTP request to %s: %s", m_logTargetName.c_str(),
                           httplib::to_string(res.error()).c_str());
         // no need to consult result handler, this is a clear network error
         addBacklog(endpoint, headers, body, len, contentType);
@@ -103,28 +101,29 @@ std::pair<bool, int> ELogHttpClient::post(const char* endpoint, const char* body
     }
 
     // consult with result to handler so we can tell whether resend is required
-    ELOG_REPORT_TRACE("HTTP status: %d", res->status);
-    if (m_resultHandler != nullptr && !m_resultHandler->handleResult(res)) {
+    ELOG_REPORT_TRACE("%s server returned HTTP status: %d", m_logTargetName.c_str(), res->status);
+    if (m_assistant != nullptr && !m_assistant->handleResult(res)) {
         addBacklog(endpoint, headers, body, len, contentType);
     }
     return {true, res->status};
 }
 
 httplib::Client* ELogHttpClient::createClient() {
-    ELOG_REPORT_TRACE("Creating HTTP client to server at: %s", m_serverAddress.c_str());
+    ELOG_REPORT_TRACE("Creating HTTP client to %s server at: %s", m_logTargetName.c_str(),
+                      m_serverAddress.c_str());
     httplib::Client* client = new httplib::Client(m_serverAddress);
-    ELOG_REPORT_TRACE("HTTP client created");
+    ELOG_REPORT_TRACE("%s HTTP client created", m_logTargetName.c_str());
     if (!client->is_valid()) {
-        ELOG_REPORT_ERROR("HTTP connection to server %s is not valid", m_serverAddress.c_str());
+        ELOG_REPORT_ERROR("HTTP connection to %s server at %s is not valid",
+                          m_logTargetName.c_str(), m_serverAddress.c_str());
         delete client;
         return nullptr;
     }
 
     // set connection timeouts
-    client->set_connection_timeout(
-        std::chrono::milliseconds(m_connectTimeoutMillis));  // micro-seconds
-    client->set_write_timeout(std::chrono::milliseconds(m_writeTimeoutMillis));
-    client->set_read_timeout(std::chrono::milliseconds(m_readTimeoutMillis));
+    client->set_connection_timeout(std::chrono::milliseconds(m_config.m_connectTimeoutMillis));
+    client->set_write_timeout(std::chrono::milliseconds(m_config.m_writeTimeoutMillis));
+    client->set_read_timeout(std::chrono::milliseconds(m_config.m_readTimeoutMillis));
 
     return client;
 }
@@ -141,7 +140,7 @@ void ELogHttpClient::resendThread() {
         // wait the full period until ordered to stop or that we are urged to resend
         {
             std::unique_lock<std::mutex> lock(m_lock);
-            m_cv.wait_for(lock, std::chrono::milliseconds(m_resendPeriodMillis),
+            m_cv.wait_for(lock, std::chrono::milliseconds(m_config.m_resendPeriodMillis),
                           [this] { return m_stopResend || !m_pendingBackLog.empty(); });
             if (m_stopResend) {
                 break;
@@ -161,7 +160,7 @@ void ELogHttpClient::resendThread() {
     }
 
     // one last attempt before shutdown
-    if (m_shutdownTimeoutMillis > 0) {
+    if (m_config.m_shutdownTimeoutMillis > 0) {
         // copy newly added pending blacklog into shipping blacklog (one last time)
         copyPendingBacklog();
 
@@ -171,7 +170,7 @@ void ELogHttpClient::resendThread() {
             // nothing to send
             return;
         }
-        uint32_t resendPeriodMillis = m_shutdownTimeoutMillis / (backlogCount + 1);
+        uint32_t resendPeriodMillis = m_config.m_shutdownTimeoutMillis / (backlogCount + 1);
 
         // attempt resending failed messages
         auto start = std::chrono::high_resolution_clock::now();
@@ -189,7 +188,13 @@ void ELogHttpClient::resendThread() {
             // compute time passed
             auto end = std::chrono::high_resolution_clock::now();
             timePassedMillis = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        } while (timePassedMillis.count() <= m_shutdownTimeoutMillis);
+        } while (timePassedMillis.count() <= m_config.m_shutdownTimeoutMillis);
+    }
+
+    size_t backlogCount = m_shippingBackLog.size();
+    if (backlogCount > 0) {
+        ELOG_REPORT_ERROR("%s log target has failed to resend %zu pending messages",
+                          m_logTargetName.c_str(), backlogCount);
     }
 }
 
@@ -202,7 +207,7 @@ void ELogHttpClient::copyPendingBacklog() {
 }
 
 void ELogHttpClient::dropExcessBacklog() {
-    while (m_backlogSizeBytes >= m_backlogLimitBytes) {
+    while (m_backlogSizeBytes >= m_config.m_backlogLimitBytes) {
         if (m_shippingBackLog.empty()) {
             // impossible, but we still must not generate core dump
             ELOG_REPORT_ERROR(
@@ -218,7 +223,7 @@ void ELogHttpClient::dropExcessBacklog() {
                 "Message body size (%zu bytes) exceeds current backlog size (%u bytes), "
                 "resetting backlog size to zero",
                 messageSize, m_backlogSizeBytes);
-            m_backlogLimitBytes = 0;
+            m_config.m_backlogLimitBytes = 0;
         } else {
             m_backlogSizeBytes -= (uint32_t)messageSize;
         }
@@ -239,7 +244,7 @@ bool ELogHttpClient::resendShippingBacklog(bool duringShutdown /* = false */) {
             // no need to consult result handler, this is a clear network error
             return false;
         }
-        if (m_resultHandler != nullptr && !m_resultHandler->handleResult(res)) {
+        if (m_assistant != nullptr && !m_assistant->handleResult(res)) {
             return false;
         }
         m_shippingBackLog.pop_front();

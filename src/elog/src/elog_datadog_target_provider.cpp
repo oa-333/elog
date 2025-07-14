@@ -6,13 +6,14 @@
 #include "elog_config_loader.h"
 #include "elog_datadog_target.h"
 #include "elog_error.h"
+#include "elog_http_config_loader.h"
 
 namespace elog {
 
 ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // expected url is as follows:
     // mon://datadog?
-    //  endpoint=http://host:port&  // e.g. endpoint=https://http-intake.logs.datadoghq.com
+    //  address=http://host:port&  // e.g. address=https://http-intake.logs.datadoghq.com
     //  api_key=<key>&
     //  source=<name>&
     //  service=<name>&
@@ -22,13 +23,16 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* lo
     //  connect_timeout_millis=value&
     //  write_timeout_millis=value&
     //  read_timeout_millis=value
+    //  resend_period_millis=value&
+    //  backlog_limit_bytes=value&
+    //  shutdown_timeout_millis=value
 
-    // we expect the following properties: endpoint (mandatory), tags, source, service, compress and
+    // we expect the following properties: address (mandatory), tags, source, service, compress and
     // connect timeout, write timeout, aggregation may be controlled by flush policy tags is normal
     // field selector stuff
-    std::string endpoint;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Datadog", "endpoint",
-                                                      endpoint)) {
+    std::string address;
+    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Datadog", "address",
+                                                      address)) {
         return nullptr;
     }
 
@@ -82,28 +86,18 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* lo
         return nullptr;
     }
 
-    // timeouts
-    int64_t connectTimeoutMillis = ELOG_DATADOG_DEFAULT_CONNECT_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
-            logTargetCfg, "Datadog", "connect_timeout_millis", connectTimeoutMillis)) {
+    // load common HTTP configuration (use defaults, see ELogHttpConfig default constructor)
+    ELogHttpConfig httpConfig;
+    if (!ELogHttpConfigLoader::loadHttpConfig(logTargetCfg, "Datadog", httpConfig)) {
+        ELOG_REPORT_ERROR(
+            "Invalid Datadog log target specification, invalid HTTP properties (context: %s)",
+            logTargetCfg->getFullContext());
         return nullptr;
     }
 
-    int64_t writeTimeoutMillis = ELOG_DATADOG_DEFAULT_WRITE_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
-            logTargetCfg, "Datadog", "write_timeout_millis", writeTimeoutMillis)) {
-        return nullptr;
-    }
-
-    int64_t readTimeoutMillis = ELOG_DATADOG_DEFAULT_READ_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
-            logTargetCfg, "Datadog", "read_timeout_millis", readTimeoutMillis)) {
-        return nullptr;
-    }
-
-    ELogDatadogTarget* target = new (std::nothrow) ELogDatadogTarget(
-        endpoint.c_str(), apiKey.c_str(), source.c_str(), service.c_str(), tags.c_str(), stackTrace,
-        compress, connectTimeoutMillis, writeTimeoutMillis, readTimeoutMillis);
+    ELogDatadogTarget* target = new (std::nothrow)
+        ELogDatadogTarget(address.c_str(), apiKey.c_str(), httpConfig, source.c_str(),
+                          service.c_str(), tags.c_str(), stackTrace, compress);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate Datadog log target, out of memory");
     }

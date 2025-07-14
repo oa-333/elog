@@ -30,14 +30,9 @@ namespace elog {
 
 class ELOG_API ELogGrafanaJsonTarget : public ELogGrafanaTarget {
 public:
-    ELogGrafanaJsonTarget(const char* lokiAddress, uint32_t connectTimeoutMillis,
-                          uint32_t writeTimeoutMillis, uint32_t readTimeoutMillis,
-                          uint32_t resendPeriodMillis, uint32_t backlogLimitBytes,
-                          uint32_t shutdownTimeoutMillis, const char* labels,
+    ELogGrafanaJsonTarget(const char* lokiAddress, const ELogHttpConfig& config, const char* labels,
                           const char* logLineMetadata)
-        : ELogGrafanaTarget(lokiAddress, connectTimeoutMillis, writeTimeoutMillis,
-                            readTimeoutMillis, resendPeriodMillis, backlogLimitBytes,
-                            shutdownTimeoutMillis),
+        : ELogGrafanaTarget(lokiAddress, config),
           m_labels(labels),
           m_logLineMetadata(logLineMetadata) {}
 

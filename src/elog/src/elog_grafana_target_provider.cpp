@@ -43,11 +43,8 @@ ELogMonTarget* ELogGrafanaTargetProvider::loadTarget(const ELogConfigMapNode* lo
         return nullptr;
     }
 
-    // load common HTTP configuration
-    ELogHttpConfig httpConfig = {
-        ELOG_GRAFANA_DEFAULT_CONNECT_TIMEOUT_MILLIS, ELOG_GRAFANA_DEFAULT_WRITE_TIMEOUT_MILLIS,
-        ELOG_GRAFANA_DEFAULT_READ_TIMEOUT_MILLIS,    ELOG_GRAFANA_DEFAULT_RESEND_TIMEOUT_MILLIS,
-        ELOG_GRAFANA_DEFAULT_BACKLOG_SIZE_BYTES,     ELOG_GRAFANA_DEFAULT_SHUTDOWN_TIMEOUT_MILLIS};
+    // load common HTTP configuration (use defaults, see ELogHttpConfig default constructor)
+    ELogHttpConfig httpConfig;
     if (!ELogHttpConfigLoader::loadHttpConfig(logTargetCfg, "Grafana-Loki", httpConfig)) {
         ELOG_REPORT_ERROR(
             "Invalid Grafana log target specification, invalid HTTP properties (context: %s)",
@@ -76,10 +73,7 @@ ELogMonTarget* ELogGrafanaTargetProvider::loadTarget(const ELogConfigMapNode* lo
 
     if (mode.compare("json") == 0) {
         ELogGrafanaJsonTarget* target = new (std::nothrow) ELogGrafanaJsonTarget(
-            lokiAddress.c_str(), httpConfig.m_connectTimeoutMillis, httpConfig.m_writeTimeoutMillis,
-            httpConfig.m_readTimeoutMillis, httpConfig.m_resendPeriodMillis,
-            httpConfig.m_backlogLimitBytes, httpConfig.m_shutdownTimeoutMillis, labels.c_str(),
-            logLineMetadata.c_str());
+            lokiAddress.c_str(), httpConfig, labels.c_str(), logLineMetadata.c_str());
         if (target == nullptr) {
             ELOG_REPORT_ERROR("Failed to allocate Grafana-Loki log target, out of memory");
         }

@@ -6,17 +6,9 @@
 #ifdef ELOG_ENABLE_HTTP
 
 #include "elog_config.h"
+#include "elog_http_config.h"
 
 namespace elog {
-
-struct ELogHttpConfig {
-    uint32_t m_connectTimeoutMillis;
-    uint32_t m_writeTimeoutMillis;
-    uint32_t m_readTimeoutMillis;
-    uint32_t m_resendPeriodMillis;
-    uint32_t m_backlogLimitBytes;
-    uint32_t m_shutdownTimeoutMillis;
-};
 
 class ELogHttpConfigLoader {
 public:

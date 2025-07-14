@@ -60,7 +60,7 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
 void ELogGrafanaJsonTarget::flushLogTarget() {
     std::string jsonBody = m_logEntry.dump();
     ELOG_REPORT_TRACE("POST log message for Grafana Loki: %s", jsonBody.c_str());
-    m_client.post("/loki/api/v1/push", jsonBody.data(), jsonBody.length(), "application/json");
+    m_client.post("/loki/api/v1/push", jsonBody.data(), jsonBody.size(), "application/json");
     // clear the log entry for next round
     // NOTE: if resend needs to take place, then the body has already been copied tp the backlog)
     m_logEntry.clear();
