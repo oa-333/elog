@@ -1,7 +1,6 @@
 #ifndef __ELOG_HTTP_CLIENT_H__
 #define __ELOG_HTTP_CLIENT_H__
 
-#define ELOG_ENABLE_HTTP
 #ifdef ELOG_ENABLE_HTTP
 
 #include <httplib.h>
