@@ -473,7 +473,7 @@ bool ELogRecordIdFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadIntFilter(filterCfg, "record_id", "record id", m_recordId);
 }
 
-bool ELogRecordIdFilter::load(const ELogExpression* expr) {
+bool ELogRecordIdFilter::loadExpr(const ELogExpression* expr) {
     return loadIntFilter(expr, "record_id", m_recordId);
 }
 
@@ -497,7 +497,7 @@ bool ELogRecordTimeFilter::load(const ELogConfigMapNode* filterCfg) {
     return true;
 }
 
-bool ELogRecordTimeFilter::load(const ELogExpression* expr) {
+bool ELogRecordTimeFilter::loadExpr(const ELogExpression* expr) {
     // get mandatory property record_time
     std::string timeStr;
     if (!loadStringFilter(expr, "record_time", timeStr)) {
@@ -576,7 +576,7 @@ bool ELogThreadNameFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "thread_name", "thread name", m_threadName);
 }
 
-bool ELogThreadNameFilter::load(const ELogExpression* expr) {
+bool ELogThreadNameFilter::loadExpr(const ELogExpression* expr) {
     return loadStringFilter(expr, "thread name", m_threadName);
 }
 
@@ -592,7 +592,7 @@ bool ELogSourceFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "log_source", "log source", m_logSourceName);
 }
 
-bool ELogSourceFilter::load(const ELogExpression* expr) {
+bool ELogSourceFilter::loadExpr(const ELogExpression* expr) {
     return loadStringFilter(expr, "log source", m_logSourceName);
 }
 
@@ -606,7 +606,7 @@ bool ELogModuleFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "log_module", "log module", m_logModuleName);
 }
 
-bool ELogModuleFilter::load(const ELogExpression* expr) {
+bool ELogModuleFilter::loadExpr(const ELogExpression* expr) {
     return loadStringFilter(expr, "log module", m_logModuleName);
 }
 
@@ -620,7 +620,7 @@ bool ELogFileNameFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "file_name", "file name", m_fileName);
 }
 
-bool ELogFileNameFilter::load(const ELogExpression* expr) {
+bool ELogFileNameFilter::loadExpr(const ELogExpression* expr) {
     return loadStringFilter(expr, "file name", m_fileName);
 }
 
@@ -637,7 +637,7 @@ bool ELogLineNumberFilter::load(const ELogConfigMapNode* filterCfg) {
     return true;
 }
 
-bool ELogLineNumberFilter::load(const ELogExpression* expr) {
+bool ELogLineNumberFilter::loadExpr(const ELogExpression* expr) {
     uint64_t lineNumber = 0;
     if (!loadIntFilter(expr, "line number", lineNumber)) {
         return false;
@@ -654,7 +654,7 @@ bool ELogFunctionNameFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "function_name", "function name", m_functionName);
 }
 
-bool ELogFunctionNameFilter::load(const ELogExpression* expr) {
+bool ELogFunctionNameFilter::loadExpr(const ELogExpression* expr) {
     return loadStringFilter(expr, "function name", m_functionName);
 }
 
@@ -678,7 +678,7 @@ bool ELogLevelFilter::load(const ELogConfigMapNode* filterCfg) {
     return true;
 }
 
-bool ELogLevelFilter::load(const ELogExpression* expr) {
+bool ELogLevelFilter::loadExpr(const ELogExpression* expr) {
     std::string logLevelStr;
     if (!loadStringFilter(expr, "log level", logLevelStr)) {
         return false;
@@ -701,7 +701,7 @@ bool ELogMsgFilter::load(const ELogConfigMapNode* filterCfg) {
     return loadStringFilter(filterCfg, "log_msg", "log message", m_logMsg);
 }
 
-bool ELogMsgFilter::load(const ELogExpression* expr) {
+bool ELogMsgFilter::loadExpr(const ELogExpression* expr) {
     return loadStringFilter(expr, "log message", m_logMsg);
 }
 

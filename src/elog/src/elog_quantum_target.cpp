@@ -65,8 +65,6 @@ bool ELogQuantumTarget::stopLogTarget() {
 
     // now wait for log thread to finish
     m_logThread.join();
-    uint64_t writePos = m_writePos.load(std::memory_order_relaxed);
-    uint64_t readPos = m_readPos.load(std::memory_order_relaxed);
     if (!m_endTarget->stop()) {
         ELOG_REPORT_ERROR("Quantum log target failed to stop underlying log target");
         return false;

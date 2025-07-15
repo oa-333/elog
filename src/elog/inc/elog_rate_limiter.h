@@ -31,7 +31,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.

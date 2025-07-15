@@ -455,7 +455,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(const ELogExpression* exp
         ELOG_REPORT_ERROR("Failed to allocate flush policy, out of memory");
         return nullptr;
     }
-    if (!flushPolicy->load(expr)) {
+    if (!flushPolicy->loadExpr(expr)) {
         ELOG_REPORT_ERROR("Failed to load compound flush policy from expression");
         delete flushPolicy;
         flushPolicy = nullptr;
@@ -563,7 +563,7 @@ ELogFilter* ELogConfigLoader::loadLogFilterExpr(ELogExpression* expr) {
         }
 
         // now have the filter load itself from the parsed expression
-        if (!filter->load(opExpr)) {
+        if (!filter->loadExpr(opExpr)) {
             ELOG_REPORT_ERROR("Failed to load filter from expression");
             delete filter;
             return nullptr;

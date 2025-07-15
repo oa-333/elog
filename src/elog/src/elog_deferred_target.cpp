@@ -94,7 +94,6 @@ void ELogDeferredTarget::logQueueMsgs(LogQueue& logQueue, bool disregardFlushReq
                 m_endTarget->flush();
             }
         } else {
-            std::string& logMsg = itr->second;
             logRecord.m_logMsg = itr->second.c_str();
             m_endTarget->log(logRecord);
             m_readCount.fetch_add(1, std::memory_order_relaxed);

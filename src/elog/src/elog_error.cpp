@@ -198,7 +198,7 @@ char* ELogError::sysErrorToStr(int sysErrorCode) {
 #ifdef ELOG_WINDOWS
 char* ELogError::win32SysErrorToStr(unsigned long sysErrorCode) {
     LPSTR messageBuffer = nullptr;
-    std::size_t size = FormatMessageA(
+    FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, sysErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0,
         NULL);

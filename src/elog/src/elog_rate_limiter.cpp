@@ -13,7 +13,7 @@ bool ELogRateLimiter::load(const ELogConfigMapNode* filterCfg) {
     return loadIntFilter(filterCfg, "max_msg_per_sec", "rate limiter", m_maxMsgPerSecond);
 }
 
-bool ELogRateLimiter::load(const ELogExpression* expr) {
+bool ELogRateLimiter::loadExpr(const ELogExpression* expr) {
     return loadIntFilter(expr, "max_msg_per_sec", m_maxMsgPerSecond);
 }
 

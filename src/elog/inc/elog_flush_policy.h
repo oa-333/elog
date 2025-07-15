@@ -13,6 +13,7 @@
 #include "elog_expression.h"
 #include "elog_gc.h"
 #include "elog_target_spec.h"
+#include "elog_time.h"
 
 namespace elog {
 
@@ -38,7 +39,7 @@ public:
     virtual bool load(const ELogConfigMapNode* flushPolicyCfg) { return true; }
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    virtual bool load(const ELogExpression* expr) { return true; };
+    virtual bool loadExpr(const ELogExpression* expr) { return true; };
 
     /**
      * @brief Queries whether this flush policy is active (i.e. has a background thread that
@@ -180,7 +181,7 @@ public:
     ~ELogAndFlushPolicy() {}
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) override;
+    bool loadExpr(const ELogExpression* expr) override;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -197,7 +198,7 @@ public:
     ~ELogOrFlushPolicy() {}
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) override;
+    bool loadExpr(const ELogExpression* expr) override;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -215,7 +216,7 @@ public:
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) override;
+    bool loadExpr(const ELogExpression* expr) override;
 
     bool shouldFlush(uint32_t msgSizeBytes) final {
         return !m_flushPolicy->shouldFlush(msgSizeBytes);
@@ -275,7 +276,7 @@ public:
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -302,7 +303,7 @@ public:
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
@@ -330,7 +331,7 @@ public:
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     bool start() final;
@@ -341,17 +342,18 @@ public:
     bool shouldFlush(uint32_t msgSizeBytes) final;
 
 private:
-    typedef std::chrono::time_point<std::chrono::steady_clock> Timestamp;
-    typedef std::chrono::milliseconds Millis;
-
-    inline Timestamp getTimestamp() const { return std::chrono::steady_clock::now(); }
-
-    inline std::chrono::milliseconds getTimeDiff(Timestamp later, Timestamp earlier) const {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(later - earlier);
+    inline ELogTime getTimestamp() const {
+        ELogTime currentTime;
+        elogGetCurrentTime(currentTime);
+        return currentTime;
     }
 
-    Millis m_logTimeLimitMillis;
-    std::atomic<Timestamp> m_prevFlushTime;
+    inline uint64_t getTimeDiffMillis(const ELogTime& later, const ELogTime& earlier) const {
+        return (elogTimeToUTCNanos(later) - elogTimeToUTCNanos(earlier)) / 1000000ull;
+    }
+
+    uint64_t m_logTimeLimitMillis;
+    std::atomic<ELogTime> m_prevFlushTime;
     std::mutex m_lock;
     std::condition_variable m_cv;
     bool m_stopTimer;
@@ -380,7 +382,7 @@ public:
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     bool start() override;
@@ -451,7 +453,7 @@ public:
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /** @brief Orders an active flush policy to start (by default no action takes place). */
     bool start() final;

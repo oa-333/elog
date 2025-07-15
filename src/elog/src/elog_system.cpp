@@ -485,7 +485,7 @@ bool ELogSystem::configureByProps(const ELogPropertySequence& props,
         if (prop.first.ends_with(logAffinitySuffix1) || prop.first.ends_with(logAffinitySuffix2)) {
             const std::string& key = prop.first;
             // shave off trailing ".log_level/_log_level" (that includes dot/underscore)
-            std::string sourceName = key.substr(0, key.size() - logLevelSuffixLen);
+            std::string sourceName = key.substr(0, key.size() - logAffinitySuffixLen);
             ELogSource* logSource = defineLogSources
                                         ? defineLogSource(sourceName.c_str(), defineMissingPath)
                                         : getLogSource(sourceName.c_str());
@@ -772,7 +772,7 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
         if (prop.first.ends_with(logAffinitySuffix1) || prop.first.ends_with(logAffinitySuffix2)) {
             const std::string& key = prop.first;
             // shave off trailing ".log_level/_log_level" (that includes dot/underscore)
-            std::string sourceName = key.substr(0, key.size() - logLevelSuffixLen);
+            std::string sourceName = key.substr(0, key.size() - logAffinitySuffixLen);
             ELogSource* logSource = defineLogSources
                                         ? defineLogSource(sourceName.c_str(), defineMissingPath)
                                         : getLogSource(sourceName.c_str());
@@ -1324,8 +1324,8 @@ public:
 
 private:
     ELogLogger* m_logger;
-    std::string m_title;
     ELogLevel m_logLevel;
+    std::string m_title;
 };
 
 void ELogSystem::logStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title, int skip,

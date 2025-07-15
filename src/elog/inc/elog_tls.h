@@ -20,7 +20,7 @@ typedef pthread_key_t ELogTlsKey;
 #define ELOG_INVALID_TLS_KEY ((ELogTlsKey) - 1)
 
 /** @typedef TLS destructor function type. */
-typedef void (*elogTlsDestructorFunc)(void*);
+typedef void (*elogTlsDestructorFunc)(void* /* tlsValue */);
 
 /**
  * @brief Creates a thread local storage key.

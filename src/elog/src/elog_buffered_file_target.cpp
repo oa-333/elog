@@ -8,8 +8,8 @@ ELogBufferedFileTarget::ELogBufferedFileTarget(const char* filePath, uint32_t bu
                                                bool useLock /* = true */,
                                                ELogFlushPolicy* flushPolicy /* = nullptr */)
     : ELogTarget("file", flushPolicy),
-      m_fileWriter(bufferSize, useLock),
       m_filePath(filePath),
+      m_fileWriter(bufferSize, useLock),
       m_fileHandle(nullptr),
       m_shouldClose(false) {
     if (useLock) {

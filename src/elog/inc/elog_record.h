@@ -57,10 +57,13 @@ struct ELOG_API ELogRecord {
           m_logTime(std::chrono::system_clock::now()),
 #endif
           m_threadId(0),
-          m_logger(nullptr),
           m_logLevel(ELEVEL_INFO),
+          m_logger(nullptr),
+          m_file(nullptr),
+          m_function(nullptr),
           m_logMsg(nullptr),
           m_logMsgLen(0),
+          m_line(0),
           m_reserved(0) {
     }
 

@@ -232,7 +232,7 @@ bool ELogCompoundFlushPolicy::loadCompositeExpr(const ELogCompositeExpression* e
     return true;
 }
 
-bool ELogAndFlushPolicy::load(const ELogExpression* expr) {
+bool ELogAndFlushPolicy::loadExpr(const ELogExpression* expr) {
     if (expr->m_type != ELogExpressionType::ET_AND_EXPR) {
         ELOG_REPORT_ERROR("Cannot load AND flush policy from expression, invalid expression type");
         return false;
@@ -252,7 +252,7 @@ bool ELogAndFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     return res;
 }
 
-bool ELogOrFlushPolicy::load(const ELogExpression* expr) {
+bool ELogOrFlushPolicy::loadExpr(const ELogExpression* expr) {
     if (expr->m_type != ELogExpressionType::ET_OR_EXPR) {
         ELOG_REPORT_ERROR("Cannot load OR flush policy from expression, invalid expression type");
         return false;
@@ -269,7 +269,7 @@ bool ELogOrFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
             res = true;
         }
     }
-    return false;
+    return res;
 }
 
 bool ELogNotFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
@@ -332,7 +332,7 @@ bool ELogNotFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return true;
 }
 
-bool ELogNotFlushPolicy::load(const ELogExpression* expr) {
+bool ELogNotFlushPolicy::loadExpr(const ELogExpression* expr) {
     if (expr->m_type != ELogExpressionType::ET_NOT_EXPR) {
         ELOG_REPORT_ERROR("Cannot load NOT flush policy from expression, invalid expression type");
         return false;
@@ -354,7 +354,7 @@ bool ELogCountFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return loadIntFlushPolicy(flushPolicyCfg, "count", "flush_count", m_logCountLimit);
 }
 
-bool ELogCountFlushPolicy::load(const ELogExpression* expr) {
+bool ELogCountFlushPolicy::loadExpr(const ELogExpression* expr) {
     return loadIntFlushPolicy(expr, "count", m_logCountLimit);
 }
 
@@ -367,7 +367,7 @@ bool ELogSizeFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return loadIntFlushPolicy(flushPolicyCfg, "size", "flush_size_bytes", m_logSizeLimitBytes);
 }
 
-bool ELogSizeFlushPolicy::load(const ELogExpression* expr) {
+bool ELogSizeFlushPolicy::loadExpr(const ELogExpression* expr) {
     return loadIntFlushPolicy(expr, "size", m_logSizeLimitBytes);
 }
 
@@ -380,35 +380,25 @@ bool ELogSizeFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
 
 ELogTimedFlushPolicy::ELogTimedFlushPolicy()
     : ELogFlushPolicy(true),
-      m_prevFlushTime(getTimestamp()),
       m_logTimeLimitMillis(0),
+      m_prevFlushTime(getTimestamp()),
       m_stopTimer(false) {}
 
 ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarget* logTarget)
     : ELogFlushPolicy(true),
-      m_prevFlushTime(getTimestamp()),
       m_logTimeLimitMillis(logTimeLimitMillis),
+      m_prevFlushTime(getTimestamp()),
       m_stopTimer(false) {}
 
 ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
 
 bool ELogTimedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
-    bool found = false;
-    uint64_t timeoutMillis = 0;
-    if (!loadIntFlushPolicy(flushPolicyCfg, "timed", "flush_timeout_millis", timeoutMillis)) {
-        return false;
-    }
-    m_logTimeLimitMillis = Millis(timeoutMillis);
-    return true;
+    return loadIntFlushPolicy(flushPolicyCfg, "timed", "flush_timeout_millis",
+                              m_logTimeLimitMillis);
 }
 
-bool ELogTimedFlushPolicy::load(const ELogExpression* expr) {
-    uint64_t timeoutMillis = 0;
-    if (!loadIntFlushPolicy(expr, "timed", timeoutMillis)) {
-        return false;
-    }
-    m_logTimeLimitMillis = Millis(timeoutMillis);
-    return true;
+bool ELogTimedFlushPolicy::loadExpr(const ELogExpression* expr) {
+    return loadIntFlushPolicy(expr, "timed", m_logTimeLimitMillis);
 }
 
 bool ELogTimedFlushPolicy::start() {
@@ -431,11 +421,11 @@ bool ELogTimedFlushPolicy::stop() {
 
 bool ELogTimedFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     // get timestamp
-    Timestamp now = std::chrono::steady_clock::now();
+    ELogTime now = getTimestamp();
 
     // compare with previous flush time
-    Timestamp prev = m_prevFlushTime.load(std::memory_order_relaxed);
-    if (getTimeDiff(now, prev) > m_logTimeLimitMillis) {
+    ELogTime prev = m_prevFlushTime.load(std::memory_order_relaxed);
+    if (getTimeDiffMillis(now, prev) > m_logTimeLimitMillis) {
         // the one that sets the new flush time will notify caller to flush
         if (m_prevFlushTime.compare_exchange_strong(prev, now, std::memory_order_seq_cst)) {
             return true;
@@ -484,7 +474,7 @@ bool ELogChainedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return false;
 }
 
-bool ELogChainedFlushPolicy::load(const ELogExpression* expr) {
+bool ELogChainedFlushPolicy::loadExpr(const ELogExpression* expr) {
     if (expr->m_type != ELogExpressionType::ET_CHAIN_EXPR) {
         ELOG_REPORT_ERROR(
             "Cannot load CHAIN flush policy from expression, invalid expression type");
@@ -621,7 +611,7 @@ bool ELogGroupFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return true;
 }
 
-bool ELogGroupFlushPolicy::load(const ELogExpression* expr) {
+bool ELogGroupFlushPolicy::loadExpr(const ELogExpression* expr) {
     if (expr->m_type != ELogExpressionType::ET_FUNC_EXPR) {
         ELOG_REPORT_ERROR(
             "Cannot load group flush policy, invalid expression type (required function "

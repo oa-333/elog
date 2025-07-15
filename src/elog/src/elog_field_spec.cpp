@@ -121,6 +121,10 @@ void ELogTextSpec::resolve() {
         case ELogFontSpec::BoldSpec::ELOG_FONT_NORMAL:
             m_resolvedSpec.append(ELOG_TT_NORMAL);
             break;
+
+        case ELogFontSpec::BoldSpec::ELOG_BOLD_NONE:
+        default:
+            break;
     }
 
     // apply italic specification
@@ -131,6 +135,10 @@ void ELogTextSpec::resolve() {
 
         case ELogFontSpec::ItalicSpec::ELOG_ITALIC_RESET:
             m_resolvedSpec.append(ELOG_TT_NO_ITALIC);
+            break;
+
+        case ELogFontSpec::ItalicSpec::ELOG_ITALIC_NONE:
+        default:
             break;
     }
 
@@ -143,6 +151,10 @@ void ELogTextSpec::resolve() {
         case ELogFontSpec::UnderlineSpec::ELOG_UNDERLINE_RESET:
             m_resolvedSpec.append(ELOG_TT_NO_UNDERLINE);
             break;
+
+        case ELogFontSpec::UnderlineSpec::ELOG_UNDERLINE_NONE:
+        default:
+            break;
     }
 
     // apply cross-out (strike-through) specification
@@ -153,6 +165,10 @@ void ELogTextSpec::resolve() {
 
         case ELogFontSpec::CrossOutSpec::ELOG_CROSSOUT_RESET:
             m_resolvedSpec.append(ELOG_TT_NO_CROSS_OUT);
+            break;
+
+        case ELogFontSpec::CrossOutSpec::ELOG_CROSSOUT_NONE:
+        default:
             break;
     }
 
@@ -168,6 +184,10 @@ void ELogTextSpec::resolve() {
 
         case ELogFontSpec::BlinkSpec::ELOG_BLINK_RESET:
             m_resolvedSpec.append(ELOG_TT_NO_BLINK);
+            break;
+
+        case ELogFontSpec::BlinkSpec::ELOG_BLINK_NONE:
+        default:
             break;
     }
 

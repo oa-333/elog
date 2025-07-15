@@ -116,7 +116,6 @@ void ELogGC::recycleRetiredObjects() {
         ELOG_INFO_EX(m_traceLogger, "Recycling objects by min-active-epoch %" PRIu64,
                      minActiveEpoch);
     }
-    uint64_t wordCount = m_activeLists.size();
     uint64_t listCount = m_objectLists.size();
     uint64_t maxActiveWord = m_maxActiveWord.load(std::memory_order_relaxed);
     for (uint64_t wordIndex = 0; wordIndex <= maxActiveWord; ++wordIndex) {

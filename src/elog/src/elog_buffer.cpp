@@ -63,11 +63,14 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     va_copy(argsCopy, args);
     uint32_t sizeLeft = size() - m_offset;
     int res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, args);
-    // return value does not include the terminating null, and number of copied characters,
+
+    // NOTE: return value does not include the terminating null, and number of copied characters,
     // including the terminating null, will not exceed size, so if res==size it means size - 1
     // characters were copied and one more terminating null, meaning one character was lost.
     // if res > size if definitely means buffer was too small, and res shows the required size
-    if (res < sizeLeft) {
+
+    // NOTE: cast to int is safe (since size is limited to ELOG_MAX_BUFFER_SIZE = 16KB)
+    if (res < (int)sizeLeft) {
         va_end(argsCopy);
         m_offset += res;
         return true;
@@ -81,7 +84,8 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     sizeLeft = size() - m_offset;
     res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, argsCopy);
     va_end(argsCopy);
-    if (res >= sizeLeft) {
+    // NOTE: cast to int is safe (since size is limited to ELOG_MAX_BUFFER_SIZE = 16KB)
+    if (res >= (int)sizeLeft) {
         ELOG_REPORT_ERROR("Failed to format string second time");
         return false;
     }

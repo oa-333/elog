@@ -17,7 +17,7 @@ public:
     virtual bool load(const ELogConfigMapNode* filterCfg) { return true; }
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    virtual bool load(const ELogExpression* expr) { return true; };
+    virtual bool loadExpr(const ELogExpression* expr) { return true; };
 
     /**
      * @brief Filters a log record.
@@ -215,7 +215,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -242,7 +242,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -404,7 +404,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -430,7 +430,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -456,7 +456,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -482,7 +482,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -510,7 +510,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -536,7 +536,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -564,7 +564,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.
@@ -590,7 +590,7 @@ public:
     bool load(const ELogConfigMapNode* filterCfg) final;
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    bool load(const ELogExpression* expr) final;
+    bool loadExpr(const ELogExpression* expr) final;
 
     /**
      * @brief Filters a log record.

@@ -54,7 +54,6 @@ ELogSource* ELogSource::getChild(const char* name) {
 }
 
 void ELogSource::removeChild(const char* name) {
-    ELogSource* logSource = nullptr;
     ChildMap::iterator itr = m_children.find(name);
     if (itr != m_children.end()) {
         m_children.erase(itr);

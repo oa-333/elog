@@ -248,10 +248,11 @@ static const char* getWin32OSName(LPOSVERSIONINFOEXA verInfo) {
     return "";
 }
 
-static const char* getWin32SuiteName(LPOSVERSIONINFOEXA verInfo) {
+/*static const char* getWin32SuiteName(LPOSVERSIONINFOEXA verInfo) {
     // currently we don't support this, is it really needed?
     return "";
-}
+}*/
+
 static const char* getWin32ProductName(LPOSVERSIONINFOEXA verInfo) {
     if (verInfo->wProductType == VER_NT_DOMAIN_CONTROLLER) {
         return "Domain Controller";
