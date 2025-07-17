@@ -50,6 +50,7 @@ public:
         : m_sourceFilePath(sourceFilePath) {}
     ELogConfigSourceContext(const ELogConfigSourceContext&) = delete;
     ELogConfigSourceContext(ELogConfigSourceContext&&) = delete;
+    ELogConfigSourceContext& operator=(const ELogConfigSourceContext&) = delete;
     ~ELogConfigSourceContext() {}
 
     /** @brief Adds input line to context. */
@@ -63,7 +64,7 @@ public:
      * @param pathContext The path context of the node.
      * @return The formatted context string.
      */
-    std::string getPosContext(uint32_t pos, const char* pathContext) const;
+    std::string getPosContext(size_t pos, const char* pathContext) const;
 
 private:
     /** @brief Source lines as read from file. In case of a string input there is a single line. */
@@ -74,11 +75,12 @@ private:
 /** @brief Context class for each specific configuration entity. */
 class ELOG_API ELogConfigContext {
 public:
-    ELogConfigContext(ELogConfigSourceContext* sourceContext, uint32_t parsePos,
+    ELogConfigContext(ELogConfigSourceContext* sourceContext, size_t parsePos,
                       const char* pathContext)
         : m_sourceContext(sourceContext), m_parsePos(parsePos), m_pathContext(pathContext) {}
     ELogConfigContext(const ELogConfigContext&) = delete;
     ELogConfigContext(ELogConfigContext&&) = delete;
+    ELogConfigContext& operator=(const ELogConfigContext&) = delete;
     ~ELogConfigContext() {}
 
     /** @brief Retrieves source intput string context data. */
@@ -91,14 +93,14 @@ public:
     inline void setPathContext(const char* pathContext) { m_pathContext = pathContext; }
 
     /** @brief Retrieves the parse position of the configuration entity. */
-    inline uint32_t getParsePos() const { return m_parsePos; }
+    inline size_t getParsePos() const { return m_parsePos; }
 
     /** @brief Retrieves full context information for the configuration entity. */
     const char* getFullContext() const;
 
 private:
     ELogConfigSourceContext* m_sourceContext;
-    uint32_t m_parsePos;
+    size_t m_parsePos;
     std::string m_pathContext;
     mutable std::string m_fullContext;
 };
@@ -126,7 +128,7 @@ public:
      * @brief Retrieves the parse position within the source file/string of this configuration
      * entity.
      */
-    inline uint32_t getParsePos() const { return m_context->getParsePos(); }
+    inline size_t getParsePos() const { return m_context->getParsePos(); }
 
     /** @brief Sets the configuration tree path context for this entity. */
     inline void setPathContext(const char* pathContext) {
@@ -134,15 +136,16 @@ public:
         onSetPathContext(pathContext);
     }
 
-    ELogConfigContext* makeConfigContext(uint32_t parsePos = ELOG_CONFIG_INVALID_PARSE_POS);
+    ELogConfigContext* makeConfigContext(size_t parsePos = ELOG_CONFIG_INVALID_PARSE_POS);
 
 protected:
     ELogConfigEntity(ELogConfigContext* context) : m_context(context) {}
     ELogConfigEntity(const ELogConfigEntity&) = delete;
     ELogConfigEntity(ELogConfigEntity&&) = delete;
+    ELogConfigEntity operator=(const ELogConfigEntity&) = delete;
 
     /** @brief Reacts to path context changing event. Should propagate to sub-entities. */
-    virtual void onSetPathContext(const char* pathContext) {}
+    virtual void onSetPathContext(const char* pathContext) { (void)pathContext; }
 
     inline ELogConfigSourceContext* getSourceContext() { return m_context->getSourceContext(); }
 
@@ -161,6 +164,7 @@ protected:
         : ELogConfigEntity(context), m_nodeType(nodeType) {}
     ELogConfigNode(const ELogConfigNode&) = delete;
     ELogConfigNode(ELogConfigNode&&) = delete;
+    ELogConfigNode& operator=(const ELogConfigNode&) = delete;
 
 private:
     ELogConfigNodeType m_nodeType;
@@ -177,6 +181,7 @@ protected:
         : ELogConfigEntity(context), m_valueType(valueType) {}
     ELogConfigValue(const ELogConfigValue&) = delete;
     ELogConfigValue(ELogConfigValue&&) = delete;
+    ELogConfigValue& operator=(const ELogConfigValue&) = delete;
 
 private:
     ELogConfigValueType m_valueType;
@@ -194,6 +199,7 @@ public:
     }
     ELogConfigSimpleNode(const ELogConfigSimpleNode&) = delete;
     ELogConfigSimpleNode(ELogConfigSimpleNode&&) = delete;
+    ELogConfigSimpleNode& operator=(const ELogConfigSimpleNode&) = delete;
     ~ELogConfigSimpleNode() override {
         if (m_value != nullptr) {
             delete m_value;
@@ -221,6 +227,7 @@ public:
         : ELogConfigNode(context, ELogConfigNodeType::ELOG_CONFIG_ARRAY_NODE) {}
     ELogConfigArrayNode(const ELogConfigArrayNode&) = delete;
     ELogConfigArrayNode(ELogConfigArrayNode&&) = delete;
+    ELogConfigArrayNode& operator=(const ELogConfigArrayNode&) = delete;
     ~ELogConfigArrayNode() override {
         for (ELogConfigValue* value : m_values) {
             delete value;
@@ -250,6 +257,7 @@ public:
         : ELogConfigNode(context, ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {}
     ELogConfigMapNode(const ELogConfigMapNode&) = delete;
     ELogConfigMapNode(ELogConfigMapNode&&) = delete;
+    ELogConfigMapNode& operator=(const ELogConfigMapNode&) = delete;
     ~ELogConfigMapNode() override {
         for (EntryType& entry : m_entries) {
             delete entry.second;
@@ -306,6 +314,7 @@ public:
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_NULL_VALUE) {}
     ELogConfigNullValue(const ELogConfigNullValue&) = delete;
     ELogConfigNullValue(ELogConfigNullValue&&) = delete;
+    ELogConfigNullValue& operator=(const ELogConfigNullValue&) = delete;
     ~ELogConfigNullValue() final {}
 };
 
@@ -316,6 +325,7 @@ public:
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_INT_VALUE), m_value(value) {}
     ELogConfigIntValue(const ELogConfigIntValue&) = delete;
     ELogConfigIntValue(ELogConfigIntValue&&) = delete;
+    ELogConfigIntValue operator=(const ELogConfigIntValue&) = delete;
     ~ELogConfigIntValue() final {}
 
     inline int64_t getIntValue() const { return m_value; }
@@ -332,6 +342,7 @@ public:
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_BOOL_VALUE), m_value(value) {}
     ELogConfigBoolValue(const ELogConfigBoolValue&) = delete;
     ELogConfigBoolValue(ELogConfigBoolValue&&) = delete;
+    ELogConfigBoolValue& operator=(const ELogConfigBoolValue&) = delete;
     ~ELogConfigBoolValue() final {}
 
     inline bool getBoolValue() const { return m_value; }
@@ -348,6 +359,7 @@ public:
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_STRING_VALUE), m_value(value) {}
     ELogConfigStringValue(const ELogConfigStringValue&) = delete;
     ELogConfigStringValue(ELogConfigStringValue&&) = delete;
+    ELogConfigStringValue& operator=(const ELogConfigStringValue&) = delete;
     ~ELogConfigStringValue() final {}
 
     inline const char* getStringValue() const { return m_value.c_str(); }
@@ -364,6 +376,7 @@ public:
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE), m_value(value) {}
     ELogConfigArrayValue(const ELogConfigArrayValue&) = delete;
     ELogConfigArrayValue(ELogConfigArrayValue&&) = delete;
+    ELogConfigArrayValue& operator=(const ELogConfigArrayValue&) = delete;
     ~ELogConfigArrayValue() final {
         if (m_value != nullptr) {
             delete m_value;
@@ -387,6 +400,7 @@ public:
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_MAP_VALUE), m_value(value) {}
     ELogConfigMapValue(const ELogConfigMapValue&) = delete;
     ELogConfigMapValue(ELogConfigMapValue&&) = delete;
+    ELogConfigMapValue& operator=(const ELogConfigMapValue&) = delete;
     ~ELogConfigMapValue() final {
         if (m_value != nullptr) {
             delete m_value;
@@ -409,6 +423,7 @@ public:
     ELogConfig(ELogConfigNode* root = nullptr) : m_root(root), m_sourceContext(nullptr) {}
     ELogConfig(const ELogConfig&) = delete;
     ELogConfig(ELogConfig&&) = delete;
+    ELogConfig& operator=(const ELogConfig&) = delete;
     ~ELogConfig() {
         if (m_root != nullptr) {
             delete m_root;
@@ -435,7 +450,7 @@ public:
         m_root = root;
     }
 
-    inline std::string getContext(uint32_t pos, const char* pathContext) const {
+    inline std::string getContext(size_t pos, const char* pathContext) const {
         return m_sourceContext->getPosContext(pos, pathContext);
     }
 

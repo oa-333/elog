@@ -12,6 +12,7 @@ class ELOG_API ELogMonTargetProvider {
 public:
     ELogMonTargetProvider(const ELogMonTargetProvider&) = delete;
     ELogMonTargetProvider(ELogMonTargetProvider&&) = delete;
+    ELogMonTargetProvider& operator=(const ELogMonTargetProvider&) = delete;
     virtual ~ELogMonTargetProvider() {}
 
     /**

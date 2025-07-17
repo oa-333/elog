@@ -11,6 +11,7 @@ class ELOG_API ELogMsgQTargetProvider {
 public:
     ELogMsgQTargetProvider(const ELogMsgQTargetProvider&) = delete;
     ELogMsgQTargetProvider(ELogMsgQTargetProvider&&) = delete;
+    ELogMsgQTargetProvider& operator=(const ELogMsgQTargetProvider&) = delete;
     virtual ~ELogMsgQTargetProvider() {}
 
     /**

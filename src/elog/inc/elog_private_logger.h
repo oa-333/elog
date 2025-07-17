@@ -9,6 +9,9 @@ class ELOG_API ELogPrivateLogger : public ELogLogger {
 public:
     ELogPrivateLogger(ELogSource* logSource)
         : ELogLogger(logSource), m_recordBuilder(&m_recordBuilderHead) {}
+    ELogPrivateLogger(const ELogPrivateLogger&) = delete;
+    ELogPrivateLogger(ELogPrivateLogger&&) = delete;
+    ELogPrivateLogger& operator=(const ELogPrivateLogger&) = delete;
     ~ELogPrivateLogger() final {}
 
 protected:

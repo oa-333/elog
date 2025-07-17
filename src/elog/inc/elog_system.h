@@ -601,7 +601,7 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
 }
 
 /** @brief Queries whether the default logger can log a record with a given log level. */
-inline bool canLog(ELogLevel logLevel) { return ELogSystem::getDefaultLogger()->canLog(logLevel); }
+inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(logLevel); }
 
 }  // namespace elog
 
@@ -969,14 +969,14 @@ if (logger != nullptr) {
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                               \
-    {                                                                                            \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
-        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                             \
-        ELOG_ERROR_EX(validLogger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
-                      errStr);                                                                   \
-        elog::ELogSystem::win32FreeErrorStr(errStr);                                             \
-        ELOG_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                          \
+#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                                \
+    {                                                                                             \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                             \
+        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                              \
+        ELOG_ERROR_EX(validLogger, "Windows system call " #syscall "() failed: %lu (%s)", sysErr, \
+                      errStr);                                                                    \
+        elog::ELogSystem::win32FreeErrorStr(errStr);                                              \
+        ELOG_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                           \
     }
 
 #if 0

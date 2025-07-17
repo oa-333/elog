@@ -14,6 +14,10 @@ public:
 
 protected:
     ELogAsyncTarget(ELogTarget* endTarget);
+    ELogAsyncTarget() = delete;
+    ELogAsyncTarget(const ELogAsyncTarget&) = delete;
+    ELogAsyncTarget(ELogAsyncTarget&&) = delete;
+    ELogAsyncTarget& operator=(const ELogAsyncTarget&) = delete;
 
     ELogTarget* m_endTarget;
 };

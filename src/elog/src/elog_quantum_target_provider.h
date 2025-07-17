@@ -10,6 +10,7 @@ public:
     ELogQuantumTargetProvider() {}
     ELogQuantumTargetProvider(const ELogQuantumTargetProvider&) = delete;
     ELogQuantumTargetProvider(ELogQuantumTargetProvider&&) = delete;
+    ELogQuantumTargetProvider& operator=(const ELogQuantumTargetProvider&) = delete;
     ~ELogQuantumTargetProvider() final {}
 
     /**

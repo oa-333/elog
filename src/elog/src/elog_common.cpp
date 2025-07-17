@@ -110,7 +110,7 @@ bool parseBoolProp(const char* propName, const std::string& logTargetCfg, const 
     return true;
 }
 
-uint32_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen /* = 0 */) {
+size_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen /* = 0 */) {
     assert(destLen > 0);
     if (srcLen == 0) {
         srcLen = strlen(src);
@@ -129,6 +129,58 @@ uint32_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen
 
     // return number of bytes copied, excluding terminating null
     return copyLen;
+}
+
+bool elog_getenv(const char* envVarName, std::string& envVarValue) {
+#ifdef ELOG_SECURE
+#ifdef ELOG_WINDOWS
+    const size_t ENV_BUF_SIZE = 256;
+    char envBuf[ENV_BUF_SIZE];
+    size_t retSize = 0;
+    errno_t res = getenv_s(&retSize, envBuf, ENV_BUF_SIZE, envVarName);
+    if (res != 0) {
+        ELOG_REPORT_ERROR("Failed to get environment variable %s, security error %d", envVarName,
+                          res);
+        return false;
+    }
+    if (retSize == 0) {
+        return false;
+    }
+    envVarValue = envBuf;
+    return true;
+#else
+    char* envVarValueLocal = secure_getenv(envVarName);
+    if (envVarValueLocal == nullptr) {
+        return false;
+    }
+    envVarValue = envVarValueLocal;
+    return true;
+#endif
+#else
+    char* envVarValueLocal = getenv(envVarName);
+    if (envVarValueLocal == nullptr) {
+        return false;
+    }
+    envVarValue = envVarValueLocal;
+    return true;
+#endif
+}
+
+FILE* elog_fopen(const char* path, const char* mode) {
+    FILE* handle = nullptr;
+#if defined(ELOG_SECURE) && defined(ELOG_WINDOWS)
+    // TODO: is this valid on linux?
+    errno_t res = fopen_s(&handle, path, mode);
+    if (res != 0) {
+        ELOG_REPORT_SYS_ERROR(fopen_s, "Failed to open log file %s", path);
+    }
+#else
+    handle = fopen(path, mode);
+    if (handle == nullptr) {
+        ELOG_REPORT_SYS_ERROR(fopen, "Failed to open log file %s", path);
+    }
+#endif
+    return handle;
 }
 
 }  // namespace elog

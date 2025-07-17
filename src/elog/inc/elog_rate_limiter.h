@@ -25,6 +25,9 @@ public:
           m_currSecond(0),
           m_currSecondCount(0),
           m_prevSecondCount(0) {}
+    ELogRateLimiter(const ELogRateLimiter&) = delete;
+    ELogRateLimiter(ELogRateLimiter&&) = delete;
+    ELogRateLimiter& operator=(const ELogRateLimiter&) = delete;
     ~ELogRateLimiter() final {}
 
     /** @brief Loads filter from configuration. */

@@ -9,6 +9,9 @@ namespace elog {
 class ELOG_API ELogFormatter : public ELogBaseFormatter {
 public:
     ELogFormatter() {}
+    ELogFormatter(const ELogFormatter&) = delete;
+    ELogFormatter(ELogFormatter&&) = delete;
+    ELogFormatter& operator=(const ELogFormatter&) = delete;
     ~ELogFormatter() final {}
 
     virtual void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);

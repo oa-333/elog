@@ -10,6 +10,7 @@ public:
     ELogRpcFormatter() : m_lastFieldType(FieldType::FT_NONE) {}
     ELogRpcFormatter(const ELogRpcFormatter&) = delete;
     ELogRpcFormatter(ELogRpcFormatter&&) = delete;
+    ELogRpcFormatter& operator=(const ELogRpcFormatter&) = delete;
     ~ELogRpcFormatter() final {}
 
     inline bool parseParams(const std::string& params) { return initialize(params.c_str()); }

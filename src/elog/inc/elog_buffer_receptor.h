@@ -15,6 +15,7 @@ public:
     ELogBufferReceptor(ELogBuffer& logBuffer) : m_buffer(logBuffer) {}
     ELogBufferReceptor(const ELogBufferReceptor&) = delete;
     ELogBufferReceptor(ELogBufferReceptor&&) = delete;
+    ELogBufferReceptor& operator=(const ELogBufferReceptor&) = delete;
     ~ELogBufferReceptor() final {}
 
     /** @brief Receives a string log record field. */
@@ -39,7 +40,7 @@ public:
 private:
     ELogBuffer& m_buffer;
 
-    void applySpec(const ELogFieldSpec& fieldSpec, const char* strField, uint32_t fieldLen = 0);
+    void applySpec(const ELogFieldSpec& fieldSpec, const char* strField, size_t fieldLen = 0);
 };
 
 }  // namespace elog

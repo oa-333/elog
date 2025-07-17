@@ -26,7 +26,7 @@ struct ELogLevelCfg {
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     /** @var Identifies the origin Debug Utilities logger. */
-    uint32_t m_dbgUtilLoggerId;
+    size_t m_dbgUtilLoggerId;
 
     /** @var Specifies the configured severity of the Debug Utilities logger. */
     dbgutil::LogSeverity m_severity;

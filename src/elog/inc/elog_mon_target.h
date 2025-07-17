@@ -14,6 +14,9 @@ namespace elog {
 class ELOG_API ELogMonTarget : public ELogTarget {
 protected:
     ELogMonTarget() : ELogTarget("mon") {}
+    ELogMonTarget(const ELogMonTarget&) = delete;
+    ELogMonTarget(ELogMonTarget&&) = delete;
+    ELogMonTarget& operator=(const ELogMonTarget&) = delete;
     ~ELogMonTarget() override {}
 };
 

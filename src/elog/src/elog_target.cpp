@@ -126,13 +126,15 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
     if (canLog(logRecord)) {
         uint32_t bytesWritten = writeLogRecord(logRecord);
         // update statistics counter
+        m_bytesWritten.fetch_add(bytesWritten, std::memory_order_relaxed);
+
         // NOTE: asynchronous log targets return zero here, but log flushing of the end target will
         // be triggered by the async log target anyway
         // NOTE: we call shouldFlush() anyway, even if zero bytes were returned, since some flush
         // policies don't care how many bytes were written, but rather how many calls were made
         // TODO: check that async target flush policy works correctly
-        bytesWritten = m_bytesWritten.fetch_add(bytesWritten, std::memory_order_relaxed);
         if (m_flushPolicy != nullptr) {
+            // NOTE: we pass to shouldFlush() the currently logged message size
             if (m_flushPolicy->shouldFlush(bytesWritten)) {
                 // flush moderation should take place only when log target is natively thread-safe
                 // NOTE: Being externally thread safe means that either there is an external lock,
@@ -171,8 +173,9 @@ uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     }
     logBuffer->reset();
     formatLogBuffer(logRecord, *logBuffer);
-    logFormattedMsg(logBuffer->getRef(), logBuffer->getOffset());
-    return logBuffer->getOffset();
+    uint32_t bufferSize = logBuffer->getOffset();
+    logFormattedMsg(logBuffer->getRef(), bufferSize);
+    return bufferSize;
 }
 
 void ELogTarget::flush() {
@@ -236,7 +239,7 @@ bool ELogTarget::canLog(const ELogRecord& logRecord) {
 ELogPassKey ELogTarget::generatePassKey() {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dist(1, UINT32_MAX);
+    std::uniform_int_distribution<uint32_t> dist(1, UINT32_MAX);
     return dist(gen);
 }
 
@@ -262,7 +265,7 @@ bool ELogCombinedTarget::stopLogTarget() {
 }
 
 uint32_t ELogCombinedTarget::writeLogRecord(const ELogRecord& logRecord) {
-    uint32_t bytesWritten = 0;
+    // uint32_t bytesWritten = 0;
     if (logRecord.m_logLevel <= getLogLevel()) {
         for (ELogTarget* target : m_logTargets) {
             target->log(logRecord);

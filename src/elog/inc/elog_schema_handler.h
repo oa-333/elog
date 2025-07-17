@@ -10,8 +10,9 @@ namespace elog {
 /** @brief Interface for loading log targets by a given scheme. */
 class ELOG_API ELogSchemaHandler {
 public:
-    ELogSchemaHandler(const ELogSchemaHandler&) = default;
-    ELogSchemaHandler(ELogSchemaHandler&&) = default;
+    ELogSchemaHandler(const ELogSchemaHandler&) = delete;
+    ELogSchemaHandler(ELogSchemaHandler&&) = delete;
+    ELogSchemaHandler& operator=(const ELogSchemaHandler&) = delete;
 
     /** @brief Destructor. */
     virtual ~ELogSchemaHandler() {}

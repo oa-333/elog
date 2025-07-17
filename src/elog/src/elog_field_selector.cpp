@@ -170,11 +170,11 @@ static void initHostName() {
 #ifdef ELOG_WINDOWS
     DWORD len = HOST_NAME_MAX;
     if (!GetComputerNameA(sHostName, &len)) {
-        strcpy(sHostName, "<N/A>");
+        elog_strncpy(sHostName, "<N/A>", HOST_NAME_MAX);
     }
 #else
     if (gethostname(sHostName, HOST_NAME_MAX) != 0) {
-        strcpy(sHostName, "<N/A>");
+        elog_strncpy(sHostName, "<N/A>", HOST_NAME_MAX);
     }
 #endif
 }
@@ -183,11 +183,11 @@ static void initUserName() {
 #ifdef ELOG_WINDOWS
     DWORD len = LOGIN_NAME_MAX;
     if (!GetUserNameA(sUserName, &len)) {
-        strcpy(sUserName, "<N/A>");
+        elog_strncpy(sUserName, "<N/A>", LOGIN_NAME_MAX);
     }
 #else  // ELOG_WINDOWS
     if (getlogin_r(sUserName, LOGIN_NAME_MAX) != 0) {
-        strcpy(sUserName, "<N/A>");
+        elog_strncpy(sUserName, "<N/A>", LOGIN_NAME_MAX);
     }
 #endif
 }
@@ -340,7 +340,7 @@ static void initOsNameAndVersion() {
 
 static void initProgName() {
     // set some default in case of error
-    strcpy(sProgName, "N/A");
+    elog_strncpy(sProgName, "N/A", PROG_NAME_MAX);
 
     // get executable file name
 #ifdef ELOG_WINDOWS
@@ -392,7 +392,7 @@ static void initProgName() {
     // finally remove extension
     char* dotPtr = strrchr(sProgName, '.');
     if (dotPtr != nullptr) {
-        uint32_t dotPos = dotPtr - sProgName;
+        size_t dotPos = (size_t)(dotPtr - sProgName);
         sProgName[dotPos] = 0;
     }
 }
@@ -678,6 +678,13 @@ public:
 
             case ELogFieldType::FT_LOG_LEVEL:
                 return m_logLevel == value.m_logLevel;
+
+            case ELogFieldType::FT_FORMAT:
+                // switch-expr should never evaluate format expression
+                ELOG_REPORT_WARN(
+                    "Attempt to perform conditional token evaluation on format field selector "
+                    "ignored");
+                return false;
 
             default:
                 // should never happen

@@ -56,6 +56,9 @@ public:
      */
     ELogQuantumTarget(ELogTarget* logTarget, uint32_t bufferSize,
                       CongestionPolicy congestionPolicy = CongestionPolicy::CP_WAIT);
+    ELogQuantumTarget(const ELogQuantumTarget&) = delete;
+    ELogQuantumTarget(ELogQuantumTarget&&) = delete;
+    ELogQuantumTarget& operator=(const ELogQuantumTarget&) = delete;
     ~ELogQuantumTarget() final {}
 
     /** @brief Queries whether the log target has written all pending messages. */
@@ -89,6 +92,9 @@ private:
         // NOTE: each record data takes 2 cache lines
 
         ELogRecordData() : m_logBuffer(nullptr), m_entryState(ES_VACANT) {}
+        ELogRecordData(const ELogRecordData&) = delete;
+        ELogRecordData(ELogRecordData&&) = delete;
+        ELogRecordData& operator=(const ELogRecordData&) = delete;
         ~ELogRecordData() {}
 
         inline void setLogBuffer(ELogBuffer* logBuffer) { m_logBuffer = logBuffer; }

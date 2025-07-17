@@ -14,7 +14,11 @@
 namespace elog {
 
 void ELogBufferedFileWriter::setFileHandle(FILE* fileHandle) {
+#ifdef ELOG_WINDOWS
+    m_fd = _fileno(fileHandle);
+#else
     m_fd = fileno(fileHandle);
+#endif
     m_logBuffer.resize(m_bufferSizeBytes);
     m_bufferOffset = 0;
 }
@@ -48,7 +52,7 @@ bool ELogBufferedFileWriter::logMsgUnlocked(const char* formattedLogMsg, size_t 
         }
     }
 
-    // if there is still no room them write entire message directly to file
+    // if there is still no room then write entire message directly to file
     if (m_bufferOffset + length > m_logBuffer.size()) {
         // cannot buffer, message is too large, do direct write instead
         assert(m_bufferOffset == 0);
@@ -63,7 +67,7 @@ bool ELogBufferedFileWriter::logMsgUnlocked(const char* formattedLogMsg, size_t 
     return true;
 }
 
-bool ELogBufferedFileWriter::writeToFile(const char* buffer, uint32_t length) {
+bool ELogBufferedFileWriter::writeToFile(const char* buffer, size_t length) {
     // NOTE: in case the buffer size is zero, and we have direct write to file, the documentation
     // states that write() is atomic and does not require a lock, BUT it does not guarantee that all
     // bytes are written, so in case log messages are not to be mixed with each other in a
@@ -73,10 +77,23 @@ bool ELogBufferedFileWriter::writeToFile(const char* buffer, uint32_t length) {
     // otherwise behavior is undefined (i.e. core dump is expected)
 
     // write log message fully to file
-    uint32_t pos = 0;
+#ifdef ELOG_MSVC
+    typedef uint32_t pos_type_t;
+#else
+    typedef size_t pos_type_t;
+#endif
+    pos_type_t pos = 0;
     while (pos < length) {
 #ifdef ELOG_MSVC
-        int res = _write(m_fd, buffer + pos, length - pos);
+        if (length > UINT32_MAX) {
+            ELOG_REPORT_ERROR(
+                "Cannot write more than %u bytes to a file at once on Windows/MSVC (requested for "
+                "%zu)",
+                (unsigned)UINT32_MAX, length);
+            return false;
+        }
+        uint32_t length32 = (uint32_t)length;
+        int res = _write(m_fd, buffer + pos, length32 - pos);
 #else
         ssize_t res = write(m_fd, buffer + pos, length - pos);
 #endif
@@ -88,7 +105,7 @@ bool ELogBufferedFileWriter::writeToFile(const char* buffer, uint32_t length) {
                               errCode);
             return false;
         }
-        pos += res;
+        pos += (pos_type_t)res;
     }
     return true;
 }

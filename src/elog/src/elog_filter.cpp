@@ -111,7 +111,8 @@ ELogFilter* constructFilter(const char* name) {
     return filter;
 }
 
-static bool compareInt(ELogCmpOp cmpOp, uint64_t lhs, uint64_t rhs) {
+template <typename T>
+static bool compareInt(ELogCmpOp cmpOp, const T& lhs, const T& rhs) {
     switch (cmpOp) {
         case ELogCmpOp::CMP_OP_EQ:
             return lhs == rhs;
@@ -125,6 +126,9 @@ static bool compareInt(ELogCmpOp cmpOp, uint64_t lhs, uint64_t rhs) {
             return lhs > rhs;
         case ELogCmpOp::CMP_OP_GE:
             return lhs >= rhs;
+
+        case ELogCmpOp::CMP_OP_CONTAINS:
+        case ELogCmpOp::CMP_OP_LIKE:
         default:
             return false;
     }
@@ -143,15 +147,15 @@ inline bool compareString(ELogCmpOp cmpOp, const char* lhs, const char* rhs) {
     }
     // otherwise do normal string comparison
     int cmpRes = strcmp(lhs, rhs);
-    return compareInt(cmpOp, cmpRes, 0);
+    return compareInt<int>(cmpOp, cmpRes, 0);
 }
 
 inline bool compareLogLevel(ELogCmpOp cmpOp, ELogLevel lhs, ELogLevel rhs) {
-    return compareInt(cmpOp, (uint64_t)lhs, (uint64_t)rhs);
+    return compareInt<uint32_t>(cmpOp, lhs, rhs);
 }
 
 inline bool compareTime(ELogCmpOp cmpOp, ELogTime lhs, ELogTime rhs) {
-    return compareInt(cmpOp, elogTimeToUTCNanos(lhs), elogTimeToUTCNanos(rhs));
+    return compareInt<uint64_t>(cmpOp, elogTimeToUTCNanos(lhs), elogTimeToUTCNanos(rhs));
 }
 
 ELogNotFilter::~ELogNotFilter() {
@@ -478,7 +482,8 @@ bool ELogRecordIdFilter::loadExpr(const ELogExpression* expr) {
 }
 
 bool ELogRecordIdFilter::filterLogRecord(const ELogRecord& logRecord) {
-    return compareInt(m_cmpOp, logRecord.m_logRecordId, m_recordId);
+    return compareInt<decltype(logRecord.m_logRecordId)>(m_cmpOp, logRecord.m_logRecordId,
+                                                         m_recordId);
 }
 
 bool ELogRecordTimeFilter::load(const ELogConfigMapNode* filterCfg) {
@@ -647,7 +652,7 @@ bool ELogLineNumberFilter::loadExpr(const ELogExpression* expr) {
 }
 
 bool ELogLineNumberFilter::filterLogRecord(const ELogRecord& logRecord) {
-    return compareInt(m_cmpOp, logRecord.m_line, m_lineNumber);
+    return compareInt<int>(m_cmpOp, (int)logRecord.m_line, m_lineNumber);
 }
 
 bool ELogFunctionNameFilter::load(const ELogConfigMapNode* filterCfg) {

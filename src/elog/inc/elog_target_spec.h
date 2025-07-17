@@ -35,6 +35,9 @@ struct ELOG_API ELogTargetUrlSpec {
     ELogTargetUrlSpec* m_subUrlSpec;
 
     ELogTargetUrlSpec() : m_subUrlSpec(nullptr) {}
+    ELogTargetUrlSpec(const ELogTargetUrlSpec&) = delete;
+    ELogTargetUrlSpec(ELogTargetUrlSpec&&) = delete;
+    ELogTargetUrlSpec& operator=(const ELogTargetUrlSpec&) = delete;
 
     ~ELogTargetUrlSpec() {
         if (m_subUrlSpec != nullptr) {

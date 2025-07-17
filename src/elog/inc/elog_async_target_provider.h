@@ -12,6 +12,7 @@ public:
     ELogAsyncTargetProvider(const ELogAsyncTargetProvider&) = delete;
     ELogAsyncTargetProvider(ELogAsyncTargetProvider&&) = delete;
     virtual ~ELogAsyncTargetProvider() {}
+    ELogAsyncTargetProvider& operator=(const ELogAsyncTargetProvider&) = delete;
 
     /**
      * @brief Loads a target from configuration object.

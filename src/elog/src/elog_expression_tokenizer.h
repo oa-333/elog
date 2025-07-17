@@ -66,6 +66,7 @@ public:
     ELogExpressionTokenizer(const std::string& sourceStr);
     ELogExpressionTokenizer(const ELogExpressionTokenizer&) = delete;
     ELogExpressionTokenizer(ELogExpressionTokenizer&&) = delete;
+    ELogExpressionTokenizer& operator=(ELogExpressionTokenizer&) = delete;
     ~ELogExpressionTokenizer() {}
 
     inline bool hasMoreTokens() const { return m_pos < m_sourceStr.length(); }

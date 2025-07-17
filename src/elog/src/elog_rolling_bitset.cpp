@@ -16,7 +16,7 @@ void ELogRollingBitset::markPrefix(uint64_t value) {
     // mark suffix within the ring buffer
     uint64_t rem = value % WORD_SIZE;
     if (rem > 0) {
-        uint64_t bitPattern = (1 << rem) - 1;
+        uint64_t bitPattern = (1ull << rem) - 1;
         ELogAtomic<uint64_t>& word = m_ring[0];
         word.m_atomicValue.store(bitPattern, std::memory_order_relaxed);
     }
@@ -129,7 +129,7 @@ bool ELogRollingBitset::contains(uint64_t value) const {
     // check if the bit is set
     uint64_t wordBitOffset = value % WORD_SIZE;
     uint64_t wordValue = word.m_atomicValue.load(std::memory_order_relaxed);
-    return (wordValue & (1 << wordBitOffset)) != 0;
+    return (wordValue & (1ull << wordBitOffset)) != 0;
 }
 
 }  // namespace elog

@@ -88,6 +88,7 @@ void ELogSource::propagateLogLevel(ELogLevel logLevel, ELogPropagateMode propaga
             m_logLevel = std::max(m_logLevel, logLevel);
             break;
 
+        case ELogPropagateMode::PM_NONE:
         default:
             break;
     }

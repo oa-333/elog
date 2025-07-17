@@ -10,6 +10,7 @@ public:
     ELogPropsFormatter() {}
     ELogPropsFormatter(const ELogPropsFormatter&) = delete;
     ELogPropsFormatter(ELogPropsFormatter&&) = delete;
+    ELogPropsFormatter& operator=(const ELogPropsFormatter&) = delete;
     ~ELogPropsFormatter() final {}
 
     bool parseProps(const std::string& props);
@@ -20,7 +21,7 @@ public:
 
     inline const std::string& getPropNameAt(uint32_t index) const { return m_propNames[index]; }
 
-    inline uint32_t getPropCount() const { return m_propNames.size(); }
+    inline uint32_t getPropCount() const { return (uint32_t)m_propNames.size(); }
 
     inline const std::vector<std::string>& getPropNames() const { return m_propNames; }
 

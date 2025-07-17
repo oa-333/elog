@@ -85,7 +85,8 @@ inline void applyBgColor(std::string& spec, ELogColor color) {
 }
 
 static bool allocTextFormat(ELogFieldSpec& fieldSpec, uint8_t autoReset);
-static bool parseTokenJustify(const char* propName, const std::string& specToken, int32_t& justify);
+static bool parseTokenJustify(const char* propName, const std::string& specToken,
+                              uint32_t& justify);
 static bool parsePropValue(const std::string& prop, const char* propName, std::string& propValue);
 static bool parseTokenColor(const char* propName, const std::string& specToken,
                             ELogColorSpec& colorSpec);
@@ -93,7 +94,7 @@ static bool simpleColorFromString(const char* colorName, ELogColor& color);
 static bool parseVGAColor(const std::string& colorValue, ELogRGBColorSpec& colorSpec);
 static bool parseGreyColor(const std::string& colorValue, uint8_t& greyScale);
 static bool parseHexaColor(const std::string& colorValue, ELogRGBColorSpec& colorSpec);
-static bool parseHexaDigit(char c, uint32_t& value);
+static bool parseHexaDigit(char c, int& value);
 static bool parseColorComponent(const char* color, uint8_t& value, const char* name);
 static bool parseTokenTextAttribute(const std::string& specToken, ELogFontSpec& fontSpec);
 
@@ -280,7 +281,6 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
     // and ${const-time:<value>} - so the expression is actually a field selector, and the
     // expressions result type MUST match.
     // the vswitch is actually a full-blown if else.
-    int32_t justify = 0;
     std::string::size_type colonPos = fieldSpecStr.find(':');
     m_name = fieldSpecStr.substr(0, colonPos);
     while (colonPos != std::string::npos) {
@@ -297,16 +297,14 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
             specToken = specToken.substr(strlen("begin-"));
         }
         if (specToken.starts_with("justify-left")) {
-            if (!parseTokenJustify("justify-left", specToken, justify)) {
+            if (!parseTokenJustify("justify-left", specToken, m_justifySpec.m_justify)) {
                 return false;
             }
-            m_justifySpec.m_justify = justify;
             m_justifySpec.m_mode = ELogJustifyMode::JM_LEFT;
         } else if (specToken.starts_with("justify-right")) {
-            if (!parseTokenJustify("justify-right", specToken, justify)) {
+            if (!parseTokenJustify("justify-right", specToken, m_justifySpec.m_justify)) {
                 return false;
             }
-            m_justifySpec.m_justify = justify;
             m_justifySpec.m_mode = ELogJustifyMode::JM_RIGHT;
         } else if (specToken.starts_with("fg-color")) {
             if (!allocTextFormat(*this, autoReset)) {
@@ -336,15 +334,16 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
             m_textSpec->m_resetTextSpec = 1;
         } else {
             // finally tru simple integer justification value
+            int32_t justify = 0;
             if (!parseIntProp("", "", specToken, justify, false)) {
                 ELOG_REPORT_ERROR("Invalid field specification: %s", specToken.c_str());
                 return false;
             }
             if (justify > 0) {
-                m_justifySpec.m_justify = justify;
+                m_justifySpec.m_justify = (uint32_t)justify;
                 m_justifySpec.m_mode = ELogJustifyMode::JM_LEFT;
             } else if (justify < 0) {
-                m_justifySpec.m_justify = -justify;
+                m_justifySpec.m_justify = (uint32_t)(-justify);
                 m_justifySpec.m_mode = ELogJustifyMode::JM_RIGHT;
             }
         }
@@ -371,7 +370,7 @@ bool allocTextFormat(ELogFieldSpec& fieldSpec, uint8_t autoReset) {
     return true;
 }
 
-bool parseTokenJustify(const char* propName, const std::string& specToken, int32_t& justify) {
+bool parseTokenJustify(const char* propName, const std::string& specToken, uint32_t& justify) {
     std::string propValue;
     if (!parsePropValue(specToken, propName, propValue)) {
         ELOG_REPORT_ERROR("Failed to parse justify specification, invalid syntax: %s",
@@ -381,10 +380,6 @@ bool parseTokenJustify(const char* propName, const std::string& specToken, int32
     if (!parseIntProp(propName, "", propValue, justify, true)) {
         ELOG_REPORT_ERROR("Failed to parse property %s value %s as integer", propName,
                           propValue.c_str());
-        return false;
-    }
-    if (justify < 0) {
-        ELOG_REPORT_ERROR("Invalid negative value specified for %s: %d", propName, justify);
         return false;
     }
     return true;
@@ -571,7 +566,7 @@ bool parseHexaColor(const std::string& colorValue, ELogRGBColorSpec& colorSpec) 
     return true;
 }
 
-bool parseHexaDigit(char c, uint32_t& value) {
+bool parseHexaDigit(char c, int& value) {
     if (c >= '0' && c <= '9') {
         value = c - '0';
         return true;
@@ -590,13 +585,19 @@ bool parseHexaDigit(char c, uint32_t& value) {
 }
 
 bool parseColorComponent(const char* color, uint8_t& value, const char* name) {
-    uint32_t digit1 = 0;
-    uint32_t digit2 = 0;
+    int digit1 = 0;
+    int digit2 = 0;
     if (!parseHexaDigit(color[0], digit1) || !parseHexaDigit(color[1], digit2)) {
         ELOG_REPORT_ERROR("Invalid hexadecimal specification for %s component: %s", name, color);
         return false;
     }
-    value = digit1 * 16 + digit2;
+    int value32 = digit1 * 16 + digit2;
+    if (value32 > UINT8_MAX) {
+        ELOG_REPORT_ERROR(
+            "Invalid hexadecimal color specification, exceeding maximum of %u: 0x%c%c",
+            (unsigned)UINT8_MAX, color[0], color[1]);
+    }
+    value = (uint8_t)value32;
     return true;
 }
 

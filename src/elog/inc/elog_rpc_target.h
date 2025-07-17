@@ -19,6 +19,9 @@ protected:
           m_host(host),
           m_port(port),
           m_functionName(functionName) {}
+    ELogRpcTarget(const ELogRpcTarget&) = delete;
+    ELogRpcTarget(ELogRpcTarget&&) = delete;
+    ELogRpcTarget& operator=(const ELogRpcTarget&) = delete;
     ~ELogRpcTarget() override {}
 
     /** @brief Orders a buffered log target to flush it log messages. */

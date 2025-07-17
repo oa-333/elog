@@ -1,6 +1,7 @@
 #ifndef __ELOG_PROPS_H__
 #define __ELOG_PROPS_H__
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -33,11 +34,14 @@ enum class ELogPropertyType : uint32_t {
 /** @struct A property value with source text position. */
 struct ELOG_API ELogPropertyPos {
     ELogPropertyType m_type;
-    uint32_t m_keyPos;
-    uint32_t m_valuePos;
+    size_t m_keyPos;
+    size_t m_valuePos;
 
-    ELogPropertyPos(ELogPropertyType type, uint32_t keyPos = 0, uint32_t valuePos = 0)
+    ELogPropertyPos(ELogPropertyType type, size_t keyPos = 0, size_t valuePos = 0)
         : m_type(type), m_keyPos(keyPos), m_valuePos(valuePos) {}
+    ELogPropertyPos(const ELogPropertyPos&) = delete;
+    ELogPropertyPos(ELogPropertyPos&&) = delete;
+    ELogPropertyPos& operator=(const ELogPropertyPos&) = delete;
     virtual ~ELogPropertyPos() {}
 };
 
@@ -45,17 +49,23 @@ struct ELOG_API ELogPropertyPos {
 struct ELOG_API ELogStringPropertyPos : public ELogPropertyPos {
     std::string m_value;
 
-    ELogStringPropertyPos(const char* value = "", uint32_t keyPos = 0, uint32_t valuePos = 0)
+    ELogStringPropertyPos(const char* value = "", size_t keyPos = 0, size_t valuePos = 0)
         : ELogPropertyPos(ELogPropertyType::PT_STRING, keyPos, valuePos), m_value(value) {}
+    ELogStringPropertyPos(const ELogStringPropertyPos&) = delete;
+    ELogStringPropertyPos(ELogStringPropertyPos&&) = delete;
+    ELogStringPropertyPos& operator=(const ELogStringPropertyPos&) = delete;
     ~ELogStringPropertyPos() final {}
 };
 
 /** @struct A property value with source text position. */
 struct ELOG_API ELogIntPropertyPos : public ELogPropertyPos {
-    int m_value;
+    int64_t m_value;
 
-    ELogIntPropertyPos(int value = 0, uint32_t keyPos = 0, uint32_t valuePos = 0)
+    ELogIntPropertyPos(int64_t value = 0, size_t keyPos = 0, size_t valuePos = 0)
         : ELogPropertyPos(ELogPropertyType::PT_INT, keyPos, valuePos), m_value(value) {}
+    ELogIntPropertyPos(const ELogIntPropertyPos&) = delete;
+    ELogIntPropertyPos(ELogIntPropertyPos&&) = delete;
+    ELogIntPropertyPos& operator=(const ELogIntPropertyPos&) = delete;
     ~ELogIntPropertyPos() final {}
 };
 
@@ -63,8 +73,11 @@ struct ELOG_API ELogIntPropertyPos : public ELogPropertyPos {
 struct ELOG_API ELogBoolPropertyPos : public ELogPropertyPos {
     bool m_value;
 
-    ELogBoolPropertyPos(bool value = false, uint32_t keyPos = 0, uint32_t valuePos = 0)
+    ELogBoolPropertyPos(bool value = false, size_t keyPos = 0, size_t valuePos = 0)
         : ELogPropertyPos(ELogPropertyType::PT_BOOL, keyPos, valuePos), m_value(value) {}
+    ELogBoolPropertyPos(const ELogBoolPropertyPos&) = delete;
+    ELogBoolPropertyPos(ELogBoolPropertyPos&&) = delete;
+    ELogBoolPropertyPos& operator=(const ELogBoolPropertyPos&) = delete;
     ~ELogBoolPropertyPos() final {}
 };
 

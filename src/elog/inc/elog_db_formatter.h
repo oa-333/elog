@@ -26,13 +26,17 @@ public:
         PT_INT,
 
         /** @var Parameter type is date-time (can be stored as string though). */
-        PT_DATETIME
+        PT_DATETIME,
+
+        /** @var Parameter type is log-level (can be stored as string though). */
+        PT_LOG_LEVEL
     };
 
     ELogDbFormatter(QueryStyle queryStyle) : m_queryStyle(queryStyle), m_fieldNum(1) {}
 
     ELogDbFormatter(const ELogDbFormatter&) = delete;
     ELogDbFormatter(ELogDbFormatter&&) = delete;
+    ELogDbFormatter& operator=(const ELogDbFormatter&) = delete;
     ~ELogDbFormatter() final {}
 
     inline const std::string& getProcessedStatement() const { return m_processedStatement; }
@@ -51,8 +55,8 @@ protected:
 
 private:
     QueryStyle m_queryStyle;
-    std::string m_processedStatement;
     uint32_t m_fieldNum;
+    std::string m_processedStatement;
 };
 
 }  // namespace elog

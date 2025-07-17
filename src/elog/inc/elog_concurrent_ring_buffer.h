@@ -11,9 +11,12 @@
 namespace elog {
 
 template <typename T>
-class ELogConcurrentRingBuffer {
+class ELOG_API ELogConcurrentRingBuffer {
 public:
     ELogConcurrentRingBuffer() : m_ringBuffer(nullptr), m_ringBufferSize(0) {}
+    ELogConcurrentRingBuffer(const ELogConcurrentRingBuffer&) = delete;
+    ELogConcurrentRingBuffer(ELogConcurrentRingBuffer&&) = delete;
+    ELogConcurrentRingBuffer& operator=(const ELogConcurrentRingBuffer&) = delete;
     ~ELogConcurrentRingBuffer() {}
 
     bool initialize(uint32_t ringBufferSize) {
@@ -146,6 +149,10 @@ public:
 private:
     enum EntryState : uint64_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };
     struct EntryData {
+        EntryData(const EntryData&) = delete;
+        EntryData(EntryData&&) = delete;
+        EntryData& operator=(const EntryData&) = delete;
+
         std::atomic<EntryState> m_entryState;
         T m_data;
         // TODO: what about struct alignment?

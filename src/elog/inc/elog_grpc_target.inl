@@ -126,7 +126,6 @@ void ELogGRPCBaseReceptor<MessageType>::receiveTimeField(uint32_t typeId, const 
 template <typename MessageType>
 void ELogGRPCBaseReceptor<MessageType>::receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
                                                              const ELogFieldSpec& fieldSpec) {
-    const char* logLevelStr = elogLevelToStr(logLevel);
     m_logRecordMsg->set_loglevel((uint32_t)logLevel);
 }
 

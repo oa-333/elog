@@ -19,9 +19,9 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
     }
 
     // there could be optional property file_buffer_size
-    int64_t bufferSize = 0;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "file", "file_buffer_size",
-                                                           bufferSize)) {
+    uint32_t bufferSize = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "file",
+                                                              "file_buffer_size", bufferSize)) {
         return nullptr;
     }
 
@@ -36,23 +36,23 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
     }
 
     // there could be optional property file_segment_size_mb
-    int64_t segmentSizeMB = 0;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "file",
-                                                           "file_segment_size_mb", segmentSizeMB)) {
+    uint32_t segmentSizeMB = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
+            logTargetCfg, "file", "file_segment_size_mb", segmentSizeMB)) {
         return nullptr;
     }
 
     // there could be optional property file_segment_ring_size
-    int64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+    uint32_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
             logTargetCfg, "file", "file_segment_ring_size", segmentRingSize)) {
         return nullptr;
     }
 
     // finally, there could be optional property file_segment_count to specify rotation
-    int64_t segmentCount = 0;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "file",
-                                                           "file_segment_count", segmentCount)) {
+    uint32_t segmentCount = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "file",
+                                                              "file_segment_count", segmentCount)) {
         return nullptr;
     }
 
@@ -60,9 +60,10 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
                            segmentCount);
 }
 
-ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, int64_t bufferSize,
-                                                   bool useFileLock, int64_t segmentSizeMB,
-                                                   int64_t segmentRingSize, int64_t segmentCount) {
+ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, uint32_t bufferSize,
+                                                   bool useFileLock, uint32_t segmentSizeMB,
+                                                   uint32_t segmentRingSize,
+                                                   uint32_t segmentCount) {
     // when invoked from ELogSystem, the ring size is zero, so we fix it to default value
     if (segmentRingSize == 0) {
         segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
@@ -71,7 +72,7 @@ ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, int6
     ELogTarget* logTarget = nullptr;
     if (segmentSizeMB > 0) {
         std::string::size_type lastSlashPos = path.find_last_of("\\/");
-        /// assuming segmented log is to be created in current folder, and path is the file name
+        // assuming segmented log is to be created in current folder, and path is the file name
         if (lastSlashPos == std::string::npos) {
             logTarget = new (std::nothrow) ELogSegmentedFileTarget(
                 "", path.c_str(), segmentSizeMB, segmentRingSize, bufferSize, segmentCount);

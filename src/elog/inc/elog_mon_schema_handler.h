@@ -12,8 +12,9 @@ namespace elog {
 class ELOG_API ELogMonSchemaHandler : public ELogSchemaHandler {
 public:
     ELogMonSchemaHandler() {}
-    ELogMonSchemaHandler(const ELogMonSchemaHandler&) = default;
-    ELogMonSchemaHandler(ELogMonSchemaHandler&&) = default;
+    ELogMonSchemaHandler(const ELogMonSchemaHandler&) = delete;
+    ELogMonSchemaHandler(ELogMonSchemaHandler&&) = delete;
+    ELogMonSchemaHandler& operator=(const ELogMonSchemaHandler&) = delete;
 
     /** @brief Destructor. */
     ~ELogMonSchemaHandler() final;

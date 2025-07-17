@@ -87,7 +87,11 @@
         "cstdalign": "cpp",
         "xutility": "cpp",
         "xhash": "cpp",
-        "*.def": "cpp"
+        "*.def": "cpp",
+        "cfenv": "cpp",
+        "complex": "cpp",
+        "expected": "cpp",
+        "typeindex": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",
@@ -120,6 +124,7 @@
         "COMDAT",
         "dbgutil",
         "dllexport",
+        "fmtlib",
         "fsanitize",
         "GRPCPP",
         "grpcpublicheaders",

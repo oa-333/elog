@@ -35,8 +35,11 @@
 
 namespace elog {
 
+#define ELOG_MAX_TARGET_COUNT 256ul
+
 #ifdef ELOG_ENABLE_STACK_TRACE
 static ELogDbgUtilLogHandler sDbgUtilLogHandler;
+static bool sDbgUtilInitialized = false;
 #endif
 
 static bool sInitialized = false;
@@ -56,7 +59,6 @@ static ELogSourceMap sLogSourceMap;
 static ELogLogger* sDefaultLogger = nullptr;
 static ELogTarget* sDefaultLogTarget = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
-static bool sDbgUtilInitialized = false;
 
 bool ELogSystem::initGlobals() {
     // init the error log so we can have trace messages as early as possible
@@ -402,11 +404,11 @@ bool ELogSystem::configureByProps(const ELogPropertySequence& props,
 
     const char* logLevelSuffix1 = "." ELOG_LEVEL_CONFIG_NAME;  // for configuration files
     const char* logLevelSuffix2 = "_" ELOG_LEVEL_CONFIG_NAME;  // for environment variables
-    uint32_t logLevelSuffixLen = strlen(logLevelSuffix1);
+    size_t logLevelSuffixLen = strlen(logLevelSuffix1);
 
     const char* logAffinitySuffix1 = "." ELOG_AFFINITY_CONFIG_NAME;  // for configuration files
     const char* logAffinitySuffix2 = "_" ELOG_AFFINITY_CONFIG_NAME;  // for environment variables
-    uint32_t logAffinitySuffixLen = strlen(logAffinitySuffix1);
+    size_t logAffinitySuffixLen = strlen(logAffinitySuffix1);
 
     // get configuration also from env
     ELogPropertySequence envProps;
@@ -686,11 +688,11 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
 
     const char* logLevelSuffix1 = "." ELOG_LEVEL_CONFIG_NAME;  // for configuration files
     const char* logLevelSuffix2 = "_" ELOG_LEVEL_CONFIG_NAME;  // for environment variables
-    uint32_t logLevelSuffixLen = strlen(logLevelSuffix1);
+    size_t logLevelSuffixLen = strlen(logLevelSuffix1);
 
     const char* logAffinitySuffix1 = "." ELOG_AFFINITY_CONFIG_NAME;  // for configuration files
     const char* logAffinitySuffix2 = "_" ELOG_AFFINITY_CONFIG_NAME;  // for environment variables
-    uint32_t logAffinitySuffixLen = strlen(logAffinitySuffix1);
+    size_t logAffinitySuffixLen = strlen(logAffinitySuffix1);
 
     for (size_t i = 0; i < cfgMap->getEntryCount(); ++i) {
         const ELogConfigMapNode::EntryType& prop = cfgMap->getEntryAt(i);
@@ -824,7 +826,12 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
 
     // otherwise add a new slot
     if (logTargetId == ELOG_INVALID_TARGET_ID) {
-        logTargetId = sLogTargets.size();
+        if (sLogTargets.size() == ELOG_MAX_TARGET_COUNT) {
+            ELOG_REPORT_ERROR("Cannot add log target, reached hard limit of log targets %u",
+                              ELOG_MAX_TARGET_COUNT);
+            return ELOG_INVALID_TARGET_ID;
+        }
+        logTargetId = (ELogTargetId)sLogTargets.size();
         sLogTargets.push_back(logTarget);
         ELOG_REPORT_TRACE("Added log target %s with id %u", logTarget->getName(), logTargetId);
     }
@@ -1054,17 +1061,20 @@ void ELogSystem::removeLogTarget(ELogTargetId targetId) {
     sLogTargets[targetId] = nullptr;
 
     // find largest suffix of removed log targets
-    int lastLogTarget = -1;
-    for (int i = sLogTargets.size() - 1; i >= 0; --i) {
-        if (sLogTargets[i] != nullptr) {
-            // at least one log target active, so we can return
-            lastLogTarget = i;
-            break;
+    size_t maxLogTargetId = sLogTargets.size() - 1;
+    bool done = false;
+    while (!done) {
+        if (sLogTargets[maxLogTargetId] != nullptr) {
+            sLogTargets.resize(maxLogTargetId + 1);
+            done = true;
+        } else if (maxLogTargetId == 0) {
+            // last one is also null
+            sLogTargets.clear();
+            done = true;
+        } else {
+            --maxLogTargetId;
         }
     }
-
-    // remove unused suffix
-    sLogTargets.resize(lastLogTarget + 1);
 }
 
 void ELogSystem::removeLogTarget(ELogTarget* target) {
@@ -1122,8 +1132,8 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
     parseSourceName(qualifiedName, namePath);
 
     ELogSource* currSource = sRootLogSource;
-    uint32_t namecount = namePath.size();
-    for (uint32_t i = 0; i < namecount - 1; ++i) {
+    size_t nameCount = namePath.size();
+    for (size_t i = 0; i < nameCount - 1; ++i) {
         ELogSource* childSource = currSource->getChild(namePath[i].c_str());
         if (childSource == nullptr && defineMissingPath) {
             childSource = addChildSource(currSource, namePath[i].c_str());
@@ -1162,10 +1172,10 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
     // <elog-level> every dot in the qualified name is replaced with underscore
     std::string envVarName = std::string(qualifiedName) + "_log_level";
     std::replace(envVarName.begin(), envVarName.end(), '.', '_');
-    char* envVarValue = getenv(envVarName.c_str());
-    if (envVarValue != nullptr) {
+    std::string envVarValue;
+    if (elog_getenv(envVarName.c_str(), envVarValue)) {
         ELogLevel logLevel = ELEVEL_INFO;
-        if (elogLevelFromStr(envVarValue, logLevel)) {
+        if (elogLevelFromStr(envVarValue.c_str(), logLevel)) {
             logSource->setLogLevel(logLevel, ELogPropagateMode::PM_NONE);
         }
     }
@@ -1178,8 +1188,8 @@ ELogSource* ELogSystem::getLogSource(const char* qualifiedName) {
     std::vector<std::string> namePath;
     parseSourceName(qualifiedName, namePath);
     ELogSource* currSource = sRootLogSource;
-    uint32_t namecount = namePath.size();
-    for (uint32_t i = 0; i < namecount; ++i) {
+    size_t nameCount = namePath.size();
+    for (size_t i = 0; i < nameCount; ++i) {
         currSource = currSource->getChild(namePath[i].c_str());
         if (currSource == nullptr) {
             ELOG_REPORT_ERROR("Cannot retrieve log source %s: missing path part %s", qualifiedName,
@@ -1292,6 +1302,10 @@ class LogStackEntryPrinter : public dbgutil::StackEntryPrinter {
 public:
     LogStackEntryPrinter(ELogLogger* logger, ELogLevel logLevel, const char* title)
         : m_logger(logger), m_logLevel(logLevel), m_title(title) {}
+    LogStackEntryPrinter(const LogStackEntryPrinter&) = delete;
+    LogStackEntryPrinter(LogStackEntryPrinter&&) = delete;
+    LogStackEntryPrinter& operator=(const LogStackEntryPrinter&) = delete;
+    ~LogStackEntryPrinter() override {}
 
     void onBeginStackTrace(dbgutil::os_thread_id_t threadId) override {
         // std::string threadName;

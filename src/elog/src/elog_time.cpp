@@ -48,7 +48,14 @@ bool initDateTable() {
     for (uint32_t i = 0; i < ELOG_MAX_DATE_INT; ++i) {
         memset(&sDateTable[i], 0, sizeof(IntStr));
         std::to_chars(sDateTable[i].m_buf, sDateTable[i].m_buf + ELOG_INT_BUF_SIZE, i);
-        sDateTable[i].m_len = strlen(sDateTable[i].m_buf);
+        size_t len = strlen(sDateTable[i].m_buf);
+        if (len > UINT16_MAX) {
+            ELOG_REPORT_ERROR(
+                "Internal error in data table initialization, year %s length is too long",
+                sDateTable[i].m_buf);
+            return false;
+        }
+        sDateTable[i].m_len = (uint16_t)len;
     }
     return true;
 }
@@ -82,8 +89,15 @@ static bool elogTimeFromStringChrono(const char* timeStr, ELogTime& logTime) {
 #if !defined(ELOG_TIME_USE_CHRONO) && defined(ELOG_MSVC)
 static bool elogSystemTimeFromStringWindows(const char* timeStr, SYSTEMTIME& sysTime) {
     const int DATE_TIME_ITEM_COUNT = 6;
+#ifdef ELOG_SECURE
+    // TODO: check what _snscanf_s is doing, maybe it is safer, also it is probably not portable to
+    // linux, so what is the standard?
+    int ret = sscanf_s(timeStr, "%hu-%hu-%hu %hu:%hu:%hu", &sysTime.wYear, &sysTime.wMonth,
+                       &sysTime.wDay, &sysTime.wHour, &sysTime.wMinute, &sysTime.wSecond);
+#else
     int ret = sscanf(timeStr, "%hu-%hu-%hu %hu:%hu:%hu", &sysTime.wYear, &sysTime.wMonth,
                      &sysTime.wDay, &sysTime.wHour, &sysTime.wMinute, &sysTime.wSecond);
+#endif
     if (ret == EOF) {
         ELOG_REPORT_ERROR("Invalid time specification: %s", timeStr);
         return false;
@@ -195,7 +209,8 @@ inline uint64_t formatIntCalc(char* buf, uint64_t num, uint64_t width) {
     }
 
     while (num > 0) {
-        buf[pos + digits - 1] = (num % 10) + '0';
+        // conversion is OK due to modulo 10
+        buf[pos + digits - 1] = (char)((num % 10) + '0');
         num /= 10;
         digits--;
     }
@@ -203,12 +218,19 @@ inline uint64_t formatIntCalc(char* buf, uint64_t num, uint64_t width) {
 }
 
 inline uint64_t formatInt(char* buf, uint64_t num, uint64_t width) {
+    // truncate width if needed
+    const uint64_t MAX_WIDTH = 256;
     if (num < ELOG_MAX_DATE_INT) {
+        if (width > MAX_WIDTH) {
+            width = MAX_WIDTH;
+        }
+        uint16_t width16 = (uint16_t)width;
         const IntStr& intStr = sDateTable[num];
-        int pos = 0;
-        if (intStr.m_len < width) {
-            memset(buf, '0', width - intStr.m_len);
-            pos += width - intStr.m_len;
+        uint16_t pos = 0;
+        if (intStr.m_len < width16) {
+            memset(buf, '0', (size_t)(width16 - intStr.m_len));
+            // NOTE: width is restricted to a small number
+            pos += width16 - intStr.m_len;
         }
         // using memcpy() instead of strcpy()/strncpy() is probably faster
         memcpy(buf + pos, intStr.m_buf, intStr.m_len);  // no need to copy terminating null

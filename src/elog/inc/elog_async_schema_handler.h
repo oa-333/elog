@@ -12,8 +12,9 @@ namespace elog {
 class ELOG_API ELogAsyncSchemaHandler : public ELogSchemaHandler {
 public:
     ELogAsyncSchemaHandler() {}
-    ELogAsyncSchemaHandler(const ELogAsyncSchemaHandler&) = default;
-    ELogAsyncSchemaHandler(ELogAsyncSchemaHandler&&) = default;
+    ELogAsyncSchemaHandler(const ELogAsyncSchemaHandler&) = delete;
+    ELogAsyncSchemaHandler(ELogAsyncSchemaHandler&&) = delete;
+    ELogAsyncSchemaHandler& operator=(const ELogAsyncSchemaHandler&) = delete;
 
     /** @brief Destructor. */
     ~ELogAsyncSchemaHandler() final;

@@ -34,6 +34,14 @@ void ELogDbFormatter::getParamTypes(std::vector<ParamType>& paramTypes) const {
                 paramTypes.push_back(ParamType::PT_DATETIME);
                 break;
 
+            case ELogFieldType::FT_LOG_LEVEL:
+                paramTypes.push_back(ParamType::PT_LOG_LEVEL);
+                break;
+
+            case ELogFieldType::FT_FORMAT:
+                // format fields can be ignored, as they do not represent a real field entity
+                break;
+
             default:
                 assert(false);
         }

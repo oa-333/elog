@@ -77,12 +77,12 @@ private:
     ELOG_REPORT_SYS_ERROR_NUM(sysCall, errno, fmt, ##__VA_ARGS__)
 
 #ifdef ELOG_WINDOWS
-#define ELOG_REPORT_WIN32_ERROR_NUM(sysCall, sysErr, fmt, ...)                                   \
-    {                                                                                            \
-        char* errStr = elog::ELogError::win32SysErrorToStr(sysErr);                              \
-        ELOG_REPORT_ERROR("Windows system call " #sysCall "() failed: %d (%s)", sysErr, errStr); \
-        elog::ELogError::win32FreeErrorStr(errStr);                                              \
-        ELOG_REPORT_ERROR(fmt, ##__VA_ARGS__);                                                   \
+#define ELOG_REPORT_WIN32_ERROR_NUM(sysCall, sysErr, fmt, ...)                                    \
+    {                                                                                             \
+        char* errStr = elog::ELogError::win32SysErrorToStr(sysErr);                               \
+        ELOG_REPORT_ERROR("Windows system call " #sysCall "() failed: %lu (%s)", sysErr, errStr); \
+        elog::ELogError::win32FreeErrorStr(errStr);                                               \
+        ELOG_REPORT_ERROR(fmt, ##__VA_ARGS__);                                                    \
     }
 
 #define ELOG_REPORT_WIN32_ERROR(sysCall, fmt, ...) \

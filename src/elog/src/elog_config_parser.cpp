@@ -14,15 +14,15 @@ namespace elog {
 bool ELogConfigParser::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                                      ELogPropagateMode& propagateMode) {
     const char* ptr = nullptr;
-    if (!elogLevelFromStr(logLevelStr, logLevel, &ptr)) {
+    size_t parseLen = 0;
+    if (!elogLevelFromStr(logLevelStr, logLevel, &ptr, &parseLen)) {
         ELOG_REPORT_ERROR("Invalid log level: %s", logLevelStr);
         return false;
     }
 
     // parse optional propagation sign if there is any
     propagateMode = ELogPropagateMode::PM_NONE;
-    uint32_t parseLen = ptr - logLevelStr;
-    uint32_t len = strlen(logLevelStr);
+    size_t len = strlen(logLevelStr);
     if (parseLen < len) {
         // there are more chars, only one is allowed
         if (parseLen + 1 != len) {
@@ -186,7 +186,7 @@ void ELogConfigParser::insertPropOverride(ELogPropertyMap& props, const std::str
 
 bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
                                          ELogTargetUrlSpec& logTargetUrlSpec,
-                                         uint32_t basePos /* = 0 */) {
+                                         size_t basePos /* = 0 */) {
     // first parse the url, then convert to configuration object
     // since we may need to specify a sub-target we use the fragment part to specify a sub-target
     std::string::size_type hashPos = logTargetUrl.find('|');
@@ -246,14 +246,14 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
         std::string prop = (sepPos == std::string::npos)
                                ? logTargetUrl.substr(prevPos)
                                : logTargetUrl.substr(prevPos, sepPos - prevPos);
-        uint32_t keyPos = basePos + prevPos;
+        size_t keyPos = basePos + prevPos;
 
         // parse to key=value and add to props map (could be there is no value specified)
         std::string::size_type equalPos = prop.find('=');
         if (equalPos != std::string::npos) {
             std::string key = trim(prop.substr(0, equalPos));
             std::string value = trim(prop.substr(equalPos + 1));
-            uint32_t valuePos = keyPos + equalPos + 1;
+            size_t valuePos = keyPos + equalPos + 1;
             // take care of pre-defined properties: user, password, host port
             if ((key.compare("user") == 0) || (key.compare("userName") == 0) ||
                 (key.compare("user_name") == 0)) {
@@ -298,7 +298,7 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
     return true;
 }
 
-bool ELogConfigParser::parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_t basePos) {
+bool ELogConfigParser::parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, size_t basePos) {
     // the path may be specified as follows: authority/path
     // the authority may be specified as follows: [userinfo "@"] host [":" port]
     // and user info is: [user[:password]
@@ -372,8 +372,8 @@ bool ELogConfigParser::parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_
 }
 
 bool ELogConfigParser::insertPropPosOverride(ELogPropertyPosMap& props, const std::string& key,
-                                             const std::string& value, uint32_t keyPos,
-                                             uint32_t valuePos) {
+                                             const std::string& value, size_t keyPos,
+                                             size_t valuePos) {
     // we need to figure out the value type (bool, int or string)
     ELogPropertyPos* prop = nullptr;
     if (value.compare("true") == 0 || value.compare("yes") == 0 || value.compare("on") == 0) {

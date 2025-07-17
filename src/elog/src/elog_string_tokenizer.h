@@ -41,6 +41,7 @@ public:
     ELogStringTokenizer(const std::string& sourceStr);
     ELogStringTokenizer(const ELogStringTokenizer&) = delete;
     ELogStringTokenizer(ELogStringTokenizer&&) = delete;
+    ELogStringTokenizer& operator=(const ELogStringTokenizer&) = delete;
     ~ELogStringTokenizer() {}
 
     inline bool hasMoreTokens() const { return m_pos < m_sourceStr.length(); }

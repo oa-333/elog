@@ -67,8 +67,8 @@ bool ELogConfigLoader::loadFileProperties(const char* configPath, ELogPropertySe
 
     uint32_t lineNumber = 0;
     std::string line;
-    uint32_t openBraceCount = 0;
-    uint32_t closeBraceCount = 0;
+    uint64_t openBraceCount = 0;
+    uint64_t closeBraceCount = 0;
     std::string multiLine;
     while (std::getline(cfgFile, line)) {
         ++lineNumber;
@@ -365,6 +365,45 @@ bool ELogConfigLoader::getOptionalLogTargetIntProperty(const ELogConfigMapNode* 
     if (found != nullptr) {
         *found = foundLocal;
     }
+    return true;
+}
+
+bool ELogConfigLoader::getOptionalLogTargetUIntProperty(const ELogConfigMapNode* logTargetCfg,
+                                                        const char* scheme, const char* propName,
+                                                        uint64_t& propValue,
+                                                        bool* found /* = nullptr */) {
+    int64_t intValue = 0;
+    bool res = getOptionalLogTargetIntProperty(logTargetCfg, scheme, propName, intValue, found);
+    if (!res) {
+        return false;
+    }
+    if (intValue < 0) {
+        ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
+                          ", expected non-negative number (context: %s)",
+                          scheme, propName, intValue, logTargetCfg->getFullContext());
+        return false;
+    }
+    propValue = (uint64_t)intValue;
+    return true;
+}
+
+bool ELogConfigLoader::getOptionalLogTargetUInt32Property(const ELogConfigMapNode* logTargetCfg,
+                                                          const char* scheme, const char* propName,
+                                                          uint32_t& propValue,
+                                                          bool* found /* = nullptr */) {
+    uint64_t intValue = 0;
+    bool res = getOptionalLogTargetUIntProperty(logTargetCfg, scheme, propName, intValue, found);
+    if (!res) {
+        return false;
+    }
+    if (intValue > UINT32_MAX) {
+        ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
+                          ", exceeding allowed maximum %u (context: %s)",
+                          scheme, propName, intValue, (unsigned)UINT32_MAX,
+                          logTargetCfg->getFullContext());
+        return false;
+    }
+    propValue = (uint32_t)intValue;
     return true;
 }
 

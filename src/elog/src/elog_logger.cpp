@@ -21,7 +21,7 @@
 
 namespace elog {
 
-static std::atomic<uint64_t> sNextRecordId = 0;
+static thread_local uint64_t sNextRecordId = 0;
 
 void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const char* function,
                            const char* fmt, ...) {
@@ -126,10 +126,12 @@ void ELogLogger::finishLog(ELogRecordBuilder* recordBuilder) {
 
 void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file,
                                 int line, const char* function) {
-    logRecord.m_logRecordId = sNextRecordId.fetch_add(1, std::memory_order_relaxed);
+    logRecord.m_logRecordId = sNextRecordId++;
     logRecord.m_logLevel = logLevel;
     logRecord.m_file = file;
-    logRecord.m_line = line;
+    // in case of overflow we report zero
+    // TODO: maybe we can take 2 bytes from another filed (e.g. not so importnat record id)?
+    logRecord.m_line = line > UINT16_MAX ? (uint16_t)0 : (uint16_t)line;
     logRecord.m_function = function;
     elogGetCurrentTime(logRecord.m_logTime);
     logRecord.m_threadId = getCurrentThreadId();

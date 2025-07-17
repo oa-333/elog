@@ -37,6 +37,7 @@ protected:
     ELogBaseFormatter() {}
     ELogBaseFormatter(const ELogBaseFormatter&) = delete;
     ELogBaseFormatter(ELogBaseFormatter&&) = delete;
+    ELogBaseFormatter& operator=(const ELogBaseFormatter&) = delete;
 
     bool parseFormatSpec(const std::string& formatSpec);
 

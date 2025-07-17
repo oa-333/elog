@@ -26,13 +26,20 @@ bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {
     // previous second count and the whole second with which it is associated. (2) it belongs to a
     // too far previous whole second, in which case the previous second count is reset to zero.
     tstamp_t currTstamp = getTstamp();
-    uint64_t wholeSecond = currTstamp.count() / 1000;
+    if (currTstamp.count() < 0) {
+        // something went bad, we have a negative timestamp, so we let the record be logged
+        return true;
+    }
+    // we are not expecting negative value here
+    uint64_t wholeSecond = (uint64_t)(currTstamp.count() / 1000);
     uint64_t currSecond = m_currSecond.load(std::memory_order_relaxed);
     if (currSecond == wholeSecond) {
         // compute sliding window rate
         uint64_t prevCount = m_prevSecondCount.load(std::memory_order_relaxed);
         uint64_t currCount = m_currSecondCount.load(std::memory_order_relaxed);
-        uint64_t count = prevCount * (1000 - (wholeSecond % 1000)) / 1000.0f + currCount;
+        // carefully compute, first multiply, then divide, otherwise value is truncated
+        uint64_t count = prevCount * (1000 - (wholeSecond % 1000));
+        count = count / 1000ull + currCount;
         if (count < m_maxMsgPerSecond) {
             // NOTE: there might be a small breach here (due to possible sudden thundering herd),
             // but we are ok with that, because this is not a strict rate limiter

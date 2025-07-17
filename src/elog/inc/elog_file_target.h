@@ -31,6 +31,7 @@ public:
 
     ELogFileTarget(const ELogFileTarget&) = delete;
     ELogFileTarget(ELogFileTarget&&) = delete;
+    ELogFileTarget& operator=(const ELogFileTarget&) = delete;
 
     ~ELogFileTarget() final {}
 

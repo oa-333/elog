@@ -17,6 +17,9 @@ public:
     /** @brief Disable move constructor. */
     ELogErrorHandler(ELogErrorHandler&&) = delete;
 
+    /** @brief Disable assignment operator. */
+    ELogErrorHandler& operator=(const ELogErrorHandler&) = delete;
+
     /** @brief Destructor. */
     virtual ~ELogErrorHandler() {}
 

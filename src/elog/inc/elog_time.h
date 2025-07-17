@@ -120,10 +120,17 @@ inline bool elogTimeEquals(const ELogTime& lhs, const ELogTime& rhs) {
 
 inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime, bool useLocalTime = false) {
 #ifdef ELOG_TIME_USE_CHRONO
-    auto epochNanos =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(logTime.time_since_epoch());
-    uint64_t utcTimeNanos = epochMillis.count();
-    return utcTimeNanos;
+    if (useLocalTime) {
+        auto timePoint = std::chrono::time_point_cast<std::chrono::nanoseconds>(logTime);
+        std::chrono::zoned_time<std::chrono::nanoseconds> zt(std::chrono::current_zone(),
+                                                             timePoint);
+        return zt.get_local_time().time_since_epoch().count();
+    } else {
+        auto epochNanos =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(logTime.time_since_epoch());
+        uint64_t utcTimeNanos = epochMillis.count();
+        return utcTimeNanos;
+    }
 #elif defined(ELOG_MSVC)
 #ifdef ELOG_TIME_USE_SYSTEMTIME
     FILETIME ft = {};
@@ -141,14 +148,37 @@ inline uint64_t elogTimeToUTCNanos(const ELogTime& logTime, bool useLocalTime = 
     }
     return 0;
 #else
-    uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(logTime);
-    return utcTimeNanos;
+    if (useLocalTime) {
+        FILETIME ftLocal;
+        if (FileTimeToLocalFileTime(&logTime, &ftLocal)) {
+            uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ftLocal);
+            return utcTimeNanos;
+        }
+    } else {
+        uint64_t utcTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(logTime);
+        return utcTimeNanos;
+    }
 #endif
 #else
-    uint64_t utcTimeNanos =
-        (logTime.m_seconds + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
-    return utcTimeNanos;
+    if (useLocalTime) {
+        time_t timer = logTime.m_seconds + sUnixTimeRef;
+        struct tm tmInfo = {};
+#ifdef ELOG_WINDOWS
+        (void)localtime_s(&tmInfo, &timer);
+#else
+        (void)localtime_r(&timer, &tmInfo);
 #endif
+        time_t localTime = mktime(&tmInfo);
+        uint64_t utcTimeNanos =
+            (localTime + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
+        return utcTimeNanos;
+    } else {
+        uint64_t utcTimeNanos =
+            (logTime.m_seconds + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
+        return utcTimeNanos;
+    }
+#endif
+    return 0;
 }
 
 inline uint64_t elogTimeToUTCSeconds(const ELogTime& logTime, bool useLocalTime = false) {

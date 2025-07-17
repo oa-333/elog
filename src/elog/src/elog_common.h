@@ -30,6 +30,7 @@
 #define ELOG_TARGET_CONFIG_NAME "log_target"
 #define ELOG_RATE_LIMIT_CONFIG_NAME "log_rate_limit"
 #define ELOG_AFFINITY_CONFIG_NAME "log_affinity"
+// #define ELOG_LEVEL_FORMAT_CONFIG_NAME "log_level_format"
 
 // simple colors for internal use
 #define RED "\x1B[31m"
@@ -113,7 +114,22 @@ inline std::string trim(const std::string& s) {
  * @param srcLen The source length (optional, can run faster if provided).
  * @return The number of characters copied.
  */
-extern uint32_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen = 0);
+extern size_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen = 0);
+
+/**
+ * @brief Retrieves environment variable value.
+ *
+ * @param envVarName The environment variable name.
+ * @param envVarValue The resulting environment variable value.
+ * @return true If variable was found, otherwise false.
+ */
+extern bool elog_getenv(const char* envVarName, std::string& envVarValue);
+
+/**
+ * @brief Opens a file (optionally in a secure manner, only on Windows when ELOG_SECURE is
+ * enabled).
+ */
+extern FILE* elog_fopen(const char* path, const char* mode);
 
 }  // namespace elog
 

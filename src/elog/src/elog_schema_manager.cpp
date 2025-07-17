@@ -17,7 +17,7 @@ const uint32_t ELOG_MAX_SCHEMA = 20;
 
 static ELogSchemaHandler* sSchemaHandlers[ELOG_MAX_SCHEMA] = {};
 static uint32_t sSchemaHandlerCount = 0;
-typedef std::unordered_map<std::string, int> ELogSchemaHandlerMap;
+typedef std::unordered_map<std::string, uint32_t> ELogSchemaHandlerMap;
 static ELogSchemaHandlerMap sSchemaHandlerMap;
 
 template <typename T>

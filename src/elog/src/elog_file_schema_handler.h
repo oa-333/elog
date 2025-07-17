@@ -9,8 +9,9 @@ namespace elog {
 class ELogFileSchemaHandler : public ELogSchemaHandler {
 public:
     ELogFileSchemaHandler() {}
-    ELogFileSchemaHandler(const ELogFileSchemaHandler&) = default;
-    ELogFileSchemaHandler(ELogFileSchemaHandler&&) = default;
+    ELogFileSchemaHandler(const ELogFileSchemaHandler&) = delete;
+    ELogFileSchemaHandler(ELogFileSchemaHandler&&) = delete;
+    ELogFileSchemaHandler& operator=(ELogFileSchemaHandler&) = delete;
 
     /** @brief Destructor. */
     ~ELogFileSchemaHandler() final {}
@@ -41,9 +42,9 @@ public:
      * into a rotating file target.
      * @return ELogTarget* The resulting log target or null if failed.
      */
-    static ELogTarget* createLogTarget(const std::string& path, int64_t bufferSize,
-                                       bool useFileLock, int64_t segmentSizeMB,
-                                       int64_t segmentRingSize, int64_t segmentCount);
+    static ELogTarget* createLogTarget(const std::string& path, uint32_t bufferSize,
+                                       bool useFileLock, uint32_t segmentSizeMB,
+                                       uint32_t segmentRingSize, uint32_t segmentCount);
 };
 
 }  // namespace elog

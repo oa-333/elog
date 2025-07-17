@@ -17,6 +17,7 @@ public:
     ELogStringStreamReceptor(std::string& logMsg) : m_msgStream(logMsg) {}
     ELogStringStreamReceptor(const ELogStringStreamReceptor&) = delete;
     ELogStringStreamReceptor(ELogStringStreamReceptor&&) = delete;
+    ELogStringStreamReceptor& operator=(const ELogStringStreamReceptor&) = delete;
     ~ELogStringStreamReceptor() final {}
 
     /** @brief Receives a string log record field. */

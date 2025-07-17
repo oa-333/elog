@@ -9,6 +9,7 @@
 
 #define ELOG_INVALID_GC_SLOT_ID ((uint64_t)-1)
 #define ELOG_WORD_SIZE sizeof(uint64_t)
+#define ELOG_MAX_THREADS 8192
 
 // TODO: this GC needs much more testing
 
@@ -20,10 +21,17 @@ namespace elog {
 static thread_local uint64_t sCurrentThreadGCSlotId = ELOG_INVALID_GC_SLOT_ID;
 
 bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency) {
+    if (maxThreads > ELOG_MAX_THREADS) {
+        ELOG_REPORT_ERROR(
+            "Cannot initialize %s garbage collector, maximum number of threads %u exceeds allowed "
+            "limit %u",
+            name, maxThreads, (unsigned)ELOG_MAX_THREADS);
+        return false;
+    }
     m_name = name;
     m_gcFrequency = gcFrequency;
     m_retireCount = 0;
-    uint64_t wordCount = (maxThreads + ELOG_WORD_SIZE - 1) / ELOG_WORD_SIZE;
+    uint32_t wordCount = (maxThreads + ELOG_WORD_SIZE - 1) / ELOG_WORD_SIZE;
     m_epochSet.resizeRing(wordCount + 1);
     m_objectLists.resize(maxThreads);
     m_activeLists.resize(wordCount);
@@ -123,7 +131,7 @@ void ELogGC::recycleRetiredObjects() {
         // we use countr_zero to find out first non-zero bit and then reset it and find the next
         uint64_t word = m_activeLists[wordIndex].m_atomicValue.load(std::memory_order_relaxed);
         while (word != 0) {
-            uint64_t bitOffset = std::countr_zero(word);
+            int bitOffset = std::countr_zero(word);
             uint64_t listIndex = wordIndex * ELOG_WORD_SIZE + bitOffset;
             if (listIndex >= listCount) {
                 // be careful with last word not to exceed list count
@@ -134,7 +142,7 @@ void ELogGC::recycleRetiredObjects() {
             processObjectList(m_objectLists[listIndex], minActiveEpoch);
 
             // reset bit
-            word &= ~(1 << bitOffset);
+            word &= ~(1ull << bitOffset);
         }
     }
 }
@@ -218,10 +226,10 @@ void ELogGC::setListActive(uint64_t slotId) {
     uint64_t wordOffset = slotId % ELOG_WORD_SIZE;
     std::atomic<uint64_t>& wordAtomic = m_activeLists[wordIndex].m_atomicValue;
     uint64_t word = wordAtomic.load(std::memory_order_acquire);
-    uint64_t newWord = word | (1 << wordOffset);
+    uint64_t newWord = word | (1ull << wordOffset);
     while (!wordAtomic.compare_exchange_strong(word, newWord, std::memory_order_seq_cst)) {
         word = wordAtomic.load(std::memory_order_relaxed);
-        newWord = word | (1 << wordOffset);
+        newWord = word | (1ull << wordOffset);
     }
 
     // we might be racing with someone else, we do so as long as we have a higher index
@@ -246,10 +254,10 @@ void ELogGC::setListInactive(uint64_t slotId) {
     uint64_t wordOffset = slotId % ELOG_WORD_SIZE;
     std::atomic<uint64_t>& wordAtomic = m_activeLists[wordIndex].m_atomicValue;
     uint64_t word = wordAtomic.load(std::memory_order_acquire);
-    uint64_t newWord = word & ~(1 << wordOffset);
+    uint64_t newWord = word & ~(1ull << wordOffset);
     while (!wordAtomic.compare_exchange_strong(word, newWord, std::memory_order_seq_cst)) {
         word = wordAtomic.load(std::memory_order_relaxed);
-        newWord = word & ~(1 << wordOffset);
+        newWord = word & ~(1ull << wordOffset);
     }
 
     // if word is non-zero, or word index is zero we are done
@@ -261,15 +269,21 @@ void ELogGC::setListInactive(uint64_t slotId) {
     uint64_t maxActiveWord = m_maxActiveWord.load(std::memory_order_acquire);
     if (wordIndex == maxActiveWord) {
         // move backwords until we find a non-zero word
-        for (int i = wordIndex - 1; i >= 0; --i) {
-            if (m_activeLists[i].m_atomicValue.load(std::memory_order_relaxed) != 0) {
+        uint64_t maxWordIndex = wordIndex - 1;
+        bool done = false;
+        while (!done) {
+            if (m_activeLists[maxWordIndex].m_atomicValue.load(std::memory_order_relaxed) != 0ull) {
                 // try CAS
-                m_maxActiveWord.compare_exchange_strong(maxActiveWord, i,
+                m_maxActiveWord.compare_exchange_strong(maxActiveWord, maxWordIndex,
                                                         std::memory_order_seq_cst);
                 // whatever happened we don't really care
                 // if we succeeded then we were able to update the max word
                 // if we failed, then someone else succeeded, so we don't need to do that
                 break;
+            } else if (maxWordIndex == 0) {
+                done = true;
+            } else {
+                --maxWordIndex;
             }
         }
     }
@@ -279,7 +293,7 @@ bool ELogGC::isListActive(uint64_t slotId) {
     uint64_t wordIndex = slotId / ELOG_WORD_SIZE;
     uint64_t wordOffset = slotId % ELOG_WORD_SIZE;
     uint64_t word = m_activeLists[wordIndex].m_atomicValue.load(std::memory_order_acquire);
-    return word & (1 << wordOffset);
+    return word & (1ull << wordOffset);
 }
 
 void ELogGC::recycleObjectList(ELogManagedObject* itr) {

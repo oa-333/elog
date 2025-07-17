@@ -10,6 +10,7 @@ public:
     ELogQueuedTargetProvider() {}
     ELogQueuedTargetProvider(const ELogQueuedTargetProvider&) = delete;
     ELogQueuedTargetProvider(ELogQueuedTargetProvider&&) = delete;
+    ELogQueuedTargetProvider& operator=(const ELogQueuedTargetProvider&) = delete;
     ~ELogQueuedTargetProvider() final {}
 
     /**

@@ -27,6 +27,9 @@ public:
      * @param logTarget The deferred log target.
      */
     ELogQueuedTarget(ELogTarget* logTarget, uint32_t batchSize, uint32_t timeoutMillis);
+    ELogQueuedTarget(const ELogQueuedTarget&) = delete;
+    ELogQueuedTarget(ELogQueuedTarget&&) = delete;
+    ELogQueuedTarget& operator=(const ELogQueuedTarget&) = delete;
     ~ELogQueuedTarget() final;
 
 protected:

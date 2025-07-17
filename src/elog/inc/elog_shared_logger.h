@@ -8,6 +8,9 @@ namespace elog {
 class ELOG_API ELogSharedLogger : public ELogLogger {
 public:
     ELogSharedLogger(ELogSource* logSource) : ELogLogger(logSource) {}
+    ELogSharedLogger(const ELogSharedLogger&) = delete;
+    ELogSharedLogger(ELogSharedLogger&&) = delete;
+    ELogSharedLogger& operator=(const ELogSharedLogger&) = delete;
     ~ELogSharedLogger() final {}
 
     /** @brief Allocate thread local storage key for per-thread record builder. */

@@ -13,6 +13,12 @@ namespace elog {
 
 class ELogDbgUtilLogHandler : public dbgutil::LogHandler {
 public:
+    ELogDbgUtilLogHandler() {}
+    ELogDbgUtilLogHandler(const ELogDbgUtilLogHandler&) = delete;
+    ELogDbgUtilLogHandler(ELogDbgUtilLogHandler&&) = delete;
+    ELogDbgUtilLogHandler& operator=(ELogDbgUtilLogHandler&) = delete;
+    ~ELogDbgUtilLogHandler() final {}
+
     /**
      * @brief Notifies that a logger has been registered.
      * @param severity The log severity with which the logger was initialized.
@@ -22,10 +28,10 @@ public:
      * return the severity with which the logger was registered.
      */
     dbgutil::LogSeverity onRegisterLogger(dbgutil::LogSeverity severity, const char* loggerName,
-                                          uint32_t loggerId) final;
+                                          size_t loggerId) final;
 
     /** @brief Unregisters a previously registered logger. */
-    void onUnregisterLogger(uint32_t loggerId) final;
+    void onUnregisterLogger(size_t loggerId) final;
 
     /**
      * @brief Notifies a logger is logging a message.
@@ -33,7 +39,7 @@ public:
      * @param loggerId The identifier used to refer to this logger.
      * @param msg The log message.
      */
-    void onMsg(dbgutil::LogSeverity severity, uint32_t loggerId, const char* loggerName,
+    void onMsg(dbgutil::LogSeverity severity, size_t loggerId, const char* loggerName,
                const char* msg) final;
 
     /**

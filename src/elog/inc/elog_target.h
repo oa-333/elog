@@ -135,7 +135,7 @@ public:
      * Typically file log targets will add a new line, while others, such as db log targets, will
      * not need an additional new line at the end of the formatted message.
      */
-    void setAddNewLine(bool addNewLine) { m_addNewLine = addNewLine ? 1 : 0; }
+    void setAddNewLine(bool addNewLine) { m_addNewLine = addNewLine ? 1ull : 0ull; }
 
     /**
      * @brief Sets the flush policy for the log target. Derived classes should take into
@@ -189,6 +189,10 @@ protected:
           m_logFormatter(nullptr),
           m_flushPolicy(flushPolicy),
           m_bytesWritten(0) {}
+
+    ELogTarget(const ELogTarget&) = delete;
+    ELogTarget(ELogTarget&&) = delete;
+    ELogTarget& operator=(const ELogTarget&) = delete;
 
     /** @brief Sets the natively-thread-safe property to true. */
     inline void setNativelyThreadSafe() {
@@ -272,6 +276,9 @@ private:
 class ELOG_API ELogCombinedTarget : public ELogTarget {
 public:
     ELogCombinedTarget() : ELogTarget("combined") {}
+    ELogCombinedTarget(const ELogCombinedTarget&) = delete;
+    ELogCombinedTarget(ELogCombinedTarget&&) = delete;
+    ELogCombinedTarget& operator=(const ELogCombinedTarget&) = delete;
     ~ELogCombinedTarget() final {}
 
     inline void addLogTarget(ELogTarget* target) { m_logTargets.push_back(target); }

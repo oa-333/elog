@@ -23,6 +23,9 @@ public:
      */
     ELogDeferredTarget(ELogTarget* logTarget)
         : ELogAsyncTarget(logTarget), m_stop(false), m_writeCount(0), m_readCount(0) {}
+    ELogDeferredTarget(const ELogDeferredTarget&) = delete;
+    ELogDeferredTarget(ELogDeferredTarget&&) = delete;
+    ELogDeferredTarget& operator=(const ELogDeferredTarget&) = delete;
     ~ELogDeferredTarget() override {}
 
     /** @brief Queries whether the log target has written all pending messages. */

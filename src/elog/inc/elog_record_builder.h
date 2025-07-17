@@ -12,6 +12,9 @@ namespace elog {
 class ELOG_API ELogRecordBuilder {
 public:
     ELogRecordBuilder(ELogRecordBuilder* next = nullptr) : m_next(next) {}
+    ELogRecordBuilder(const ELogRecordBuilder&) = delete;
+    ELogRecordBuilder(ELogRecordBuilder&&) = delete;
+    ELogRecordBuilder& operator=(const ELogRecordBuilder&) = delete;
     ~ELogRecordBuilder() {}
 
     inline const ELogRecord& getLogRecord() const { return m_logRecord; }

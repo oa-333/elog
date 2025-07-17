@@ -54,6 +54,9 @@ protected:
           m_reconnectTimeoutMillis(reconnectTimeoutMillis),
           m_shouldStop(false),
           m_shouldWakeUp(false) {}
+    ELogDbTarget(const ELogDbTarget&) = delete;
+    ELogDbTarget(ELogDbTarget&&) = delete;
+    ELogDbTarget& operator=(const ELogDbTarget&) = delete;
 
     ~ELogDbTarget() override {}
 
@@ -176,19 +179,19 @@ private:
      */
     bool parseInsertStatement(const std::string& insertStatement);
 
-    int allocSlot();
+    uint32_t allocSlot();
 
-    void freeSlot(int slot);
+    void freeSlot(uint32_t slot);
 
-    bool initConnection(int& slotId);
+    bool initConnection(uint32_t& slotId);
 
     /** @brief Queries whether that database connection has been restored. */
-    inline bool isConnected(int slotId) {
+    inline bool isConnected(uint32_t slotId) {
         return m_threadSlots[slotId].m_isConnected.load(std::memory_order_relaxed);
     }
 
     /** @brief Sets the database connection as connected. */
-    inline void setConnected(int slotId) {
+    inline void setConnected(uint32_t slotId) {
         m_threadSlots[slotId].m_isConnected.store(true, std::memory_order_relaxed);
     }
 

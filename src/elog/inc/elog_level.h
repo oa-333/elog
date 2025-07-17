@@ -2,6 +2,7 @@
 #define __ELOG_LEVEL_H__
 
 #include <cstdint>
+#include <cstdlib>
 
 #include "elog_def.h"
 
@@ -54,10 +55,12 @@ extern ELOG_API const char* elogLevelToStr(ELogLevel logLevel);
  * @param logLevelStr The input log level string.
  * @param[out] logLevel The resulting log level.
  * @param[out] ptr Optionally on returns points to the first char where parsing stopped.
+ * @param[out] size Optionally returns the number of characters parsed (not including terminating
+ * null).
  * @return True if parsing succeeded, otherwise false.
  */
 extern ELOG_API bool elogLevelFromStr(const char* logLevelStr, ELogLevel& logLevel,
-                                      const char** ptr = nullptr);
+                                      const char** ptr = nullptr, size_t* size = nullptr);
 
 }  // namespace elog
 

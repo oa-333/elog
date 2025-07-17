@@ -11,6 +11,7 @@ class ELOG_API ELogDbTargetProvider {
 public:
     ELogDbTargetProvider(const ELogDbTargetProvider&) = delete;
     ELogDbTargetProvider(ELogDbTargetProvider&&) = delete;
+    ELogDbTargetProvider& operator=(const ELogDbTargetProvider&) = delete;
     virtual ~ELogDbTargetProvider() {}
 
     /**

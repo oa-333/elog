@@ -28,7 +28,7 @@ public:
      * @brief Construct a new ELogBufferedFileTarget object using an existing file handle.
      * @note This constructor is usually used for logging to the standard error and output streams.
      * @param fileHandle The open file handle to use.
-     * @param bufferSize The buffer size to use. Specify zero to disable buffering.
+     * @param bufferSize The buffer size to use. Specify zero to default buffer size.
      * @param useLock Specifies whether to use lock. If buffering is used in a multi-threaded
      * scenario, the a lock is required, and without a lock behavior is undefined.
      * @param flushPolicy Optional flush policy to use.
@@ -39,7 +39,7 @@ public:
                            ELogFlushPolicy* flushPolicy = nullptr, bool shouldClose = false)
         : ELogTarget("buffered-file", flushPolicy),
           m_fileWriter(bufferSize, useLock),
-          m_fileHandle(nullptr),
+          m_fileHandle(fileHandle),
           m_shouldClose(shouldClose) {
         if (useLock) {
             setNativelyThreadSafe();
@@ -48,6 +48,7 @@ public:
     }
     ELogBufferedFileTarget(const ELogBufferedFileTarget&) = delete;
     ELogBufferedFileTarget(ELogBufferedFileTarget&&) = delete;
+    ELogBufferedFileTarget& operator=(const ELogBufferedFileTarget&) = delete;
 
     ~ELogBufferedFileTarget() final {}
 

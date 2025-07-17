@@ -18,7 +18,7 @@ namespace elog {
 #define ELOG_BUFFER_SIZE (1024 - 3 * sizeof(uint64_t))
 
 /** @def The maximum size allowed for a single log message buffer. */
-#define ELOG_MAX_BUFFER_SIZE (16 * 1024)
+#define ELOG_MAX_BUFFER_SIZE ((size_t)(16 * 1024))
 
 // TODO: fix terminology here - capacity, size, resize/reserve, offset/length, etc.
 

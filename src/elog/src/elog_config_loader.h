@@ -70,6 +70,14 @@ public:
                                                 const char* scheme, const char* propName,
                                                 int64_t& propValue, bool* found = nullptr);
 
+    static bool getOptionalLogTargetUIntProperty(const ELogConfigMapNode* logTargetCfg,
+                                                 const char* scheme, const char* propName,
+                                                 uint64_t& propValue, bool* found = nullptr);
+
+    static bool getOptionalLogTargetUInt32Property(const ELogConfigMapNode* logTargetCfg,
+                                                   const char* scheme, const char* propName,
+                                                   uint32_t& propValue, bool* found = nullptr);
+
     static bool getOptionalLogTargetBoolProperty(const ELogConfigMapNode* logTargetCfg,
                                                  const char* scheme, const char* propName,
                                                  bool& propValue, bool* found = nullptr);

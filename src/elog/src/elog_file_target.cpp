@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #endif
 
+#include "elog_common.h"
 #include "elog_error.h"
 
 namespace elog {
@@ -94,9 +95,9 @@ bool ELogFileTarget::configureOptimalBufferSize() {
 
 bool ELogFileTarget::startLogTarget() {
     if (m_fileHandle == nullptr) {
-        m_fileHandle = fopen(m_filePath.c_str(), "a");
+        m_fileHandle = elog_fopen(m_filePath.c_str(), "a");
         if (m_fileHandle == nullptr) {
-            ELOG_REPORT_SYS_ERROR(fopen, "Failed to open log file %s", m_filePath.c_str());
+            ELOG_REPORT_ERROR("Failed to open log file %s", m_filePath.c_str());
             return false;
         }
         m_shouldClose = true;

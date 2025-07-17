@@ -66,7 +66,9 @@
 
 namespace elog {
 
-static thread_local int sThreadSlotId = -1;
+static const uint32_t ELOG_DB_INVALID_SLOT_ID = 0xFFFFFFFF;
+
+static thread_local uint32_t sThreadSlotId = ELOG_DB_INVALID_SLOT_ID;
 
 bool ELogDbTarget::startLogTarget() {
     if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
@@ -88,7 +90,7 @@ bool ELogDbTarget::startLogTarget() {
 
     // in single slot mode we allocate slot, try to connect
     if (m_threadModel != ThreadModel::TM_CONN_PER_THREAD) {
-        int slotId = -1;
+        uint32_t slotId = ELOG_DB_INVALID_SLOT_ID;
         if (!initConnection(slotId)) {
             return false;
         }
@@ -128,10 +130,10 @@ bool ELogDbTarget::stopLogTarget() {
 }
 
 uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
-    int slotId = 0;
+    uint32_t slotId = 0;
     if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
         slotId = sThreadSlotId;
-        if (slotId == -1) {
+        if (slotId == ELOG_DB_INVALID_SLOT_ID) {
             if (!initConnection(slotId)) {
                 ELOG_REPORT_ERROR("Failed to initialize DB connection for current thread");
                 return 0;
@@ -170,7 +172,7 @@ bool ELogDbTarget::parseInsertStatement(const std::string& insertStatement) {
     return true;
 }
 
-int ELogDbTarget::allocSlot() {
+uint32_t ELogDbTarget::allocSlot() {
     for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
         bool isUsed = m_threadSlots[i].m_isUsed.load(std::memory_order_relaxed);
         if (!isUsed && m_threadSlots[i].m_isUsed.compare_exchange_strong(
@@ -178,16 +180,16 @@ int ELogDbTarget::allocSlot() {
             return i;
         }
     }
-    return -1;
+    return ELOG_DB_INVALID_SLOT_ID;
 }
 
-void ELogDbTarget::freeSlot(int slot) {
+void ELogDbTarget::freeSlot(uint32_t slot) {
     m_threadSlots[slot].m_isUsed.store(false, std::memory_order_relaxed);
 }
 
-bool ELogDbTarget::initConnection(int& slotId) {
+bool ELogDbTarget::initConnection(uint32_t& slotId) {
     slotId = allocSlot();
-    if (slotId == -1) {
+    if (slotId == ELOG_DB_INVALID_SLOT_ID) {
         ELOG_REPORT_ERROR("No available thread slot");
         return false;
     }

@@ -11,6 +11,7 @@ class ELOG_API ELogRpcTargetProvider {
 public:
     ELogRpcTargetProvider(const ELogRpcTargetProvider&) = delete;
     ELogRpcTargetProvider(ELogRpcTargetProvider&&) = delete;
+    ELogRpcTargetProvider& operator=(const ELogRpcTargetProvider&) = delete;
     virtual ~ELogRpcTargetProvider() {}
 
     /**

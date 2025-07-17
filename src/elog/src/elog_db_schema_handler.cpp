@@ -124,15 +124,15 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
     }
 
     // check for optional db_max_threads
-    int64_t maxThreads = ELOG_DB_MAX_THREADS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "database",
-                                                           "db_max_threads", maxThreads)) {
+    uint32_t maxThreads = ELOG_DB_MAX_THREADS;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "database",
+                                                              "db_max_threads", maxThreads)) {
         return nullptr;
     }
 
     // check for optional db_reconnect_timeout_millis
-    int64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+    uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
             logTargetCfg, "database", "db_reconnect_timeout_millis", reconnectTimeoutMillis)) {
         return nullptr;
     }

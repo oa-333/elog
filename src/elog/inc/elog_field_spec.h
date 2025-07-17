@@ -110,7 +110,7 @@ struct ELOG_API ELogRGBColorSpec {
 };
 
 struct ELOG_API ELogColorSpec {
-    // specify which union member to use with this
+    // specify which of the members is in use
     enum SpecType : uint32_t {
         COLOR_SPEC_NONE,
         COLOR_SPEC_SIMPLE,
@@ -118,11 +118,10 @@ struct ELOG_API ELogColorSpec {
         COLOR_SPEC_RGB_VGA,
         COLOR_SPEC_GREY
     } m_colorSpecType;
-    union {
-        ELogSimpleColorSpec m_simpleSpec;
-        ELogRGBColorSpec m_rgbSpec;
-        uint8_t m_greyScale;
-    };
+
+    ELogSimpleColorSpec m_simpleSpec;
+    ELogRGBColorSpec m_rgbSpec;
+    uint8_t m_greyScale;
 
     ELogColorSpec() : m_colorSpecType(COLOR_SPEC_NONE) {}
 };
@@ -199,6 +198,8 @@ struct ELOG_API ELogFieldSpec {
             m_textSpec = nullptr;
         }
     }
+
+    ELogFieldSpec& operator=(const ELogFieldSpec&) = delete;
 
     bool parse(const std::string& fieldSpecStr);
 };

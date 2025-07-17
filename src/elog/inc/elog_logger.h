@@ -114,6 +114,10 @@ protected:
      */
     ELogLogger(ELogSource* logSource) : m_logSource(logSource) {}
 
+    ELogLogger(const ELogLogger&) = delete;
+    ELogLogger(ELogLogger&&) = delete;
+    ELogLogger& operator=(const ELogLogger&) = delete;
+
     /** @brief Retrieves the underlying log record builder. */
     virtual ELogRecordBuilder* getRecordBuilder() = 0;
 

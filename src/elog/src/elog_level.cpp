@@ -23,12 +23,16 @@ const char* elogLevelToStr(ELogLevel logLevel) {
 }
 
 bool elogLevelFromStr(const char* logLevelStr, ELogLevel& logLevel,
-                      const char** ptr /* = nullptr */) {
+                      const char** ptr /* = nullptr */, size_t* size /* = nullptr */) {
     for (uint32_t i = 0; i < gLogLevelCount; ++i) {
         if (strncmp(logLevelStr, gLogLevelStr[i], strlen(gLogLevelStr[i])) == 0) {
             logLevel = gLogLevels[i];
+            size_t parseLen = strlen(gLogLevelStr[i]);
             if (ptr) {
-                *ptr = logLevelStr + strlen(gLogLevelStr[i]);
+                *ptr = logLevelStr + parseLen;
+            }
+            if (size) {
+                *size = parseLen;
             }
             return true;
         }

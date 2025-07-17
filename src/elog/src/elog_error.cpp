@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "elog_common.h"
 #include "elog_system.h"
 
 #ifdef ELOG_MINGW
@@ -21,6 +22,9 @@ static std::atomic<ELogTargetId> sStderrTargetId = ELOG_INVALID_TARGET_ID;
 class ELogDefaultErrorHandler : public ELogErrorHandler {
 public:
     ELogDefaultErrorHandler() {}
+    ELogDefaultErrorHandler(const ELogDefaultErrorHandler&) = delete;
+    ELogDefaultErrorHandler(ELogDefaultErrorHandler&&) = delete;
+    ELogDefaultErrorHandler& operator=(const ELogDefaultErrorHandler&) = delete;
     ~ELogDefaultErrorHandler() final {}
 
     void onError(const char* msg) final {
@@ -42,6 +46,9 @@ public:
 class ELogSelfErrorHandler : public ELogErrorHandler {
 public:
     ELogSelfErrorHandler() : m_logSource(nullptr), m_logger(nullptr) {}
+    ELogSelfErrorHandler(const ELogSelfErrorHandler&) = delete;
+    ELogSelfErrorHandler(ELogSelfErrorHandler&&) = delete;
+    ELogSelfErrorHandler& operator=(const ELogSelfErrorHandler&) = delete;
     ~ELogSelfErrorHandler() final {}
 
     void init() {
@@ -154,6 +161,8 @@ void ELogError::reportWarn(const char* fmt, ...) {
 }
 
 void ELogError::reportTrace(const char* fmt, ...) {
+    // TODO: allocating a buffer each time is not such a good idea, at least we can use thread local
+    // fixed buffer
     static thread_local bool isTracing = false;
     if (sErrorHandler->isTraceEnabled() && !isTracing) {
         isTracing = true;
@@ -163,7 +172,15 @@ void ELogError::reportTrace(const char* fmt, ...) {
         // check how many bytes are required
         va_list argsCopy;
         va_copy(argsCopy, args);
-        uint32_t requiredBytes = (vsnprintf(nullptr, 0, fmt, argsCopy) + 1);
+        int res = vsnprintf(nullptr, 0, fmt, argsCopy);
+        if (res < 0) {
+            // output error occurred, report this, this is highly unexpected
+            ELOG_REPORT_ERROR("Failed to format trace buffer");
+            return;
+        }
+
+        // now we can safely make the cast
+        uint32_t requiredBytes = ((uint32_t)res) + 1;
 
         // format trace message
         char* traceMsg = (char*)malloc(requiredBytes);
@@ -209,15 +226,18 @@ void ELogError::win32FreeErrorStr(char* errStr) { LocalFree(errStr); }
 #endif
 
 void ELogError::initError() {
-    if (getenv("ELOG_SINK") != nullptr) {
-        ELOG_REPORT_TRACE("Setting Log sink: %s", getenv("ELOG_SINK"));
-        if (strcmp(getenv("ELOG_SINK"), "logger") == 0) {
+    std::string elogSink;
+    if (elog_getenv("ELOG_SINK", elogSink)) {
+        ELOG_REPORT_TRACE("Setting Log sink: %s", elogSink.c_str());
+        if (elogSink.compare("logger") == 0) {
             sSelfErrorHandler.init();
             setErrorHandler(&sSelfErrorHandler);
         }
     }
-    if (getenv("ELOG_TRACE") != nullptr) {
-        if (strcmp(getenv("ELOG_TRACE"), "TRUE") == 0) {
+
+    std::string elogTrace;
+    if (elog_getenv("ELOG_TRACE", elogTrace)) {
+        if (elogTrace.compare("TRUE") == 0) {
             setTraceMode(true);
         }
     }
@@ -227,7 +247,15 @@ void ELogError::reportV(ReportType reportType, const char* msgFmt, va_list args)
     // compute error message length, this requires copying variadic argument pointer
     va_list argsCopy;
     va_copy(argsCopy, args);
-    uint32_t requiredBytes = (vsnprintf(nullptr, 0, msgFmt, argsCopy) + 1);
+    int res = vsnprintf(nullptr, 0, msgFmt, argsCopy);
+    if (res < 0) {
+        // output error occurred, report this, this is highly unexpected
+        ELOG_REPORT_ERROR("Failed to format trace buffer");
+        return;
+    }
+
+    // now we can safely make the cast
+    uint32_t requiredBytes = ((uint32_t)res) + 1;
 
     // format error message
     char* formattedMsg = (char*)malloc(requiredBytes);

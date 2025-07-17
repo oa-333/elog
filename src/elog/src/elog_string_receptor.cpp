@@ -3,6 +3,7 @@
 #include <charconv>
 #include <cstring>
 
+#include "elog_error.h"
 #include "elog_system.h"
 
 namespace elog {
@@ -41,16 +42,23 @@ void ELogStringReceptor::receiveLogLevelField(uint32_t typeId, ELogLevel logLeve
 }
 
 void ELogStringReceptor::applySpec(const ELogFieldSpec& fieldSpec, const char* strField,
-                                   uint32_t fieldLen /* = 0 */) {
+                                   size_t fieldLen /* = 0 */) {
     // update field length if needed
     if (fieldLen == 0) {
         fieldLen = strlen(strField);
     }
+    if (fieldLen > UINT32_MAX) {
+        // drop field
+        ELOG_REPORT_WARN("Dropping field %s with abnormal length %zu", fieldSpec.m_name.c_str(),
+                         fieldLen);
+        return;
+    }
+    uint32_t fieldLen32 = (uint32_t)fieldLen;
 
     // apply right justification if needed
     if (fieldSpec.m_justifySpec.m_mode == ELogJustifyMode::JM_RIGHT &&
-        fieldLen < fieldSpec.m_justifySpec.m_justify) {
-        m_logMsg.append(fieldSpec.m_justifySpec.m_justify - fieldLen, ' ');
+        fieldLen32 < fieldSpec.m_justifySpec.m_justify) {
+        m_logMsg.append(fieldSpec.m_justifySpec.m_justify - fieldLen32, ' ');
     }
 
     // apply text formatting (font/color)
@@ -60,7 +68,7 @@ void ELogStringReceptor::applySpec(const ELogFieldSpec& fieldSpec, const char* s
     }
 
     // append field to log message
-    m_logMsg.append(strField, fieldLen);
+    m_logMsg.append(strField, fieldLen32);
 
     // auto-reset text formatting if required
     if (fieldSpec.m_textSpec != nullptr && fieldSpec.m_textSpec->m_autoReset) {
@@ -69,8 +77,8 @@ void ELogStringReceptor::applySpec(const ELogFieldSpec& fieldSpec, const char* s
 
     // apply left justification if needed
     if (fieldSpec.m_justifySpec.m_mode == ELogJustifyMode::JM_LEFT &&
-        fieldLen < fieldSpec.m_justifySpec.m_justify) {
-        m_logMsg.append(fieldSpec.m_justifySpec.m_justify - fieldLen, ' ');
+        fieldLen32 < fieldSpec.m_justifySpec.m_justify) {
+        m_logMsg.append(fieldSpec.m_justifySpec.m_justify - fieldLen32, ' ');
     }
 }
 

@@ -11,13 +11,19 @@
 
 namespace elog {
 
+/** @def The hard limit for the buffered file writer's buffer size (in bytes). */
+#define ELOG_MAX_FILE_BUFFER_BYTES (64 * 1024 * 1024)
+
+/** @def Default buffers size. */
+#define ELOG_DEFAULT_FILE_BUFFER_SIZE_BYTES (1024 * 1024)
+
 /** @brief A utility class for writing data to file with internal buffering. */
 class ELOG_API ELogBufferedFileWriter {
 public:
     /**
      * @brief Construct a new ELogBufferedFileWriter object.
-     * @param bufferSizeBytes The size of the buffer in bytes to use when writing data. Specify zero
-     * size to disable buffering altogether.
+     * @param bufferSizeBytes The size of the buffer in bytes to use when writing data. Buffer size
+     * exceeding the allowed maximum will be truncated. Specify zero size to use default.
      * @param useLock Specifies whether to use locking. When buffering is enabled, a lock is
      * required in multi-threaded scenario, and failing to use a lock will result in undefined
      * behavior. If the buffering is disabled, then normally locking is not required, even with
@@ -31,9 +37,16 @@ public:
      * buffer size, then it is written directly to file without buffering.
      */
     ELogBufferedFileWriter(uint32_t bufferSizeBytes, bool useLock)
-        : m_fd(0), m_bufferSizeBytes(bufferSizeBytes), m_bufferOffset(0), m_useLock(useLock) {}
+        : m_fd(0), m_bufferSizeBytes(bufferSizeBytes), m_bufferOffset(0), m_useLock(useLock) {
+        if (m_bufferSizeBytes > ELOG_MAX_FILE_BUFFER_BYTES) {
+            m_bufferSizeBytes = ELOG_MAX_FILE_BUFFER_BYTES;
+        } else if (m_bufferSizeBytes == 0) {
+            m_bufferSizeBytes = ELOG_DEFAULT_FILE_BUFFER_SIZE_BYTES;
+        }
+    }
     ELogBufferedFileWriter(const ELogBufferedFileWriter&) = delete;
     ELogBufferedFileWriter(ELogBufferedFileWriter&&) = delete;
+    ELogBufferedFileWriter& operator=(const ELogBufferedFileWriter&) = delete;
     ~ELogBufferedFileWriter() {}
 
     /**
@@ -55,15 +68,15 @@ public:
 
 private:
     int m_fd;
-    uint32_t m_bufferSizeBytes;
-    uint32_t m_bufferOffset;
-    std::vector<char> m_logBuffer;
+    size_t m_bufferSizeBytes;
+    size_t m_bufferOffset;
+    alignas(8) std::vector<char> m_logBuffer;
     bool m_useLock;
     alignas(8) std::mutex m_lock;
 
     bool logMsgUnlocked(const char* formattedLogMsg, size_t length);
 
-    bool writeToFile(const char* buffer, uint32_t length);
+    bool writeToFile(const char* buffer, size_t length);
 };
 
 }  // namespace elog

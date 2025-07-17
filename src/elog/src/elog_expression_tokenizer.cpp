@@ -47,7 +47,7 @@ bool ELogExpressionTokenizer::nextToken(ELogExprTokenType& tokenType, std::strin
             // NOTE: there must be another char, otherwise expression syntax is bad
             if (m_pos == m_sourceStr.length()) {
                 ELOG_REPORT_ERROR("Premature end of expression string, while parsing operator: %s",
-                                  getErrLocStr(tokenPos));
+                                  getErrLocStr(tokenPos).c_str());
                 return false;
             }
             // now check if second char is also special
@@ -64,7 +64,7 @@ bool ELogExpressionTokenizer::nextToken(ELogExprTokenType& tokenType, std::strin
                     tokenType = ELogExprTokenType::TT_GE_OP;
                 } else {
                     ELOG_REPORT_ERROR("Invalid operator token '%s': %s", token.c_str(),
-                                      getErrLocStr(tokenPos));
+                                      getErrLocStr(tokenPos).c_str());
                     return false;
                 }
             } else {
@@ -76,7 +76,7 @@ bool ELogExpressionTokenizer::nextToken(ELogExprTokenType& tokenType, std::strin
                     tokenType = ELogExprTokenType::TT_GT_OP;
                 } else {
                     ELOG_REPORT_ERROR("Invalid operator token '%s': %s", token.c_str(),
-                                      getErrLocStr(tokenPos));
+                                      getErrLocStr(tokenPos).c_str());
                     return false;
                 }
             }

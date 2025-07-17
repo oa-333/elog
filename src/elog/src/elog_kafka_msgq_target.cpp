@@ -181,7 +181,6 @@ uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
     if (m_partition != -1) {
         partition = m_partition;
     }
-    int res = 0;
     if (headers != nullptr) {
         const uint32_t VU_COUNT = 6;
         rd_kafka_vu_t vus[VU_COUNT];

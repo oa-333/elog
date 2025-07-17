@@ -146,7 +146,6 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     }
 
     // optional flush timeout
-    bool found = false;
     int64_t timeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
     if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "Sentry",
                                                            "flush_timeout_millis", timeoutMillis)) {

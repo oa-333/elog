@@ -16,6 +16,7 @@ public:
     ELogStringReceptor(std::string& logMsg) : m_logMsg(logMsg) {}
     ELogStringReceptor(const ELogStringReceptor&) = delete;
     ELogStringReceptor(ELogStringReceptor&&) = delete;
+    ELogStringReceptor& operator=(const ELogStringReceptor&) = delete;
     ~ELogStringReceptor() final {}
 
     /** @brief Receives a string log record field. */
@@ -36,7 +37,7 @@ public:
 private:
     std::string& m_logMsg;
 
-    void applySpec(const ELogFieldSpec& fieldSpec, const char* strField, uint32_t fieldLen = 0);
+    void applySpec(const ELogFieldSpec& fieldSpec, const char* strField, size_t fieldLen = 0);
 };
 
 }  // namespace elog

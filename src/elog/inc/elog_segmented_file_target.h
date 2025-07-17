@@ -12,8 +12,17 @@
 
 namespace elog {
 
+/** @def Maximum value allowed for segment limit (MB). Currently totalling in 4GB. */
+#define ELOG_MAX_SEGMENT_LIMIT_MB ((uint32_t)4096)
+
+/** @def Maximum value allowed for segment ring size. Currently totalling in 64 million items. */
+#define ELOG_MAX_SEGMENT_RING_SIZE ((uint32_t)(64 * 1024 * 1024))
+
+/** @def Maximum value allowed for segment count (for rotating log target). */
+#define ELOG_MAX_SEGMENT_COUNT ((uint32_t)(1024 * 1024))
+
 /** @def The default ring buffer size used for pending messages during segment switch. */
-#define ELOG_DEFAULT_SEGMENT_RING_SIZE (1024 * 1024)
+#define ELOG_DEFAULT_SEGMENT_RING_SIZE ((uint32_t)(1024 * 1024))
 
 /**
  * @brief A lock-free segmented log file target, that breaks log file into segments by a configured
@@ -40,15 +49,17 @@ public:
      * log segments to rotate. By default no log rotation takes place.
      * @param fileBufferSizeBytes Optionally specify file buffer size to use. This will cause the
      * segmented logger to use ELog's internal implementation of buffered file, which is slightly
-     * better than default fopen/fwrite functions. By default file buffering is not used.
+     * better than default fopen/fwrite functions. Specify zero to disable buffering. By default
+     * file buffering is not used.
      * @param flushPolicy Optional flush policy to be used in conjunction with this log target.
      */
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
-                            uint64_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
-                            uint64_t fileBufferSizeBytes = 0, uint64_t segmentCount = 0,
+                            uint32_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
+                            uint32_t fileBufferSizeBytes = 0, uint32_t segmentCount = 0,
                             ELogFlushPolicy* flushPolicy = nullptr);
     ELogSegmentedFileTarget(const ELogSegmentedFileTarget&) = delete;
     ELogSegmentedFileTarget(ELogSegmentedFileTarget&&) = delete;
+    ELogSegmentedFileTarget& operator=(const ELogSegmentedFileTarget&) = delete;
 
     ~ELogSegmentedFileTarget() final;
 
@@ -71,20 +82,23 @@ private:
 
     // single segment data
     struct SegmentData {
-        uint64_t m_segmentId;
+        uint32_t m_segmentId;
         std::atomic<uint64_t> m_bytesLogged;
         FILE* m_segmentFile;
         ELogBufferedFileWriter* m_bufferedFileWriter;
         LogMsgQueue m_pendingMsgs;
 
-        SegmentData(uint64_t segmentId, uint64_t bytesLogged = 0)
+        SegmentData(uint32_t segmentId, uint64_t bytesLogged = 0)
             : m_segmentId(segmentId),
               m_bytesLogged(bytesLogged),
               m_segmentFile(nullptr),
               m_bufferedFileWriter(nullptr) {}
+        SegmentData(const SegmentData&) = delete;
+        SegmentData(SegmentData&&) = delete;
+        SegmentData& operator=(const SegmentData&) = delete;
         ~SegmentData() { m_pendingMsgs.terminate(); }
 
-        bool open(const char* segmentPath, uint64_t fileBufferSizeBytes = 0, bool useLock = true,
+        bool open(const char* segmentPath, uint32_t fileBufferSizeBytes = 0, bool useLock = true,
                   bool truncateSegment = false);
         bool log(const char* logMsg, size_t len);
         bool drain();
@@ -92,10 +106,10 @@ private:
         bool close();
     };
 
-    uint64_t m_segmentLimitBytes;
-    uint64_t m_segmentRingSize;
-    uint64_t m_fileBufferSizeBytes;
-    uint64_t m_segmentCount;
+    uint32_t m_segmentLimitBytes;
+    uint32_t m_segmentRingSize;
+    uint32_t m_fileBufferSizeBytes;
+    uint32_t m_segmentCount;
     std::atomic<SegmentData*> m_currentSegment;
     std::atomic<uint64_t> m_epoch;
     ELogRollingBitset m_epochSet;
@@ -103,10 +117,10 @@ private:
     std::string m_logName;
 
     bool openSegment();
-    bool getSegmentCount(uint32_t& segmentCount, uint32_t& lastSegmentSizeBytes);
+    bool getSegmentCount(uint32_t& segmentCount, uint64_t& lastSegmentSizeBytes);
     bool scanDirFiles(const char* dirPath, std::vector<std::string>& fileNames);
-    bool getSegmentIndex(const std::string& fileName, int32_t& segmentIndex);
-    bool getFileSize(const char* filePath, uint32_t& fileSize);
+    bool getSegmentIndex(const std::string& fileName, uint32_t& segmentIndex);
+    bool getFileSize(const char* filePath, uint64_t& fileSize);
     void formatSegmentPath(std::string& segmentPath, uint32_t segmentId);
     bool advanceSegment(uint32_t segmentId, const std::string& logMsg, uint64_t currentEpoch);
     void logMsgQueue(std::list<std::string>& logMsgs, FILE* segmentFile);

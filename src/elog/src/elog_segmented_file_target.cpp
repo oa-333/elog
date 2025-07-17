@@ -13,7 +13,11 @@
 #include <filesystem>
 #include <thread>
 
+#include "elog_common.h"
 #include "elog_error.h"
+
+// TODO: need hard coded limits for all configuration values, and from there we can derive required
+// type. in addition, load functions with limits should be written to check limits
 
 // some design notes
 // =================
@@ -120,8 +124,8 @@ static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& file
     // check for error
     DWORD errCode = GetLastError();
     if (errCode != ERROR_NO_MORE_FILES) {
-        ELOG_REPORT_SYS_ERROR_NUM(FindNextFile, errCode,
-                                  "Failed to search for next file in directory: %s", dirPath);
+        ELOG_REPORT_WIN32_ERROR_NUM(FindNextFile, errCode,
+                                    "Failed to search for next file in directory: %s", dirPath);
         return false;
     }
 
@@ -189,10 +193,10 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 #endif
 
 bool ELogSegmentedFileTarget::SegmentData::open(const char* segmentPath,
-                                                uint64_t fileBufferSizeBytes /* = 0 */,
+                                                uint32_t fileBufferSizeBytes /* = 0 */,
                                                 bool useLock /* = true */,
                                                 bool truncateSegment /* = false */) {
-    m_segmentFile = fopen(segmentPath, truncateSegment ? "w" : "a");
+    m_segmentFile = elog_fopen(segmentPath, truncateSegment ? "w" : "a");
     if (m_segmentFile == nullptr) {
         int errCode = errno;
         ELOG_REPORT_SYS_ERROR(fopen, "Failed to open segment file %s: %d", segmentPath, errCode);
@@ -284,8 +288,8 @@ bool ELogSegmentedFileTarget::SegmentData::close() {
 
 ELogSegmentedFileTarget::ELogSegmentedFileTarget(
     const char* logPath, const char* logName, uint32_t segmentLimitMB,
-    uint64_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
-    uint64_t fileBufferSizeBytes /* = 0 */, uint64_t segmentCount /* = 0 */,
+    uint32_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
+    uint32_t fileBufferSizeBytes /* = 0 */, uint32_t segmentCount /* = 0 */,
     ELogFlushPolicy* flushPolicy /* = nullptr */)
     : ELogTarget("segmented-file", flushPolicy),
       m_segmentLimitBytes(segmentLimitMB * 1024 * 1024),
@@ -296,10 +300,37 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(
       m_epoch(0),
       m_logPath(logPath),
       m_logName(logName) {
-    // open current segment (start a new one if needed)
+    // check for limits
+    if (segmentLimitMB > ELOG_MAX_SEGMENT_LIMIT_MB) {
+        ELOG_REPORT_WARN(
+            "Truncating segment size limit from %u MB to %u MB (exceeding allowed limit), at "
+            "segmented/rotating log target at %s",
+            segmentLimitMB, (unsigned)ELOG_MAX_SEGMENT_LIMIT_MB);
+        m_segmentLimitBytes = ELOG_MAX_SEGMENT_LIMIT_MB * 1024 * 1024;
+    }
+    if (m_segmentRingSize > ELOG_MAX_SEGMENT_RING_SIZE) {
+        ELOG_REPORT_WARN(
+            "Truncating segment ring size from %u to %u pending log messages (exceeding allowed "
+            "limit), at segmented/rotating log target at %s",
+            m_segmentRingSize, (unsigned)ELOG_MAX_SEGMENT_RING_SIZE);
+        m_segmentRingSize = ELOG_MAX_SEGMENT_RING_SIZE;
+    }
+    if (m_segmentCount > ELOG_MAX_SEGMENT_COUNT) {
+        ELOG_REPORT_WARN(
+            "Truncating segment count from %u to %u (exceeding allowed limit), at rotating log "
+            "target at %s",
+            m_segmentCount, (unsigned)ELOG_MAX_SEGMENT_COUNT);
+        m_segmentCount = ELOG_MAX_SEGMENT_COUNT;
+    }
+
+    // set defaults
     if (m_segmentRingSize == 0) {
         m_segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE;
+        ELOG_REPORT_TRACE(
+            "Using default segment ring size %u at segmented/rotating log target at %s",
+            m_segmentRingSize, logName);
     }
+
     setNativelyThreadSafe();
     setAddNewLine(true);
 }
@@ -395,7 +426,7 @@ void ELogSegmentedFileTarget::flushLogTarget() {
 bool ELogSegmentedFileTarget::openSegment() {
     // get segment count and last segment size
     uint32_t segmentCount = 0;
-    uint32_t lastSegmentSizeBytes = 0;
+    uint64_t lastSegmentSizeBytes = 0;
     if (!getSegmentCount(segmentCount, lastSegmentSizeBytes)) {
         return false;
     }
@@ -440,7 +471,7 @@ bool ELogSegmentedFileTarget::openSegment() {
 }
 
 bool ELogSegmentedFileTarget::getSegmentCount(uint32_t& segmentCount,
-                                              uint32_t& lastSegmentSizeBytes) {
+                                              uint64_t& lastSegmentSizeBytes) {
     // scan directory for all files with matching name:
     // <log-path>/<log-name>.<log-id>.log
     std::vector<std::string> fileNames;
@@ -448,15 +479,17 @@ bool ELogSegmentedFileTarget::getSegmentCount(uint32_t& segmentCount,
         return false;
     }
 
-    int32_t maxSegmentIndex = -1;  // init with "no segments" value
+    bool segmentFound = false;  // init with "no segments" value
+    uint32_t maxSegmentIndex = 0;
     std::string lastSegmentName;
     std::vector<std::string>::iterator itr = fileNames.begin();
     while (itr != fileNames.end()) {
         const std::string fileName = *itr;
-        int32_t segmentIndex = -1;
+        uint32_t segmentIndex = 0;
         // NOTE: if we failed to extract segment id from file - that is OK, since the directory
         // might contain log segmented with different name scheme
         if (getSegmentIndex(fileName, segmentIndex)) {
+            segmentFound = true;
             if (maxSegmentIndex < segmentIndex) {
                 maxSegmentIndex = segmentIndex;
                 lastSegmentName = fileName;
@@ -464,11 +497,11 @@ bool ELogSegmentedFileTarget::getSegmentCount(uint32_t& segmentCount,
         }
         ++itr;
     }
-    ELOG_REPORT_TRACE("Max segment index %d from segment file %s", maxSegmentIndex,
-                      lastSegmentName.c_str());
 
     lastSegmentSizeBytes = 0;
-    if (maxSegmentIndex >= 0) {
+    if (segmentFound) {
+        ELOG_REPORT_TRACE("Max segment index %u from segment file %s", maxSegmentIndex,
+                          lastSegmentName.c_str());
         if (!getFileSize((m_logPath + "/" + lastSegmentName).c_str(), lastSegmentSizeBytes)) {
             return false;
         }
@@ -490,52 +523,48 @@ bool ELogSegmentedFileTarget::scanDirFiles(const char* dirPath,
 #endif
 }
 
-bool ELogSegmentedFileTarget::getSegmentIndex(const std::string& fileName, int32_t& segmentIndex) {
-    segmentIndex = -1;
+bool ELogSegmentedFileTarget::getSegmentIndex(const std::string& fileName, uint32_t& segmentIndex) {
     if (fileName.starts_with(m_logName) && fileName.ends_with(LOG_SUFFIX)) {
         // extract segment index
         // check for special case - segment zero has no index embedded
         if (fileName.compare(m_logName + LOG_SUFFIX) == 0) {
             // first segment with no index
             segmentIndex = 0;
-            // otherwise we already have a segment with higher index
-        } else {
-            // shave off prefix and suffix (and another additional dot)
-            if (fileName[m_logName.length()] != '.') {
-                // unexpected file name
-                ELOG_REPORT_WARN("Invalid segment file name: %s", fileName.c_str());
-                return false;
-            }
-            std::string segmentIndexStr =
-                fileName.substr(m_logName.length() + 1,
-                                fileName.length() - m_logName.length() - strlen(LOG_SUFFIX) - 1);
-            try {
-                std::size_t pos = 0;
-                segmentIndex = std::stoi(segmentIndexStr, &pos);
-                if (pos != segmentIndexStr.length()) {
-                    // something is wrong, we have excess chars, so we ignore this segment
-                    ELOG_REPORT_ERROR(
-                        "Invalid segment file name, excess chars after segment index: %s",
-                        fileName.c_str());
-                    segmentIndex = -1;
-                    return false;
-                }
-                ELOG_REPORT_TRACE("Found segment index %u from segment file %s", segmentIndex,
+            return true;
+        }
+
+        // shave off prefix and suffix (and another additional dot)
+        if (fileName[m_logName.length()] != '.') {
+            // unexpected file name
+            ELOG_REPORT_WARN("Invalid segment file name: %s", fileName.c_str());
+            return false;
+        }
+        std::string segmentIndexStr =
+            fileName.substr(m_logName.length() + 1,
+                            fileName.length() - m_logName.length() - strlen(LOG_SUFFIX) - 1);
+        try {
+            std::size_t pos = 0;
+            segmentIndex = std::stoul(segmentIndexStr, &pos);
+            if (pos != segmentIndexStr.length()) {
+                // something is wrong, we have excess chars, so we ignore this segment
+                ELOG_REPORT_ERROR("Invalid segment file name, excess chars after segment index: %s",
                                   fileName.c_str());
-            } catch (std::exception& e) {
-                ELOG_REPORT_SYS_ERROR(
-                    std::stoi,
-                    "Invalid segment file name %s, segment index could not be parsed: %s",
-                    fileName.c_str(), e.what());
-                segmentIndex = -1;
                 return false;
             }
+            ELOG_REPORT_TRACE("Found segment index %u from segment file %s", segmentIndex,
+                              fileName.c_str());
+            return true;
+        } catch (std::exception& e) {
+            ELOG_REPORT_SYS_ERROR(
+                std::stoi, "Invalid segment file name %s, segment index could not be parsed: %s",
+                fileName.c_str(), e.what());
+            return false;
         }
     }
-    return true;
+    return false;
 }
 
-bool ELogSegmentedFileTarget::getFileSize(const char* filePath, uint32_t& fileSize) {
+bool ELogSegmentedFileTarget::getFileSize(const char* filePath, uint64_t& fileSize) {
     try {
         std::filesystem::path p{filePath};
         fileSize = std::filesystem::file_size(p);
@@ -666,8 +695,8 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
             // of other threads
             // std::unique_lock<std::mutex> lock(prevSegment->m_lock);
             while (!prevSegment->m_pendingMsgs.empty()) {
-                const std::string& logMsg = prevSegment->m_pendingMsgs.back();
-                logMsgs.push_front(logMsg);
+                const std::string& pendingMsg = prevSegment->m_pendingMsgs.back();
+                logMsgs.push_front(pendingMsg);
                 prevSegment->m_pendingMsgs.pop();
             }
         }

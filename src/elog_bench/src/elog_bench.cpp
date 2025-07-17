@@ -1749,9 +1749,9 @@ static void writeSTCsv(const char* fname, const std::vector<double>& data) {
       << data[column++] << std::endl;
     f << column << " \"Buffered\\nSize=1MB\" " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
-    f << column << " \"Segmented\\nSize=1MB\" " << std::fixed << std::setprecision(2)
+    f << column << " \"Segmented\\nSize=15MB\" " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
-    f << column << " \"Rotating\\nSize=1MB\" " << std::fixed << std::setprecision(2)
+    f << column << " \"Rotating\\nSize=15MB\" " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
     f << column << " Deferred " << std::fixed << std::setprecision(2) << data[column++]
       << std::endl;
@@ -1948,13 +1948,17 @@ void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
 void testPerfSTSegmentedFile1mb(std::vector<double>& msgThroughput,
                                 std::vector<double>& ioThroughput, std::vector<double>& msgp50,
                                 std::vector<double>& msgp95, std::vector<double>& msgp99) {
+    // segmentation takes place at ~13000 messages with 1 mb segment, meaning that with 1000000
+    // messages we get ~76 segments, this is too much for a short test
+    // we would like to restrict the segment count to let's say 5 so we use segment size 15 mb
     const char* cfg =
         "file:///./bench_data/"
-        "elog_bench_segmented_1mb_st.log?file_segment_size_mb=1&flush_policy=none";
+        "elog_bench_segmented_15mb_st.log?file_segment_size_mb=15&file_buffer_size=1048576&"
+        "flush_policy=none";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("Segmented Size=1mb", cfg, msgPerf, ioPerf, statData);
+    runSingleThreadedTest("Segmented Size=15mb", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
 #ifdef MEASURE_PERCENTILE
@@ -1967,14 +1971,18 @@ void testPerfSTSegmentedFile1mb(std::vector<double>& msgThroughput,
 void testPerfSTRotatingFile1mb(std::vector<double>& msgThroughput,
                                std::vector<double>& ioThroughput, std::vector<double>& msgp50,
                                std::vector<double>& msgp95, std::vector<double>& msgp99) {
+    // rotation takes place at ~13000 messages with 1 mb segment, meaning that with 1000000 messages
+    // we get ~76 segment rotation, this is too much for a short test
+    // we would like to restrict the segment count to let's say 5 so we use segment size 15 mb
     const char* cfg =
         "file:///./bench_data/"
-        "elog_bench_rotating_1mb.log?file_segment_size_mb=1&file_buffer_size=1048576&"
+        "elog_bench_rotating_15mb.log?file_segment_size_mb=15&file_buffer_size=1048576&"
         "file_segment_count=5&flush_policy=none";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("Rotating Size=1mb", cfg, msgPerf, ioPerf, statData);
+    // we send 10000 messages to avoid rotation
+    runSingleThreadedTest("Rotating Size=15mb", cfg, msgPerf, ioPerf, statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
 #ifdef MEASURE_PERCENTILE

@@ -1,5 +1,6 @@
 #include "elog_buffered_file_target.h"
 
+#include "elog_common.h"
 #include "elog_error.h"
 
 namespace elog {
@@ -20,9 +21,9 @@ ELogBufferedFileTarget::ELogBufferedFileTarget(const char* filePath, uint32_t bu
 
 bool ELogBufferedFileTarget::startLogTarget() {
     if (m_fileHandle == nullptr) {
-        m_fileHandle = fopen(m_filePath.c_str(), "a");
+        m_fileHandle = elog_fopen(m_filePath.c_str(), "a");
         if (m_fileHandle == nullptr) {
-            ELOG_REPORT_SYS_ERROR(fopen, "Failed to open log file %s", m_filePath.c_str());
+            ELOG_REPORT_ERROR("Failed to open log file %s", m_filePath.c_str());
             return false;
         }
         m_shouldClose = true;

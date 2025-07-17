@@ -27,6 +27,7 @@ class ELOG_API ELogSource {
 public:
     ELogSource(const ELogSource&) = delete;
     ELogSource(ELogSource&&) = delete;
+    ELogSource& operator=(const ELogSource&) = delete;
 
     // log source name/id
     /** @brief Retrieves the unique log source id. */
@@ -76,6 +77,9 @@ public:
 
     /** @brief Removes a child log source by name. Silently ignored if child not found. */
     void removeChild(const char* name);
+
+    /** @brief Retrieves the log level associated with the log source. */
+    inline ELogLevel getLogLevel() const { return m_logLevel; }
 
     /**
      * @brief Sets the log level associated with the log source and all of its managed loggers.

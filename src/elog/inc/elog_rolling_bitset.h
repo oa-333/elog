@@ -21,6 +21,9 @@ public:
         : m_ringSize(ringSizeWords), m_fullWordCount(0), m_traceLogger(nullptr) {
         m_ring.resize(m_ringSize, 0);
     }
+    ELogRollingBitset(const ELogRollingBitset&) = delete;
+    ELogRollingBitset(ELogRollingBitset&&) = delete;
+    ELogRollingBitset& operator=(const ELogRollingBitset&) = delete;
     ~ELogRollingBitset() {}
 
     /** @brief Order rolling bitset to trace its operation with this logger. */

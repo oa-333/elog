@@ -12,8 +12,9 @@ namespace elog {
 class ELOG_API ELogMsgQSchemaHandler : public ELogSchemaHandler {
 public:
     ELogMsgQSchemaHandler() {}
-    ELogMsgQSchemaHandler(const ELogMsgQSchemaHandler&) = default;
-    ELogMsgQSchemaHandler(ELogMsgQSchemaHandler&&) = default;
+    ELogMsgQSchemaHandler(const ELogMsgQSchemaHandler&) = delete;
+    ELogMsgQSchemaHandler(ELogMsgQSchemaHandler&&) = delete;
+    ELogMsgQSchemaHandler& operator=(const ELogMsgQSchemaHandler&) = delete;
 
     /** @brief Destructor. */
     ~ELogMsgQSchemaHandler() final;

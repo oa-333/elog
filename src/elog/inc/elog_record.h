@@ -70,13 +70,18 @@ struct ELOG_API ELogRecord {
     /** @brief Default copy constructor. */
     ELogRecord(const ELogRecord&) = default;
 
+    /** @brief Default move constructor. */
+    ELogRecord(ELogRecord&&) = delete;
+
     /** @brief Destructor. */
     ~ELogRecord() {}
 
+    /** @brief Use default assignment operator. */
     inline ELogRecord& operator=(const ELogRecord& logRecord) = default;
 
+    /** @brief Compare two log records by pair thread-id/record-id. */
     inline bool operator==(const ELogRecord& logRecord) const {
-        return m_logRecordId == logRecord.m_logRecordId;
+        return m_threadId == logRecord.m_threadId && m_logRecordId == logRecord.m_logRecordId;
     }
 };
 

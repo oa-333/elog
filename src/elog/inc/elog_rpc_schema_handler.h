@@ -12,8 +12,9 @@ namespace elog {
 class ELOG_API ELogRpcSchemaHandler : public ELogSchemaHandler {
 public:
     ELogRpcSchemaHandler() {}
-    ELogRpcSchemaHandler(const ELogRpcSchemaHandler&) = default;
-    ELogRpcSchemaHandler(ELogRpcSchemaHandler&&) = default;
+    ELogRpcSchemaHandler(const ELogRpcSchemaHandler&) = delete;
+    ELogRpcSchemaHandler(ELogRpcSchemaHandler&&) = delete;
+    ELogRpcSchemaHandler& operator=(const ELogRpcSchemaHandler&) = delete;
 
     /** @brief Destructor. */
     ~ELogRpcSchemaHandler() final;

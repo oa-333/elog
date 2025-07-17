@@ -9,8 +9,9 @@ namespace elog {
 class ELogSysSchemaHandler : public ELogSchemaHandler {
 public:
     ELogSysSchemaHandler() {}
-    ELogSysSchemaHandler(const ELogSysSchemaHandler&) = default;
-    ELogSysSchemaHandler(ELogSysSchemaHandler&&) = default;
+    ELogSysSchemaHandler(const ELogSysSchemaHandler&) = delete;
+    ELogSysSchemaHandler(ELogSysSchemaHandler&&) = delete;
+    ELogSysSchemaHandler& operator=(const ELogSysSchemaHandler&) = delete;
 
     /** @brief Destructor. */
     ~ELogSysSchemaHandler() final {}

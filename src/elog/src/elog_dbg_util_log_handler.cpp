@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string>
 
+#include "elog_common.h"
 #include "elog_config_parser.h"
 #include "elog_error.h"
 #include "elog_system.h"
@@ -23,7 +24,7 @@ inline dbgutil::LogSeverity logLevelToSeverity(ELogLevel logLevel) {
 
 dbgutil::LogSeverity ELogDbgUtilLogHandler::onRegisterLogger(dbgutil::LogSeverity severity,
                                                              const char* loggerName,
-                                                             uint32_t loggerId) {
+                                                             size_t loggerId) {
     // define a log source
     std::string qualifiedLoggerName = std::string("dbgutil.") + loggerName;
     ELogSource* logSource = ELogSystem::defineLogSource(qualifiedLoggerName.c_str(), true);
@@ -39,13 +40,13 @@ dbgutil::LogSeverity ELogDbgUtilLogHandler::onRegisterLogger(dbgutil::LogSeverit
     // check for logger log level
     std::string envVarName = qualifiedLoggerName + "_log_level";
     std::replace(envVarName.begin(), envVarName.end(), '.', '_');
-    char* envVarValue = getenv(envVarName.c_str());
-    if (envVarValue != nullptr) {
+    std::string envVarValue;
+    if (elog_getenv(envVarName.c_str(), envVarValue)) {
         ELogLevel logLevel = ELEVEL_INFO;
         ELogPropagateMode propagateMode = ELogPropagateMode::PM_NONE;
-        if (!ELogConfigParser::parseLogLevel(envVarValue, logLevel, propagateMode)) {
+        if (!ELogConfigParser::parseLogLevel(envVarValue.c_str(), logLevel, propagateMode)) {
             ELOG_REPORT_ERROR("Invalid dbgutil source %s log level: %s",
-                              qualifiedLoggerName.c_str(), envVarValue);
+                              qualifiedLoggerName.c_str(), envVarValue.c_str());
         } else {
             // we first set logger severity (in the end we will deal with propagation)
             ELOG_REPORT_TRACE("Setting %s initial log level to %s (no propagation)",
@@ -60,36 +61,40 @@ dbgutil::LogSeverity ELogDbgUtilLogHandler::onRegisterLogger(dbgutil::LogSeverit
     return severity;
 }
 
-void ELogDbgUtilLogHandler::onUnregisterLogger(uint32_t loggerId) {
+void ELogDbgUtilLogHandler::onUnregisterLogger(size_t loggerId) {
     if (loggerId < m_dbgUtilLoggers.size()) {
         m_dbgUtilLoggers[loggerId] = nullptr;
-        uint32_t maxLoggerId = 0;
-        for (int i = m_dbgUtilLoggers.size() - 1; i >= 0; --i) {
-            if (m_dbgUtilLoggers[i] != nullptr) {
-                maxLoggerId = i;
-                break;
+        size_t maxLoggerId = m_dbgUtilLoggers.size() - 1;
+        bool done = false;
+        while (!done) {
+            if (m_dbgUtilLoggers[maxLoggerId] != nullptr) {
+                m_dbgUtilLoggers.resize(maxLoggerId + 1);
+                done = true;
+            } else if (maxLoggerId == 0) {
+                // last one is also null
+                m_dbgUtilLoggers.clear();
+                done = true;
+            } else {
+                --maxLoggerId;
             }
-        }
-        if (maxLoggerId + 1 < m_dbgUtilLoggers.size()) {
-            m_dbgUtilLoggers.resize(maxLoggerId + 1);
         }
     }
 }
 
-void ELogDbgUtilLogHandler::onMsg(dbgutil::LogSeverity severity, uint32_t loggerId,
+void ELogDbgUtilLogHandler::onMsg(dbgutil::LogSeverity severity, size_t loggerId,
                                   const char* loggerName, const char* msg) {
     // locate logger by id
-    ELogLogger* logger = nullptr;
     if (loggerId < m_dbgUtilLoggers.size()) {
-        logger = m_dbgUtilLoggers[loggerId];
-    }
-    if (logger != nullptr) {
-        ELogLevel logLevel = severityToLogLevel(severity);
-        if (logger->canLog(logLevel)) {
-            logger->logNoFormat(logLevel, "", 0, "", msg);
-        } else {
-            ELOG_TRACE("Discarded dbgutil log source %s message %s, severity %u",
-                       logger->getLogSource()->getQualifiedName(), msg, (unsigned)severity);
+        ELogLogger* logger = m_dbgUtilLoggers[loggerId];
+        if (logger != nullptr) {
+            ELogLevel logLevel = severityToLogLevel(severity);
+            if (logger->canLog(logLevel)) {
+                logger->logNoFormat(logLevel, "", 0, "", msg);
+            } else {
+                ELOG_REPORT_TRACE("Discarded dbgutil log source %s message %s, severity %u",
+                                  logger->getLogSource()->getQualifiedName(), msg,
+                                  (unsigned)severity);
+            }
         }
     }
 }

@@ -49,6 +49,9 @@ protected:
     /** @brief Disallow move constructor.*/
     ELogManagedObject(ELogManagedObject&&) = delete;
 
+    /** @brief Disallow assignment operator.*/
+    ELogManagedObject& operator=(const ELogManagedObject&) = delete;
+
     ELogManagedObject(uint64_t retireEpoch = 0, ELogManagedObject* next = nullptr)
         : m_retireEpoch(retireEpoch), m_next(next) {}
 
@@ -65,6 +68,9 @@ public:
           m_retireCount(0),
           m_traceLogger(nullptr),
           m_tlsKey(ELOG_INVALID_TLS_KEY) {}
+    ELogGC(const ELogGC&) = delete;
+    ELogGC(ELogGC&&) = delete;
+    ELogGC& operator=(const ELogGC&) = delete;
     ~ELogGC() {}
 
     /** @brief Order GC to trace its operation with this logger. */

@@ -10,6 +10,7 @@ public:
     ELogDeferredTargetProvider() {}
     ELogDeferredTargetProvider(const ELogDeferredTargetProvider&) = delete;
     ELogDeferredTargetProvider(ELogDeferredTargetProvider&&) = delete;
+    ELogDeferredTargetProvider& operator=(const ELogDeferredTargetProvider&) = delete;
     ~ELogDeferredTargetProvider() final {}
 
     /**

@@ -24,11 +24,11 @@ private:
                                    const std::string& value);
 
     static bool parseLogTargetUrl(const std::string& logTargetUrl,
-                                  ELogTargetUrlSpec& logTargetUrlSpec, uint32_t basePos = 0);
+                                  ELogTargetUrlSpec& logTargetUrlSpec, size_t basePos = 0);
 
-    static bool parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, uint32_t basePos);
+    static bool parseUrlPath(ELogTargetUrlSpec& logTargetUrlSpec, size_t basePos);
     static bool insertPropPosOverride(ELogPropertyPosMap& props, const std::string& key,
-                                      const std::string& value, uint32_t keyPos, uint32_t valuePos);
+                                      const std::string& value, size_t keyPos, size_t valuePos);
     static ELogConfigMapNode* logTargetUrlToConfig(ELogTargetUrlSpec* urlSpec,
                                                    ELogConfigSourceContext* sourceContext);
     static bool addConfigProperty(ELogConfigMapNode* mapNode, const char* key,

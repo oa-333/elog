@@ -13,6 +13,9 @@ class ELogTarget;
 class ELogPreInitLogger : public ELogLogger {
 public:
     ELogPreInitLogger() : ELogLogger(nullptr), m_recordBuilder(nullptr) {}
+    ELogPreInitLogger(const ELogPreInitLogger&) = delete;
+    ELogPreInitLogger(ELogPreInitLogger&&) = delete;
+    ELogPreInitLogger& operator=(const ELogPreInitLogger&) = delete;
     ~ELogPreInitLogger() final { discardAccumulatedLogMessages(); }
 
     /** @brief Writes all accumulated log messages to the given log target. */

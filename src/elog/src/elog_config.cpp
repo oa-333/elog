@@ -58,12 +58,12 @@ const char* configValueTypeToString(ELogConfigValueType valueType) {
     return "N/A";
 }
 
-std::string ELogConfigSourceContext::getPosContext(uint32_t pos, const char* pathContext) const {
+std::string ELogConfigSourceContext::getPosContext(size_t pos, const char* pathContext) const {
     // find source line
     uint32_t lineDataIndex = 0;
     uint32_t lineNumber = 0;
-    uint32_t offset = 0;
-    uint32_t totalChars = 0;
+    size_t offset = 0;
+    size_t totalChars = 0;
     for (const auto& lineData : m_lines) {
         if (pos >= totalChars && pos < totalChars + lineData.second.length()) {
             // line found
@@ -97,7 +97,7 @@ const char* ELogConfigContext::getFullContext() const {
 }
 
 ELogConfigContext* ELogConfigEntity::makeConfigContext(
-    uint32_t parsePos /* = ELOG_CONFIG_INVALID_PARSE_POS */) {
+    size_t parsePos /* = ELOG_CONFIG_INVALID_PARSE_POS */) {
     ELogConfigContext* context =
         new (std::nothrow) ELogConfigContext(getSourceContext(), parsePos, "");
     if (context == nullptr) {

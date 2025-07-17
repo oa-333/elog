@@ -44,6 +44,11 @@ static void elogTlsCleanup(int event, void* userData) {
 class ELogTlsKeyPurge : public ELogWin32DllPurgeFilter {
 public:
     ELogTlsKeyPurge(ELogTlsKey key) : m_key(key) {}
+    ELogTlsKeyPurge(const ELogTlsKeyPurge&) = delete;
+    ELogTlsKeyPurge(ELogTlsKeyPurge&&) = delete;
+    ELogTlsKeyPurge& operator=(const ELogTlsKeyPurge&) = delete;
+    ~ELogTlsKeyPurge() final {}
+
     bool purge(elogWin32ThreadDllEventCB callback, void* userData) final {
         ELogTlsCleanupData* cleanupData = (ELogTlsCleanupData*)userData;
         if (cleanupData != nullptr && cleanupData->m_key == m_key) {
@@ -88,6 +93,8 @@ bool elogCreateTls(ELogTlsKey& key, elogTlsDestructorFunc dtor /* = nullptr */) 
 
 bool elogDestroyTls(ELogTlsKey key) {
 #ifdef ELOG_WINDOWS
+    // remove the callback used to cleanup this key in each thread
+    // NOTE: caller is expected to call elogDestroyTls after all relevant threads have terminated
     ELogTlsKeyPurge purge(key);
     purgeDllCallback(&purge);
     if (!TlsFree(key)) {

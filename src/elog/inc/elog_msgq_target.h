@@ -14,6 +14,9 @@ namespace elog {
 class ELOG_API ELogMsgQTarget : public ELogTarget {
 protected:
     ELogMsgQTarget() : ELogTarget("msgq") {}
+    ELogMsgQTarget(const ELogMsgQTarget&) = delete;
+    ELogMsgQTarget(ELogMsgQTarget&&) = delete;
+    ELogMsgQTarget& operator=(const ELogMsgQTarget&) = delete;
     ~ELogMsgQTarget() override {}
 
     /** @brief Orders a buffered log target to flush it log messages. */
