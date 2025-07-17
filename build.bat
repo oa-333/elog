@@ -6,6 +6,7 @@ REM -v|--verbose
 REM -d|--debug
 REM -r|--release
 REM -w|--rel-with-debug-info
+REM -e|--secure
 REM -s|--stack-trace
 REM -b|--fmt-lib
 REM -f|--full
@@ -21,6 +22,7 @@ REM set default values
 SET PLATFORM=WINDOWS
 SET BUILD_TYPE=Debug
 SET INSTALL_DIR=C:\install\elog
+SET SECURE=0
 SET STACK_TRACE=0
 SET FMT_LIB=0
 SET VERBOSE=0
@@ -50,6 +52,8 @@ IF /I "%ARG1%" == "-r" SET BUILD_TYPE=Release & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--release" SET BUILD_TYPE=Release & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-w" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--rel-with-debug-info" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-e" SET SECURE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--secure" SET SECURE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-s" SET STACK_TRACE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--stack-trace" SET STACK_TRACE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-b" SET FMT_LIB=1 & GOTO CHECK_OPTS
@@ -91,6 +95,7 @@ IF %HELP% EQU 1 GOTO PRINT_HELP
 echo [DEBUG] Parsed args:
 echo [DEBUG] BUILD_TYPE=%BUILD_TYPE%
 echo [DEBUG] INSTALL_DIR=%INSTALL_DIR%
+echo [DEBUG] SECURE=%SECURE%
 echo [DEBUG] STACK_TRACE=%STACK_TRACE%
 echo [DEBUG] FMT_LIB=%FMT_LIB%
 echo [DEBUG] VERBOSE=%VERBOSE%
@@ -114,6 +119,7 @@ echo [INFO]  Build type: %BUILD_TYPE%
 echo [INFO]  Install dir: %INSTALL_DIR%
 SET OPTS=-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR%
 IF %VERBOSE% EQU 1 SET OPTS=%OPTS% -DCMAKE_VERBOSE_MAKEFILE=ON
+IF %SECURE% EQU 1 SET OPTS=%OPTS% -DELOG_SECURE=ON
 IF %STACK_TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_STACK_TRACE=ON
 IF %FMT_LIB% EQU 1 (
     SET OPTS=%OPTS% -DELOG_ENABLE_FMT_LIB=ON
@@ -238,7 +244,7 @@ REM TODO: not passing extra parameters after "--"
 echo [INFO] VCPKG_ROOT=%VCPKG_ROOT%
 echo [INFO]  Configuring project
 REM NOTE: when vcpkg is used, it seems that cmake default to MSBuild which is very slow, so we force Ninja generator
-echo [INFO]  Executing build command cmake --preset=default %OPTS% -S ..\..\ -B . -G "Ninja"
+echo [INFO]  Executing configure command cmake --preset=default %OPTS% -S ..\..\ -B . -G "Ninja"
 cmake --preset=default %OPTS% -S ..\..\ -B . -G "Ninja"
 IF errorlevel 1 (
     echo [ERROR] Configure phase failed, see errors above, aborting
@@ -249,7 +255,7 @@ IF errorlevel 1 (
 REM build phase
 REM NOTE: On windows MSVC (multi-config system), then configuration to build should be specified in build command
 echo [INFO]  Building
-echo [INFO] Executing command: cmake --build . -j %VERBOSE_OPT% --config %BUILD_TYPE%
+echo [INFO] Executing build command: cmake --build . -j %VERBOSE_OPT% --config %BUILD_TYPE%
 cmake --build . -j %VERBOSE_OPT% --config %BUILD_TYPE%
 IF errorlevel 1 (
     echo [ERROR] Build phase failed, see errors above, aborting
@@ -285,6 +291,7 @@ echo.
 echo       -r^|--release                Build in release mode.
 echo       -d^|--debug                  Build in debug mode.
 echo       -w^|--rel-with-debug-info    Build in release mode with debug symbols.
+echo       -e^|--secure                 Uses secure C runtime functions.
 echo.
 echo If none is specified, then the default is debug build mode.
 echo.

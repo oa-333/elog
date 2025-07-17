@@ -5,6 +5,7 @@
 # -d|--debug
 # -r|--release
 # -w|--rel-with-debug-info
+# -e|--secure
 # -s|--stack-trace
 # -b|--fmt-lib
 # -f|--full
@@ -25,6 +26,7 @@ if [ "$OS" = "Msys" ]; then
 else
     INSTALL_DIR=~/install/elog
 fi
+SECURE=0
 STACK_TRACE=0
 FMT_LIB=0
 VERBOSE=0
@@ -38,7 +40,7 @@ TRACE=0
 HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwsbfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,stack-trace,fmt-lib,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
+TEMP=$(getopt -o vdrwesbfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,stack-trace,fmt-lib,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -48,6 +50,7 @@ while true; do
     -d | --debug ) BUILD_TYPE=Debug; shift ;;
     -r | --release ) BUILD_TYPE=Release; shift ;;
     -w | --rel-with-debug-info ) BUILD_TYPE=RelWithDebInfo; shift ;;
+    -e | --secure) SECURE=1; shift ;;
     -s | --stack-trace ) STACK_TRACE=1; shift ;;
     -b | --fmt-lib ) FMT_LIB=1; shift ;;
     -f | --full ) FULL=1; shift;;
@@ -75,6 +78,7 @@ if [ "$HELP" -eq "1" ]; then
     echo "      -r|--release                Build in release mode."
     echo "      -d|--debug                  Build in debug mode."
     echo "      -w|--rel-with-debug-info    Build in release mode with debug symbols."
+    echo "      -e|--secure                 Uses secure C runtime functions."
     echo ""
     echo "If none is specified, then the default is debug build mode."
     echo ""
@@ -131,6 +135,7 @@ fi
 # set normal options
 echo "[INFO] Build type: $BUILD_TYPE"
 echo "[INFO] Install dir: $INSTALL_DIR"
+echo "[INFO] Secure: $SECURE"
 echo "[INFO] Stack trace: $STACK_TRACE"
 echo "[INFO] fmtlib: $FMT_LIB"
 echo "[INFO] Verbose: $VERBOSE"
@@ -143,6 +148,9 @@ echo "[INFO] Clang: $CLANG"
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 if [ "$VERBOSE" == "1" ]; then
     OPTS+=" -DCMAKE_VERBOSE_MAKEFILE=ON"
+fi
+if [ "$SECURE" == "1" ]; then
+    OPTS+=" -DELOG_SECURE=ON"
 fi
 if [ "$STACK_TRACE" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_STACK_TRACE=ON"

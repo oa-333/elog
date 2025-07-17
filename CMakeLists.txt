@@ -1,14 +1,32 @@
 cmake_minimum_required(VERSION 3.23)
 include(FetchContent)
-project(ELog VERSION 1.0 DESCRIPTION "ELog Error Logging Library" LANGUAGES CXX)
+
+#############################################################
+# project definitions
+#############################################################
+project(ELog VERSION 0.1.0 DESCRIPTION "ELog Error Logging Library" LANGUAGES CXX)
 
 # build shared library
 add_library(elog SHARED)
 set_target_properties(elog PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# build executable benchmark
-add_executable(elog_bench)
+# build test if not from fetch content
+option(ELOG_BUILD_BENCH "Build benchmark test" OFF)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    message(STATUS "Building also local benchmark test")
+    set(ELOG_BUILD_BENCH ON)
+endif()
 
+# build executable benchmark
+if (ELOG_BUILD_BENCH)
+    add_executable(elog_bench)
+    if (MINGW)
+        # since output may go to the same install dir, we need to use a different exe name
+        set_target_properties(elog_bench PROPERTIES OUTPUT_NAME "elog_bench_mingw")
+    endif()
+endif()
+
+# some things are platform dependent so we need a well-defined system name
 if (MINGW)
     set(SYSTEM_NAME "${CMAKE_SYSTEM_NAME}_mingw")
 else()
@@ -22,7 +40,10 @@ if (MSVC)
     set(CMAKE_MAP_IMPORTED_CONFIG_RELEASE Release RelWithDebInfo MinSizeRel Debug)
 endif()
 
+#############################################################
 # optional compilation features
+#############################################################
+option(ELOG_SECURE "Use secure C runtime functions" OFF)
 option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
 option(ELOG_ENABLE_FMT_LIB "ELog fmtlib formatting style support" OFF)
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
@@ -46,13 +67,27 @@ if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR)
     set(ELOG_ENABLE_JSON ON)
 endif()
 
+#############################################################
+# secure CRT option
+#############################################################
+if (ELOG_SECURE)
+    target_compile_definitions(elog PRIVATE ELOG_SECURE)
+endif()
+
+#############################################################
+# memory check option
+#############################################################
 if (ELOG_ENABLE_MEM_CHECK)
     if (MSVC)
         target_compile_options(elog PRIVATE "/fsanitize=address")
-        target_compile_options(elog_bench PRIVATE "/fsanitize=address")
+        if (ELOG_BUILD_BENCH)
+            target_compile_options(elog_bench PRIVATE "/fsanitize=address")
+        endif()
     else()
         target_compile_options(elog PRIVATE "-fsanitize=address")
-        target_compile_options(elog_bench PRIVATE "-fsanitize=address")
+        if (ELOG_BUILD_BENCH)
+            target_compile_options(elog_bench PRIVATE "-fsanitize=address")
+        endif()
         target_link_options(elog PRIVATE -fsanitize=address)
         #target_link_options(elog PRIVATE -shared-libasan)
         #target_link_libraries(elog asan)
@@ -60,15 +95,22 @@ if (ELOG_ENABLE_MEM_CHECK)
     endif()
 endif()
 
+#############################################################
+# group flush tracing option
+#############################################################
 if (ELOG_ENABLE_GROUP_FLUSH_GC_TRACE)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_GROUP_FLUSH_GC_TRACE)
 endif()
 
+#############################################################
 # get fmtlib if needed
+#############################################################
 if (ELOG_ENABLE_FMT_LIB)
     message(STATUS "Enabling fmtlib")
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_FMT_LIB)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_FMT_LIB)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_FMT_LIB)
+    endif()
 
     FetchContent_Declare(fmt
         GIT_REPOSITORY https://github.com/fmtlib/fmt.git
@@ -80,7 +122,9 @@ if (ELOG_ENABLE_FMT_LIB)
     target_link_libraries(elog fmt::fmt)
 endif()
 
+#############################################################
 # get HTTP client if needed
+#############################################################
 if (ELOG_ENABLE_HTTP)
     message(STATUS "Enabling http")
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_HTTP)
@@ -120,6 +164,7 @@ if (ELOG_ENABLE_HTTP)
     find_path(GZIP_HPP_INCLUDE_DIRS gzip/compress.hpp)
     if (NOT GZIP_HPP_INCLUDE_DIRS)
         # This is a temporary workaround, not sure why find_path() fails on Linux/MinGW
+        #set(GZIP_HPP_INCLUDE_DIRS ${gzp-hpp_SOURCE_DIR}/include)
         set(GZIP_HPP_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/_deps/gzip-hpp-src/include)
     endif()
     message(STATUS "Adding gzip include path: ${GZIP_HPP_INCLUDE_DIRS}")
@@ -132,7 +177,9 @@ if (ELOG_ENABLE_HTTP)
     target_compile_definitions(elog PRIVATE ZLIB_CONST)
 endif()
 
+#############################################################
 # get JSON if needed
+#############################################################
 if (ELOG_ENABLE_JSON)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_JSON)
     # add dependency on nlohmann_json
@@ -140,32 +187,51 @@ if (ELOG_ENABLE_JSON)
     target_link_libraries(elog nlohmann_json::nlohmann_json)
 endif()
 
+#############################################################
 # stack trace requires dbgutil
-# TODO: this should change after moving to public repo
+#############################################################
 if (ELOG_ENABLE_STACK_TRACE)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_STACK_TRACE)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_STACK_TRACE)
-    # add dbg util dependency
-    if (MSVC OR MINGW)
-        target_include_directories(elog PRIVATE "C:\\install\\dbgutil\\include")
-        target_include_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\include")
-        target_link_directories(elog PRIVATE "C:\\install\\dbgutil\\lib")
-        target_link_directories(elog_bench PRIVATE "C:\\install\\dbgutil\\lib")
+    
+    # for local builds we use local dbgutil
+    if (ELOG_BUILD_BENCH)
+        message(STATUS "Fetching dbgutil from local path: ${CMAKE_SOURCE_DIR}/../dbgutil")
+        FetchContent_Declare(dbgutil
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/../dbgutil)
     else()
-        target_include_directories(elog PRIVATE ~/install/dbgutil/include)
-        target_include_directories(elog_bench PRIVATE ~/install/dbgutil/include)
-        target_link_directories(elog PRIVATE ~/install/dbgutil/lib)
-        target_link_directories(elog_bench PRIVATE ~/install/dbgutil/lib)
+        message(STATUS "Fetching dbgutil from github")
+        FetchContent_Declare(dbgutil
+            GIT_REPOSITORY https://github.com/oa-333/dbgutil.git
+            GIT_TAG v0.1.0
+        )
     endif()
+    FetchContent_MakeAvailable(dbgutil)
+    target_include_directories(
+        elog
+        PRIVATE ${dbgutil_SOURCE_DIR}/inc
+    )
     target_link_libraries(elog dbgutil)
+    
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_STACK_TRACE)
+        target_include_directories(
+            elog_bench
+            PRIVATE ${dbgutil_SOURCE_DIR}/inc
+        )
+        target_link_libraries(elog_bench dbgutil)
+    endif()
 endif()
 
-# if gRPC is enabled we need to generate protocol headers Proto file
+#############################################################
+# gRPC Connector
+#############################################################
 # NOTE: all definitions here are adapted from the gRPC C++ client example in grpc.io
 if (ELOG_ENABLE_GRPC_CONNECTOR)
     # enable connector in code
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
+    endif()
 
     # Find Protobuf installation
     option(protobuf_MODULE_COMPATIBLE TRUE)
@@ -198,7 +264,9 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
     set(elog_grpc_srcs "${elog_platform_proto_path}/elog.grpc.pb.cc")
     set(elog_grpc_hdrs "${elog_platform_proto_path}/elog.grpc.pb.h")
     target_include_directories(elog PRIVATE ${elog_platform_proto_path})
-    target_include_directories(elog_bench PRIVATE ${elog_platform_proto_path})
+    if (ELOG_BUILD_BENCH)
+        target_include_directories(elog_bench PRIVATE ${elog_platform_proto_path})
+    endif()
 
     # generate files command
 
@@ -251,7 +319,9 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
     if (MSVC)
         # add gRPC sources to target elog_bench on Windows (because they cannot be exported, due to 
         # protoc limitation), but not proto sources (see big comment above)
-        target_sources(elog_bench PRIVATE ${elog_grpc_srcs})
+        if (ELOG_BUILD_BENCH)
+            target_sources(elog_bench PRIVATE ${elog_grpc_srcs})
+        endif()
         # NOTE: we do not add protobuf generates message source (because they can be exported)
     endif()
 
@@ -262,7 +332,9 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
         # NOTE: we need to force inclusion of elog_def.h for elog_bench as well, since it compiles
         # gRPC generated sources, and therefore includes generated protobuf message headers, which
         # now contain ELOG_API definition in each class declaration
-        target_compile_options(elog_bench PRIVATE /FI${CMAKE_SOURCE_DIR}\\src\\elog\\inc\\elog_def.h)
+        if (ELOG_BUILD_BENCH)
+            target_compile_options(elog_bench PRIVATE /FI${CMAKE_SOURCE_DIR}\\src\\elog\\inc\\elog_def.h)
+        endif()
     else()
         target_compile_options(elog PRIVATE -include ${CMAKE_SOURCE_DIR}/src/elog/inc/elog_def.h)
     endif()
@@ -275,25 +347,37 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
         ${_PROTOBUF_LIBPROTOBUF})
 
     # make sure elog_bench is linked against required libraries
-    target_link_libraries(elog_bench
-        absl::absl_log
-        absl::flags_parse
-        absl::log_initialize
-        absl::log_globals
-        ${_REFLECTION}
-        ${_GRPC_GRPCPP}
-        ${_PROTOBUF_LIBPROTOBUF})
+    if (ELOG_BUILD_BENCH)
+        target_link_libraries(elog_bench
+            absl::absl_log
+            absl::flags_parse
+            absl::log_initialize
+            absl::log_globals
+            ${_REFLECTION}
+            ${_GRPC_GRPCPP}
+            ${_PROTOBUF_LIBPROTOBUF})
+    endif()
 endif()
 
+#############################################################
+# Grafana Loki connector
+#############################################################
 if (ELOG_ENABLE_GRAFANA_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_GRAFANA_CONNECTOR)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRAFANA_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRAFANA_CONNECTOR)
+    endif()
     # Grafana requires HTTP connection and JSON support, which is already handled above
 endif()
 
+#############################################################
+# Sentry connector
+#############################################################
 if (ELOG_ENABLE_SENTRY_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_SENTRY_CONNECTOR)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_SENTRY_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_SENTRY_CONNECTOR)
+    endif()
     if (MSVC)
         find_package(sentry CONFIG REQUIRED)
         target_link_libraries(elog sentry::sentry)
@@ -301,123 +385,34 @@ if (ELOG_ENABLE_SENTRY_CONNECTOR)
         message(STATUS "Using SENTRY_SDK_HOME " $ENV{SENTRY_SDK_HOME})
         target_include_directories(elog PRIVATE "$ENV{SENTRY_SDK_HOME}/include")
         target_link_directories(elog PRIVATE "$ENV{SENTRY_SDK_HOME}/lib")
-        target_link_directories(elog_bench PRIVATE "$ENV{SENTRY_SDK_HOME}/lib")
         target_link_libraries(elog sentry)
-        target_link_libraries(elog_bench sentry)
+        if (ELOG_BUILD_BENCH)
+            target_link_directories(elog_bench PRIVATE "$ENV{SENTRY_SDK_HOME}/lib")
+            target_link_libraries(elog_bench sentry)
+        endif()
     endif()
 endif()
 
+#############################################################
+# Datadog connector
+#############################################################
 if (ELOG_ENABLE_DATADOG_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_DATADOG_CONNECTOR)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_DATADOG_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_DATADOG_CONNECTOR)
+    endif()
     # Datadog requires HTTP connection and JSON support, which is already handled above
 endif()
 
-# set different name on MinGW
-if (MINGW)
-    # since output may go to the same install dir, we need to use a different exe name
-    set_target_properties(elog_bench PROPERTIES OUTPUT_NAME "elog_bench_mingw")
-endif()
-
-# Using C++ 20 standard on Windows, and C++ 23 on other platforms
-if (MSVC)
-    target_compile_features(elog PRIVATE cxx_std_20)
-    target_compile_features(elog_bench PRIVATE cxx_std_20)
-else()
-    target_compile_features(elog PRIVATE cxx_std_23)
-    target_compile_features(elog_bench PRIVATE cxx_std_23)
-endif()
-
-# some optimizations for MSVC release builds that cmake does not by default set
-# this options come out of the box in Visual Studio C++ for Release build
-# we also add /Ob2 (since cmake uses /Ob1 thus restricting inlining)
-if (MSVC)
-    if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-        # disable security checks
-        target_compile_options(elog PRIVATE "/sdl-" )
-        target_compile_options(elog_bench PRIVATE "/sdl-" )
-        # be permissive
-        target_compile_options(elog PRIVATE "/permissive-")
-        target_compile_options(elog_bench PRIVATE "/permissive-")
-        # whole program optimization
-        target_compile_options(elog PRIVATE "/GL")
-        target_compile_options(elog_bench PRIVATE "/GL")
-        # use intrinsics
-        target_compile_options(elog PRIVATE "/Oi")
-        target_compile_options(elog_bench PRIVATE "/Oi")
-        # allowing more inlining
-        #target_compile_options(elog PRIVATE "/Ob2")
-        target_compile_options(elog_bench PRIVATE "/Ob2")
-        # disable security checks
-        target_compile_options(elog PRIVATE "/GS-")
-        target_compile_options(elog_bench PRIVATE "/GS-")
-        # enable function level linking
-        target_compile_options(elog PRIVATE "/Gy")
-        target_compile_options(elog_bench PRIVATE "/Gy")
-        # disable runtime type information
-        #target_compile_options(elog PRIVATE "/GR-")
-        target_compile_options(elog_bench PRIVATE "/GR-")
-        # don't generate manifest
-        target_link_options(elog PRIVATE "/MANIFEST:NO")
-        target_link_options(elog_bench PRIVATE "/MANIFEST:NO")
-        # linker optimization (reference=yes)
-        target_link_options(elog PRIVATE "/OPT:REF")
-        target_link_options(elog_bench PRIVATE "/OPT:REF")
-        # linker optimization (enable COMDAT Folding)
-        target_link_options(elog PRIVATE "/OPT:ICF")
-        target_link_options(elog_bench PRIVATE "/OPT:ICF")
-        # disable incremental linking
-        target_link_options(elog PRIVATE "/INCREMENTAL:NO")
-        target_link_options(elog_bench PRIVATE "/INCREMENTAL:NO")
-    endif()
-endif()
-
-# -Wno-interference-size - don't warn about using std::hardware_destructive_interference_size
-if (NOT MSVC)
-    add_compile_options(-Wno-interference-size)
-endif()
-
-# TODO: we should fix this in code
-if ("$ENV{CXX}" MATCHES ".*clang.*")
-    target_compile_options(elog PRIVATE "-Wno-final-dtor-non-final-class")
-    target_compile_options(elog_bench PRIVATE "-Wno-final-dtor-non-final-class")
-endif()
-
-# compile flags for per platform
-if (MSVC)
-    # /Zi - generate full debug information
-    # /EHsc - catch(..) catches only C++ exceptions, extern "C" functions never throw C++ exception
-    target_compile_definitions(elog PRIVATE ELOG_DLL)
-    # TODO: need to remove /Zi and check it gets added with Debug and 
-    add_compile_options(/Zi /EHsc)
-    # disable notorious C4251 (user is required to use the same C++ version)
-    target_compile_options(elog PRIVATE /wd4251)
-    target_compile_options(elog_bench PRIVATE /wd4251)
-    target_link_libraries(elog Ws2_32 Advapi32)
-endif()
-
-# include directories
-target_include_directories(elog PRIVATE src/elog/inc)
-target_include_directories(elog_bench PRIVATE src/elog/inc)
-
-# special include directories for MinGW
-if (MINGW)
-    target_include_directories(elog PRIVATE /ucrt64/include)
-    target_include_directories(elog_bench PRIVATE /ucrt64/include)
-    target_link_directories(elog PRIVATE /ucrt64/lib)
-    target_link_directories(elog_bench PRIVATE /ucrt64/lib)
-elseif(NOT MSVC)
-    add_link_options(-rdynamic)
-endif()
-
-# link libraries
-target_link_libraries(elog_bench elog)
-
-# SQLite - supported on all platforms
+#############################################################
+# SQLite connector - supported on all platforms
+#############################################################
 if (ELOG_ENABLE_SQLITE_DB_CONNECTOR)
     # NOTE: find_package works only for MSVC/vcpkg
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_SQLITE_DB_CONNECTOR)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_SQLITE_DB_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_SQLITE_DB_CONNECTOR)
+    endif()
     if (MSVC)
         find_package(unofficial-sqlite3 CONFIG REQUIRED)
         target_link_libraries(elog unofficial::sqlite3::sqlite3)
@@ -427,10 +422,14 @@ if (ELOG_ENABLE_SQLITE_DB_CONNECTOR)
     endif()
 endif()
 
-# PostgreSQL
+#############################################################
+# PostgreSQL connector
+#############################################################
 if (ELOG_ENABLE_PGSQL_DB_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_PGSQL_DB_CONNECTOR)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_PGSQL_DB_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_PGSQL_DB_CONNECTOR)
+    endif()
     # NOTE: find_package works only for Windows/MinGW
     if (MSVC)
         find_package(PostgreSQL REQUIRED)
@@ -443,7 +442,9 @@ if (ELOG_ENABLE_PGSQL_DB_CONNECTOR)
     endif()
 endif()
 
-# MySQL - supported only on Windows
+#############################################################
+# MySQL connector - supported only on Windows
+#############################################################
 if (MSVC)
     if (ELOG_ENABLE_MYSQL_DB_CONNECTOR)
         # all attempts to use vcpkg failed (no jdbc driver, only xdev for document API), so using old method
@@ -451,21 +452,27 @@ if (MSVC)
         # default value: "C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
         message(STATUS "Using MYSQL_ROOT " ${MYSQL_ROOT})
         target_compile_definitions(elog PRIVATE ELOG_ENABLE_MYSQL_DB_CONNECTOR)
-        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_MYSQL_DB_CONNECTOR)
         #find_package(unofficial-mysql-connector-cpp CONFIG REQUIRED)
         #target_link_libraries(elog unofficial::mysql-connector-cpp::connector)
         target_include_directories(elog PRIVATE "${MYSQL_ROOT}\\include")
         target_link_directories(elog PRIVATE "${MYSQL_ROOT}\\lib64\\vs14")
-        target_link_directories(elog_bench PRIVATE "${MYSQL_ROOT}\\lib64\\vs14")
         target_link_libraries(elog mysqlcppconn)
-        target_link_libraries(elog_bench mysqlcppconn)
+        if (ELOG_BUILD_BENCH)
+            target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_MYSQL_DB_CONNECTOR)
+            target_link_directories(elog_bench PRIVATE "${MYSQL_ROOT}\\lib64\\vs14")
+            target_link_libraries(elog_bench mysqlcppconn)
+        endif()
     endif()
 endif()
 
-# Kafka - supported on all platforms
+#############################################################
+# Kafka connector - supported on all platforms
+#############################################################
 if (ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
-    target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
+    endif()
     if (MSVC)
         find_package(RdKafka CONFIG REQUIRED)
         target_link_libraries(elog RdKafka::rdkafka RdKafka::rdkafka++)
@@ -475,28 +482,174 @@ if (ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
     endif()
 endif()
 
+#############################################################
+# C++ Version
+#############################################################
+
+# Using C++ 20 standard on Windows, and C++ 23 on other platforms
+if (MSVC)
+    target_compile_features(elog PRIVATE cxx_std_20)
+    if (ELOG_BUILD_BENCH)
+        target_compile_features(elog_bench PRIVATE cxx_std_20)
+    endif()
+else()
+    target_compile_features(elog PRIVATE cxx_std_23)
+    if (ELOG_BUILD_BENCH)
+        target_compile_features(elog_bench PRIVATE cxx_std_23)
+    endif()
+endif()
+
+#############################################################
+# Compile Options
+#############################################################
+
+#############################################################
+# MSVC Release Mode flags
+#############################################################
+# some optimizations for MSVC release builds that cmake does not by default set
+# this options come out of the box in Visual Studio C++ for Release build
+# we also add /Ob2 (since cmake uses /Ob1 thus restricting inlining)
+if (MSVC)
+    if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        # disable security checks
+        target_compile_options(elog PRIVATE "/sdl-" )
+        # be permissive
+        target_compile_options(elog PRIVATE "/permissive-")
+        # whole program optimization
+        target_compile_options(elog PRIVATE "/GL")
+        # use intrinsics
+        target_compile_options(elog PRIVATE "/Oi")
+        # allowing more inlining
+        #target_compile_options(elog PRIVATE "/Ob2")
+        # disable security checks
+        target_compile_options(elog PRIVATE "/GS-")
+        # enable function level linking
+        target_compile_options(elog PRIVATE "/Gy")
+        # disable runtime type information
+        #target_compile_options(elog PRIVATE "/GR-")
+        # don't generate manifest
+        target_link_options(elog PRIVATE "/MANIFEST:NO")
+        # linker optimization (reference=yes)
+        target_link_options(elog PRIVATE "/OPT:REF")
+        # linker optimization (enable COMDAT Folding)
+        target_link_options(elog PRIVATE "/OPT:ICF")
+        # disable incremental linking
+        target_link_options(elog PRIVATE "/INCREMENTAL:NO")
+        
+        if (ELOG_BUILD_BENCH)
+            target_compile_options(elog_bench PRIVATE "/sdl-" )
+            target_compile_options(elog_bench PRIVATE "/permissive-")
+            target_compile_options(elog_bench PRIVATE "/GL")
+            target_compile_options(elog_bench PRIVATE "/Oi")
+            target_compile_options(elog_bench PRIVATE "/Ob2")
+            target_compile_options(elog_bench PRIVATE "/GS-")
+            target_compile_options(elog_bench PRIVATE "/Gy")
+            target_compile_options(elog_bench PRIVATE "/GR-")
+            target_link_options(elog_bench PRIVATE "/MANIFEST:NO")
+            target_link_options(elog_bench PRIVATE "/OPT:REF")
+            target_link_options(elog_bench PRIVATE "/OPT:ICF")
+            target_link_options(elog_bench PRIVATE "/INCREMENTAL:NO")
+        endif()
+    endif()
+endif()
+
+#############################################################
+# Compiler Warnings
+#############################################################
+if (MSVC)
+    target_compile_options(elog PRIVATE /Wall)
+    # disable notorious C4251 (user is required to use the same C++ version)
+    # instead user needs to build all modules with same C++ version for ABI safety
+    target_compile_options(elog PRIVATE /wd4251)
+    target_compile_options(elog PRIVATE /wd5045)
+    target_compile_options(elog PRIVATE /wd4100)
+    target_compile_options(elog PRIVATE /wd4820)
+    target_compile_options(elog PRIVATE /wd4324)
+    target_compile_options(elog PRIVATE /wd5039)
+    if (ELOG_BUILD_BENCH)
+        target_compile_options(elog_bench PRIVATE /wd4251)
+    endif()
+else()
+    target_compile_options(elog PRIVATE -Wall)
+    # -Wno-interference-size - don't warn about using std::hardware_destructive_interference_size
+    add_compile_options(-Wno-interference-size)
+endif()
+
+#############################################################
+# clang options
+#############################################################
+# TODO: this requires fixing in code
+if ("$ENV{CXX}" MATCHES ".*clang.*")
+    target_compile_options(elog PRIVATE "-Wno-final-dtor-non-final-class")
+    if (ELOG_BUILD_BENCH)
+        target_compile_options(elog_bench PRIVATE "-Wno-final-dtor-non-final-class")
+    endif()
+endif()
+
+# compile flags for per platform
+if (MSVC)
+    target_compile_definitions(elog PRIVATE ELOG_DLL)
+    # /Zi - generate full debug information
+    # /EHsc - catch(..) catches only C++ exceptions, extern "C" functions never throw C++ exception
+    add_compile_options(/Zi /EHsc)
+    target_link_libraries(elog Ws2_32 Advapi32)
+endif()
+
+# include directories
+target_include_directories(elog PRIVATE src/elog/inc)
+if (ELOG_BUILD_BENCH)
+    target_include_directories(elog_bench PRIVATE src/elog/inc)
+endif()
+
+# special include directories for MinGW
+# TODO: check this again, since we are building from UCRT64 console
+if (MINGW)
+    target_include_directories(elog PRIVATE /ucrt64/include)
+    target_link_directories(elog PRIVATE /ucrt64/lib)
+    if (ELOG_BUILD_BENCH)
+        target_include_directories(elog_bench PRIVATE /ucrt64/include)
+        target_link_directories(elog_bench PRIVATE /ucrt64/lib)
+    endif()
+elseif(NOT MSVC)
+    add_link_options(-rdynamic)
+endif()
+
+# link libraries
+if (ELOG_BUILD_BENCH)
+    target_link_libraries(elog_bench elog)
+endif()
+
 # source folders
 add_subdirectory(src/elog/src)
-add_subdirectory(src/elog_bench/src)
 add_subdirectory(src/elog/proto)
+if (ELOG_BUILD_BENCH)
+    add_subdirectory(src/elog_bench/src)
+endif()
 
 # public headers
 add_subdirectory(src/elog/inc)
 
-# install header in install dir
-install(TARGETS elog FILE_SET publicheaders)
-install(TARGETS elog_bench)
+#############################################################
+# local install for tests
+#############################################################
+if (ELOG_BUILD_BENCH)
+    message(STATUS "Installing at ${CMAKE_INSTALL_PREFIX}")
 
-# common install dir
-set(ELOG_INSTALL_REL_PATH ${CMAKE_INSTALL_PREFIX}/../bin/${SYSTEM_NAME}-${CMAKE_BUILD_TYPE})
-cmake_path(NORMAL_PATH ELOG_INSTALL_REL_PATH OUTPUT_VARIABLE ELOG_INSTALL_PATH)
-make_directory(${ELOG_INSTALL_PATH})
-make_directory(${CMAKE_INSTALL_PREFIX}/../bin/${SYSTEM_NAME})
-install(TARGETS elog LIBRARY DESTINATION ${ELOG_INSTALL_PATH})
-install(TARGETS elog RUNTIME DESTINATION ${ELOG_INSTALL_PATH})
-install(TARGETS elog_bench RUNTIME DESTINATION ${ELOG_INSTALL_PATH})
-if (MSVC)
-    install(FILES run_bench.bat DESTINATION ${ELOG_INSTALL_PATH})
-else()
-    install(FILES run_bench.sh DESTINATION ${ELOG_INSTALL_PATH})
+    # install header in install dir
+    install(TARGETS elog FILE_SET publicheaders)
+    install(TARGETS elog_bench)
+
+    # common install dir
+    set(ELOG_INSTALL_REL_PATH ${CMAKE_INSTALL_PREFIX}/../bin/${SYSTEM_NAME}-${CMAKE_BUILD_TYPE})
+    cmake_path(NORMAL_PATH ELOG_INSTALL_REL_PATH OUTPUT_VARIABLE ELOG_INSTALL_PATH)
+    make_directory(${ELOG_INSTALL_PATH})
+    make_directory(${CMAKE_INSTALL_PREFIX}/../bin/${SYSTEM_NAME})
+    install(TARGETS elog LIBRARY DESTINATION ${ELOG_INSTALL_PATH})
+    install(TARGETS elog RUNTIME DESTINATION ${ELOG_INSTALL_PATH})
+    install(TARGETS elog_bench RUNTIME DESTINATION ${ELOG_INSTALL_PATH})
+    if (MSVC)
+        install(FILES run_bench.bat DESTINATION ${ELOG_INSTALL_PATH})
+    else()
+        install(FILES run_bench.sh DESTINATION ${ELOG_INSTALL_PATH})
+    endif()
 endif()
