@@ -32,6 +32,7 @@
 #include "elog_syslog_target.h"
 #include "elog_target_spec.h"
 #include "elog_time_internal.h"
+#include "elog_win32_event_log_target.h"
 
 namespace elog {
 
@@ -971,6 +972,43 @@ ELogTargetId ELogSystem::addSysLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
 
     return logTargetId;
 #else
+    ELOG_REPORT_ERROR("Cannot create syslog target: not supported on current platform");
+    return ELOG_INVALID_TARGET_ID;
+#endif
+}
+
+ELogTargetId ELogSystem::addWin32EventLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                                                const char* eventSourceName /* = "" */,
+                                                uint32_t eventId /* = 0 */,
+                                                ELogFilter* logFilter /* = nullptr */,
+                                                ELogFormatter* logFormatter /* = nullptr */) {
+#ifdef ELOG_WINDOWS
+    ELogWin32EventLogTarget* logTarget =
+        new (std::nothrow) ELogWin32EventLogTarget(eventSourceName, eventId);
+    if (logTarget == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create Windows Event Log target, out of memory");
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    logTarget->setLogLevel(logLevel);
+    if (logFilter != nullptr) {
+        logTarget->setLogFilter(logFilter);
+    }
+    if (logFormatter != nullptr) {
+        logTarget->setLogFormatter(logFormatter);
+    }
+
+    ELogTargetId logTargetId = addLogTarget(logTarget);
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        // NOTE: detach from policy/filter/formatter before delete, because in case of failure
+        // caller is still owner of these objects.
+        logTarget->detach();
+        delete logTarget;
+    }
+
+    return logTargetId;
+#else
+    ELOG_REPORT_ERROR("Cannot create Windows Event Log target: not supported on current platform");
     return ELOG_INVALID_TARGET_ID;
 #endif
 }

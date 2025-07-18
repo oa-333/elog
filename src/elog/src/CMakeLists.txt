@@ -79,4 +79,5 @@ target_sources(elog PRIVATE
     ./elog_target.cpp
     ./elog_time.cpp
     ./elog_tls.cpp
-    ./elog_win32_dll_event.cpp)
+    ./elog_win32_dll_event.cpp
+    ./elog_win32_event_log_target.cpp)

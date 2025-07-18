@@ -78,4 +78,5 @@ target_sources(
             elog_target_spec.h
             elog_target.h
             elog_time.h
-            elog_tls.h)
+            elog_tls.h
+            elog_win32_event_log_target.h)

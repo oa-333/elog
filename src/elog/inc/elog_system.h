@@ -330,10 +330,37 @@ public:
                                            ELogFilter* logFilter = nullptr,
                                            ELogFormatter* logFormatter = nullptr);
 
-    /** @brief Adds syslog (or Windows Event Log) target. */
+    /** @brief Adds syslog target. */
     static ELogTargetId addSysLogTarget(ELogLevel logLevel = ELEVEL_INFO,
                                         ELogFilter* logFilter = nullptr,
                                         ELogFormatter* logFormatter = nullptr);
+
+    /**
+     * @brief Adds Windows Event Log target.
+     *
+     * @param logLevel Restrict reports to the event log by log level.
+     * @param eventSourceName The event source name to use in the event log reports. If this
+     * parameter is left empty, then the application name as configured by the user via @ref
+     * ELogSystem::setAppName() will be used. If none was set, then the program name, as extracted
+     * from the current executable image, will be used instead. If all fails the name "elog" will be
+     * used as a last resort.
+     * @param eventId The event id to use in the event log report. Since no message
+     * file/resource-dll is involved in the reports, this is solely used for searching/identifying
+     * events in the event viewer.
+     * @param logFilter Any additional log filter to apply to log records before reporting to the
+     * event log.
+     * @param logFormatter Alternate messages formatting. Since event log records already contain a
+     * time stamp, it may be desired to use a simpler log format, without a time stamp.
+     * @return ELogTargetId The resulting log target id, or @ref ELOG_INVALID_TARGET_ID in case of
+     * failure.
+     * @note Unless being explicitly overridden by the user, the Windows Event Log target can be
+     * obtained by the name "win32eventlog" (see @ref ELogSystem::getLogTarget()).
+     */
+    static ELogTargetId addWin32EventLogTarget(ELogLevel logLevel = ELEVEL_INFO,
+                                               const char* eventSourceName = "",
+                                               uint32_t eventId = 0,
+                                               ELogFilter* logFilter = nullptr,
+                                               ELogFormatter* logFormatter = nullptr);
 
     /**
      * @brief Adds a dedicated tracer, that receives messages only from a specific logger.
@@ -433,6 +460,62 @@ public:
      * @note This call is NOT thread safe.
      */
     static ELogLogger* getSharedLogger(const char* qualifiedSourceName);
+
+    /**
+     * Log Level Interface
+     */
+
+    /**
+     * @brief Retrieves the global log level (the log level of the root log source).
+     * @return The log level.
+     */
+    static ELogLevel getLogLevel();
+
+    /** @brief Configures the global log level. */
+
+    /**
+     * @brief Set the global log level of the root log source.
+     *
+     * @param logLevel Th elog level to set.
+     * @param propagateMode Specifies how the log level should propagate to child log sources of the
+     * root log source.
+     */
+    static void setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode);
+
+    /**
+     * @brief Set the font and/or color of a specific log level.
+     *
+     * @param logLevel The log level to configure.
+     * @param formatSpec The font/color specification for the log level.
+     */
+    // static void setLogLevelFormat(ELogLevel logLevel, const ELogTextSpec& formatSpec);
+
+    /**
+     * @brief Configures the font/color of several log level using a configuration string, with the
+     * following format:
+     *
+     * "{<level>:<spec>, <level>:<spec>}"
+     *
+     * Where level is any of the log levels (without ELOG_ prefix, e.g. INFO), and font/color
+     * specification is a  follows any of these formats:
+     *
+     * fg/bg-color = <any of black, red, green, yellow, blue, magenta, cyan, white>
+     * fg/bg-color = #RRGGBB (full hexadecimal RGB specification)
+     * fg/bg-color = vga#RRGGBB (vga hexadecimal RGB color, each component may not exceed 1F)
+     * fg/bg-color = grey/gray#<value>> (grayscale value in the range 0-23, inclusive, zero is dark)
+     * font = bold/faint/italic/underline/cross-out/blink-slow/blink-rapid
+     *
+     * Font format specification may appear more than once. For instance:
+     *
+     * {TRACE:font=faint, INFO:fg-color=green, WARN:fg-color=yellow,
+     * ERROR:fg-color=red:font=bold:font=blink-rapid}
+     *
+     * Note that all simple colors may be preceded by "bright-" prefix (e.g. bright-yellow).
+     *
+     * @param logLevelConfig log level format configuration.
+     * @return True if the operation succeeded, otherwise false (i.e. parse error).
+     */
+    // static bool configureLogLevelFormat(const char* logLevelConfig);
 
     /**
      * Log Formatting Interface
@@ -969,14 +1052,14 @@ if (logger != nullptr) {
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                                \
-    {                                                                                             \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                             \
-        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                              \
-        ELOG_ERROR_EX(validLogger, "Windows system call " #syscall "() failed: %lu (%s)", sysErr, \
-                      errStr);                                                                    \
-        elog::ELogSystem::win32FreeErrorStr(errStr);                                              \
-        ELOG_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                           \
+#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                              \
+    {                                                                                           \
+        elog::ELogLogger* errLogger = elog::getValidLogger(logger);                             \
+        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                            \
+        ELOG_ERROR_EX(errLogger, "Windows system call " #syscall "() failed: %lu (%s)", sysErr, \
+                      errStr);                                                                  \
+        elog::ELogSystem::win32FreeErrorStr(errStr);                                            \
+        ELOG_ERROR_EX(errLogger, fmt, ##__VA_ARGS__);                                           \
     }
 
 #if 0
@@ -991,14 +1074,14 @@ if (logger != nullptr) {
 
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                           \
-    {                                                                                            \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
-        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                             \
-        ELOG_ERROR_EX(validLogger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
-                      errStr);                                                                   \
-        elog::ELogSystem::win32FreeErrorStr(errStr);                                             \
-        ELOG_FMT_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                      \
+#define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                         \
+    {                                                                                          \
+        elog::ELogLogger* errLogger = elog::getValidLogger(logger);                            \
+        char* errStr = elog::ELogSystem::win32SysErrorToStr(sysErr);                           \
+        ELOG_ERROR_EX(errLogger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
+                      errStr);                                                                 \
+        elog::ELogSystem::win32FreeErrorStr(errStr);                                           \
+        ELOG_FMT_ERROR_EX(errLogger, fmt, ##__VA_ARGS__);                                      \
     }
 
 #if 0
@@ -1021,13 +1104,19 @@ if (logger != nullptr) {
  * @note The error code for the system call is obtained through @ref errno. If you wish to provide
  * another error code then consider calling @ref ELOG_SYS_ERROR_NUM() instead.
  */
-#define ELOG_WIN32_ERROR_EX(logger, syscall, fmt, ...) \
-    ELOG_WIN32_ERROR_NUM_EX(logger, syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+#define ELOG_WIN32_ERROR_EX(logger, syscall, fmt, ...)                        \
+    {                                                                         \
+        DWORD sysErr = ::GetLastError();                                      \
+        ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
 
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_WIN32_ERROR_EX(logger, syscall, fmt, ...) \
-    ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+#define ELOG_FMT_WIN32_ERROR_EX(logger, syscall, fmt, ...)                        \
+    {                                                                             \
+        DWORD sysErr = ::GetLastError();                                          \
+        ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
 #endif
 
 #endif  // ELOG_WINDOWS
@@ -1285,13 +1374,19 @@ if (logger != nullptr) {
  * @note The error code for the system call is obtained through @ref errno. If you wish to provide
  * another error code then consider calling @ref ELOG_SYS_ERROR_NUM() instead.
  */
-#define ELOG_WIN32_ERROR(syscall, fmt, ...) \
-    ELOG_WIN32_ERROR_NUM(syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+#define ELOG_WIN32_ERROR(syscall, fmt, ...)                        \
+    {                                                              \
+        DWORD sysErr = ::GetLastError();                           \
+        ELOG_WIN32_ERROR_NUM(syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
 
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_WIN32_ERROR(syscall, fmt, ...) \
-    ELOG_FMT_WIN32_ERROR_NUM(syscall, ::GetLastError(), fmt, ##__VA_ARGS__)
+#define ELOG_FMT_WIN32_ERROR(syscall, fmt, ...)                        \
+    {                                                                  \
+        DWORD sysErr = ::GetLastError();                               \
+        ELOG_FMT_WIN32_ERROR_NUM(syscall, sysErr, fmt, ##__VA_ARGS__); \
+    }
 #endif
 
 #endif  // ELOG_WINDOWS
