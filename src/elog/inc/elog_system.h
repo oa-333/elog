@@ -578,6 +578,9 @@ public:
      * Log Filtering Interface
      */
 
+    /** @brief Configures top-level log filter form configuration string. */
+    static bool configureLogFilter(const char* logFilterCfg);
+
     /** @brief Installs a custom log filter. */
     static void setLogFilter(ELogFilter* logFilter);
 
@@ -585,9 +588,16 @@ public:
      * @brief Sets a global rate limit on message logging.
      * @param maxMsgPerSecond The maximum allowed number of message logging within a 1 second
      * window of time.
+     * @param replaceGlobalFilter Specified what to do in case of an existing global log filter. If
+     * set to true, then the rate limiter will replace any configured global log filter. If set to
+     * false then the rate limiter will be combined with the currently configured global log filter
+     * using OR operator. In no global filter is currently being used then this parameter has no
+     * significance and is ignored.
      * @return True if the operation succeeded, otherwise false.
+     * @note Setting the global rate limit will replace the current global log filter. If the
+     * intention is to add a rate limiting to the current log filter
      */
-    static bool setRateLimit(uint32_t maxMsgPerSecond);
+    static bool setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter = true);
 
     /**
      * @brief Filters a log record.

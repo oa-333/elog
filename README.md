@@ -1,7 +1,8 @@
 # ELog Logging Library
 
-The ELog (Error Log) library is a simple, lightweight, yet robust, high-performant and feature-rich C++ logging library.  
-The library was designed such that it can be extended for a broad range of use cases, and it supports a wide range of options for configuration from file or connection string (see examples below).
+The ELog (Error Log) library is a simple, lightweight, high-performant and feature-rich C++ logging library.  
+The library has connectors for various widely-used external systems, and was designed such that it can be extended  
+for a broad range of use cases. In addition, it is fully configurable from file or string input (see examples below).
 
 The project is still in pre-Beta phase, and more is expected to come.
 
@@ -16,6 +17,10 @@ Possible output:
 
     2025-07-05 10:35:18.311 INFO   [32680] This is an unsigned integer 5 and a string 'hi'
 
+Using [fmtlib](https://github.com/fmtlib/fmt) formatting style (requires enabling fmtlib extension):
+
+    ELOG_FMT_INFO("This is an unsigned integer {} and a string '{}'", 5, "hi");
+
 Logging with a designated [logger](#defining-log-sources-and-loggers) (no error checking):
 
     // initialize a thread-safe shared logger
@@ -27,7 +32,7 @@ Logging with a designated [logger](#defining-log-sources-and-loggers) (no error 
             logSource->getQualifiedName(), 
             logSource->getId());
 
-Initialize elog and configure an asynchronous rotating file log target (log segment size 4M, 20 log segments at most):
+Initialize elog and configure an asynchronous (based on lock-free ring-buffer) rotating file log target, having log segment size 4M, and 20 log segments at most:
 
     elog::initialize();
     elog::configureTargetFromStr(
@@ -37,22 +42,7 @@ Initialize elog and configure an asynchronous rotating file log target (log segm
     // all log messages are now directed to the asynchronous rotating logger
     ELOG_INFO("App starting");
 
-Add asynchronous log target to send log lines to Grafana-Loki, while flushing each 100 log lines or 5 seconds, and restricting log shipping to ERROR log level:
-
-    elog::configureTargetFromStr(
-        "async://quantum?quantum_buffer_size=1000&log_level=ERROR | "
-        "mon://grafana?mode=json&"
-        "loki_endpoint=http://192.168.108.111:3100&"
-        "labels={\"app\": \"${app}$\"}&"
-        "log_line_metadata={\"log_source\": \"${src}\", \"thread_name\": \"${tname}\"}&"
-        "flush_policy=((count == 100) OR (time == 5000))");
-
-Each log line is accompanied by:
-
-- "app" label, which equals to configured application name (see [field reference tokens](#log-record-field-reference-tokens) for more details)
-- Log line metadata, containing the log source and thread name issuing the log message
-
-When stack trace are enabled, a stack trace containing file and line can be dumped (so when Grafana-Loki connector is configured, for instance, this stack trace is sent to Grafana-Loki as well):
+When stack traces are enabled (build ELog with ELOG_ENABLE_STACK_TRACE=ON), a stack trace containing file and line can be dumped:
 
     ELOG_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing current thread stack trace");
 
@@ -71,12 +61,28 @@ Sample output (Linux):
     8# 0x716a4842a28b __libc_start_main()                      at <N/A>  (libc.so.6)
     9# 0x5c4bddcba745 _start() +37                             at <N/A>  (wal_test_linux)
 
-It is also possible to dump stack trace of all running thread (experimental):
+It is also possible to dump stack trace of all running threads (experimental):
 
     ELOG_APP_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing application stack trace");
 
+This examples adds an asynchronous log target to send log lines to Grafana-Loki, while flushing (i.e. send HTTP message with accumulated log lines) each 100 log lines or 5 seconds, and restricting log shipping to ERROR log level, with retry timeout of 5 seconds (when Loki is down), and backlog of 1 MB of data (after which old log data is discard while Loki is down):
 
-Configure [log line format](#configuring-log-line-format):
+    elog::configureTargetFromStr(
+        "async://quantum?quantum_buffer_size=1000&log_level=ERROR | "
+        "mon://grafana?mode=json&"
+        "loki_endpoint=http://192.168.108.111:3100&"
+        "labels={\"app\": \"${app}$\"}&"
+        "log_line_metadata={\"log_source\": \"${src}\", \"thread_name\": \"${tname}\"}&"
+        "stack_trace=yes&"
+        "flush_policy=((count == 100) OR (time == 5000))");
+
+Each log line is accompanied by:
+
+- "app" label, which equals to configured application name (see [field reference tokens](#log-record-field-reference-tokens) for more details)
+- Log line metadata, containing the log source and thread name issuing the log message
+- Logging thread's fully resolved call stack with function/file/line data for each frame
+
+In this example, the [log line format](#configuring-log-line-format) can be configured:
 
     elog::configureLogFormat("${time} ${level:6} [${tid}] ${src} ${msg}");
 
@@ -90,48 +96,74 @@ The effect is the following line format:
 
 The ELog library provides the following notable features:
 
-- Synchronous and asynchronous logging schemes
-    - **Lock-free** synchronous log file rotation/segmentation
-    - Allowing for multiple log targets (i.e. "log appenders"), including file, syslog, stderr, stdout
-- Flexible and rich in features
-    - Configurable logger hierarchy, log line format, flush policies, filtering, rate limiting, compound log targets and more
-    - **Supports dumping to log call stack (current thread or all threads) with file and line number, voluntarily or due to unhandled signal**
 - High performance
-    - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free, scalable in multi-threaded scenarios)
+    - Although perhaps not the fastest out there, ELog still provides high performance logging with low overhead
+    - Minimal formatting on logging application side, possibly combined with lock-free asynchronous logging
+    - Full formatting takes place on background thread
+    - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, *scalable* in multi-threaded scenarios)
     - Check out the [benchmarks](#Benchmarks) below
-- Connectivity to external systems
-    - [Grafana Loki](https://grafana.com/oss/loki/)
-    - [Sentry](https://sentry.io/welcome/)
-    - [Datadog](https://www.datadoghq.com/)
-    - [Kafka](#connecting-to-kafka-topic)
-    - [PostgreSQL](#connecting-to-postgresql)
-    - [SQLite](#connecting-to-sqlite)
-    - [MySQL](#connecting-to-mysql-experimental)
+- Synchronous and asynchronous logging schemes
+    - Synchronous logging to file, allowing for efficient buffering and log rotation/segmentation
+    - **Lock-free** synchronous log file rotation/segmentation
+- Wide range of predefined log targets (i.e. "log sinks/appenders"):
+    - stdout/stderr
+    - syslog
+    - Windows event log
+    - log file (including rotation/segmentation)
+    - databases (PostgreSQL, SQLite, MySQL)
+    - message queues (Kafka)
+    - RPC endpoints (gRPC)
+    - monitoring tools (Grafana Loki, Datadog, Sentry)
+- Flexible and rich in features
+    - User can define multiple log targets
+    - combine with complex filtering schemes and flush policies
+    - possibly employing rate limiting
+    - Can combine several log targets under one framework and apply common restrictions and properties
+- Pre-initialization Logging
+    - Accumulates log messages issued during static initialization (or any message before the ELog library is initialized) and issues the accumulated log messages in each added log target.
+- *Full Call Stack Dumping* (with function/file/line information)
+    - Voluntary current thread call stack dumping (i.e. not in signal handler, so no thread context pointer required)
+    - Voluntary full application call stack dumping (i.e. stack trace of all active threads)
+- Exception/Crash Handling
+    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
+    - Writes to log full exception information, including call stack
+    - Generates core dump (mini-dump file on Windows)
+- Configurability
+    - The entire library is *fully configurable* from file or string, including very complex scenarios (see [basic examples](#basic-examples) above)
+    - The purpose is to reduce amount of boilerplate code required just to get things started
+    - The following can be configured by file or string:
+        - log levels
+        - output destinations (log targets/sinks)
+        - log file buffering and rotation
+        - asynchronous logging schemes
+        - formatting patterns, including fonts, colors and conditional formatting
+        - complex filters
+        - complex flush policies
+        - log source hierarchy (file only)
+        - log level, with propagation in the log source hierarchy
+        - log target affinity (restricting log sources to specific log targets - file only)
+        - rate limiting
+    - All configurable parameters can be set either globally and/or per log target
+- Extendibility
+    - All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file)
+        - log targets
+        - flush policies
+        - log record filters
+        - log record formatting
+        - log record field reference tokens
+    - This requires static registration, which is normally achieved through helper macros
+- Various formatting styles
+    - Supports both printf and fmtlib formatting style
 - Multiple platform support
     - **Linux, Windows, MinGW**
-- Designed for external extendibility
-    - Special connectors can be developed by the user and get registered into the ELog system
-- Configurable from file or properties map
-    - Most common use case scenarios are fully configurable from config file
-
-Additional features:
-
-- Logging to multiple targets (destinations) at once
-- Logger hierarchy with per-logger log level control
-- Various asynchronous logging schemes (low logger latency)
-- Configurable log line format and log level on a per-target basis
-    - For instance, when using both file and syslog logging, log lines sent to syslog can be formatted differently than regular log file
-    - In addition, it can be configured such that only FATAL messages are sent to syslog
-- Optional rate limiting (global and/or per log target)
-- Configurable flush policy (global and/or per log target)
-- Configurable log filtering (global and/or per log target)
+- Intuitive API
+    - Most common tasks are achieved via powerful configuration abilities, and using the logging macros
+- Extensive Documentation
+    - Below you can find a clear and elaborate explanation on how to use, configure and extend the ELog library
 
 Planned/considered future features:
 
-- Connectivity to Windows Event Log
-- Connectivity to SMTP
 - Support on MacOS
-- Optional handling of signals
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
@@ -185,7 +217,8 @@ In particular the following compile/runtime dependencies exist in each case:
 - gRPC connector depends on gRPC and protobuf libraries
 - Grafana/Loki and Datadog connectors requires json/nlohmann and httplib
 - Sentry connector requires the Sentry native library
-- Stack trace logging requires [dbgutil](https://github.com/oa-333/dbgutil)
+- Stack trace logging and exception/crash handling requires [dbgutil](https://github.com/oa-333/dbgutil)
+- fmtlib formatting style requires [fmtlib](#https://github.com/fmtlib/fmt)
 
 ### Installing
 
@@ -203,6 +236,20 @@ Add to compiler include path:
 Add to linker flags:
 
     -L<install-path>/bin -lelog
+
+For CMake builds it is possible to use FetchContent as follows:
+
+    FetchContent_Declare(elog
+        GIT_REPOSITORY https://github.com/oa-333/elog.git
+        GIT_TAG v0.1.0
+    )
+    FetchContent_MakeAvailable(elog)
+    target_include_directories(
+        <your project name here>
+        PRIVATE
+        ${elog_SOURCE_DIR}/src/elog/include
+    )
+    target_link_libraries(<your project name here> elog)
 
 According to requirements, in the future it may be uploaded to package managers (e.g. vcpkg).
 
@@ -227,27 +274,36 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Defining Log Sources and Loggers](#defining-log-sources-and-loggers)
     - [Configuring Log Line Format](#configuring-log-line-format)
     - [Log Record Field Reference Tokens](#log-record-field-reference-tokens)
-    - [Extending The Formatting Scheme](#extending-the-formatting-scheme)
     - [Filtering Log Messages](#filtering-log-messages)
     - [Limiting Log Rate](#limiting-log-rate)
     - [Log Targets](#log-targets)
     - [Flush Policy](#flush-policy)
-- [Configuring from Properties](#configuring-from-properties)
+- [Configuring from File or String](#configuring-from-file-or-string)
     - [Configuring Log Level](#configuring-log-level)
     - [Configuring Log Targets](#configuring-log-targets)
     - [Individual Log Target Configuration](#individual-log-target-configuration)
     - [Configuring Flush Policy](#configuring-flush-policy)
+    - [Configuring Log Filters](#configuring-log-filters)
     - [Compound Log Targets](#compound-log-targets)
     - [Configuring Database Log Targets](#configuring-database-log-targets)
     - [Connecting to PostgreSQL](#connecting-to-postgresql)
     - [Connecting to SQLite](#connecting-to-sqlite)
     - [Connecting to MySQL (experimental)](#connecting-to-mysql-experimental)
     - [Connecting to Kafka Topic](#connecting-to-kafka-topic)
+    - [Connecting to gRPC Endpoint](#connecting-to-grpc-endpoint)
     - [Connecting to Grafana-Loki](#connecting-to-grafana-loki)
-    - [Connecting to Sentry](#connecting-to-sentry)
     - [Connecting to Datadog](#connecting-to-datadog)
+    - [Connecting to Sentry](#connecting-to-sentry)
     - [Nested Specification Style](#nested-specification-style)
-    - [Terminal Formatting Syntax](#terminal-formatting-syntax)
+    - [Terminal Text Formatting](#terminal-text-formatting)
+    - [Terminal Text Formatting Syntax](#terminal-formatting-formal-syntax-specification)
+- [Extending The Library](#extending-the-library)
+    - [Extending The Formatting Scheme](#extending-the-formatting-scheme)
+    - [Adding New Log Filter Types](#adding-new-log-filter-types)
+    - [Adding New Flush Policy Types](#adding-new-flush-policy-types)
+    - [Adding New Log Target Types](#adding-new-log-target-types)
+    - [Adding New Schema Handler Types](#adding-new-schema-handler-type)
+    - [Using Proprietary Protocol for gRPC Log Target](#using-proprietary-protocol-for-grpc-log-target)
 - [Benchmarks](#benchmarks)
     - [Benchmark Highlights](#benchmark-highlights)
     - [Empty Logging Benchmark](#empty-logging-benchmark)
@@ -433,37 +489,7 @@ Tokens may contain justification number, where positive means justify to the lef
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
 
 An extended syntax for reference token was defined for special terminal formatting escape sequences (colors and fonts).
-See 
-
-### Extending The Formatting Scheme
-
-In order to extend the formatting scheme with new reference tokens, ELogFieldSelector should be derived, implemented, and registered.  
-For instance:
-
-    class MyFieldSelector : public ELogFieldSelector {
-    public:
-        MyFieldSelector(int justify, ...) : ELogFieldSelector(ELogFieldType::FT_INT, justify) {...}
-        ~MyFieldSelector() override {...}
-
-        void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final {
-            // implement
-            // obtain the data and pass it to the receptor, with justify value. For instance:
-            uint64_t myIntData = ...;
-            receptor->receiveIntField(myIntData, m_justify);
-        }
-
-    private:
-        ELOG_DECLARE_FIELD_SELECTOR(MyFieldSelector, refname);
-    };
-
-Pay attention that now, in the format line configuration you may reference this new token with ${refname},  
-as specified in the ELOG_DECLARE_FIELD_SELECTOR() macro.
-
-In addition, in the source file, make sure the implement the field selector registration, as follows:
-
-    ELOG_IMPLEMENT_FIELD_SELECTOR(MyFieldSelector)
-
-For more examples see elog_field_selector.h and elog_field_selector.cpp.
+See [terminal text formatting](#terminal-text-formatting) for more details.
 
 ### Filtering Log Messages
 
@@ -562,22 +588,19 @@ In case a combination of strategies is needed, either ELogAndFlushPolicy or ELog
 
 For any other specialized flush policy, derive from ELogFlushPolicy and override the shouldFlush() virtual method.
 
-## Configuring from Properties
+## Configuring from File or String
 
-The ELogSystem facade provides a utility function to load configuration from properties map:
+The ELog library provides utility functions to load configuration from file or string:
 
-    static bool configureFromProperties(const ELogPropertyMap& props,
-                                        bool defineLogSources = false,
-                                        bool defineMissingPath = false);
+- configureByPropFile (load definitions from property file, key=value)
+- configureByProps (load from property map)
+- configureByPropFileEx (load from property file, extended position information)
+- configureByPropsEx (load from property map, extended position information)
+- configureByFile (load from file, nested/permissive JSON format)
+- configureByStr (load from string, nested/permissive JSON format)
+- configure (load from configuration object)
 
-The properties map is actually a vector of pairs, since order of configuring log sources' log levels matter.  
-The following properties are recognized (the rest are ignored):
-
-- log_format: configures log line format specification
-- log_level: configures global log level of the root log source, allows specifying propagation (see below)
-- {source-name}.log_level: configures log level of a specific log source
-- log_rate_limit: configures the global log rate limit (maximum number of messages per second)
-- log_target: configures a log target (may be repeated several times)
+TODO: refine API, we don't need so many functions
 
 ### Configuring Log Level
 
@@ -675,33 +698,113 @@ The last three flush policies require the following addition parameter each resp
 - flush_size_bytes
 - flush_timeout_millis
 
-For more complex flush policy, assign a name to the log target and configure manually its flush policy.
+Complex flush policies can be defined with the following free style syntax:
+
+flush_policy=((count == 10) OR (time == 5000))
+
+This is interpreted as flushing either when 10 log messages are accumulated or when timeout from last flush exceeds 5 seconds.  
+
+The following operators are allowed:
+
+- AND
+- OR
+- NOT
+- CHAIN (experimental, used for group flush moderation)
+
+The following flush policies are recognized (can be externally extended):
+
+- count, size, time
+
+Only == (equals) operator is recognized in this context.  
+The expression must be properly formed with parenthesis enclosing each sub-expression.
+
+### Configuring Log Filters
+
+Log records can be filtered, such that some log records are dropped due to configured criteria.  
+This can take place on a global level or on a per-target basis.  
+By default there is no special log filtering except for log level.  
+Log filters can be configured inside a log target URL, or using nested form.  
+Due to their tendency to be complex, it is highly recommended that free-style expressions be used:
+
+filter=((log_module == files) OR (log_level == FATAL))
+
+This is interpreted as: allow logging only log messages that originate from the "files" module  
+or that have a FATAL log level.
+
+The following operators are allowed:
+
+- AND
+- OR
+- NOT
+- CONTAINS (search for substring)
+- LIKE (regular expression matching)
+- <, <=, >, >=, ==, != (integer/string/time/level comparison)
+
+The following filter names are recognized (can be externally extended):
+
+- record_id, record_time, thread_name, log_source, log_module, log_level, log_msg
+- file_name, line_number, function_name
+
+The expression must be properly formed with parenthesis enclosing each sub-expression.
+
+The CONTAINS operator is useful when trying to match a source file.  
+It may happen that the log record contains a full path name, so matching that with == is a bit awkward.  
+In this case just use CONTAINS like this:
+
+    (file_name CONTAINS <part of source file name>)
+
+The same applies to function name filter, since on some platforms the function name may appear with full  
+argument types and parenthesis.
+
+Pay attention that some filters may have significant performance impact, and they should normally used  
+in scenarios where one is chasing a bug and trying to narrow down what is being logged.
 
 ### Compound Log Targets
 
-The following optional parameters are supported for compound log targets:
+When using asynchronous logging schemes, it is required to specify two log targets: the asynchronous "outer" log target, and the "inner" end log target. In order to simplify syntax, the pipe sign '|' is used as follows:
 
-    defer (no value associated)
-    queue_batch_size=<batch-size>,queue_timeout_millis=<timeout-millis>
-    quantum_buffer_size=<buffer-size>
+    log_target = async://deferred | file://logs/app.log?file_segment_size_mb=4
 
-These optional parameters can be used to specify a compound deferred or queued log target.  
-The defer option specifies a deferred log target.  
-The queue options specify a queued log target.  
-The quantum option specifies a quantum log target.  
-All options should be separated by an ampersand (&).
+So one URL is piped into another URL. The outer URL results in a log target that is added to the global list of log targets, while the inner URL generates a private log target that is managed by the outer log target.
 
-Here is an example for a deferred log target that uses segmented file log target:
+ELog has 3 predefined asynchronous log targets:
 
-    log_target = file://logs/app.log?file_segment_size_mb=4&deferred
+- Deferred (mutex, condition variable, logging thread)
+- Queued (deferred + periodic wake-up due to timeout/queue-size)
+- Quantum (lock free ring buffer)
+
+The deferred log target uses a simple logging thread with a queue guarded by a mutex. The logging thread is woken up for each logged message. The deferred log target has no special parameters.
+
+The queued log target is based on the deferred log target, but adds logic of lazier wake-up, whenever timeout passes or queue size reaches some level. The queued log target therefore uses the following mandatory parameters:
+
+    queue_batch_size=<batch-size>
+    queue_timeout_millis=<timeout-millis>
+
+The quantum log target uses a lock free ring buffer and a CPU-tight logging thread. The quantum log target requires the following mandatory parameter to be defined:
+
+    quantum_buffer_size=<ring-buffer-size>
+
+All asynchronous log target may be configured with log format, log level, filter and flush policy.
+
+Here is an example for a deferred log target that uses count flush policy and passes logged message to a segmented file log target:
+
+    log_target = async://deferred?flush_policy=count&flush_count=4096 | file://logs/app.log?file_segment_size_mb=4
 
 ### Configuring Database Log Targets
 
 Here is another example for connecting to a MySQL database behind a queued log target:
 
-    log_target = db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert_query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&queue_batch_size=1024&queue_timeout_millis=100
+    log_target = async://queued?queue_batch_size=1024&queue_timeout_millis=100 | 
+        db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&
+        insert_query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
 
-Pay attention to the last log target example components:
+Pay attention to the outer log target:
+- scheme: async
+- path: queued (denoting queued asynchronous log target)
+- queue_batch_size: Triggers background thread to wake up when log message queue reaches this size
+- queue_timeout_millis: Triggers background thread to wake up each time this timeout passes
+
+Pay attention to the inner log target:
 
 - scheme: db
 - path: mysql (designates the database type)
@@ -710,11 +813,6 @@ Pay attention to the last log target example components:
 - user: The user name used to connect to the database
 - passwd: The password used to connect to the database (for security put the configuration file in a directory with restricted access)
 - insert_query: The query used to insert a log record into the database
-- queue_batch_size: When this is present a queued log target is used
-- queue_timeout_millis: Specifies the timeout used by the queued log target
-
-In the example above, queue_batch_size and queue_timeout_millis are not related to the database target specification,  
-and their presence only configures a compound log target (namely, a queued log target over a database lgo target).  
 
 When using the db scheme, the conn_string and insert_query components are mandatory.
 The following parameters are optional for database target configuration:
@@ -767,7 +865,7 @@ Here are the relevant components:
 
 ### Connecting to MySQL (experimental)
 
-Following is a sample configuration for SQLite connector:
+Following is a sample configuration for MySQL connector:
 
     db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&insert_query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
 
@@ -803,9 +901,206 @@ Different flush policies can be applied, as explained above.
 
 In case message msgq_headers are to be passed as well, the 'msgq_headers' parameter should be used as a CSV property list:
 
-    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&msgq_headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
+    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&msgq_headers={rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}}
 
-Since log target resource strings tend to get complex, future versions will include property trees for configuration.
+### Connecting to gRPC Endpoint
+
+The following example shows how to connect to a gRPC endpoint using Unary gRPC client:
+
+    log_target = "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, ${msg})
+
+Points to note:
+
+- scheme being used is 'rpc'
+- path is 'grpc'
+- the gRPC server address is specified by 'rpc_server' (no typo here, there is no initial 'g')
+- the gRPC invocation is configured by 'rpc_call' (again, no typo here)
+
+The gRPC client uses a protocol predefined by ELog, and can be found at src/elog/proto/elog.proto.  
+This protocol file defines a message with member variables corresponding to all log record fields.  
+It also defines a service sending and streaming log messages.
+
+The gRPC client may be configured to use various communications schemes via the 'grpc_client_mode' parameter, which can take the following values
+
+- unary (the default if not specified)
+- stream
+- async
+- async_callback_unary
+- async_callback_stream
+
+When using grpc_client_mode=async_callback_stream, an additional integer parameter is required:
+
+- grpc_max_inflight_calls
+
+Benchmark shows (as well as gRPC recommendations) that async_callback_stream has the best performance.
+
+The following optional parameters are also recognized:
+
+- grpc_deadline_timeout_millis
+- grpc_server_ca_path
+- grpc_client_ca_path
+- grpc_client_key_path
+
+In order to use a different proprietary protocol, more work needs to be done.  
+Please refer to [this]() guide for more details.
+
+### Connecting to Grafana Loki
+
+The following example demonstrates how to configure a Grafana Loki log target:
+
+    log_target = mon://grafana?mode=json&
+        loki_address=http://localhost:3100&
+        labels={app: ${app}}&
+        log_line_metadata={src: ${src}, tname: ${tname}}&
+        flush_policy=count?flush_count=10
+
+The Grafana Loki log target uses the 'mon' scheme (for monitoring tools), and 'json' mode.  
+This mode means that data is sent in plain json, without compressions.  
+(Future versions may support gRPC content and snappy compression, according to need).    
+Two mandatory parameters are expected: 'log_address' and 'labels'.  
+Optionally, log line metadata may be attached to log lines reported to Grafana Loki.  
+The syntax for both labels and log line metadata is similar, a property map, which is a permissive form of JSON.  
+Pay attention that in the example above, the global log format is used as the message payload.  
+If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
+
+Pay attention that since the Grafana Loki log target uses HTTP communication, it can specify [common HTTP timeouts](#common-http-timeouts) in the configuration string URL.
+
+Since HTTP client is being used, the flush policy actually determines when an aggregated payload will be sent to Loki. Be advised that HTTP message sending may be slow, so it is recommended to consider putting the Grafana Loki log target behind an asynchronous log target, and configure periodic flushing according to payload size limits and/or timeout considerations.
+
+### Connecting to Datadog
+
+The following example demonstrates how to configure a Datadog log target:
+
+    log_target = mon://address=https://http-intake.logs.datadoghq.eu&
+        api_key=670d35294fa0d39af61180a42c6ef7db&"
+        source=elog&
+        service=elog_bench&
+        flush_policy=count&
+        flush_count=5&
+        tags={log_source=${src}, module=${mod}, file=${file}, line=${line}}&
+        stack_trace=yes&
+        compress=yes
+
+The Datadog log target uses the 'mon' scheme (for monitoring tools).  
+Two mandatory parameters are expected: 'address', 'api_key'.
+
+The following optional parameters map be specified: 'source', 'service', 'tags', 'stack_trace' and 'compress'.
+The source and service are static names that may be attached to each log line report.  
+The tags parameter is a property set (in curly braces, comma separated), that defines dynamic properties that  
+can be associated with each log line report.  
+The syntax for tags parameter is a property map, which is a permissive form of JSON object.  
+
+The stack_trace parameter denotes whether to associate the current call stack with the log line report.  
+This requires usage of [dbgutil](#https://github.com/oa-333/dbgutil), so ELog must be built with ELOG_ENABLE_STACK_TRACE=ON.  
+Pay attention that resolving full stack trace with file and line information is a performance hit,  
+so this option mostly suites FATAL and crash reports. If mixed reports are required (i.e. also ERROR level),  
+then consider setting up two Datadog log targets, one for ERROR reports without stack trace, and one for FATAL  
+and crash reports, with stack trace.  
+
+The compress parameter denotes whether the HTTP message payload should be compressed (gzip).
+
+Pay attention that in the example above, the global log format is used as the message payload.  
+If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
+
+The datadog log target uses HTTP communication, so it can specify [common HTTP timeouts](#common-http-timeouts) in the configuration string URL.
+
+Since HTTP client is being used, the flush policy actually determines when an aggregated payload will be sent to Datadog server. Be advised that HTTP message sending may be slow, so it is recommended to consider putting the Datadog log target behind an asynchronous log target, and configure periodic flushing according to payload size limits and/or timeout considerations.
+
+### Connecting to Sentry
+
+The following example demonstrates how to configure a Sentry log target:
+    log_target = mon://sentry?
+        dsn=https://39a372c6d69afb1af1e209d91f9730c5@o1208530129237538.ingest.de.sentry.io/1208530129237538&
+        db_path=.sentry-native&
+        release=native@1.0&
+        env=staging&
+        handler_path=vcpkg_installed\\x64-windows\\tools\\sentry-native\\crashpad_handler.exe&
+        flush_policy=immediate&
+        debug=true&
+        logger_level=DEBUG&
+        tags={log_source=${src}, module=${mod}, file=${file}, line=${line}}&
+        stack_trace=yes&
+        context={app=${app}, os=${os_name}, ver=${os_ver}}&
+        context_title=Env Details
+
+The Sentry log target uses the 'mon' scheme (for monitoring tools).  
+Four mandatory parameters are expected: 'dsn', 'db_path', 'release', 'env'.  
+The dsn denotes the HTTP address and ingestion endpoint used by sentry and is mandatory.  
+The dsn may also be provided via the environment variable SENTRY_DSN, in which case it is not required to specify DSN in the URL (actually it will be ignored, so the environment variable SENTRY_DSN overrides the value specified in the configuration).
+
+The db_path is a relative file system path used by sentry for local data management.  
+The env parameter is static text used to distinguish between monitored environments (e.g. staging/prod).  
+Also an optional distribution parameter (named 'dist') can be used to further identify the monitored application.
+
+The handler_path is also required on Windows platforms, and should point to the sentry-native installation path. In normal cmake builds, this can be found relative to the build directory in the path specified above.
+
+Although not specified above, a proxy server may be specified if needed to communicate with Sentry server, using the following syntax:  
+
+    proxy=<proxy-address:port>
+
+In case security certificates are being used the local certificates folder path may be specified as follows:
+
+    ca_certs_path=<file-system-folder-path>
+
+Sentry maintains a report context, which is a static description that is attached to each log report.  
+The user may configure the title attached to the context with the 'context_title' parameter, and the context data may be given through the 'context' parameter, which is a property map, as in other monitoring tools configuration URLs. If 'context' was specified, then it is required also to specify 'context_title'.
+
+Dynamic attributes may be attached to each log report using the 'tags' parameter, which is a property map that may refer to log record fields. 
+
+Pay attention that when the current thread name is set properly, via elog::setCurrentThreadName(), then this name is automatically also being sent to Sentry with each log report.
+
+The stack_trace parameter denotes whether to associate the current call stack with the log line report.  
+This requires usage of [dbgutil](#https://github.com/oa-333/dbgutil), so ELog must be built with ELOG_ENABLE_STACK_TRACE=ON.  
+Pay attention that resolving full stack trace with file and line information is a performance hit,  
+so this option mostly suites FATAL and crash reports. If mixed reports are required (i.e. also ERROR level),  
+then consider setting up two Sentry log targets, one for ERROR reports without stack trace, and one for FATAL  
+and crash reports, with stack trace.  
+
+Optional flush and shutdown timeout parameters may be specified with 'flush_timeout_millis' and 'shutdown_timeout_millis'.
+
+Finally, in order to debug issues with the Sentry log target's connectivity with the Sentry server, the 'debug' parameter may be used, set to true. This will have Sentry native SDK log/trace messages to be redirected to ELog, and printed to the standard error stream via specialized logger and log source, using the log source name "elog.sentry".  
+The 'logger_level' parameter controls the level of Sentry native SDK message being printed out.
+
+Pay attention that in the example above, the global log format is used as the message payload.  
+If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
+
+// TODO: add adding new log target type and new schema handler
+// TODO: address problem of deallocating extended types (requires destroy function, which must be overridden, and we might provide a utility macro for that) - they must be deallocated at the same module where they were allocated
+// conversely this can be solved by the factory class - let it also delete (because being a macro it is defined
+// in the user's module)
+
+### Common HTTP Timeouts
+
+Several log targets (currently Grafana Loki and Datadog) use HTTP client for their communication with an end server.  
+For these kind of log targets the following common configuration properties can be specified in the configuration string URL of the log target:
+
+- connect_timeout_millis
+- write_timeout_millis
+- read_timeout_millis
+- resend_timeout_millis
+- backlog_limit_bytes
+- shutdown_timeout_millis
+
+The connect timeout is used to determine when a server connection setup failed.  
+It may be that the server is not down, but setting up HTTP connection takes too much time.  
+The write timeout is used to determine whether message sending failed, and therefore requires to be resent later.  
+The read timeout is used to determine when a server response has timed out, and therefore resend will take place.  
+The common HTTP client makes provision for resending messages periodically via a background thread,  
+in case message sending failed.  
+This backlog configuration parameter controls the size of the backlog used for failed messages pending to be resent.  
+The resend timeout controls the period that the background thread waits until it attempts again to resend failed messages.  
+Finally, the shutdown configuration parameter specifies the amount of time spent in last attempt to resend all pending messages. This includes the final message sent during last flush when the log target is being stopped.
+
+The following table summarizes the default values for these configuration parameters:
+
+| Parameter  | Default Value |
+| ------------- | ------------- |
+| connect_timeout_millis  | 200  |
+| write_timeout_millis  | 50  |
+| read_timeout_millis  | 100  |
+| resend_timeout_millis  | 5000  |
+| backlog_limit_bytes  | 1048576 (1MB)  |
+| shutdown_timeout_millis  | 5000  |
 
 ### Nested Specification Style
 
@@ -813,10 +1108,14 @@ As log target URLs tend to be rather complex in some cases, a different specific
 For instance, let's take the last example (sending log messages to Kafka topic with headers), but let's put it behind a deferred
 log target. The result looks like this:
 
-    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&msgq_headers=rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}&deferred
+    log_target = async://deferred?flush_policy=count&flush_count=4096 | msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&msgq_headers={rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}}
 
 This is rather not pleasing to the eye, and probably prone to error.  
-Instead here is how it may look using the nested specification style:
+ELog allows a more JSON-like syntax for msgq_headers as follows (colon instead of equals sign):
+
+    msgq_headers={rid: ${rid}, time: ${time}, level: ${level}, host: ${host}, user: ${user}, prog: ${prog}, pid: ${pid}, tid: ${tid}, tname: ${tname}, file: ${file}, line: ${line}, func: ${func}, mod: ${mod}, src: ${src}, msg: ${msg}}
+
+Instead of a long URL, here is how it may look using the nested specification style:
 
     log_target = {
         scheme = async,
@@ -826,12 +1125,27 @@ Instead here is how it may look using the nested specification style:
             type = kafka,
             kafka_bootstrap_server = localhost:9092,
             msgq_topic = log_records,
-            msgq_headers = rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, prog=${prog}, pid=${pid}, tid=${tid}, tname=${tname}, file=${file}, line=${line}, func=${func}, mod=${mod}, src=${src}, msg=${msg}
+            msgq_headers = {
+                rid=${rid}, 
+                time=${time}, 
+                level=${level}, 
+                host=${host}, 
+                user=${user}, 
+                prog=${prog}, 
+                pid=${pid}, 
+                tid=${tid}, 
+                tname=${tname}, 
+                file=${file}, 
+                line=${line}, 
+                func=${func}, 
+                mod=${mod}, 
+                src=${src}, 
+                msg=${msg}
+            }
         }
     }
 
-With this type of log target specification, the log target nesting is much clearer. In this example, it is evident that log messages are handed over to a deferred log target, which in turn sends log messages to a kafka topic.
-
+With this type of log target specification, the log target nesting is much clearer.  
 Besides clarity, the nested specification style allows doing things which are not possible with URL style.  
 For instance, suppose we have a syslog target configured with log level ERROR, but some module, say core.files, reports many errors due to disk failure, and causes log flooding in syslog. As a result, we would like to restrict the rate of this specific log source to syslog (assume we don't care about other log targets) to 10 messages per second, but we would not like to restrict other log sources. This can be achieved in configuration with compound log filters as follows:
 
@@ -858,6 +1172,19 @@ For instance, suppose we have a syslog target configured with log level ERROR, b
 The logic this configuration uses is as follows: allow messages to pass if the log source is NOT core.files OR (i.e. the log source is core.files) the rate does not exceed 10 messages per second. In any case the log level is set at ERROR for syslog.  
 This example is a bit complex, but it illustrates the flexibility nested configuration has.
 
+Due to these complexities, the expression free-style flush policy specification was devised, and the same goal can be achieved as follows:
+
+    log_target = sys://syslog?log_level=ERROR&filter=((log_source != core.files) OR (max_msg_per_sec == 10))
+
+The same syntax may be used with the nested specification:
+
+    log_target = {
+        scheme = sys,
+        path = syslog,
+        log_level = ERROR,
+        filter = ((log_source != core.files) OR (max_msg_per_sec == 10))
+    }
+
 In case of simply limiting the rate for all incoming messages, the configuration becomes much simpler:
 
     log_target = {
@@ -868,7 +1195,16 @@ In case of simply limiting the rate for all incoming messages, the configuration
         max_msg_per_sec = 10
     }
 
-### Terminal Formatting Syntax
+Or in case of filter expression:
+
+    log_target = {
+        scheme = sys,
+        path = syslog,
+        log_level = ERROR,
+        filter = (max_msg_per_sec == 10)
+    }
+
+### Terminal Text Formatting
 
 When logging to terminal (stdout or stderr), it is possible to specify special formatting for the log line.  
 For instance, consider the following log target specification:
@@ -970,6 +1306,318 @@ Conditional formatting takes place in three main forms:
     ${expr-switch: ${case: (filter-pred) : ${fmt:<format>}}, ..., ${default:${fmt: <format>}} }
 
 TODO: finish this after documenting filter predicates.
+
+## Extending The Library
+
+All aspects of the ELog library are extendible, such that the extension may be also loadable from configuration.  
+In the following sections it will be explained how to extend each aspect of the ELog library.
+
+### Extending The Formatting Scheme
+
+The log line format may reference special tokens which point to the current log record being logged.  
+In order to extend the formatting scheme with new reference tokens, ELogFieldSelector should be derived, implemented, and registered. The actual token value can be resolved to anything, and not necessarily be tied to the lgo record fields.
+
+With that understanding in hand, suppose we would like to add a new special token that reflects current system state.  
+Now let's assume there are global functions for that:
+
+    enum SystemState { IDLE, NORMAL, URGENT, OVERLOADED };
+
+    extern SystemState getSystemState();
+
+    extern const char* systemStateToString(SystemState state);
+
+    extern bool systemStateFromString(const char* stateStr, SystemState& state);
+
+So the first step is to derive from ELogFieldSelector:
+
+    class SystemStateFieldSelector : public ELogFieldSelector {
+    public:
+        SystemStateFieldSelector(const ELogFieldSpec& fieldSpec)
+             : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
+        ~SystemStateFieldSelector() override {}
+
+        void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final {
+            // obtain the system state and convert to string form
+            SystemState currentSysState = getSystemState();
+            const char* sysStateStr = systemStateToString(currentSysState);
+            
+            // pass the system state string to the receptor, with text justify value
+            receptor->receiveStringField(getTypeId(), sysStateStr, m_fieldSpec);
+        }
+
+    private:
+        ELOG_DECLARE_FIELD_SELECTOR(SystemStateFieldSelector, sys_state);
+    };
+
+Important points to note:
+
+- The constructor should receive one parameter of type const ELogFieldSpec&, and pass it to the parent class
+- The field selector should specify the field type (in our example it is FT_TEXT which is string type)
+- in the selectField() virtual method, the system test should be passed to the receptor alongside with the field selector's type id and configured field specification
+
+The new field selector class is being registered in the field selector global registry using the helper macro:
+
+    ELOG_DECLARE_FIELD_SELECTOR(SystemStateFieldSelector, sys_state);
+
+This helper macro requires a companion macro to be put in the source file (actually any source file):
+
+    ELOG_IMPLEMENT_FIELD_SELECTOR(MyFieldSelector)
+
+With this in place, the log line configuration string may now look like this:
+
+    ${time} ${level:6} [${tid:5}] <<${sys_state}>> ${msg}
+
+So each log line will include the system state within <<>> parenthesis.
+
+For more examples refer to elog_field_selector.h and elog_field_selector.cpp source files.
+
+### Adding New Log Filter Types
+
+It is possible to simply derive from ELogFilter and implement the required filter logic,  
+but in order to make the extended log filter loadable from configuration further steps are required.
+
+First it is required to determine whether the log filter is comparable, i.e. is it expected to be used  
+in conjunction with some comparison operation, for instance:
+
+    filter_name <= some_value
+
+If so, then the extended filter should derive from ELogCmpFilter, otherwise it should derive directly from ELogFilter.  
+Since most filters are comparative, we will relate here only to the first case.  
+Following the [previous example](#extending-the-formatting-scheme), we will add a new new filter that compares  
+the current system state to some given value:
+
+    class SystemStateFilter : public ELogCmpFilter {
+    public:
+        SystemStateFilter(SystemState sysState, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
+            : ELogCmpFilter(cmpOp), m_sysState(sysState) {}
+        ~SystemStateFilter() final {}
+
+        /** @brief Loads filter from configuration. */
+        bool load(const ELogConfigMapNode* filterCfg) final;
+
+        /** @brief Loads filter from a free-style predicate-like parsed expression. */
+        bool loadExpr(const ELogExpression* expr) final;
+
+        /**
+        * @brief Filters a log record.
+        * @param logRecord The log record to filter.
+        * @return true If the log record is to be logged.
+        * @return false If the log record is to be discarded.
+        */
+        bool filterLogRecord(const ELogRecord& logRecord) final;
+
+    private:
+        SystemState m_sysState;
+
+        ELOG_DECLARE_FILTER(SystemStateFilter, sys_state);
+    };
+
+A few points to note:
+
+- The filter must pass to parent class what kind of comparison operator it uses (this will be overridden later during load phase)
+- In order to be loadable from configuration, the new filter needs to declare its reference name (sys_state) using the helper macro ELOG_DECLARE_FILTER().
+
+The implementation is also straightforward, and follows the implementation of other predefined log filters:
+
+    // register filter in global filter registry
+    ELOG_IMPLEMENT_FILTER(SystemStateFilter)
+
+    // load from configuration file (nested style)
+    bool SystemStateFilter::load(const ELogConfigMapNode* filterCfg) {
+        std::string sysState;
+        if (!loadStringFilter(filterCfg, "sys_state", "system state", sysState)) {
+            // full error message already logged by loadStringFilter()
+            return false;
+        }
+        if (!systemStateFromString(sysState.c_str(), m_sysState)) {
+            // systemStateFromString() should have already logged error message
+            return false;
+        }
+        return true;
+    }
+
+    // load from configuration (expression style)
+    bool SystemStateFilter::loadExpr(const ELogExpression* expr) {
+        std::string sysState;
+        if (!loadStringFilter(expr, "system state", sysState)) {
+            return false;
+        }
+        if (!systemStateFromString(sysState.c_str(), m_sysState)) {
+            // systemStateFromString() should have already logged error message
+            return false;
+        }
+        return true;
+    }
+
+    bool SystemStateFilter::filterLogRecord(const ELogRecord& logRecord) {
+        return compareInt(m_cmpOp, (int)getSystemState(), (int)m_sysState);
+    }
+
+A few points to note:
+
+- The filter must be registered in the global filter registry with the helper macro ELOG_IMPLEMENT_FILTER()
+- When loading from configuration or expression one can use the helper method of the parent class loadStringFilter(), which extracts the filter value from the configuration/expression
+- The configured system state is first loaded as string, then converted to enumerated value and saved in a member variable
+- When filtering a log record, the helper function compareInt is used to compare enumerated values. If not applicable then any logic may be implemented here
+- When filtering a log record the current system state is always the left-hand side argument for comparison, while the value loaded from configuration is always the right-hand side argument.
+
+So with this in hand, we can now filter based on system state as follows:
+
+    (sys_state >= URGENT)
+
+    ((sys_state >= NORMAL) AND (sys_state <= URGENT))
+
+## Adding New Flush Policy Types
+
+In order to add a new flush policy type, it is required to derive from ELogFilter and implement the flush policy logic.  
+In order to make the extended flush policy loadable from configuration further steps are required.
+
+First some basic concepts must be explained.  
+A flush policy controls two aspects of flushing lgo messages:
+
+- Whether a flush should take place (the controlling policy)
+- How should a flush should take place, and whether it should be moderated (the moderating policy)
+
+Most flush policies are only controlling policies, except for the experimental ELogGroupFlushPolicy,  
+which implements group flush. 
+
+In addition, a flush policy may be active or passive.  
+Active flush policies may determine by themselves, in their own time (i.e. via some background thread)  
+when to execute flush. One such example is the time flush policy.  
+Passive flush policies make such a decision only when called by shouldFlush().
+
+With this understanding we now can move one to explaining how to add a new flush policy type.  
+Continuing with previous examples, let's assume we would like to add a flush policy that is sensitive to the  
+current system state, such that in URGENT and OVERLOADED states, flush will take places much less than usual.  
+This is not a trivial flush policy. For simpler examples please refer to elog_flush_policy.h/cpp.
+So we begin with this declaration:
+
+    class SystemStateFlushPolicy : public ELogFlushPolicy {
+    public:
+        SystemStateFlushPolicy(uint64_t normalLimitBytes = 0, uint64_t urgentLimitBytes = 0, 
+            uint64_t overloadedLimitBytes = 0)
+            : m_normalLimitBytes(normalLimitBytes), 
+              m_urgentLimitBytes(urgentLimitBytes),
+              m_overloadedLimitBytes(overloadedLimitBytes) {}
+        ~SystemStateFlushPolicy() override {}
+
+        /** @brief Loads flush policy from configuration. */
+        bool load(const ELogConfigMapNode* flushPolicyCfg) final;
+
+        /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+        bool loadExpr(const ELogExpression* expr) final;
+
+        bool shouldFlush(uint32_t msgSizeBytes) final;
+
+    private:
+        uint64_t m_normalLimitBytes;
+        uint64_t m_urgentLimitBytes;
+        uint64_t m_overloadedLimitBytes;
+
+        // use atomic variable, access may be multi-threaded
+        std::atomic<uint64_t> m_currentLogSizeBytes;
+
+        ELOG_DECLARE_FLUSH_POLICY(SystemStateFlushPolicy, sys_state);
+    };
+
+This is no different than adding a new filter type or adding a new token reference.  
+The flush logic is also straightforward, but the loading part is a bit tricky.  
+First let's take a look at the flush logic:
+
+    bool SystemStateFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+        // compute previous and current amount of logged bytes (thread-safe)
+        uint64_t prevSizeBytes =
+            m_currentLogSizeBytes.fetch_add(msgSizeBytes, std::memory_order_relaxed);
+        uint64_t currSizeBytes = prevSizeBytes + msgSizeBytes;
+
+        // decide limit according to system state
+        uint64_t limitBytes = 0;
+        switch (getSystemState()) {
+            case OVERLOADED:
+                limitBytes = m_overloadedLimitBytes;
+                break;
+
+            case URGENT:
+                limitBytes = m_urgentLimitBytes;
+
+            case NORMAL:
+            case IDLE:
+            default:
+                limitBytes = m_normalLimitBytes;
+        }
+
+        // now decide whether flush should take place (we flush if we crossed a "flush boundary")
+        return (currSizeBytes / limitBytes) > (prevSizeBytes / limitBytes);
+    }
+
+So we see here that the flush frequency is adjusted to the current system state.  
+Now let's address the configuration aspect, and we will start with free-style expression.  
+The flush policy is not something simple as "(count == 10)".  
+We could model it as an if-else statement, but that would be too complex.  
+Instead, we can model it as something similar to a function call:
+
+    sys_state(normal_size_bytes == 1024, urgent_size_bytes == 4096, overloaded_size_bytes == 8192)
+
+Actually, a more readable form would be:
+
+    sys_state(normal_size_bytes: 1024, urgent_size_bytes: 4096, overloaded_size_bytes: 8192)
+
+Both forms of syntax above are supported by ELog.  
+In a similar manner, when using string URL or nested-style we can require the following properties:
+
+    - normal_size_bytes
+    - urgent_size_bytes
+    - overloaded_size_bytes
+
+With this we can now implement the loading functions:
+
+    bool SystemStateFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
+        // this takes care both of string URL and nested style configuration
+        return loadIntFlushPolicy(flushPolicyCfg, "sys_state", "normal_size_bytes", m_normalLimitBytes) &&
+            loadIntFlushPolicy(flushPolicyCfg, "sys_state", "urgent_size_bytes", m_urgentLimitBytes) &&
+            loadIntFlushPolicy(flushPolicyCfg, "sys_state", "overloaded_size_bytes", m_overloadedLimitBytes);
+    }
+
+    bool SystemStateFlushPolicy::loadExpr(const ELogExpression* expr) {
+        // first make sure we have a function expression
+        if (expr->m_type != ET_FUNC_EXPR) {
+            return false;
+        }
+        ELogFunctionExpression* funcExpr = (ELogFunctionExpression*)expr;
+
+        // make sure we have exactly 3 parameters
+        if (funcExpr->m_expressions.size() != 3) {
+            return false;
+        }
+
+        // finally, load all sub-expressions
+        // for simplicity, we assume strict order
+        return loadIntFlushPolicy(funcExpr->m_expressions[0], "sys_state", m_normalLimitBytes, "normal_size_bytes") &&
+            loadIntFlushPolicy(funcExpr->m_expressions[1], "sys_state", m_urgentLimitBytes, "urgent_size_bytes") &&
+            loadIntFlushPolicy(funcExpr->m_expressions[2], "sys_state", m_overloadedLimitBytes, "overloaded_size_bytes");
+    }
+
+With this in hand we can now specify in configuration:
+
+    flush_policy=(sys_state(normal_size_bytes: 1024, urgent_size_bytes: 4096, overloaded_size_bytes: 8192))
+
+Notice that the flush policy must be surrounded by parenthesis, so that it gets parsed as an expression.  
+
+Finally, the flush policy needs to get registered in the global flush policy registry, so add this in the source file:
+
+    ELOG_IMPLEMENT_FLUSH_POLICY(SystemStateFlushPolicy)
+
+### Adding New Log Target Types
+
+TBD
+
+### Adding New Schema Handler Type
+
+TBD
+
+### Using Proprietary Protocol for gRPC Log Target
+
+TBD
 
 ## Benchmarks
 

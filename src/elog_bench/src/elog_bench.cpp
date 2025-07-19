@@ -1157,10 +1157,8 @@ void testKafka() {
         "kafka_flush_timeout_millis=50&"
         "flush_policy=immediate&"
         "headers={rid=${rid}, time=${time}, level=${level}, host=${host}, user=${user}, "
-        "prog=${prog},"
-        "pid = ${pid}, tid = ${tid}, tname = ${tname}, file = ${file}, line = ${line}, func = "
-        "${func}"
-        "mod = ${mod}, src = ${src}, msg = ${msg}}";
+        "prog=${prog}, pid = ${pid}, tid = ${tid}, tname = ${tname}, file = ${file}, "
+        "line = ${line}, func = ${func}, mod = ${mod}, src = ${src}, msg = ${msg}}";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
@@ -1189,7 +1187,6 @@ void testSentry() {
         "release=native@1.0&"
         "env=staging&"
         "handler_path=vcpkg_installed\\x64-windows\\tools\\sentry-native\\crashpad_handler.exe&"
-        "installed\\x64-windows\\tools\\sentry-native&"
         "flush_policy=immediate&"
         "debug=true&"
         "logger_level=DEBUG&"

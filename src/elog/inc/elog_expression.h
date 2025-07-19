@@ -40,7 +40,7 @@ enum class ELogExpressionType : uint32_t {
 //      group(size == X, timeout == Y),
 //
 // and so we add a func expression with named args, but this syntax will cause sub-expressions to be
-// interpreted as size filter and timed filter, so we introduce a new syntax with colon character,
+// interpreted as size filter and time filter, so we introduce a new syntax with colon character,
 // denoting named value, rather than predicate, like this:
 //
 //      group(group_size:4, group_timeout_micros:100)

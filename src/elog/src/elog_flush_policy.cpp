@@ -393,12 +393,11 @@ ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarg
 ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
 
 bool ELogTimedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
-    return loadIntFlushPolicy(flushPolicyCfg, "timed", "flush_timeout_millis",
-                              m_logTimeLimitMillis);
+    return loadIntFlushPolicy(flushPolicyCfg, "time", "flush_timeout_millis", m_logTimeLimitMillis);
 }
 
 bool ELogTimedFlushPolicy::loadExpr(const ELogExpression* expr) {
-    return loadIntFlushPolicy(expr, "timed", m_logTimeLimitMillis);
+    return loadIntFlushPolicy(expr, "time", m_logTimeLimitMillis);
 }
 
 bool ELogTimedFlushPolicy::start() {

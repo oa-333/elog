@@ -81,7 +81,11 @@ struct ELOG_API ELogBoolPropertyPos : public ELogPropertyPos {
     ~ELogBoolPropertyPos() final {}
 };
 
-struct ELogPropertyPosSequence {
+struct ELOG_API ELogPropertyPosSequence {
+    ELogPropertyPosSequence() {}
+    ELogPropertyPosSequence(const ELogPropertyPosSequence&) = delete;
+    ELogPropertyPosSequence(ELogPropertyPosSequence&&) = delete;
+    ELogPropertyPosSequence& operator=(const ELogPropertyPosSequence&) = delete;
     ~ELogPropertyPosSequence() {
         for (auto& entry : m_sequence) {
             delete entry.second;
@@ -91,7 +95,11 @@ struct ELogPropertyPosSequence {
     std::vector<std::pair<std::string, ELogPropertyPos*>> m_sequence;
 };
 
-struct ELogPropertyPosMap {
+struct ELOG_API ELogPropertyPosMap {
+    ELogPropertyPosMap() {}
+    ELogPropertyPosMap(const ELogPropertyPosMap&) = delete;
+    ELogPropertyPosMap(ELogPropertyPosMap&&) = delete;
+    ELogPropertyPosMap& operator=(const ELogPropertyPosMap&) = delete;
     ~ELogPropertyPosMap() {
         for (auto& entry : m_map) {
             delete entry.second;
@@ -102,12 +110,6 @@ struct ELogPropertyPosMap {
     typedef std::unordered_map<std::string, ELogPropertyPos*> MapType;
     MapType m_map;
 };
-
-/** @typedef Property map with source text position information. */
-// typedef std::vector<std::pair<std::string, ELogPropertyPos*>> ELogPropertyPosSequence;
-
-/** @typedef Property map with source text position information. */
-// typedef std::unordered_map<std::string, ELogPropertyPos*> ELogPropertyPosMap;
 
 }  // namespace elog
 

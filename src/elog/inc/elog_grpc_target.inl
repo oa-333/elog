@@ -365,7 +365,7 @@ template <typename StubType, typename MessageType, typename ReceptorType>
 bool ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::setStateFlush() {
     ReactorState state = m_state.load(std::memory_order_acquire);
     if (state == ReactorState::RS_INIT) {
-        // nothing to do, this is usually coming from a timed flush policy when there are no
+        // nothing to do, this is usually coming from a time flush policy when there are no
         // log records being written, so we simply discard the request
         return false;
     }

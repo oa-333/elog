@@ -391,7 +391,15 @@ bool ELogSystem::configureByProps(const ELogPropertySequence& props,
         }
     }
 
-    // configure global rate limit
+    // configure global filter
+    std::string logFilterCfg;
+    if (getProp(props, ELOG_FILTER_CONFIG_NAME, logFilterCfg)) {
+        if (!configureLogFilter(logFilterCfg.c_str())) {
+            return false;
+        }
+    }
+
+    // configure global rate limit (overrides global filter)
     std::string rateLimitCfg;
     if (getProp(props, ELOG_RATE_LIMIT_CONFIG_NAME, rateLimitCfg)) {
         if (!configureRateLimit(rateLimitCfg)) {
@@ -673,7 +681,17 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
         return false;
     }
 
-    // configure global rate limit
+    // configure global filter
+    std::string logFilterCfg;
+    if (!cfgMap->getStringValue(ELOG_FILTER_CONFIG_NAME, found, logFilterCfg)) {
+        // configuration error
+        return false;
+    } else if (found && !configureLogFilter(logFilterCfg.c_str())) {
+        ELOG_REPORT_ERROR("Invalid top-level log filter in properties: %s", logFilterCfg.c_str());
+        return false;
+    }
+
+    // configure global rate limit (overrides global filter)
     // TODO: what about valid values? should be defined and checked
     int64_t rateLimit = 0;
     if (!cfgMap->getIntValue(ELOG_RATE_LIMIT_CONFIG_NAME, found, rateLimit)) {
@@ -1273,8 +1291,22 @@ ELogLogger* ELogSystem::getPrivateLogger(const char* qualifiedSourceName) {
     return logger;
 }
 
-// ELogLogger* ELogSystem::getMultiThreadedLogger(const char* sourceName);
-// ELogLogger* ELogSystem::getSingleThreadedLogger(const char* sourceName);
+ELogLevel ELogSystem::getLogLevel() { return sRootLogSource->getLogLevel(); }
+
+void ELogSystem::setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode) {
+    return sRootLogSource->setLogLevel(logLevel, propagateMode);
+}
+
+/*void ELogSystem::setLogLevelFormat(ELogLevel logLevel, const ELogTextSpec& formatSpec) {}
+
+bool ELogSystem::configureLogLevelFormat(const char* logLevelConfig) {
+    // parse as properties
+    ELogPropsFormatter formatter;
+    if (!formatter.parseProps(logLevelConfig)) {
+        ELOG_REPORT_ERROR("Invalid log level format string: %s", logLevelConfig);
+        return false;
+    }
+}*/
 
 // log formatting
 bool ELogSystem::configureLogFormat(const char* logFormat) {
@@ -1308,6 +1340,23 @@ void ELogSystem::setCurrentThreadName(const char* threadName) {
     setCurrentThreadNameField(threadName);
 }
 
+bool ELogSystem::configureLogFilter(const char* logFilterCfg) {
+    if (logFilterCfg[0] != '(') {
+        ELOG_REPORT_ERROR(
+            "Cannot configure global log filter, only expression style is supported: %s",
+            logFilterCfg);
+        return false;
+    }
+
+    ELogFilter* logFilter = ELogConfigLoader::loadLogFilterExprStr(logFilterCfg);
+    if (logFilter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to configure global log filter from string: %s", logFilterCfg);
+        return false;
+    }
+    setLogFilter(logFilter);
+    return true;
+}
+
 // global log filtering
 void ELogSystem::setLogFilter(ELogFilter* logFilter) {
     if (sGlobalFilter != nullptr) {
@@ -1316,13 +1365,27 @@ void ELogSystem::setLogFilter(ELogFilter* logFilter) {
     sGlobalFilter = logFilter;
 }
 
-bool ELogSystem::setRateLimit(uint32_t maxMsgPerSecond) {
+bool ELogSystem::setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter /* = true */) {
     ELogRateLimiter* rateLimiter = new (std::nothrow) ELogRateLimiter(maxMsgPerSecond);
     if (rateLimiter == nullptr) {
         ELOG_REPORT_ERROR("Failed to set rate limit, out of memory");
         return false;
     }
-    setLogFilter(rateLimiter);
+    if (sGlobalFilter == nullptr || replaceGlobalFilter) {
+        setLogFilter(rateLimiter);
+    }
+
+    // if a global log filter already exists, then the rate limiter ORed with the existing filter
+    ELogOrLogFilter* logFilter = new (std::nothrow) ELogOrLogFilter();
+    if (logFilter == nullptr) {
+        ELOG_REPORT_ERROR(
+            "Failed to allocate OR log filter for global rate limiter, out of memory");
+        delete rateLimiter;
+        return false;
+    }
+    logFilter->addFilter(sGlobalFilter);
+    logFilter->addFilter(rateLimiter);
+    setLogFilter(logFilter);
     return true;
 }
 
