@@ -27,7 +27,7 @@ dbgutil::LogSeverity ELogDbgUtilLogHandler::onRegisterLogger(dbgutil::LogSeverit
                                                              size_t loggerId) {
     // define a log source
     std::string qualifiedLoggerName = std::string("dbgutil.") + loggerName;
-    ELogSource* logSource = ELogSystem::defineLogSource(qualifiedLoggerName.c_str(), true);
+    ELogSource* logSource = elog::defineLogSource(qualifiedLoggerName.c_str(), true);
     logSource->setModuleName("dbgutil");
     ELogLogger* logger = logSource->createSharedLogger();
 

@@ -27,6 +27,7 @@ private:
     ELogHttpConfigLoader() {}
     ELogHttpConfigLoader(const ELogHttpConfigLoader&) = delete;
     ELogHttpConfigLoader(ELogHttpConfigLoader&&) = delete;
+    ELogHttpConfigLoader& operator=(const ELogHttpConfigLoader&) = delete;
     ~ELogHttpConfigLoader() {}
 
     static bool loadHttpConfigValue(const ELogConfigMapNode* logTargetCfg, const char* targetName,

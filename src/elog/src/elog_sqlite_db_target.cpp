@@ -25,6 +25,9 @@ namespace elog {
 class ELogSQLiteDbFieldReceptor : public ELogFieldReceptor {
 public:
     ELogSQLiteDbFieldReceptor(sqlite3_stmt* stmt) : m_res(0), m_stmt(stmt), m_fieldNum(1) {}
+    ELogSQLiteDbFieldReceptor(const ELogSQLiteDbFieldReceptor&) = delete;
+    ELogSQLiteDbFieldReceptor(ELogSQLiteDbFieldReceptor&&) = delete;
+    ELogSQLiteDbFieldReceptor& operator=(const ELogSQLiteDbFieldReceptor&) = delete;
     ~ELogSQLiteDbFieldReceptor() final {}
 
     /** @brief Retrieves last operation's result code. */
@@ -33,7 +36,7 @@ public:
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
                             size_t length) {
-        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, field, length, SQLITE_TRANSIENT);
+        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, field, (int)length, SQLITE_TRANSIENT);
         if (m_res == 0) {
             m_res = res;
         }
@@ -41,7 +44,7 @@ public:
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint32_t typeId, uint64_t field, const ELogFieldSpec& fieldSpec) final {
-        int res = sqlite3_bind_int64(m_stmt, m_fieldNum++, field);
+        int res = sqlite3_bind_int64(m_stmt, m_fieldNum++, (sqlite3_int64)field);
         if (m_res == 0) {
             m_res = res;
         }
@@ -60,7 +63,7 @@ public:
     void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
                               const ELogFieldSpec& fieldSpec) final {
         const char* logLevelStr = elogLevelToStr(logLevel);
-        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, logLevelStr, strlen(logLevelStr),
+        int res = sqlite3_bind_text(m_stmt, m_fieldNum++, logLevelStr, (int)strlen(logLevelStr),
                                     SQLITE_TRANSIENT);
         if (m_res == 0) {
             m_res = res;
@@ -70,7 +73,7 @@ public:
 private:
     int m_res;
     sqlite3_stmt* m_stmt;
-    uint32_t m_fieldNum;
+    int m_fieldNum;
 };
 
 bool ELogSQLiteDbTarget::connectDb(void* dbData) {
@@ -91,9 +94,9 @@ bool ELogSQLiteDbTarget::connectDb(void* dbData) {
     ELOG_REPORT_TRACE("Connected to SQLite3");
 
     const std::string& processedInsertStatement = getProcessedInsertStatement();
-    res =
-        sqlite3_prepare_v2(sqliteDbData->m_connection, processedInsertStatement.c_str(),
-                           processedInsertStatement.length(), &sqliteDbData->m_insertStmt, nullptr);
+    res = sqlite3_prepare_v2(sqliteDbData->m_connection, processedInsertStatement.c_str(),
+                             (int)processedInsertStatement.length(), &sqliteDbData->m_insertStmt,
+                             nullptr);
     if (res != SQLITE_OK) {
         ELOG_REPORT_ERROR("Failed to prepare sqlite statement '%s': %s",
                           processedInsertStatement.c_str(), sqlite3_errstr(res));

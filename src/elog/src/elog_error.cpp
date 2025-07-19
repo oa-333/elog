@@ -52,7 +52,7 @@ public:
     ~ELogSelfErrorHandler() final {}
 
     void init() {
-        m_logSource = ELogSystem::defineLogSource("elog");
+        m_logSource = elog::defineLogSource("elog");
         if (m_logSource != nullptr) {
             m_logger = m_logSource->createSharedLogger();
         }
@@ -91,7 +91,7 @@ private:
     inline bool restrictToStdErr() {
         ELogTargetId logTargetId = sStderrTargetId.load(std::memory_order_relaxed);
         if (logTargetId == ELOG_INVALID_TARGET_ID) {
-            ELogTargetId stderrTargetId = ELogSystem::getLogTargetId("stderr");
+            ELogTargetId stderrTargetId = elog::getLogTargetId("stderr");
             if (stderrTargetId != ELOG_INVALID_TARGET_ID) {
                 if (sStderrTargetId.compare_exchange_strong(logTargetId, stderrTargetId,
                                                             std::memory_order_seq_cst)) {

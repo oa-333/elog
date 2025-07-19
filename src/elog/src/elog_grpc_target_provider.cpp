@@ -112,8 +112,8 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(const ELogConfigMapNode* logTa
     }
 
     // a deadline may also be specified
-    int64_t deadlineTimeoutMillis = -1;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+    uint32_t deadlineTimeoutMillis = ELOG_GRPC_DEFAULT_DEADLINE_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
             logTargetCfg, "gRPC", "grpc_deadline_timeout_millis", deadlineTimeoutMillis)) {
         return nullptr;
     }
@@ -147,8 +147,8 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(const ELogConfigMapNode* logTa
     }
 
     // for async callback stream, it is also possible to specify grpc_max_inflight_calls
-    int64_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+    uint32_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
             logTargetCfg, "gRPC", "grpc_max_inflight_calls", maxInflightCalls)) {
         return nullptr;
     }

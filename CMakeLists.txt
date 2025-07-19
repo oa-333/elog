@@ -316,13 +316,12 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
 
     # add generated sources to library (commented out, see comment above)
     # target_sources(elog PRIVATE ${elog_proto_srcs} ${elog_grpc_srcs})
-    if (MSVC)
-        # add gRPC sources to target elog_bench on Windows (because they cannot be exported, due to 
-        # protoc limitation), but not proto sources (see big comment above)
-        if (ELOG_BUILD_BENCH)
-            target_sources(elog_bench PRIVATE ${elog_grpc_srcs})
-        endif()
-        # NOTE: we do not add protobuf generates message source (because they can be exported)
+
+    # add gRPC sources to target elog_bench on Windows (because they cannot be exported, due to 
+    # protoc limitation), but do not add protobuf generated message sources (see big comment above)
+    if (MSVC AND ELOG_BUILD_BENCH)
+        target_sources(elog_bench PRIVATE ${elog_grpc_srcs})
+        # NOTE: we do not add protobuf generated message source (because they can be exported)
     endif()
 
     # force include of elog_def.h so that protobuf generates code can compile (see big comment above)

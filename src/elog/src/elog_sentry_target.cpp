@@ -77,12 +77,12 @@ static bool buildStackTrace(sentry_value_t& st) {
             frame, "module", sentry_value_new_string(stackEntry.m_entryInfo.m_moduleName.c_str()));
 
         // set line number
-        sentry_value_set_by_key(frame, "lineno",
-                                sentry_value_new_int32(stackEntry.m_entryInfo.m_lineNumber));
+        sentry_value_set_by_key(
+            frame, "lineno", sentry_value_new_int32((int32_t)stackEntry.m_entryInfo.m_lineNumber));
 
         // set column number
-        sentry_value_set_by_key(frame, "colno",
-                                sentry_value_new_int32(stackEntry.m_entryInfo.m_columnIndex));
+        sentry_value_set_by_key(
+            frame, "colno", sentry_value_new_int32((int32_t)stackEntry.m_entryInfo.m_columnIndex));
 
         // add the frame to the frame list
         sentry_value_append(frames, frame);
@@ -106,6 +106,10 @@ inline sentry_level_e elogLevelToSentryLevel(ELogLevel logLevel) {
         case ELEVEL_NOTICE:
         case ELEVEL_INFO:
             return SENTRY_LEVEL_INFO;
+
+        case ELEVEL_TRACE:
+        case ELEVEL_DEBUG:
+        case ELEVEL_DIAG:
         default:
             return SENTRY_LEVEL_DEBUG;
     }
@@ -129,7 +133,7 @@ inline ELogLevel sentryLogLevelToELog(sentry_level_t logLevel) {
 }
 
 static void initSentryLogger(ELogTargetId sentryLogTargetId) {
-    ELogSource* logSource = ELogSystem::defineLogSource("elog.sentry", true);
+    ELogSource* logSource = elog::defineLogSource("elog.sentry", true);
     if (logSource != nullptr) {
         // make sure we do not enter infinite loop, so we ensure sentry log source does NOT write to
         // the sentry log target
@@ -149,6 +153,9 @@ static void sentryLoggerFunc(sentry_level_t level, const char* message, va_list 
 class ELogSentryContextReceptor : public ELogFieldReceptor {
 public:
     ELogSentryContextReceptor() { m_context = sentry_value_new_object(); }
+    ELogSentryContextReceptor(const ELogSentryContextReceptor&) = delete;
+    ELogSentryContextReceptor(ELogSentryContextReceptor&&) = delete;
+    ELogSentryContextReceptor& operator=(const ELogSentryContextReceptor&) = delete;
     ~ELogSentryContextReceptor() final {}
 
     /** @brief Receives a string log record field. */
@@ -186,6 +193,9 @@ private:
 class ELogSentryTagsReceptor : public ELogFieldReceptor {
 public:
     ELogSentryTagsReceptor() {}
+    ELogSentryTagsReceptor(const ELogSentryTagsReceptor&) = delete;
+    ELogSentryTagsReceptor(ELogSentryTagsReceptor&&) = delete;
+    ELogSentryTagsReceptor& operator=(const ELogSentryTagsReceptor&) = delete;
     ~ELogSentryTagsReceptor() final {}
 
     /** @brief Receives a string log record field. */
@@ -220,7 +230,8 @@ public:
         }
         for (uint32_t i = 0; i < m_tagValues.size(); ++i) {
             sentry_set_tag(tagNames[i].c_str(), m_tagValues[i].c_str());
-            bytesWritten += tagNames[i].length() + m_tagValues[i].length();
+            // NOTE: no chance of overflow here
+            bytesWritten += (uint32_t)(tagNames[i].length() + m_tagValues[i].length());
         }
         return true;
     }
@@ -368,7 +379,7 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
 
     // append current thread attributes
     sentry_value_t thd = sentry_value_new_thread(getCurrentThreadId(), nullptr);
-    sentry_value_set_by_key(thd, "id", sentry_value_new_int32(getCurrentThreadId()));
+    sentry_value_set_by_key(thd, "id", sentry_value_new_int32((int32_t)getCurrentThreadId()));
     sentry_value_set_by_key(thd, "current", sentry_value_new_bool(true));
     const char* currThreadName = getCurrentThreadNameField();
     if (currThreadName != nullptr && *currThreadName != 0) {
@@ -392,7 +403,7 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     sentry_capture_event(evt);
     // TODO: this number a bit misleading, since we may also have stack trace in payload
     // this will be more critical when using non-trivial flush policy
-    return bytesWritten + logMsg.length();
+    return bytesWritten + (uint32_t)logMsg.length();
 
     // TODO: Currently the native SDK does not support yet new logs interface, when it does we will
     // send it as well

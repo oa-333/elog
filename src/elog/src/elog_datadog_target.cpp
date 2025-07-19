@@ -50,7 +50,7 @@ bool ELogDatadogTarget::stopLogTarget() { return m_client.stop(); }
 
 uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     ELOG_REPORT_TRACE("Preapring log message for Datadog");
-    uint32_t index = m_logItemArray.size();
+    size_t index = m_logItemArray.size();
 
     // log line
     std::string logMsg;
@@ -99,7 +99,7 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     }*/
 
     ELOG_REPORT_TRACE("Log message for Datadog is ready, body: %s", m_logItemArray.dump().c_str());
-    return logMsg.size();
+    return (uint32_t)logMsg.size();
 }
 
 void ELogDatadogTarget::flushLogTarget() {

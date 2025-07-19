@@ -33,8 +33,9 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     ELogSentryParams params;
 
     // first check for env var SENTRY_DSN
-    if (getenv("SENTRY_DSN") != nullptr) {
-        params.m_dsn = getenv("SENTRY_DSN");
+    if (elog_getenv("SENTRY_DSN", params.m_dsn)) {
+        // do not print key and cause security breach
+        ELOG_REPORT_TRACE("Using ENTRY_DSN environment variable");
     } else if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Sentry", "dsn",
                                                              params.m_dsn)) {
         return nullptr;
@@ -146,16 +147,16 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     }
 
     // optional flush timeout
-    int64_t timeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "Sentry",
-                                                           "flush_timeout_millis", timeoutMillis)) {
+    uint64_t timeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(
+            logTargetCfg, "Sentry", "flush_timeout_millis", timeoutMillis)) {
         return nullptr;
     }
     params.m_flushTimeoutMillis = timeoutMillis;
 
     // optional shutdown timeout
     timeoutMillis = ELOG_SENTRY_DEFAULT_SHUTDOWN_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(
             logTargetCfg, "Sentry", "shutdown_timeout_millis", timeoutMillis)) {
         return nullptr;
     }

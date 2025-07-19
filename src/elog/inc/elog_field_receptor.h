@@ -176,6 +176,9 @@ public:
 protected:
     ELogFieldReceptor(ReceiveStyle receiveStyle = ReceiveStyle::RS_BY_TYPE)
         : m_receiveStyle(receiveStyle) {}
+    ELogFieldReceptor(const ELogFieldReceptor&) = delete;
+    ELogFieldReceptor(ELogFieldReceptor&&) = delete;
+    ELogFieldReceptor& operator=(const ELogFieldReceptor&) = delete;
 
 private:
     ReceiveStyle m_receiveStyle;

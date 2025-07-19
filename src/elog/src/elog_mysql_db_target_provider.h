@@ -14,6 +14,7 @@ public:
     ELogMySqlDbTargetProvider() {}
     ELogMySqlDbTargetProvider(const ELogMySqlDbTargetProvider&) = delete;
     ELogMySqlDbTargetProvider(ELogMySqlDbTargetProvider&&) = delete;
+    ELogMySqlDbTargetProvider& operator=(const ELogMySqlDbTargetProvider&) = delete;
     ~ELogMySqlDbTargetProvider() final {}
 
     ELogDbTarget* loadTarget(const ELogConfigMapNode* logTargetCfg, const std::string& connString,

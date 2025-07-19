@@ -13,6 +13,9 @@ namespace elog {
 class ELogPGSQLDbFieldReceptor : public ELogFieldReceptor {
 public:
     ELogPGSQLDbFieldReceptor() {}
+    ELogPGSQLDbFieldReceptor(const ELogPGSQLDbFieldReceptor&) = delete;
+    ELogPGSQLDbFieldReceptor(ELogPGSQLDbFieldReceptor&&) = delete;
+    ELogPGSQLDbFieldReceptor& operator=(const ELogPGSQLDbFieldReceptor&) = delete;
     ~ELogPGSQLDbFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
@@ -42,7 +45,7 @@ public:
     void prepareParams() {
         for (const std::string& str : m_stringCache) {
             m_paramValues.push_back(str.c_str());
-            m_paramLengths.push_back(str.length());
+            m_paramLengths.push_back((int)str.length());
         }
     }
 
@@ -89,7 +92,7 @@ bool ELogPGSQLDbTarget::connectDb(void* dbData) {
     // NOTE: according to libpq documentation, PGresult can return null, so we must be cautious
     PGresult* res =
         PQprepare(pgsqlDbData->m_conn, m_stmtName.c_str(), getProcessedInsertStatement().c_str(),
-                  getInsertStatementParamTypes().size(), nullptr);
+                  (int)getInsertStatementParamTypes().size(), nullptr);
     if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
         ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
@@ -143,16 +146,16 @@ bool ELogPGSQLDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
     pgsqlFieldReceptor.prepareParams();
 
     // execute prepared statement
-    PGresult* res =
-        PQexecPrepared(pgsqlDbData->m_conn, m_stmtName.c_str(),
-                       getInsertStatementParamTypes().size(), pgsqlFieldReceptor.getParamValues(),
-                       pgsqlFieldReceptor.getParamLengths(), &m_paramFormats[0], 0);
+    PGresult* res = PQexecPrepared(pgsqlDbData->m_conn, m_stmtName.c_str(),
+                                   (int)getInsertStatementParamTypes().size(),
+                                   pgsqlFieldReceptor.getParamValues(),
+                                   pgsqlFieldReceptor.getParamLengths(), &m_paramFormats[0], 0);
     if (res == nullptr || PQresultStatus(res) != PGRES_COMMAND_OK) {
         ExecStatusType status = res ? PQresultStatus(res) : PGRES_FATAL_ERROR;
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
         std::string logMsg;
-        ELogSystem::formatLogMsg(logRecord, logMsg);
+        elog::formatLogMsg(logRecord, logMsg);
         ELOG_REPORT_ERROR(
             "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
             statusStr, logMsg.c_str());
@@ -283,7 +286,7 @@ void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
         std::string logMsg;
-        ELogSystem::formatLogMsg(logRecord, logMsg);
+        elog::formatLogMsg(logRecord, logMsg);
         ELOG_REPORT_ERROR(
             "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
             statusStr, logMsg.c_str());

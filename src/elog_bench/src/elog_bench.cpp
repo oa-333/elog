@@ -85,12 +85,12 @@ static void testPerfSharedLogger();
 
 // test connectors
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
-static void testGRPC();
-static void testGRPCSimple();
-static void testGRPCStream();
-static void testGRPCAsync();
-static void testGRPCAsyncCallbackUnary();
-static void testGRPCAsyncCallbackStream();
+static int testGRPC();
+static int testGRPCSimple();
+static int testGRPCStream();
+static int testGRPCAsync();
+static int testGRPCAsyncCallbackUnary();
+static int testGRPCAsyncCallbackStream();
 #endif
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 static void testMySQL();
@@ -116,10 +116,10 @@ static void testDatadog();
 
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                                   double& ioThroughput, StatData& msgPercentile,
-                                  uint32_t msgCount = ST_MSG_COUNT);
+                                  uint32_t msgCount = ST_MSG_COUNT, bool enableTrace = false);
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
                                bool privateLogger = true, uint32_t minThreads = MIN_THREAD_COUNT,
-                               uint32_t maxThreads = MAX_THREAD_COUNT);
+                               uint32_t maxThreads = MAX_THREAD_COUNT, bool enableTrace = false);
 static void printMermaidChart(const char* name, std::vector<double>& msgThroughput,
                               std::vector<double>& byteThroughput);
 static void printMarkdownTable(const char* name, std::vector<double>& msgThroughput,
@@ -190,8 +190,11 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
 #include <grpcpp/server_context.h>
 
 static std::mutex coutLock;
+
+std::atomic<uint64_t> sGrpcMsgCount;
 static void handleLogRecord(const elog_grpc::ELogGRPCRecordMsg* msg) {
     // TODO: conduct a real test - collect messages, verify they match the log messages
+    sGrpcMsgCount.fetch_add(1, std::memory_order_relaxed);
     return;
     std::stringstream s;
     uint32_t fieldCount = 0;
@@ -450,12 +453,10 @@ public:
 
 static int testConnectors() {
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
-    testGRPC();
-    testGRPCSimple();
-    testGRPCStream();
-    testGRPCAsync();
-    testGRPCAsyncCallbackUnary();
-    testGRPCAsyncCallbackStream();
+    int res = testGRPC();
+    if (res != 0) {
+        return res;
+    }
 #endif
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
     testMySQL();
@@ -812,18 +813,18 @@ void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
 }
 
 elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
-    if (!elog::ELogSystem::initialize()) {
+    if (!elog::initialize()) {
         fprintf(stderr, "Failed to initialize elog system\n");
         return nullptr;
     }
     fprintf(stderr, "ELog system initialized\n");
     if (sTestConns) {
-        // elog::ELogSystem::addStdErrLogTarget();
-        elog::ELogSystem::setCurrentThreadName("elog_bench_main");
-        elog::ELogSystem::setAppName("elog_bench_app");
+        // elog::addStdErrLogTarget();
+        elog::setCurrentThreadName("elog_bench_main");
+        elog::setAppName("elog_bench_app");
     }
     if (sTestException) {
-        elog::ELogSystem::addStdErrLogTarget();
+        elog::addStdErrLogTarget();
     }
 
     elog::ELogPropertyPosSequence props;
@@ -831,7 +832,7 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     std::string::size_type nonSpacePos = namedCfg.find_first_not_of(" \t\r\n");
     if (nonSpacePos == std::string::npos) {
         fprintf(stderr, "Invalid log target configuration, all white space\n");
-        elog::ELogSystem::terminate();
+        elog::terminate();
         return nullptr;
     }
     bool res = false;
@@ -849,44 +850,44 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
             elog::ELogStringPropertyPos* prop =
                 new elog::ELogStringPropertyPos(namedCfg.c_str(), 0, 0);
             props.m_sequence.push_back({"log_target", prop});
-            res = elog::ELogSystem::configureByPropsEx(props, true, true);
+            res = elog::configureByPropsEx(props, true, true);
         } else {
             std::string cfgStr = "{ log_target = \"";
             cfgStr += namedCfg + "\"}";
             fprintf(stderr, "Using configuration: log_target = %s\n", namedCfg.c_str());
-            res = elog::ELogSystem::configureByStr(cfgStr.c_str(), true, true);
+            res = elog::configureByStr(cfgStr.c_str(), true, true);
         }
     } else {
-        res = elog::ELogSystem::configureByStr(cfg, true, true);
+        res = elog::configureByStr(cfg, true, true);
     }
     if (!res) {
         fprintf(stderr, "Failed to initialize elog system with log target config: %s\n", cfg);
-        elog::ELogSystem::terminate();
+        elog::terminate();
         return nullptr;
     }
     fprintf(stderr, "Configure from props OK\n");
 
-    elog::ELogTarget* logTarget = elog::ELogSystem::getLogTarget("elog_bench");
+    elog::ELogTarget* logTarget = elog::getLogTarget("elog_bench");
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to find logger by name elog_bench, aborting\n");
-        elog::ELogSystem::terminate();
+        elog::terminate();
     }
-    elog::ELogSource* logSource = elog::ELogSystem::defineLogSource("elog_bench_logger");
+    elog::ELogSource* logSource = elog::defineLogSource("elog_bench_logger");
     elog::ELogTargetAffinityMask mask = 0;
     ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
     logSource->setLogTargetAffinity(mask);
 #ifdef ELOG_ENABLE_FMT_LIB
-    // elog::ELogSystem::discardAccumulatedLogMessages();
-    elog::ELogTargetId id = elog::ELogSystem::addStdErrLogTarget();
+    // elog::discardAccumulatedLogMessages();
+    elog::ELogTargetId id = elog::addStdErrLogTarget();
     int someInt = 5;
     ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
-    elog::ELogSystem::removeLogTarget(id);
-    elog::ELogSystem::discardAccumulatedLogMessages();
+    elog::removeLogTarget(id);
+    elog::discardAccumulatedLogMessages();
 #endif
     return logTarget;
 }
 
-void termELog() { elog::ELogSystem::terminate(); }
+void termELog() { elog::terminate(); }
 
 void testPerfPrivateLog() {
     // Private logger test
@@ -897,7 +898,7 @@ void testPerfPrivateLog() {
         return;
     }
     fprintf(stderr, "initElog() OK\n");
-    elog::ELogLogger* privateLogger = elog::ELogSystem::getPrivateLogger("");
+    elog::ELogLogger* privateLogger = elog::getPrivateLogger("");
     fprintf(stderr, "private logger retrieved\n");
 
     fprintf(stderr, "Empty private log benchmark:\n");
@@ -938,7 +939,7 @@ void testPerfSharedLogger() {
         fprintf(stderr, "Failed to init shared logger test, aborting\n");
         return;
     }
-    elog::ELogLogger* sharedLogger = elog::ELogSystem::getSharedLogger("");
+    elog::ELogLogger* sharedLogger = elog::getSharedLogger("");
 
     fprintf(stderr, "Empty shared log benchmark:\n");
     uint64_t bytesStart = logTarget->getBytesWritten();
@@ -971,137 +972,157 @@ void testPerfSharedLogger() {
 }
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
-void testGRPC() {
-    testGRPCSimple();
-    testGRPCStream();
-    testGRPCAsync();
-    testGRPCAsyncCallbackUnary();
-    testGRPCAsyncCallbackStream();
+int testGRPC() {
+    int res = testGRPCSimple();
+    if (res != 0) {
+        return res;
+    }
+
+    res = testGRPCStream();
+    if (res != 0) {
+        return res;
+    }
+
+    res = testGRPCAsync();
+    if (res != 0) {
+        return res;
+    }
+
+    res = testGRPCAsyncCallbackUnary();
+    if (res != 0) {
+        return res;
+    }
+
+    res = testGRPCAsyncCallbackStream();
+    if (res != 0) {
+        return res;
+    }
+
+    return 0;
 }
 
-void testGRPCSimple() {
-    // start gRPC server
-    // absl::InitializeLog();
+template <typename ServerType>
+std::thread startServiceWait(std::unique_ptr<grpc::Server>& server, ServerType& service,
+                             std::unique_ptr<grpc::ServerCompletionQueue>& cq) {
+    return std::thread([&server]() { server->Wait(); });
+}
+
+template <>
+std::thread startServiceWait<TestGRPCAsyncServer>(
+    std::unique_ptr<grpc::Server>& server, TestGRPCAsyncServer& service,
+    std::unique_ptr<grpc::ServerCompletionQueue>& cq) {
+    return std::thread([&service, &cq]() { service.HandleRpcs(cq.get()); });
+}
+
+#define GRPC_OPT_HAS_PRE_INIT 0x01
+#define GRPC_OPT_NEED_CQ 0x02
+#define GRPC_OPT_TRACE 0x04
+
+template <typename ServerType>
+int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1000,
+                   uint32_t mtMsgCount = 1000) {
+    // setup up server
     std::string serverAddress = "0.0.0.0:5051";
-    TestGRPCServer service;
+    ServerType service;
     grpc::ServerBuilder builder;
     builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
+
+    std::unique_ptr<grpc::ServerCompletionQueue> cq;
+    if (opts & GRPC_OPT_NEED_CQ) {
+        cq = builder.AddCompletionQueue();
+    }
+
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
     std::cout << "Server listening on " << serverAddress << std::endl;
-    std::thread t = std::thread([&server]() { server->Wait(); });
+    std::thread t = startServiceWait(server, service, cq);
 
-    const char* cfg =
+    // prepare log target URL and test name
+    std::string cfg =
         "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
-        "${msg})";
+        "${msg})&grpc_max_inflight_calls=20000&flush_policy=count&flush_count=1024&"
+        "grpc_client_mode=";
+    cfg += clientType;
+    std::string testName = std::string("gRPC (") + clientType + ")";
+    std::string mtResultFileName = std::string("elog_bench_grpc_") + clientType;
+
+    // run single threaded test
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("gRPC (unary)", cfg, msgPerf, ioPerf, statData);
-    runMultiThreadTest("gRPC (unary)", "elog_bench_grpc_unary", cfg, true, 1, 4);
+
+    sGrpcMsgCount.store(0, std::memory_order_relaxed);
+
+    if (opts & GRPC_OPT_TRACE) {
+        elog::setTraceMode(true);
+    }
+
+    runSingleThreadedTest(testName.c_str(), cfg.c_str(), msgPerf, ioPerf, statData, stMsgCount);
+    uint32_t receivedMsgCount = (uint32_t)sGrpcMsgCount.load(std::memory_order_relaxed);
+    // total: 2 pre-init + 1 test error message + stMsgCount single-thread messages
+    uint32_t totalMsg = stMsgCount + 1;
+    if (opts & GRPC_OPT_HAS_PRE_INIT) {
+        totalMsg += 2;
+    }
+    if (receivedMsgCount != totalMsg) {
+        fprintf(
+            stderr,
+            "%s gRPC client test failed, missing messages on server side, expected %u, got %u\n",
+            clientType, stMsgCount, receivedMsgCount);
+        server->Shutdown();
+        t.join();
+        fprintf(stderr, "%s gRPC client test FAILED\n", clientType);
+        return 1;
+    }
+
+    // multi-threaded test
+    sMsgCnt = mtMsgCount;
+    sGrpcMsgCount.store(0, std::memory_order_relaxed);
+    runMultiThreadTest(testName.c_str(), mtResultFileName.c_str(), cfg.c_str(), true, 1, 4);
+    sMsgCnt = 0;
 
     server->Shutdown();
     t.join();
+
+    receivedMsgCount = (uint32_t)sGrpcMsgCount.load(std::memory_order_relaxed);
+    // total: sMsgCnt multi-thread messages + total threads
+    // each test adds 2 more messages for start and end test phase
+    // we run total 10 threads  in 4 phases(1 + 2 + 3 + 4)
+    const uint32_t threadCount = 10;
+    const uint32_t phaseCount = 4;
+    const uint32_t exMsgPerPhase = 2;
+    totalMsg = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
+    if (receivedMsgCount != totalMsg) {
+        fprintf(
+            stderr,
+            "%s gRPC client test failed, missing messages on server side, expected %u, got %u\n",
+            clientType, totalMsg, receivedMsgCount);
+        server->Shutdown();
+        t.join();
+        fprintf(stderr, "%s gRPC client test FAILED\n", clientType);
+        return 2;
+    }
+
+    fprintf(stderr, "%s gRPC client test PASSED\n", clientType);
+    return 0;
 }
 
-void testGRPCStream() {
-    std::string serverAddress = "0.0.0.0:5051";
-    TestGRPCServer service;
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    std::cout << "Server listening on " << serverAddress << std::endl;
-    std::thread t = std::thread([&server]() { server->Wait(); });
-
-    const char* cfg =
-        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
-        "${msg})&grpc_client_mode=stream";
-    double msgPerf = 0.0f;
-    double ioPerf = 0.0f;
-    StatData statData;
-    runSingleThreadedTest("gRPC (stream)", cfg, msgPerf, ioPerf, statData);
-    runMultiThreadTest("gRPC (stream)", "elog_bench_grpc_stream", cfg, true, 1, 4);
-
-    server->Shutdown();
-    t.join();
+int testGRPCSimple() {
+    return testGRPCClient<TestGRPCServer>("unary", GRPC_OPT_HAS_PRE_INIT, 10, 100);
 }
 
-void testGRPCAsync() {
-    std::string serverAddress = "0.0.0.0:5051";
-    TestGRPCAsyncServer service;
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    std::unique_ptr<grpc::ServerCompletionQueue> cq = builder.AddCompletionQueue();
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    std::cout << "Server listening on " << serverAddress << std::endl;
-    std::thread t = std::thread([&service, &cq]() { service.HandleRpcs(cq.get()); });
+int testGRPCStream() { return testGRPCClient<TestGRPCServer>("stream"); }
 
-    const char* cfg =
-        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
-        "${msg})&grpc_client_mode=async";
-    double msgPerf = 0.0f;
-    double ioPerf = 0.0f;
-    StatData statData;
-    runSingleThreadedTest("gRPC (async)", cfg, msgPerf, ioPerf, statData);
-    runMultiThreadTest("gRPC (async)", "elog_bench_grpc_async", cfg, true, 1, 4);
-
-    // test is over, order server to shut down
-    server->Shutdown();
-    t.join();
-    cq->Shutdown();
+int testGRPCAsync() {
+    return testGRPCClient<TestGRPCAsyncServer>("async", GRPC_OPT_NEED_CQ, 10, 100);
 }
 
-void testGRPCAsyncCallbackUnary() {
-    std::string serverAddress = "0.0.0.0:5051";
-    TestGRPCAsyncCallbackServer service;
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    std::cout << "Server listening on " << serverAddress << std::endl;
-    std::thread t = std::thread([&server]() { server->Wait(); });
-
-    const char* cfg =
-        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
-        "${msg})&grpc_client_mode=async_callback_unary";
-    double msgPerf = 0.0f;
-    double ioPerf = 0.0f;
-    StatData statData;
-    runSingleThreadedTest("gRPC (async callback unary)", cfg, msgPerf, ioPerf, statData);
-    runMultiThreadTest("gRPC (async callback unary)", "elog_bench_grpc_async_cb_unary", cfg, true,
-                       1, 4);
-
-    // test is over, order server to shut down
-    server->Shutdown();
-    t.join();
+int testGRPCAsyncCallbackUnary() {
+    return testGRPCClient<TestGRPCAsyncCallbackServer>("async_callback_unary", 10, 100);
 }
 
-void testGRPCAsyncCallbackStream() {
-    std::string serverAddress = "0.0.0.0:5051";
-    TestGRPCAsyncCallbackServer service;
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(serverAddress, grpc::InsecureServerCredentials());
-    builder.RegisterService(&service);
-    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    std::cout << "Server listening on " << serverAddress << std::endl;
-    std::thread t = std::thread([&server]() { server->Wait(); });
-
-    const char* cfg =
-        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
-        "${msg})&grpc_client_mode=async_callback_stream&grpc_max_inflight_calls=20000&flush_policy="
-        "count&flush_count=1024";
-    double msgPerf = 0.0f;
-    double ioPerf = 0.0f;
-    StatData statData;
-    runSingleThreadedTest("gRPC (async callback stream)", cfg, msgPerf, ioPerf, statData);
-    runMultiThreadTest("gRPC (async callback stream)", "elog_bench_grpc_async_cb_stream", cfg, true,
-                       1, 4);
-
-    // test is over, order server to shut down
-    server->Shutdown();
-    t.join();
+int testGRPCAsyncCallbackStream() {
+    return testGRPCClient<TestGRPCAsyncCallbackServer>("async_callback_stream");
 }
 #endif
 
@@ -1229,7 +1250,7 @@ int testColors() {
     if (logTarget == nullptr) {
         return 1;
     }
-    elog::ELogLogger* logger = elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+    elog::ELogLogger* logger = elog::getPrivateLogger("elog_bench_logger");
     ELOG_INFO_EX(logger, "This is a test message");
     termELog();
 
@@ -1243,7 +1264,7 @@ int testColors() {
     if (logTarget == nullptr) {
         return 2;
     }
-    logger = elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+    logger = elog::getPrivateLogger("elog_bench_logger");
     ELOG_INFO_EX(logger, "This is a test message");
     ELOG_WARN_EX(logger, "This is a test message");
     termELog();
@@ -1262,7 +1283,7 @@ int testColors() {
     if (logTarget == nullptr) {
         return 3;
     }
-    logger = elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+    logger = elog::getPrivateLogger("elog_bench_logger");
     ELOG_INFO_EX(logger, "This is a test message");
     ELOG_WARN_EX(logger, "This is a test message");
     ELOG_ERROR_EX(logger, "This is a test message");
@@ -1280,7 +1301,7 @@ int testColors() {
         "[${tid:font=italic}] ${src:font=underline:fg-color=bright-red} "
         "${msg:font=cross-out,blink-rapid:fg-color=#993983}";
     logTarget = initElog(cfg);
-    logger = elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+    logger = elog::getPrivateLogger("elog_bench_logger");
     ELOG_INFO_EX(logger, "This is a test message");
     ELOG_WARN_EX(logger, "This is a test message");
     ELOG_ERROR_EX(logger, "This is a test message");
@@ -1412,7 +1433,7 @@ int testEventLog() {
 
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput, StatData& msgPercentile,
-                           uint32_t msgCount /* = ST_MSG_COUNT */) {
+                           uint32_t msgCount /* = ST_MSG_COUNT */, bool enableTrace /* = false */) {
     if (sMsgCnt > 0) {
         msgCount = sMsgCnt;
     }
@@ -1422,8 +1443,12 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
         return;
     }
 
+    if (enableTrace) {
+        elog::setTraceMode(true);
+    }
+
     fprintf(stderr, "\nRunning %s single-thread test\n", title);
-    elog::ELogSource* logSource = elog::ELogSystem::defineLogSource("elog.bench", true);
+    elog::ELogSource* logSource = elog::defineLogSource("elog.bench", true);
     elog::ELogLogger* logger = logSource->createPrivateLogger();
 #ifdef MEASURE_PERCENTILE
     std::vector<double> samples(msgCount, 0.0f);
@@ -1489,7 +1514,8 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
 void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
                         bool privateLogger /* = true */,
                         uint32_t minThreads /* = MIN_THREAD_COUNT */,
-                        uint32_t maxThreads /* = MAX_THREAD_COUNT */) {
+                        uint32_t maxThreads /* = MAX_THREAD_COUNT */,
+                        bool enableTrace /* = false */) {
     if (sMinThreadCnt > 0) {
         minThreads = sMinThreadCnt;
     }
@@ -1506,12 +1532,16 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         return;
     }
 
+    if (enableTrace) {
+        elog::setTraceMode(true);
+    }
+
     fprintf(stderr, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
     std::vector<double> msgThroughput;
     std::vector<double> byteThroughput;
     std::vector<double> accumThroughput;
     elog::ELogLogger* sharedLogger =
-        privateLogger ? nullptr : elog::ELogSystem::getSharedLogger("elog_bench_logger");
+        privateLogger ? nullptr : elog::getSharedLogger("elog_bench_logger");
     for (uint32_t i = MIN_THREAD_COUNT; i < minThreads; ++i) {
         msgThroughput.push_back(0);
         byteThroughput.push_back(0);
@@ -1532,9 +1562,8 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         // create private loggers before running threads, otherwise race condition may happen (log
         // source is not thread-safe)
         for (uint32_t i = 0; i < threadCount; ++i) {
-            loggers[i] = sharedLogger != nullptr
-                             ? sharedLogger
-                             : elog::ELogSystem::getPrivateLogger("elog_bench_logger");
+            loggers[i] = sharedLogger != nullptr ? sharedLogger
+                                                 : elog::getPrivateLogger("elog_bench_logger");
         }
         uint64_t bytesStart = logTarget->getBytesWritten();
         for (uint32_t i = 0; i < threadCount; ++i) {

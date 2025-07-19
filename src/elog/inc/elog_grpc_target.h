@@ -8,12 +8,27 @@
 #include <grpc/grpc.h>
 #include <grpcpp/channel.h>
 
+// disable some annoying warnings coming from protobuf generated headers
+#ifdef ELOG_MSVC
+#pragma warning(push)
+#pragma warning(disable : 4626 5027)
+#endif
+
 #include "elog.grpc.pb.h"
 #include "elog.pb.h"
+
+#ifdef ELOG_MSVC
+#pragma warning(pop)
+#endif
+
 #include "elog_atomic.h"
 #include "elog_error_handler.h"
 #include "elog_rpc_target.h"
 
+/** @def Default deadline used by gRPC log target. Beware of too small deadlines. */
+#define ELOG_GRPC_DEFAULT_DEADLINE_MILLIS 60000
+
+/** @def Default maximum number of pending messages used by the reactor code. */
 #define ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS 1024
 
 // gRPC log target has the following possible configurations:
@@ -47,6 +62,9 @@ class ELogGRPCBaseReceptor : public ELogFieldReceptor {
 public:
     ELogGRPCBaseReceptor()
         : ELogFieldReceptor(ELogFieldReceptor::ReceiveStyle::RS_BY_NAME), m_logRecordMsg(nullptr) {}
+    ELogGRPCBaseReceptor(const ELogGRPCBaseReceptor&) = delete;
+    ELogGRPCBaseReceptor(ELogGRPCBaseReceptor&&) = delete;
+    ELogGRPCBaseReceptor& operator=(const ELogGRPCBaseReceptor&) = delete;
     ~ELogGRPCBaseReceptor() override {}
 
     /** @brief Provide from outside a log record message to be filled-in by the field receptor. */
@@ -146,14 +164,28 @@ public:
           m_state(ReactorState::RS_INIT),
           m_inFlight(false),
           m_inFlightRequestId(0),
+          m_inFlightRequests(nullptr),
+          m_maxInflightCalls(maxInflightCalls),
           m_nextRequestId(0) {
         // just to be on the safe side
-        if (maxInflightCalls == 0) {
-            maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS;
+        if (m_maxInflightCalls == 0) {
+            m_maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS;
         }
-        m_inFlightRequests.resize(maxInflightCalls);
+        m_inFlightRequests = new (std::nothrow) CallData[m_maxInflightCalls];
+        if (m_inFlightRequests == nullptr) {
+            m_errorHandler->onError(
+                "Failed to allocate in-flight message array in gRPC base reactor");
+        }
     }
-    ~ELogGRPCBaseReactor() {}
+    ELogGRPCBaseReactor(const ELogGRPCBaseReactor&) = delete;
+    ELogGRPCBaseReactor(ELogGRPCBaseReactor&&) = delete;
+    ELogGRPCBaseReactor& operator=(const ELogGRPCBaseReactor&) = delete;
+    ~ELogGRPCBaseReactor() {
+        if (m_inFlightRequests != nullptr) {
+            delete[] m_inFlightRequests;
+            m_inFlightRequests = nullptr;
+        }
+    }
 
     /**
      * @brief Writes a log record through the reactor (outside reactor flow).
@@ -205,7 +237,11 @@ private:
         MessageType* m_logRecordMsg;
         ReceptorType m_receptor;
 
-        CallData() : m_requestId(0), m_isUsed(false), m_logRecordMsg(nullptr) {}
+        CallData();
+        CallData(const CallData&) = delete;
+        CallData(CallData&&) = delete;
+        CallData& operator=(const CallData&) = delete;
+        ~CallData() {}
 
         bool init(uint64_t requestId) {
             m_requestId.m_atomicValue.store(requestId, std::memory_order_relaxed);
@@ -217,17 +253,11 @@ private:
             return true;
         }
 
-        void clear() {
-            m_requestId.m_atomicValue.store(-1, std::memory_order_relaxed);
-            m_isUsed.m_atomicValue.store(false, std::memory_order_relaxed);
-            // NOTE: the grpc framework does not take ownership of the message so we must delete it
-            delete m_logRecordMsg;
-            m_logRecordMsg = nullptr;
-            m_receptor.setLogRecordMsg(nullptr);
-        }
+        void clear();
     };
 
-    std::vector<CallData> m_inFlightRequests;
+    CallData* m_inFlightRequests;
+    uint32_t m_maxInflightCalls;
     std::atomic<uint64_t> m_nextRequestId;
 
     std::list<uint64_t> m_pendingWriteRequests;
@@ -264,6 +294,7 @@ public:
 
     ELogGRPCBaseTarget(const ELogGRPCBaseTarget&) = delete;
     ELogGRPCBaseTarget(ELogGRPCBaseTarget&&) = delete;
+    ELogGRPCBaseTarget& operator=(const ELogGRPCBaseTarget&) = delete;
     ~ELogGRPCBaseTarget() final {}
 
 protected:

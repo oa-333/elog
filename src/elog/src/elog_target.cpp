@@ -212,7 +212,7 @@ void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) 
     if (m_logFormatter != nullptr) {
         m_logFormatter->formatLogMsg(logRecord, logMsg);
     } else {
-        ELogSystem::formatLogMsg(logRecord, logMsg);
+        elog::formatLogMsg(logRecord, logMsg);
     }
     if (m_addNewLine) {
         logMsg.append("\n");
@@ -223,7 +223,7 @@ void ELogTarget::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuf
     if (m_logFormatter != nullptr) {
         m_logFormatter->formatLogBuffer(logRecord, logBuffer);
     } else {
-        ELogSystem::formatLogBuffer(logRecord, logBuffer);
+        elog::formatLogBuffer(logRecord, logBuffer);
     }
     if (m_addNewLine) {
         logBuffer.append("\n");

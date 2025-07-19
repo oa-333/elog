@@ -318,6 +318,24 @@ bool ELogConfigLoader::getLogTargetIntProperty(const ELogConfigMapNode* logTarge
     return true;
 }
 
+bool ELogConfigLoader::getLogTargetUInt32Property(const ELogConfigMapNode* logTargetCfg,
+                                                  const char* scheme, const char* propName,
+                                                  uint32_t& propValue) {
+    int64_t intValue = 0;
+    if (!getLogTargetIntProperty(logTargetCfg, scheme, propName, intValue)) {
+        return false;
+    }
+    if (intValue > UINT32_MAX) {
+        ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
+                          ", exceeding allowed maximum %u (context: %s)",
+                          scheme, propName, intValue, (unsigned)UINT32_MAX,
+                          logTargetCfg->getFullContext());
+        return false;
+    }
+    propValue = (uint32_t)intValue;
+    return true;
+}
+
 bool ELogConfigLoader::getLogTargetBoolProperty(const ELogConfigMapNode* logTargetCfg,
                                                 const char* scheme, const char* propName,
                                                 bool& propValue) {
@@ -368,22 +386,56 @@ bool ELogConfigLoader::getOptionalLogTargetIntProperty(const ELogConfigMapNode* 
     return true;
 }
 
+bool ELogConfigLoader::getOptionalLogTargetInt32Property(const ELogConfigMapNode* logTargetCfg,
+                                                         const char* scheme, const char* propName,
+                                                         int32_t& propValue,
+                                                         bool* found /* = nullptr */) {
+    int64_t intValue = 0;
+    bool foundLocal = false;
+    bool res =
+        getOptionalLogTargetIntProperty(logTargetCfg, scheme, propName, intValue, &foundLocal);
+    if (!res) {
+        return false;
+    }
+    if (foundLocal) {
+        if (intValue > INT32_MAX || intValue < INT32_MIN) {
+            ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
+                              ", exceeding allowed range [%d, %d] (context: %s)",
+                              scheme, propName, intValue, (int)INT32_MIN, (int)INT32_MAX,
+                              logTargetCfg->getFullContext());
+            return false;
+        }
+        propValue = (int32_t)intValue;
+    }
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
+    return true;
+}
+
 bool ELogConfigLoader::getOptionalLogTargetUIntProperty(const ELogConfigMapNode* logTargetCfg,
                                                         const char* scheme, const char* propName,
                                                         uint64_t& propValue,
                                                         bool* found /* = nullptr */) {
     int64_t intValue = 0;
-    bool res = getOptionalLogTargetIntProperty(logTargetCfg, scheme, propName, intValue, found);
+    bool foundLocal = false;
+    bool res =
+        getOptionalLogTargetIntProperty(logTargetCfg, scheme, propName, intValue, &foundLocal);
     if (!res) {
         return false;
     }
-    if (intValue < 0) {
-        ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
-                          ", expected non-negative number (context: %s)",
-                          scheme, propName, intValue, logTargetCfg->getFullContext());
-        return false;
+    if (foundLocal) {
+        if (intValue < 0) {
+            ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
+                              ", expected non-negative number (context: %s)",
+                              scheme, propName, intValue, logTargetCfg->getFullContext());
+            return false;
+        }
+        propValue = (uint64_t)intValue;
     }
-    propValue = (uint64_t)intValue;
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
     return true;
 }
 
@@ -392,18 +444,25 @@ bool ELogConfigLoader::getOptionalLogTargetUInt32Property(const ELogConfigMapNod
                                                           uint32_t& propValue,
                                                           bool* found /* = nullptr */) {
     uint64_t intValue = 0;
-    bool res = getOptionalLogTargetUIntProperty(logTargetCfg, scheme, propName, intValue, found);
+    bool foundLocal = false;
+    bool res =
+        getOptionalLogTargetUIntProperty(logTargetCfg, scheme, propName, intValue, &foundLocal);
     if (!res) {
         return false;
     }
-    if (intValue > UINT32_MAX) {
-        ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
-                          ", exceeding allowed maximum %u (context: %s)",
-                          scheme, propName, intValue, (unsigned)UINT32_MAX,
-                          logTargetCfg->getFullContext());
-        return false;
+    if (foundLocal) {
+        if (intValue > UINT32_MAX) {
+            ELOG_REPORT_ERROR("Invalid '%s' property '%s' value %" PRId64
+                              ", exceeding allowed maximum %u (context: %s)",
+                              scheme, propName, intValue, (unsigned)UINT32_MAX,
+                              logTargetCfg->getFullContext());
+            return false;
+        }
+        propValue = (uint32_t)intValue;
     }
-    propValue = (uint32_t)intValue;
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
     return true;
 }
 

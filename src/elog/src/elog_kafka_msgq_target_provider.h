@@ -14,6 +14,7 @@ public:
     ELogKafkaMsgQTargetProvider() {}
     ELogKafkaMsgQTargetProvider(const ELogKafkaMsgQTargetProvider&) = delete;
     ELogKafkaMsgQTargetProvider(ELogKafkaMsgQTargetProvider&&) = delete;
+    ELogKafkaMsgQTargetProvider& operator=(const ELogKafkaMsgQTargetProvider&) = delete;
     ~ELogKafkaMsgQTargetProvider() final {}
 
     /**

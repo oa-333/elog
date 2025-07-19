@@ -169,7 +169,6 @@ bool elog_getenv(const char* envVarName, std::string& envVarValue) {
 FILE* elog_fopen(const char* path, const char* mode) {
     FILE* handle = nullptr;
 #if defined(ELOG_SECURE) && defined(ELOG_WINDOWS)
-    // TODO: is this valid on linux?
     errno_t res = fopen_s(&handle, path, mode);
     if (res != 0) {
         ELOG_REPORT_SYS_ERROR(fopen_s, "Failed to open log file %s", path);

@@ -19,6 +19,7 @@ public:
     ELogJsonFormatter() {}
     ELogJsonFormatter(const ELogJsonFormatter&) = delete;
     ELogJsonFormatter(ELogJsonFormatter&&) = delete;
+    ELogJsonFormatter& operator=(const ELogJsonFormatter&) = delete;
     ~ELogJsonFormatter() override {}
 
     bool parseJson(const std::string& jsonStr);
@@ -29,7 +30,7 @@ public:
 
     inline const std::string& getPropNameAt(uint32_t index) const { return m_propNames[index]; }
 
-    inline uint32_t getPropCount() const { return m_propNames.size(); }
+    inline uint32_t getPropCount() const { return (uint32_t)m_propNames.size(); }
 
     inline const std::vector<std::string>& getPropNames() const { return m_propNames; }
 

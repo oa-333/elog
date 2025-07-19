@@ -112,8 +112,8 @@ void ELogLogger::finishLog(ELogRecordBuilder* recordBuilder) {
 
         // send to log targets
         const ELogRecord& logRecord = recordBuilder->getLogRecord();
-        if (ELogSystem::filterLogMsg(logRecord)) {
-            ELogSystem::log(logRecord, m_logSource->getLogTargetAffinityMask());
+        if (elog::filterLogMsg(logRecord)) {
+            elog::logMsg(logRecord, m_logSource->getLogTargetAffinityMask());
         }
 
         // reset log record data

@@ -14,6 +14,7 @@ public:
     ELogPGSQLDbTargetProvider() {}
     ELogPGSQLDbTargetProvider(const ELogPGSQLDbTargetProvider&) = delete;
     ELogPGSQLDbTargetProvider(ELogPGSQLDbTargetProvider&&) = delete;
+    ELogPGSQLDbTargetProvider& operator=(const ELogPGSQLDbTargetProvider&) = delete;
     ~ELogPGSQLDbTargetProvider() final {}
 
     ELogDbTarget* loadTarget(const ELogConfigMapNode* logTargetCfg, const std::string& connString,

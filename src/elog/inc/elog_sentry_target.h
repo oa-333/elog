@@ -40,6 +40,7 @@ public:
 
     ELogSentryTarget(const ELogSentryTarget&) = delete;
     ELogSentryTarget(ELogSentryTarget&&) = delete;
+    ELogSentryTarget& operator=(const ELogSentryTarget&) = delete;
     ~ELogSentryTarget() override {}
 
 protected:

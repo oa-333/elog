@@ -14,6 +14,7 @@ public:
     ELogSentryTargetProvider() {}
     ELogSentryTargetProvider(const ELogSentryTargetProvider&) = delete;
     ELogSentryTargetProvider(ELogSentryTargetProvider&&) = delete;
+    ELogSentryTargetProvider& operator=(const ELogSentryTargetProvider&) = delete;
     ~ELogSentryTargetProvider() final {}
 
     /**

@@ -56,6 +56,9 @@ public:
           m_backlogSizeBytes(0),
           m_stopResend(false) {}
 
+    ELogHttpClient(const ELogHttpClient&) = delete;
+    ELogHttpClient(ELogHttpClient&&) = delete;
+    ELogHttpClient& operator=(const ELogHttpClient&) = delete;
     ~ELogHttpClient() {}
 
     /**

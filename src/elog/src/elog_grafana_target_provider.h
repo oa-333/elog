@@ -14,6 +14,7 @@ public:
     ELogGrafanaTargetProvider() {}
     ELogGrafanaTargetProvider(const ELogGrafanaTargetProvider&) = delete;
     ELogGrafanaTargetProvider(ELogGrafanaTargetProvider&&) = delete;
+    ELogGrafanaTargetProvider& operator=(const ELogGrafanaTargetProvider&) = delete;
     ~ELogGrafanaTargetProvider() final {}
 
     /**

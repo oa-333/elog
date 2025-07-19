@@ -13,7 +13,7 @@ namespace elog {
  */
 class ELOG_API ELogStringStreamReceptor : public ELogFieldReceptor {
 public:
-    ELogStringStreamReceptor() {}
+    ELogStringStreamReceptor() = delete;
     ELogStringStreamReceptor(std::string& logMsg) : m_msgStream(logMsg) {}
     ELogStringStreamReceptor(const ELogStringStreamReceptor&) = delete;
     ELogStringStreamReceptor(ELogStringStreamReceptor&&) = delete;

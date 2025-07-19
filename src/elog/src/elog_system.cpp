@@ -34,6 +34,7 @@
 #include "elog_time_internal.h"
 #include "elog_win32_event_log_target.h"
 
+// #include "elog_props_formatter.h"
 namespace elog {
 
 #define ELOG_MAX_TARGET_COUNT 256ul
@@ -61,7 +62,21 @@ static ELogLogger* sDefaultLogger = nullptr;
 static ELogTarget* sDefaultLogTarget = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
 
-bool ELogSystem::initGlobals() {
+// these functions are defined as external because they are friends of some classes
+extern bool initGlobals();
+extern void termGlobals();
+extern ELogSource* createLogSource(ELogSourceId sourceId, const char* name,
+                                   ELogSource* parent = nullptr, ELogLevel logLevel = ELEVEL_INFO);
+extern void deleteLogSource(ELogSource* logSource);
+
+// local helpers
+static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
+static bool configureRateLimit(const std::string& rateLimitCfg);
+static bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id = nullptr);
+static bool configureLogTarget(const ELogConfigMapNode* logTargetCfg, ELogTargetId* id = nullptr);
+static bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap);
+
+bool initGlobals() {
     // init the error log so we can have trace messages as early as possible
     ELogError::initError();
 
@@ -117,7 +132,7 @@ bool ELogSystem::initGlobals() {
 
     // root logger has no name
     // NOTE: this is the only place where we cannot use logging macros
-    sRootLogSource = new (std::nothrow) ELogSource(allocLogSourceId(), "");
+    sRootLogSource = createLogSource(allocLogSourceId(), "");
     if (sRootLogSource == nullptr) {
         ELOG_REPORT_ERROR("Failed to create root log source, out of memory");
         termGlobals();
@@ -137,6 +152,14 @@ bool ELogSystem::initGlobals() {
     }
     ELOG_REPORT_TRACE("Root log source added to global log source map");
 
+    // TODO: support also bin logger that does NOT format on client side, but rather using template
+    // variadic args, encodes each parameter type with 1 byte, followed by parameter flat data, then
+    // finally by 0xFF byte denoting start of format string, then followed by 4 bytes string len and
+    // then followed by format string. Entire buffer may have some small header (total len, etc.).
+    // actual formatting will take place later, either by async thread, or by external process.
+    // need to define log target binary/text mode, so that if a text mode log target receives a
+    // binary buffer, it must format it first. for a binary log target, the log record must also be
+    // written in binary form.
     sDefaultLogger = sRootLogSource->createSharedLogger();
     if (sDefaultLogger == nullptr) {
         ELOG_REPORT_ERROR("Failed to create default logger, out of memory");
@@ -180,7 +203,7 @@ bool ELogSystem::initGlobals() {
     return true;
 }
 
-void ELogSystem::termGlobals() {
+void termGlobals() {
     // NOTE: since log target may have indirect dependencies (e.g. one log target, while writing a
     // log message, issues another log message with is dispatched to all other log targets), we
     // first stop all targets and then delete them, but this requires log target to be able to
@@ -215,7 +238,7 @@ void ELogSystem::termGlobals() {
         sDefaultLogTarget = nullptr;
     }
     if (sRootLogSource != nullptr) {
-        delete sRootLogSource;
+        deleteLogSource(sRootLogSource);
         sRootLogSource = nullptr;
     }
     sDefaultLogger = nullptr;
@@ -235,8 +258,8 @@ void ELogSystem::termGlobals() {
     sPreInitLogger.discardAccumulatedLogMessages();
 }
 
-bool ELogSystem::initialize(const char* configFile /* = nullptr */,
-                            ELogErrorHandler* errorHandler /* = nullptr */) {
+bool initialize(const char* configFile /* = nullptr */,
+                ELogErrorHandler* errorHandler /* = nullptr */) {
     if (sInitialized) {
         ELOG_REPORT_ERROR("Duplicate attempt to initialize rejected");
         return false;
@@ -253,7 +276,7 @@ bool ELogSystem::initialize(const char* configFile /* = nullptr */,
     return true;
 }
 
-void ELogSystem::terminate() {
+void terminate() {
     if (!sInitialized) {
         ELOG_REPORT_ERROR("Duplicate attempt to terminate ignored");
         return;
@@ -262,27 +285,23 @@ void ELogSystem::terminate() {
     sInitialized = false;
 }
 
-bool ELogSystem::isInitialized() { return sInitialized; }
+bool isInitialized() { return sInitialized; }
 
-ELogLogger* ELogSystem::getPreInitLogger() { return &sPreInitLogger; }
+ELogLogger* getPreInitLogger() { return &sPreInitLogger; }
 
-void ELogSystem::discardAccumulatedLogMessages() { sPreInitLogger.discardAccumulatedLogMessages(); }
+void discardAccumulatedLogMessages() { sPreInitLogger.discardAccumulatedLogMessages(); }
 
-void ELogSystem::setErrorHandler(ELogErrorHandler* errorHandler) {
-    ELogError::setErrorHandler(errorHandler);
-}
+void setErrorHandler(ELogErrorHandler* errorHandler) { ELogError::setErrorHandler(errorHandler); }
 
-void ELogSystem::setTraceMode(bool enableTrace /* = true */) {
-    ELogError::setTraceMode(enableTrace);
-}
+void setTraceMode(bool enableTrace /* = true */) { ELogError::setTraceMode(enableTrace); }
 
-bool ELogSystem::isTraceEnabled() { return ELogError::isTraceEnabled(); }
+bool isTraceEnabled() { return ELogError::isTraceEnabled(); }
 
-bool ELogSystem::registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler) {
+bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler) {
     return ELogSchemaManager::registerSchemaHandler(schemeName, schemaHandler);
 }
 
-bool ELogSystem::configureRateLimit(const std::string& rateLimitCfg) {
+bool configureRateLimit(const std::string& rateLimitCfg) {
     uint32_t maxMsgPerSec = 0;
     if (!parseIntProp(ELOG_RATE_LIMIT_CONFIG_NAME, "", rateLimitCfg, maxMsgPerSec)) {
         ELOG_REPORT_ERROR("Failed to parse rate limit configuration: ", rateLimitCfg.c_str());
@@ -291,8 +310,7 @@ bool ELogSystem::configureRateLimit(const std::string& rateLimitCfg) {
     return setRateLimit(maxMsgPerSec);
 }
 
-bool ELogSystem::configureLogTargetEx(const std::string& logTargetCfg,
-                                      ELogTargetId* id /* = nullptr */) {
+bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id /* = nullptr */) {
     // the following formats are currently supported as a URL-like string
     //
     // sys://stdout
@@ -344,8 +362,7 @@ bool ELogSystem::configureLogTargetEx(const std::string& logTargetCfg,
     return true;
 }
 
-bool ELogSystem::configureLogTarget(const ELogConfigMapNode* logTargetCfg,
-                                    ELogTargetId* id /* = nullptr */) {
+bool configureLogTarget(const ELogConfigMapNode* logTargetCfg, ELogTargetId* id /* = nullptr */) {
     // load the target (common properties already configured)
     ELogTarget* logTarget = ELogConfigLoader::loadLogTarget(logTargetCfg);
     if (logTarget == nullptr) {
@@ -366,8 +383,8 @@ bool ELogSystem::configureLogTarget(const ELogConfigMapNode* logTargetCfg,
     return true;
 }
 
-bool ELogSystem::configureByPropFile(const char* configPath, bool defineLogSources /* = false */,
-                                     bool defineMissingPath /* = false */) {
+bool configureByPropFile(const char* configPath, bool defineLogSources /* = false */,
+                         bool defineMissingPath /* = false */) {
     // elog requires properties in order due to log level propagation
     ELogPropertySequence props;
     if (!ELogConfigLoader::loadFileProperties(configPath, props)) {
@@ -376,9 +393,8 @@ bool ELogSystem::configureByPropFile(const char* configPath, bool defineLogSourc
     return configureByProps(props, defineLogSources, defineMissingPath);
 }
 
-bool ELogSystem::configureByProps(const ELogPropertySequence& props,
-                                  bool defineLogSources /* = false */,
-                                  bool defineMissingPath /* = false */) {
+bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /* = false */,
+                      bool defineMissingPath /* = false */) {
     // TODO: Allow override from env also log_format, log_filter, and perhaps global flush policy
 
     // configure log format (unrelated to order of appearance)
@@ -406,6 +422,14 @@ bool ELogSystem::configureByProps(const ELogPropertySequence& props,
             return false;
         }
     }
+
+    // configure global log level format (font/color)
+    /*std::string logLevelFormatCfg;
+    if (getProp(props, ELOG_LEVEL_FORMAT_CONFIG_NAME, logLevelFormatCfg)) {
+        if (!configureLogLevelFormat(logLevelFormatCfg.c_str())) {
+            return false;
+        }
+    }*/
 
     std::vector<ELogLevelCfg> logLevelCfg;
     ELogLevel logLevel = ELEVEL_INFO;
@@ -525,8 +549,8 @@ bool ELogSystem::configureByProps(const ELogPropertySequence& props,
     return true;
 }
 
-bool ELogSystem::configureByPropFileEx(const char* configPath, bool defineLogSources /* = false */,
-                                       bool defineMissingPath /* = false */) {
+bool configureByPropFileEx(const char* configPath, bool defineLogSources /* = false */,
+                           bool defineMissingPath /* = false */) {
     // elog requires properties in order due to log level propagation
     ELogConfig* config = ELogConfig::loadFromPropFile(configPath);
     if (config == nullptr) {
@@ -538,9 +562,8 @@ bool ELogSystem::configureByPropFileEx(const char* configPath, bool defineLogSou
     return res;
 }
 
-bool ELogSystem::configureByPropsEx(const ELogPropertyPosSequence& props,
-                                    bool defineLogSources /* = false */,
-                                    bool defineMissingPath /* = false */) {
+bool configureByPropsEx(const ELogPropertyPosSequence& props, bool defineLogSources /* = false */,
+                        bool defineMissingPath /* = false */) {
     // we first convert properties to configuration object and then load from cfg object
     ELogConfig* config = ELogConfig::loadFromProps(props);
     if (config == nullptr) {
@@ -552,8 +575,8 @@ bool ELogSystem::configureByPropsEx(const ELogPropertyPosSequence& props,
     return res;
 }
 
-bool ELogSystem::configureByFile(const char* configPath, bool defineLogSources /* = false */,
-                                 bool defineMissingPath /* = false */) {
+bool configureByFile(const char* configPath, bool defineLogSources /* = false */,
+                     bool defineMissingPath /* = false */) {
     // elog requires properties in order due to log level propagation
     ELogConfig* config = ELogConfig::loadFromFile(configPath);
     if (config == nullptr) {
@@ -565,7 +588,7 @@ bool ELogSystem::configureByFile(const char* configPath, bool defineLogSources /
     return res;
 }
 
-bool ELogSystem::augmentConfigFromEnv(ELogConfigMapNode* cfgMap) {
+bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap) {
     char** envPtr = environ;
     for (; *envPtr; envPtr++) {
         std::string envVar(*envPtr);
@@ -620,8 +643,8 @@ bool ELogSystem::augmentConfigFromEnv(ELogConfigMapNode* cfgMap) {
     return true;
 }
 
-bool ELogSystem::configureByStr(const char* configStr, bool defineLogSources /* = false */,
-                                bool defineMissingPath /* = false */) {
+bool configureByStr(const char* configStr, bool defineLogSources /* = false */,
+                    bool defineMissingPath /* = false */) {
     ELogConfig* config = ELogConfig::loadFromString(configStr);
     if (config == nullptr) {
         ELOG_REPORT_ERROR("Failed to load configuration from string: %s", configStr);
@@ -653,8 +676,8 @@ inline bool validateConfigValueIntType(const ELogConfigValue* value, const char*
     return validateConfigValueType(value, ELogConfigValueType::ELOG_CONFIG_INT_VALUE, key);
 }
 
-bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false */,
-                           bool defineMissingPath /* = false */) {
+bool configure(ELogConfig* config, bool defineLogSources /* = false */,
+               bool defineMissingPath /* = false */) {
     // verify root node is of map type
     if (config->getRootNode()->getNodeType() != ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {
         ELOG_REPORT_ERROR("Top-level configuration node is not a map node");
@@ -827,7 +850,7 @@ bool ELogSystem::configure(ELogConfig* config, bool defineLogSources /* = false 
     return true;
 }
 
-ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
+ELogTargetId addLogTarget(ELogTarget* logTarget) {
     // TODO: should we guard against duplicate names (they are used in search by name and in log
     // affinity mask building) - this might require API change (returning at least bool)
     ELOG_REPORT_TRACE("Adding log target: %s", logTarget->getName());
@@ -869,7 +892,7 @@ ELogTargetId ELogSystem::addLogTarget(ELogTarget* logTarget) {
     return logTargetId;
 }
 
-ELogTargetId ELogSystem::configureLogTargetString(const char* logTargetCfg) {
+ELogTargetId configureLogTargetString(const char* logTargetCfg) {
     ELogTargetId id = ELOG_INVALID_TARGET_ID;
     if (!configureLogTargetEx(logTargetCfg, &id)) {
         return ELOG_INVALID_TARGET_ID;
@@ -877,11 +900,13 @@ ELogTargetId ELogSystem::configureLogTargetString(const char* logTargetCfg) {
     return id;
 }
 
-ELogTargetId ELogSystem::addLogFileTarget(
-    const char* logFilePath, uint32_t bufferSize /* = 0 */, bool useLock /* = false */,
-    uint32_t segmentLimitMB /* = 0 */, uint32_t segmentCount /* = 0 */,
-    ELogLevel logLevel /* = ELEVEL_INFO */, ELogFlushPolicy* flushPolicy /* = nullptr */,
-    ELogFilter* logFilter /* = nullptr */, ELogFormatter* logFormatter /* = nullptr */) {
+ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 0 */,
+                              bool useLock /* = false */, uint32_t segmentLimitMB /* = 0 */,
+                              uint32_t segmentCount /* = 0 */,
+                              ELogLevel logLevel /* = ELEVEL_INFO */,
+                              ELogFlushPolicy* flushPolicy /* = nullptr */,
+                              ELogFilter* logFilter /* = nullptr */,
+                              ELogFormatter* logFormatter /* = nullptr */) {
     // we delegate to the schema handler
     ELogTarget* logTarget = ELogFileSchemaHandler::createLogTarget(logFilePath, bufferSize, useLock,
                                                                    segmentLimitMB, 0, segmentCount);
@@ -911,11 +936,12 @@ ELogTargetId ELogSystem::addLogFileTarget(
     return logTargetId;
 }
 
-ELogTargetId ELogSystem::attachLogFileTarget(
-    FILE* fileHandle, bool closeHandleWhenDone /* = false */, uint32_t bufferSize /* = 0 */,
-    bool useLock /* = false */, ELogLevel logLevel /* = ELEVEL_INFO */,
-    ELogFlushPolicy* flushPolicy /* = nullptr */, ELogFilter* logFilter /* = nullptr */,
-    ELogFormatter* logFormatter /* = nullptr */) {
+ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone /* = false */,
+                                 uint32_t bufferSize /* = 0 */, bool useLock /* = false */,
+                                 ELogLevel logLevel /* = ELEVEL_INFO */,
+                                 ELogFlushPolicy* flushPolicy /* = nullptr */,
+                                 ELogFilter* logFilter /* = nullptr */,
+                                 ELogFormatter* logFormatter /* = nullptr */) {
     ELogTarget* logTarget = nullptr;
     if (bufferSize > 0) {
         logTarget = new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock,
@@ -950,21 +976,21 @@ ELogTargetId ELogSystem::attachLogFileTarget(
     return logTargetId;
 }
 
-ELogTargetId ELogSystem::addStdErrLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
-                                            ELogFilter* logFilter /* = nullptr */,
-                                            ELogFormatter* logFormatter /* = nullptr */) {
+ELogTargetId addStdErrLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                                ELogFilter* logFilter /* = nullptr */,
+                                ELogFormatter* logFormatter /* = nullptr */) {
     return attachLogFileTarget(stderr, false, 0, false, logLevel, nullptr, logFilter, logFormatter);
 }
 
-ELogTargetId ELogSystem::addStdOutLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
-                                            ELogFilter* logFilter /* = nullptr */,
-                                            ELogFormatter* logFormatter /* = nullptr */) {
+ELogTargetId addStdOutLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                                ELogFilter* logFilter /* = nullptr */,
+                                ELogFormatter* logFormatter /* = nullptr */) {
     return attachLogFileTarget(stdout, false, 0, false, logLevel, nullptr, logFilter, logFormatter);
 }
 
-ELogTargetId ELogSystem::addSysLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
-                                         ELogFilter* logFilter /* = nullptr */,
-                                         ELogFormatter* logFormatter /* = nullptr */) {
+ELogTargetId addSysLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                             ELogFilter* logFilter /* = nullptr */,
+                             ELogFormatter* logFormatter /* = nullptr */) {
 #ifdef ELOG_LINUX
     ELogSysLogTarget* logTarget = new (std::nothrow) ELogSysLogTarget();
     if (logTarget == nullptr) {
@@ -995,11 +1021,11 @@ ELogTargetId ELogSystem::addSysLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
 #endif
 }
 
-ELogTargetId ELogSystem::addWin32EventLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
-                                                const char* eventSourceName /* = "" */,
-                                                uint32_t eventId /* = 0 */,
-                                                ELogFilter* logFilter /* = nullptr */,
-                                                ELogFormatter* logFormatter /* = nullptr */) {
+ELogTargetId addWin32EventLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
+                                    const char* eventSourceName /* = "" */,
+                                    uint32_t eventId /* = 0 */,
+                                    ELogFilter* logFilter /* = nullptr */,
+                                    ELogFormatter* logFormatter /* = nullptr */) {
 #ifdef ELOG_WINDOWS
     ELogWin32EventLogTarget* logTarget =
         new (std::nothrow) ELogWin32EventLogTarget(eventSourceName, eventId);
@@ -1031,8 +1057,8 @@ ELogTargetId ELogSystem::addWin32EventLogTarget(ELogLevel logLevel /* = ELEVEL_I
 #endif
 }
 
-ELogTargetId ELogSystem::addTracer(const char* traceFilePath, uint32_t traceBufferSize,
-                                   const char* targetName, const char* sourceName) {
+ELogTargetId addTracer(const char* traceFilePath, uint32_t traceBufferSize, const char* targetName,
+                       const char* sourceName) {
     // prepare configuration string
     std::stringstream s;
     s << "async://quantum?quantum_buffer_size=" << traceBufferSize << "&name=" << targetName
@@ -1040,11 +1066,11 @@ ELogTargetId ELogSystem::addTracer(const char* traceFilePath, uint32_t traceBuff
     std::string cfg = s.str();
 
     // add log target from configuration string
-    ELogTargetId id = ELogSystem::configureLogTargetString(cfg.c_str());
+    ELogTargetId id = configureLogTargetString(cfg.c_str());
     if (id == ELOG_INVALID_TARGET_ID) {
         return id;
     }
-    ELogTarget* logTarget = ELogSystem::getLogTarget(id);
+    ELogTarget* logTarget = getLogTarget(id);
     if (logTarget == nullptr) {
         ELOG_REPORT_ERROR("Internal error while adding tracer, log target by id %u not found", id);
         return false;
@@ -1054,7 +1080,7 @@ ELogTargetId ELogSystem::addTracer(const char* traceFilePath, uint32_t traceBuff
     logTarget->setPassKey();
 
     // define log source
-    ELogSource* logSource = ELogSystem::defineLogSource(sourceName, true);
+    ELogSource* logSource = defineLogSource(sourceName, true);
     if (logSource == nullptr) {
         ELOG_REPORT_ERROR("Failed to define tracer %s log source by name %s", targetName,
                           sourceName);
@@ -1072,14 +1098,14 @@ ELogTargetId ELogSystem::addTracer(const char* traceFilePath, uint32_t traceBuff
     return id;
 }
 
-ELogTarget* ELogSystem::getLogTarget(ELogTargetId targetId) {
+ELogTarget* getLogTarget(ELogTargetId targetId) {
     if (targetId >= sLogTargets.size()) {
         return nullptr;
     }
     return sLogTargets[targetId];
 }
 
-ELogTarget* ELogSystem::getLogTarget(const char* logTargetName) {
+ELogTarget* getLogTarget(const char* logTargetName) {
     for (ELogTarget* logTarget : sLogTargets) {
         if (strcmp(logTarget->getName(), logTargetName) == 0) {
             return logTarget;
@@ -1088,7 +1114,7 @@ ELogTarget* ELogSystem::getLogTarget(const char* logTargetName) {
     return nullptr;
 }
 
-ELogTargetId ELogSystem::getLogTargetId(const char* logTargetName) {
+ELogTargetId getLogTargetId(const char* logTargetName) {
     for (uint32_t logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
         if (strcmp(logTarget->getName(), logTargetName) == 0) {
@@ -1098,7 +1124,7 @@ ELogTargetId ELogSystem::getLogTargetId(const char* logTargetName) {
     return ELOG_INVALID_TARGET_ID;
 }
 
-void ELogSystem::removeLogTarget(ELogTargetId targetId) {
+void removeLogTarget(ELogTargetId targetId) {
     // be careful, if this is the last log target, we must put back stderr
     if (targetId >= sLogTargets.size()) {
         // silently ignore invalid request
@@ -1133,7 +1159,7 @@ void ELogSystem::removeLogTarget(ELogTargetId targetId) {
     }
 }
 
-void ELogSystem::removeLogTarget(ELogTarget* target) {
+void removeLogTarget(ELogTarget* target) {
     // find log target and remove it
     for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
         if (sLogTargets[i] == target) {
@@ -1157,12 +1183,21 @@ static void parseSourceName(const std::string& qualifiedName, std::vector<std::s
     }
 }
 
-ELogSource* ELogSystem::addChildSource(ELogSource* parent, const char* sourceName) {
-    ELogSource* logSource = new (std::nothrow) ELogSource(allocLogSourceId(), sourceName, parent);
+ELogSource* createLogSource(ELogSourceId sourceId, const char* name,
+                            ELogSource* parent /* = nullptr */,
+                            ELogLevel logLevel /* = ELEVEL_INFO */) {
+    return new (std::nothrow) ELogSource(sourceId, name, parent, logLevel);
+}
+
+// control carefully who can delete a log source
+void deleteLogSource(ELogSource* logSource) { delete logSource; }
+
+ELogSource* addChildSource(ELogSource* parent, const char* sourceName) {
+    ELogSource* logSource = createLogSource(allocLogSourceId(), sourceName, parent);
     if (!parent->addChild(logSource)) {
         // impossible
         ELOG_REPORT_ERROR("Internal error, cannot add child source %s, already exists", sourceName);
-        delete logSource;
+        deleteLogSource(logSource);
         return nullptr;
     }
 
@@ -1173,15 +1208,14 @@ ELogSource* ELogSystem::addChildSource(ELogSource* parent, const char* sourceNam
         ELOG_REPORT_ERROR("Internal error, cannot add new log source %s by id %u, already exists",
                           sourceName, logSource->getId());
         parent->removeChild(logSource->getName());
-        delete logSource;
+        deleteLogSource(logSource);
         return nullptr;
     }
     return logSource;
 }
 
 // log sources
-ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
-                                        bool defineMissingPath /* = false */) {
+ELogSource* defineLogSource(const char* qualifiedName, bool defineMissingPath /* = false */) {
     std::unique_lock<std::mutex> lock(sSourceTreeLock);
     // parse name to components and start traveling up to last component
     std::vector<std::string> namePath;
@@ -1239,7 +1273,7 @@ ELogSource* ELogSystem::defineLogSource(const char* qualifiedName,
     return logSource;
 }
 
-ELogSource* ELogSystem::getLogSource(const char* qualifiedName) {
+ELogSource* getLogSource(const char* qualifiedName) {
     std::unique_lock<std::mutex> lock(sSourceTreeLock);
     std::vector<std::string> namePath;
     parseSourceName(qualifiedName, namePath);
@@ -1256,7 +1290,7 @@ ELogSource* ELogSystem::getLogSource(const char* qualifiedName) {
     return currSource;
 }
 
-ELogSource* ELogSystem::getLogSource(ELogSourceId logSourceId) {
+ELogSource* getLogSource(ELogSourceId logSourceId) {
     ELogSource* logSource = nullptr;
     std::unique_lock<std::mutex> lock(sSourceTreeLock);
     ELogSourceMap::iterator itr = sLogSourceMap.find(logSourceId);
@@ -1266,14 +1300,14 @@ ELogSource* ELogSystem::getLogSource(ELogSourceId logSourceId) {
     return logSource;
 }
 
-ELogSource* ELogSystem::getRootLogSource() { return sRootLogSource; }
+ELogSource* getRootLogSource() { return sRootLogSource; }
 
 // void configureLogSourceLevel(const char* qualifiedName, ELogLevel logLevel);
 
 // logger interface
-ELogLogger* ELogSystem::getDefaultLogger() { return sDefaultLogger; }
+ELogLogger* getDefaultLogger() { return sDefaultLogger; }
 
-ELogLogger* ELogSystem::getSharedLogger(const char* qualifiedSourceName) {
+ELogLogger* getSharedLogger(const char* qualifiedSourceName) {
     ELogLogger* logger = nullptr;
     ELogSource* source = getLogSource(qualifiedSourceName);
     if (source != nullptr) {
@@ -1282,7 +1316,7 @@ ELogLogger* ELogSystem::getSharedLogger(const char* qualifiedSourceName) {
     return logger;
 }
 
-ELogLogger* ELogSystem::getPrivateLogger(const char* qualifiedSourceName) {
+ELogLogger* getPrivateLogger(const char* qualifiedSourceName) {
     ELogLogger* logger = nullptr;
     ELogSource* source = getLogSource(qualifiedSourceName);
     if (source != nullptr) {
@@ -1291,15 +1325,15 @@ ELogLogger* ELogSystem::getPrivateLogger(const char* qualifiedSourceName) {
     return logger;
 }
 
-ELogLevel ELogSystem::getLogLevel() { return sRootLogSource->getLogLevel(); }
+ELogLevel getLogLevel() { return sRootLogSource->getLogLevel(); }
 
-void ELogSystem::setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode) {
+void setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode) {
     return sRootLogSource->setLogLevel(logLevel, propagateMode);
 }
 
-/*void ELogSystem::setLogLevelFormat(ELogLevel logLevel, const ELogTextSpec& formatSpec) {}
+/*void setLogLevelFormat(ELogLevel logLevel, const ELogTextSpec& formatSpec) {}
 
-bool ELogSystem::configureLogLevelFormat(const char* logLevelConfig) {
+bool configureLogLevelFormat(const char* logLevelConfig) {
     // parse as properties
     ELogPropsFormatter formatter;
     if (!formatter.parseProps(logLevelConfig)) {
@@ -1309,7 +1343,7 @@ bool ELogSystem::configureLogLevelFormat(const char* logLevelConfig) {
 }*/
 
 // log formatting
-bool ELogSystem::configureLogFormat(const char* logFormat) {
+bool configureLogFormat(const char* logFormat) {
     ELogFormatter* logFormatter = new (std::nothrow) ELogFormatter();
     if (!logFormatter->initialize(logFormat)) {
         delete logFormatter;
@@ -1319,28 +1353,26 @@ bool ELogSystem::configureLogFormat(const char* logFormat) {
     return true;
 }
 
-void ELogSystem::setLogFormatter(ELogFormatter* logFormatter) {
+void setLogFormatter(ELogFormatter* logFormatter) {
     if (sGlobalFormatter != nullptr) {
         delete sGlobalFormatter;
     }
     sGlobalFormatter = logFormatter;
 }
 
-void ELogSystem::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
+void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
     sGlobalFormatter->formatLogMsg(logRecord, logMsg);
 }
 
-void ELogSystem::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
+void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
     sGlobalFormatter->formatLogBuffer(logRecord, logBuffer);
 }
 
-void ELogSystem::setAppName(const char* appName) { setAppNameField(appName); }
+void setAppName(const char* appName) { setAppNameField(appName); }
 
-void ELogSystem::setCurrentThreadName(const char* threadName) {
-    setCurrentThreadNameField(threadName);
-}
+void setCurrentThreadName(const char* threadName) { setCurrentThreadNameField(threadName); }
 
-bool ELogSystem::configureLogFilter(const char* logFilterCfg) {
+bool configureLogFilter(const char* logFilterCfg) {
     if (logFilterCfg[0] != '(') {
         ELOG_REPORT_ERROR(
             "Cannot configure global log filter, only expression style is supported: %s",
@@ -1358,14 +1390,14 @@ bool ELogSystem::configureLogFilter(const char* logFilterCfg) {
 }
 
 // global log filtering
-void ELogSystem::setLogFilter(ELogFilter* logFilter) {
+void setLogFilter(ELogFilter* logFilter) {
     if (sGlobalFilter != nullptr) {
         delete sGlobalFilter;
     }
     sGlobalFilter = logFilter;
 }
 
-bool ELogSystem::setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter /* = true */) {
+bool setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter /* = true */) {
     ELogRateLimiter* rateLimiter = new (std::nothrow) ELogRateLimiter(maxMsgPerSecond);
     if (rateLimiter == nullptr) {
         ELOG_REPORT_ERROR("Failed to set rate limit, out of memory");
@@ -1389,7 +1421,7 @@ bool ELogSystem::setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter
     return true;
 }
 
-bool ELogSystem::filterLogMsg(const ELogRecord& logRecord) {
+bool filterLogMsg(const ELogRecord& logRecord) {
     bool res = true;
     if (sGlobalFilter != nullptr) {
         res = sGlobalFilter->filterLogRecord(logRecord);
@@ -1443,29 +1475,27 @@ private:
     std::string m_title;
 };
 
-void ELogSystem::logStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title, int skip,
-                               dbgutil::StackEntryFormatter* formatter) {
+void logStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title, int skip,
+                   dbgutil::StackEntryFormatter* formatter) {
     LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
     dbgutil::printStackTrace(skip, &printer, formatter);
 }
 
-void ELogSystem::logStackTraceContext(ELogLogger* logger, void* context, ELogLevel logLevel,
-                                      const char* title, int skip,
-                                      dbgutil::StackEntryFormatter* formatter) {
+void logStackTraceContext(ELogLogger* logger, void* context, ELogLevel logLevel, const char* title,
+                          int skip, dbgutil::StackEntryFormatter* formatter) {
     LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
     dbgutil::printStackTraceContext(context, skip, &printer, formatter);
 }
 
-void ELogSystem::logAppStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title,
-                                  int skip, dbgutil::StackEntryFormatter* formatter) {
+void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title, int skip,
+                      dbgutil::StackEntryFormatter* formatter) {
     LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
     dbgutil::printAppStackTrace(skip, &printer, formatter);
 }
 #endif
 
-void ELogSystem::log(
-    const ELogRecord& logRecord,
-    ELogTargetAffinityMask logTargetAffinityMask /* = ELOG_ALL_TARGET_AFFINITY_MASK */) {
+void logMsg(const ELogRecord& logRecord,
+            ELogTargetAffinityMask logTargetAffinityMask /* = ELOG_ALL_TARGET_AFFINITY_MASK */) {
     bool logged = false;
     for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
@@ -1491,14 +1521,14 @@ void ELogSystem::log(
     }
 }
 
-char* ELogSystem::sysErrorToStr(int sysErrorCode) { return ELogError::sysErrorToStr(sysErrorCode); }
+char* sysErrorToStr(int sysErrorCode) { return ELogError::sysErrorToStr(sysErrorCode); }
 
 #ifdef ELOG_WINDOWS
-char* ELogSystem::win32SysErrorToStr(unsigned long sysErrorCode) {
+char* win32SysErrorToStr(unsigned long sysErrorCode) {
     return ELogError::win32SysErrorToStr(sysErrorCode);
 }
 
-void ELogSystem::win32FreeErrorStr(char* errStr) { ELogError::win32FreeErrorStr(errStr); }
+void win32FreeErrorStr(char* errStr) { ELogError::win32FreeErrorStr(errStr); }
 #endif
 
 }  // namespace elog

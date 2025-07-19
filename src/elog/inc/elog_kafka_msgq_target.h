@@ -29,6 +29,7 @@ public:
 
     ELogKafkaMsgQTarget(const ELogKafkaMsgQTarget&) = delete;
     ELogKafkaMsgQTarget(ELogKafkaMsgQTarget&&) = delete;
+    ELogKafkaMsgQTarget& operator=(const ELogKafkaMsgQTarget&) = delete;
     ~ELogKafkaMsgQTarget() final {}
 
 protected:

@@ -38,6 +38,7 @@ public:
 
     ELogGrafanaJsonTarget(const ELogGrafanaJsonTarget&) = delete;
     ELogGrafanaJsonTarget(ELogGrafanaJsonTarget&&) = delete;
+    ELogGrafanaJsonTarget& operator=(const ELogGrafanaJsonTarget&) = delete;
     ~ELogGrafanaJsonTarget() final {}
 
 protected:

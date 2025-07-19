@@ -14,6 +14,7 @@ public:
     ELogGRPCTargetProvider();
     ELogGRPCTargetProvider(const ELogGRPCTargetProvider&) = delete;
     ELogGRPCTargetProvider(ELogGRPCTargetProvider&&) = delete;
+    ELogGRPCTargetProvider& operator=(const ELogGRPCTargetProvider&) = delete;
     ~ELogGRPCTargetProvider() final;
 
     /**

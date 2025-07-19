@@ -52,7 +52,7 @@ Sample output (Linux):
  
     0# 0x716a4879e618 dbgutil::printStackTraceContext() +185   at dbg_stack_trace.cpp:185 (libdbgutil.so)
     1# 0x716a4903b8cf dbgutil::printStackTrace() +46           at dbg_stack_trace.h:238 (libelog.so)
-    2# 0x716a4903b1c1 elog::ELogSystem::logStackTrace() +101   at elog_system.cpp:1527 (libelog.so)
+    2# 0x716a4903b1c1 elog::logStackTrace() +101               at elog.cpp:1527 (libelog.so)
     3# 0x5c4bddcbfb30 initRecovery() +973                      at waL_test.cpp:299 (wal_test_linux)
     4# 0x5c4bddcbeb04 testLoadWALRecord() +120                 at waL_test.cpp:122 (wal_test_linux)
     5# 0x5c4bddcbe96d runTest() +51                            at waL_test.cpp:95 (wal_test_linux)
@@ -202,8 +202,8 @@ For more information, see [documentation](#documentation) below.
 ## Getting Started
 
 In order to use the library, include the main header "elog_system.h", which is the library facade.  
-In the application code, make sure to call one of the elog::ElogSystem::initializeXXX() functions before using any of the logging macros. After this, you can use ELOG_INFO() and the rest of the macros.  
-At application exit make sure to call elog::ELogSystem::terminate().
+In the application code, make sure to call one of the elog::initializeXXX() functions before using any of the logging macros. After this, you can use ELOG_INFO() and the rest of the macros.  
+At application exit make sure to call elog::terminate().
 
 ### External Dependencies
 
@@ -324,7 +324,7 @@ The ELog library can be used out of box as follows:
 
     int main(int argc, char* argv[]) {
         // initialize the elog system to log into file
-        if (!elog::ELogSystem::initializeLogFile("./test.log")) {
+        if (!elog::initializeLogFile("./test.log")) {
             fprintf(stderr, "Failed to initialize elog\n");
             return 1;
         }
@@ -334,7 +334,7 @@ The ELog library can be used out of box as follows:
         ...
 
         // terminate the elog system
-        elog::ELogSystem::terminate();
+        elog::terminate();
         return 0;
     }
 
@@ -355,7 +355,7 @@ In this example a synchronous segmented log file is used, with 4MB segment size:
 
     int main(int argc, char* argv[]) {
         // initialize the elog system to log into segmented file
-        if (!elog::ELogSystem::initializeSegmentedLogFile(
+        if (!elog::initializeSegmentedLogFile(
                 ".",        // log dir
                 "test",     // segment base name
                 4 * MB)) {  // segment size
@@ -368,7 +368,7 @@ In this example a synchronous segmented log file is used, with 4MB segment size:
         ...
 
         // terminate the elog system
-        elog::ELogSystem::terminate();
+        elog::terminate();
         return 0;
     }
 
@@ -394,13 +394,12 @@ before being sent to log targets for actual logging.
 
 Here is a simple example of defining a log source and obtaining a logger.
 
-    using namespace elog;
-    ELogSource* logSource = ELogSystem::defineLogSource("core");
+    elog::ELogSource* logSource = elog::defineLogSource("core");
     if (logSource == nullptr) {
         // NOTE: we use here the default logger
         ELOG_ERROR("Failed to define log source with name core");
     } else {
-        ELogLogger* logger = logSource->createSharedLogger();
+        elog::ELogLogger* logger = logSource->createSharedLogger();
         ELOG_INFO_EX(logger, "Obtained a logger from source %s with id %u",
             logSource->getQualifiedName(), 
             logSource->getId());
@@ -445,7 +444,7 @@ For instance, the default log line format specification that is used by ELog is:
 
 In code, it can be done as follows:
 
-    elog::ELogSystem::configureLogFormat("${time} ${level:6} [${tid}] ${msg}");
+    elog::configureLogFormat("${time} ${level:6} [${tid}] ${msg}");
 
 In configuration (globally or per log target), it can be done as follows:
 
@@ -500,14 +499,15 @@ In this case ELogFilter may be derived to provide more specialized control.
 
 Pay attention that log filtering is usually applied at the global level, by the call:
 
-    ELogSystem::setLogFilter(logFilter);
+    elog::setLogFilter(logFilter);
 
 ### Limiting Log Rate
 
 A special instance of a log filter is the rate limiter, which may be applied globally or per log-target:
 
-    ELogRateLimiter* rateLimiter = new ELogRateLimiter(500);  // no more than 500 messages per second
-    ELogSystem::setLogFilter(rateLimiter);
+    // no more than 500 messages per second
+    elog::ELogRateLimiter* rateLimiter = new elog::ELogRateLimiter(500);
+    elog::setLogFilter(rateLimiter);
 
 
 ### Log Targets
@@ -525,13 +525,13 @@ it is possible to defer that to another context by using the ELogDeferredTarget.
 This log target takes another target as the final destination:
 
     // define a segmented log target with 4K segment size
-    ELogTarget* fileTarget = new ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
+    elog::ELogTarget* fileTarget = new elog::ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
 
     // combine it with a deferred log target
-    ELogTarget* deferredTarget = new ELogDeferredTarget(fileTarget);
+    elog::ELogTarget* deferredTarget = new elog::ELogDeferredTarget(fileTarget);
 
     // now set it as the system log target
-    ELogSystem::setLogTarget(deferredTarget);
+    elog::setLogTarget(deferredTarget);
 
 The ELogDeferredTarget is quite simplistic. It wakes up the logging thread for each log message.
 The ELogQueuedTarget provides more control, by allowing to specify a batch size and a timeout,
@@ -540,31 +540,31 @@ a specified timeout has passed since last time it woke up.
 In the example above we can change it like this:
 
     // define a segmented log target with 4K segment size
-    ELogTarget* fileTarget = new ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
+    elog::ELogTarget* fileTarget = new elog::ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
 
     // combine it with a queued log target with batch size 64, and 500 milliseconds timeout
-    ELogTarget* queuedTarget = new ELogQueuedTarget(fileTarget, 64, 500);
+    elog::ELogTarget* queuedTarget = new elog::ELogQueuedTarget(fileTarget, 64, 500);
 
     // now set it as the system log target
-    ELogSystem::setLogTarget(queuedTarget);
+    elog::setLogTarget(queuedTarget);
 
 The ELogQuantumTarget mentioned above can be use das follows:
 
     // define a segmented log target with 4K segment size
-    ELogTarget* fileTarget = new ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
+    elog::ELogTarget* fileTarget = new elog::ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
 
     // combine it with a quantum log target that can handle a burst of 1 million log messages
-    ELogTarget* quantumTarget = new ELogQuantumTarget(&fileTarget, 1024 * 1024);
+    elog::ELogTarget* quantumTarget = new elog::ELogQuantumTarget(&fileTarget, 1024 * 1024);
 
     // now set it as the system log target
-    ELogSystem::setLogTarget(quantumTarget);
+    elog::setLogTarget(quantumTarget);
 
 The ELogSQLiteDbTarget can be used as follows:
 
-    ELogTarget* sqliteTarget = new ELogSQLiteDbTarget("test.db", "INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})");
+    elog::ELogTarget* sqliteTarget = new elog::ELogSQLiteDbTarget("test.db", "INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})");
 
     // add it as an additional log target
-    ELogSystem::addLogTarget(sqliteTarget);
+    elog::addLogTarget(sqliteTarget);
 
 ### Flush Policy
 
@@ -665,7 +665,7 @@ Target name may be specified by the 'name' parameter, as follows:
 
 Next, the log target may be located as follows:
 
-    ELogTarget* logTarget = ELogSystem::getLogTarget("file-logger");
+    elog::ELogTarget* logTarget = elog::getLogTarget("file-logger");
 
 ### Individual Log Target Configuration
 

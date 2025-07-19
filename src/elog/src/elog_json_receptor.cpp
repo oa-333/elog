@@ -7,6 +7,14 @@
 
 namespace elog {
 
+// NOTE: we disable the MSVC compiler warning c4866, which seems like a compiler limitation,
+// not being able to evaluate from left to right (see discussion here:
+// https://stackoverflow.com/questions/66185151/warning-c4866-raised-by-microsoft-visual-c)
+#ifdef ELOG_MSVC
+#pragma warning(push)
+#pragma warning(disable : 4866)
+#endif
+
 bool ELogJsonReceptor::prepareJsonMap(nlohmann::json& logAttributes,
                                       const std::vector<std::string>& propNames) {
     if (m_propValues.size() != propNames.size()) {
@@ -16,10 +24,15 @@ bool ELogJsonReceptor::prepareJsonMap(nlohmann::json& logAttributes,
         return false;
     }
     for (uint32_t i = 0; i < m_propValues.size(); ++i) {
+        // NOTE: MSVC compiler issues warning c4866 here
         logAttributes[propNames[i]] = m_propValues[i];
     }
     return true;
 }
+
+#ifdef ELOG_MSVC
+#pragma warning(pop)
+#endif
 
 }  // namespace elog
 

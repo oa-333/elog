@@ -26,6 +26,7 @@ public:
 
     ELogSQLiteDbTarget(const ELogSQLiteDbTarget&) = delete;
     ELogSQLiteDbTarget(ELogSQLiteDbTarget&&) = delete;
+    ELogSQLiteDbTarget& operator=(const ELogSQLiteDbTarget&) = delete;
     ~ELogSQLiteDbTarget() final {}
 
 protected:

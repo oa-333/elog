@@ -20,22 +20,22 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const ELogConfigMapNode*
         return nullptr;
     }
 
-    int64_t flushTimeoutMillis = -1;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(
+    uint32_t flushTimeoutMillis = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
             logTargetCfg, "Kafka", "kafka_flush_timeout_millis", flushTimeoutMillis)) {
         return nullptr;
     }
 
-    int64_t shutdownFlushTimeoutMillis = -1;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "Kafka",
-                                                           "kafka_shutdown_flush_timeout_millis",
-                                                           shutdownFlushTimeoutMillis)) {
+    uint32_t shutdownFlushTimeoutMillis = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "Kafka",
+                                                              "kafka_shutdown_flush_timeout_millis",
+                                                              shutdownFlushTimeoutMillis)) {
         return nullptr;
     }
 
-    int64_t partition = -1;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, "Kafka", "partition",
-                                                           partition)) {
+    int32_t partition = -1;
+    if (!ELogConfigLoader::getOptionalLogTargetInt32Property(logTargetCfg, "Kafka", "partition",
+                                                             partition)) {
         return nullptr;
     }
 

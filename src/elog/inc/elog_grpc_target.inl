@@ -8,6 +8,8 @@
 #include <grpcpp/security/credentials.h>
 #include <grpcpp/support/interceptor.h>
 
+#include <climits>
+
 #define ELOG_INVALID_REQUEST_ID ((uint64_t)-1)
 #define ELOG_FLUSH_REQUEST_ID ((uint64_t)-2)
 
@@ -141,14 +143,13 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
     // not with respect to OnWriteDone() and onDone()
 
     // this must be done regardless of state
-    // TODO: allocate data in ring buffer and assign id for fast locating
     CallData* callData = allocCallData();
     if (callData == nullptr) {
         m_errorHandler->onError("Failed to allocate gRPC call data");
         return 0;
     }
     m_rpcFormatter->fillInParams(logRecord, &callData->m_receptor);
-    uint32_t bytesWritten = callData->m_logRecordMsg->ByteSizeLong();
+    uint32_t bytesWritten = (uint32_t)callData->m_logRecordMsg->ByteSizeLong();
 
     ReactorState state = m_state.load(std::memory_order_acquire);
     if (state == ReactorState::RS_INIT) {
@@ -171,9 +172,13 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
         // NOTE: there is no race here with other writes or flush, so we can safely change
         // in-flight and in-flight request id without the risk of facing any race conditions
         m_inFlight.store(true, std::memory_order_relaxed);
-        m_inFlightRequestId.store(
-            callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed),
-            std::memory_order_relaxed);
+        uint64_t requestId = callData->m_requestId.m_atomicValue.load(std::memory_order_acquire);
+        m_inFlightRequestId.store(requestId, std::memory_order_release);
+        if (m_errorHandler->isTraceEnabled()) {
+            std::string msg = "*** Set inflight (INIT) to true for request id ";
+            msg += std::to_string(requestId);
+            m_errorHandler->onTrace(msg.c_str());
+        }
         BaseClass::StartWrite(callData->m_logRecordMsg);
         BaseClass::StartCall();  // this actually marks the start of a new RPC stream
     }
@@ -187,16 +192,28 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
             // OnWriteDone(), but here we know that inflight is false, which means that
             // OnWriteDone() for previous message has already executed and reset the inflight flag
             // to false
-            m_inFlightRequestId.store(
-                callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed),
-                std::memory_order_release);
+            uint64_t requestId =
+                callData->m_requestId.m_atomicValue.load(std::memory_order_acquire);
+            m_inFlightRequestId.store(requestId, std::memory_order_release);
+            if (m_errorHandler->isTraceEnabled()) {
+                std::string msg = "*** Set inflight (BATCH) to true for request id ";
+                msg += std::to_string(requestId);
+                m_errorHandler->onTrace(msg.c_str());
+            }
             BaseClass::StartWrite(callData->m_logRecordMsg);
         } else {
             // need to push on request queue and wait until in flight write request finishes
             // NOTE: we may have a race here with OnWriteDone() so we must use a lock
             std::unique_lock<std::mutex> lock(m_lock);
-            m_pendingWriteRequests.push_front(
-                callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed));
+            uint64_t requestId =
+                callData->m_requestId.m_atomicValue.load(std::memory_order_relaxed);
+            m_pendingWriteRequests.push_front(requestId);
+            if (m_errorHandler->isTraceEnabled()) {
+                std::string msg =
+                    "*** Inflight (BATCH) is already true, pushing pending request id ";
+                msg += std::to_string(requestId);
+                m_errorHandler->onTrace(msg.c_str());
+            }
         }
     } else if (state == ReactorState::RS_FLUSH) {
         // this cannot happen, after FLUSH no incoming messages are allowed
@@ -225,11 +242,17 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::flush() {
         if (inFlight || !m_pendingWriteRequests.empty()) {
             // flush request must be put in the queue, because there is in-flight message
             if (m_errorHandler->isTraceEnabled()) {
-                std::string traceMsg = "*** FLUSH request submitted (in-flight=%s)";
+                std::string traceMsg = "*** FLUSH request submitted, in-flight=";
                 traceMsg += inFlight ? "yes" : "no";
                 m_errorHandler->onTrace(traceMsg.c_str());
             }
             m_pendingWriteRequests.push_front(ELOG_FLUSH_REQUEST_ID);
+            if (m_errorHandler->isTraceEnabled()) {
+                std::string msg = "*** Pushed flush request on queue, inflight is ";
+                msg += inFlight ? "true" : "false";
+                m_errorHandler->onTrace(msg.c_str());
+            }
+
             return;
         }
     }
@@ -272,8 +295,14 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnWriteDone(bool 
 
     // get call data and free it (now it is safe to do so according to gRPC documentation)
     uint64_t requestId = m_inFlightRequestId.load(std::memory_order_relaxed);
-    CallData* callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
+    CallData* callData = &m_inFlightRequests[requestId % m_maxInflightCalls];
     callData->clear();
+
+    if (m_errorHandler->isTraceEnabled()) {
+        std::string msg = "*** OnWriteDone(): in-flight is true, completed request id ";
+        msg += std::to_string(requestId);
+        m_errorHandler->onTrace(msg.c_str());
+    }
 
     // in order to maintain correct order, we do not reset yet the inflight flag,
     // but first, we check the pending queue
@@ -296,15 +325,40 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnWriteDone(bool 
         // (See Q. 7 at best practices here: https://grpc.io/docs/languages/cpp/best_practices/)
         BaseClass::StartWritesDone();
         BaseClass::RemoveHold();
+        // attention, since no incoming message is allowed after flush, we can surely assume that
+        // all previous messages have been sent, and OnWriteDone() notification for all of them was
+        // sent, so we can conclude that the pending messages queue is empty, and so the in-flight
+        // flag can be reset back to false
+        assert(m_pendingWriteRequests.empty());
+        if (m_pendingWriteRequests.empty()) {
+            if (!m_inFlight.compare_exchange_strong(inFlight, false, std::memory_order_release)) {
+                // must succeed
+                assert(false);
+            }
+        }
+        // NOTE: if we don't set in-flight to false here, an assert will fire in OnDone(), seeing
+        // that in-flight is still true (which is not expected during OnDone())
     } else if (requestId != ELOG_INVALID_REQUEST_ID) {
         // access to call data array is thread-safe from anywhere
-        callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
+        callData = &m_inFlightRequests[requestId % m_maxInflightCalls];
+        if (m_errorHandler->isTraceEnabled()) {
+            std::string msg = "*** OnWriteDone(): Starting write for delayed request id ";
+            msg += std::to_string(requestId);
+            m_errorHandler->onTrace(msg.c_str());
+        }
+        // must store the currently executed in-flight message request id, otherwise next round of
+        // OnWriteDone() will not be able to find the call data and clean it up
+        m_inFlightRequestId.store(requestId, std::memory_order_relaxed);
         // start write can be called outside reactor flow, since holds are used
         BaseClass::StartWrite(callData->m_logRecordMsg);
         // keep in-flight raised
     } else {
         // NOTE: access to in-flight flag IS thread-safe, because this is the only places where it
         // is set to false, so racing writers will see it as true, until it is set to false here
+        if (m_errorHandler->isTraceEnabled()) {
+            m_errorHandler->onTrace(
+                "*** OnWriteDone(): No pending request, resetting inflight to false");
+        }
         if (!m_inFlight.compare_exchange_strong(inFlight, false, std::memory_order_release)) {
             // must succeed
             assert(false);
@@ -318,6 +372,14 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnDone(const grpc
         std::string errorMsg = "gRPC call (asynchronous callback stream) ended with error: ";
         errorMsg += status.error_message();
         m_errorHandler->onError(errorMsg.c_str());
+    }
+
+    if (m_errorHandler->isTraceEnabled()) {
+        std::stringstream s;
+        s << "*** OnDone(): state = " << (int)m_state.load(std::memory_order_relaxed)
+          << ", in-flight=" << (m_inFlight ? "yes" : "no")
+          << "pending-requests=" << m_pendingWriteRequests.size();
+        m_errorHandler->onTrace(s.str().c_str());
     }
 
     // in order to avoid newcomers writing messages before the ones that needed to wait during
@@ -340,10 +402,24 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnDone(const grpc
 }
 
 template <typename StubType, typename MessageType, typename ReceptorType>
+ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::CallData::CallData()
+    : m_requestId(((uint64_t)ELOG_INVALID_REQUEST_ID)), m_isUsed(false), m_logRecordMsg(nullptr) {}
+
+template <typename StubType, typename MessageType, typename ReceptorType>
+void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::CallData::clear() {
+    m_requestId.m_atomicValue.store(((uint64_t)ELOG_INVALID_REQUEST_ID), std::memory_order_relaxed);
+    m_isUsed.m_atomicValue.store(false, std::memory_order_relaxed);
+    // NOTE: the grpc framework does not take ownership of the message so we must delete it
+    delete m_logRecordMsg;
+    m_logRecordMsg = nullptr;
+    m_receptor.setLogRecordMsg(nullptr);
+}
+
+template <typename StubType, typename MessageType, typename ReceptorType>
 typename ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::CallData*
 ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::allocCallData() {
     uint64_t requestId = m_nextRequestId.fetch_add(1, std::memory_order_relaxed);
-    CallData* callData = &m_inFlightRequests[requestId % m_inFlightRequests.size()];
+    CallData* callData = &m_inFlightRequests[requestId % m_maxInflightCalls];
     bool isUsed = callData->m_isUsed.m_atomicValue.load(std::memory_order_relaxed);
     if (isUsed) {
         while (isUsed || !callData->m_isUsed.m_atomicValue.compare_exchange_strong(
@@ -557,9 +633,18 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
         m_errorHandler->onError(errorMsg.c_str());
         // TODO: what now?
         return 0;
-    } else {
-        return msg.ByteSizeLong();
     }
+
+    // check for overflow
+    size_t bytesWritten = msg.ByteSizeLong();
+    if (bytesWritten > UINT32_MAX) {
+        std::string errorMsg = "Invalid gRPC payload size: ";
+        errorMsg += std::to_string(bytesWritten);
+        m_errorHandler->onError(errorMsg.c_str());
+        bytesWritten = UINT32_MAX;
+        // nevertheless we continue, but size will be incorrect
+    }
+    return (uint32_t)bytesWritten;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
@@ -586,10 +671,19 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
         m_errorHandler->onError("Failed to stream log record over gRPC");
         // TODO: what now?
         return 0;
-    } else {
-        // TODO: fix this: we need to separate submitted/written counters
-        return msg.ByteSizeLong();
     }
+
+    // TODO: fix this: we need to separate submitted/written counters
+    // check for overflow
+    size_t bytesWritten = msg.ByteSizeLong();
+    if (bytesWritten > UINT32_MAX) {
+        std::string errorMsg = "Invalid gRPC payload size: ";
+        errorMsg += std::to_string(bytesWritten);
+        m_errorHandler->onError(errorMsg.c_str());
+        bytesWritten = UINT32_MAX;
+        // nevertheless we continue, but size will be incorrect
+    }
+    return (uint32_t)bytesWritten;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
@@ -628,17 +722,30 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
             "Failed to get completion queue response in asynchronous mode gRPC");
         // TODO: what now?
         return 0;
-    } else if (tag != (void*)1) {
+    }
+
+    if (tag != (void*)1) {
         m_errorHandler->onError("Unexpected response tag in asynchronous mode gRPC");
         return 0;
-    } else if (!callStatus.ok()) {
+    }
+
+    if (!callStatus.ok()) {
         std::string errorMsg = "Asynchronous mode gRPC call ended with status FAIL: ";
         errorMsg += callStatus.error_message();
         m_errorHandler->onError(errorMsg.c_str());
         return 0;
-    } else {
-        return msg.ByteSizeLong();
     }
+
+    // check for overflow
+    size_t bytesWritten = msg.ByteSizeLong();
+    if (bytesWritten > UINT32_MAX) {
+        std::string errorMsg = "Invalid gRPC payload size: ";
+        errorMsg += std::to_string(bytesWritten);
+        m_errorHandler->onError(errorMsg.c_str());
+        bytesWritten = UINT32_MAX;
+        // nevertheless we continue, but size will be incorrect
+    }
+    return (uint32_t)bytesWritten;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
@@ -682,11 +789,20 @@ ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
         });
     std::unique_lock<std::mutex> lock(responseLock);
     responseCV.wait(lock, [&done] { return done; });
-    if (result) {
-        return msg.ByteSizeLong();
-    } else {
+    if (!result) {
         return 0;
     }
+
+    // check for overflow
+    size_t bytesWritten = msg.ByteSizeLong();
+    if (bytesWritten > UINT32_MAX) {
+        std::string errorMsg = "Invalid gRPC payload size: ";
+        errorMsg += std::to_string(bytesWritten);
+        m_errorHandler->onError(errorMsg.c_str());
+        bytesWritten = UINT32_MAX;
+        // nevertheless we continue, but size will be incorrect
+    }
+    return (uint32_t)bytesWritten;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
@@ -738,7 +854,7 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
         m_errorHandler->onError("Failed to create gRPC synchronous streaming client writer");
         return false;
     }
-    return m_clientWriter.get() != nullptr;
+    return true;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,

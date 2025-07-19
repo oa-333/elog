@@ -57,7 +57,8 @@ private:
     /** @brief Reports an error/warn/trace message. */
     static void reportV(ReportType reportType, const char* msgFmt, va_list args);
 
-    friend class ELogSystem;
+    // allow initialization function special access
+    friend bool initGlobals();
 };
 
 /** @brief Report error message to enclosing application/library. */

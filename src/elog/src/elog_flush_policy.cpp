@@ -39,9 +39,9 @@ static ELogLogger* sGCLogger = nullptr;
 #define ELOG_GROUP_FLUSH_GC_TRACE_BUFFER_SIZE 2000000
 
 static void initGCLogger() {
-    ELogTargetId id = ELogSystem::addTracer("./gc_trace.log", ELOG_GROUP_FLUSH_GC_TRACE_BUFFER_SIZE,
-                                            "trace", "group-flush-gc");
-    sGCLogger = ELogSystem::getSharedLogger("group-flush-gc");
+    ELogTargetId id = elog::addTracer("./gc_trace.log", ELOG_GROUP_FLUSH_GC_TRACE_BUFFER_SIZE,
+                                      "trace", "group-flush-gc");
+    sGCLogger = elog::getSharedLogger("group-flush-gc");
 }
 
 static void resetGCLogger() { sGCLogger = nullptr; }

@@ -95,7 +95,7 @@ public:
 
     /**
      * @brief Sets optional log target name (for identification, can be used when searching for a
-     * log target by name, see @ref ELogSystem::getLogTarget()).
+     * log target by name, see @ref elog::getLogTarget()).
      */
     inline void setName(const char* name) { m_name = name; }
 

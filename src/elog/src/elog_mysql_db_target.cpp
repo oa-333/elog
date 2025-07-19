@@ -9,6 +9,9 @@ namespace elog {
 class ELogMySqlDbFieldReceptor : public ELogFieldReceptor {
 public:
     ELogMySqlDbFieldReceptor(sql::PreparedStatement* stmt) : m_stmt(stmt), m_fieldNum(0) {}
+    ELogMySqlDbFieldReceptor(const ELogMySqlDbFieldReceptor&) = delete;
+    ELogMySqlDbFieldReceptor(ELogMySqlDbFieldReceptor&&) = delete;
+    ELogMySqlDbFieldReceptor& operator=(const ELogMySqlDbFieldReceptor&) = delete;
     ~ELogMySqlDbFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
@@ -19,7 +22,7 @@ public:
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint32_t typeId, uint64_t field, const ELogFieldSpec& fieldSpec) final {
-        m_stmt->setInt64(m_fieldNum++, field);
+        m_stmt->setInt64(m_fieldNum++, (int64_t)field);
     }
 
     /** @brief Receives a time log record field. */
@@ -76,7 +79,6 @@ bool ELogMySqlDbTarget::disconnectDb(void* dbData) {
     try {
         mysqlDbData->m_insertStmt.reset();
         mysqlDbData->m_connection.reset();
-        return true;
     } catch (sql::SQLException& e) {
         ELOG_REPORT_ERROR("Failed to stop MySQL log target: %s", e.what());
         return false;

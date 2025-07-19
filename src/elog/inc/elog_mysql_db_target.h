@@ -3,7 +3,17 @@
 
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
+// disable some annoying warnings in MySQL jdbc driver headers
+#ifdef ELOG_MSVC
+#pragma warning(push)
+#pragma warning(disable : 4464 4626 5267 4242)
+#endif
+
 #include <mysql/jdbc.h>
+
+#ifdef ELOG_MSVC
+#pragma warning(pop)
+#endif
 
 #include <memory>
 
@@ -28,6 +38,7 @@ public:
 
     ELogMySqlDbTarget(const ELogMySqlDbTarget&) = delete;
     ELogMySqlDbTarget(ELogMySqlDbTarget&&) = delete;
+    ELogMySqlDbTarget& operator=(const ELogMySqlDbTarget&) = delete;
     ~ELogMySqlDbTarget() final {}
 
 protected:
@@ -53,6 +64,12 @@ private:
     std::string m_insertStmtText;
 
     struct MySQLDbData {
+        MySQLDbData() {}
+        MySQLDbData(const MySQLDbData&) = delete;
+        MySQLDbData(MySQLDbData&&) = delete;
+        MySQLDbData& operator=(const MySQLDbData&) = delete;
+        ~MySQLDbData() {}
+
         std::unique_ptr<sql::Connection> m_connection;
         std::unique_ptr<sql::PreparedStatement> m_insertStmt;
     };

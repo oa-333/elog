@@ -11,9 +11,12 @@
 
 namespace elog {
 
-class ELogJsonReceptor : public ELogFieldReceptor {
+class ELOG_API ELogJsonReceptor : public ELogFieldReceptor {
 public:
     ELogJsonReceptor() {}
+    ELogJsonReceptor(const ELogJsonReceptor&) = delete;
+    ELogJsonReceptor(ELogJsonReceptor&&) = delete;
+    ELogJsonReceptor& operator=(const ELogJsonReceptor&) = delete;
     ~ELogJsonReceptor() final {}
 
     /** @brief Receives a string log record field. */

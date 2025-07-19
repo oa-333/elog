@@ -292,6 +292,8 @@ static void initOsNameAndVersion() {
     GetVersionExA((LPOSVERSIONINFOA)&verInfo);
 
     // TODO: This is a hack, since embedding manifest is very awkward and does not work...
+    // (it is unclear whether the manifest can be embedded within any DLL or it must be embedded
+    // within the main executable image)
     auto sharedUserData = (BYTE*)WIN32_VERSION_BASE_ADDR;
     auto majorVerPtr = (ULONG*)(sharedUserData + WIN32_VERSION_MAJOR_OFFSET);
     auto minorVerPtr = (ULONG*)(sharedUserData + WIN32_VERSION_MINOR_OFFSET);
@@ -630,6 +632,9 @@ void ELogIfSelector::selectField(const ELogRecord& record, ELogFieldReceptor* re
 class ELogFieldContainer : public ELogFieldReceptor {
 public:
     ELogFieldContainer() : ELogFieldReceptor(ReceiveStyle::RS_BY_TYPE) {}
+    ELogFieldContainer(const ELogFieldContainer&) = delete;
+    ELogFieldContainer(ELogFieldContainer&&) = delete;
+    ELogFieldContainer& operator=(const ELogFieldContainer&) = delete;
     ~ELogFieldContainer() final {}
 
     /** @brief Receives a string log record field. */

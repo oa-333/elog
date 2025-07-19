@@ -24,6 +24,7 @@ public:
 
     ELogPGSQLDbTarget(const ELogPGSQLDbTarget&) = delete;
     ELogPGSQLDbTarget(ELogPGSQLDbTarget&&) = delete;
+    ELogPGSQLDbTarget& operator=(const ELogPGSQLDbTarget&) = delete;
     ~ELogPGSQLDbTarget() final {}
 
 protected:

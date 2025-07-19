@@ -14,6 +14,7 @@ public:
     ELogSQLiteDbTargetProvider() {}
     ELogSQLiteDbTargetProvider(const ELogSQLiteDbTargetProvider&) = delete;
     ELogSQLiteDbTargetProvider(ELogSQLiteDbTargetProvider&&) = delete;
+    ELogSQLiteDbTargetProvider& operator=(const ELogSQLiteDbTargetProvider&) = delete;
     ~ELogSQLiteDbTargetProvider() final {}
 
     ELogDbTarget* loadTarget(const ELogConfigMapNode* logTargetCfg, const std::string& connString,

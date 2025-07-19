@@ -19,6 +19,7 @@ public:
     ELogGrafanaTarget(const char* lokiAddress, const ELogHttpConfig& config);
     ELogGrafanaTarget(const ELogGrafanaTarget&) = delete;
     ELogGrafanaTarget(ELogGrafanaTarget&&) = delete;
+    ELogGrafanaTarget& operator=(const ELogGrafanaTarget&) = delete;
     ~ELogGrafanaTarget() override {}
 
 protected:

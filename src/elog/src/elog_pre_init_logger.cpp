@@ -9,7 +9,7 @@ namespace elog {
 
 void ELogPreInitLogger::writeAccumulatedLogMessages(ELogTarget* logTarget) {
     // use default logger
-    ELogLogger* logger = ELogSystem::getDefaultLogger();
+    ELogLogger* logger = elog::getDefaultLogger();
 
     // first check affinity
     ELogTargetAffinityMask mask = logger->getLogSource()->getLogTargetAffinityMask();
@@ -28,7 +28,7 @@ void ELogPreInitLogger::writeAccumulatedLogMessages(ELogTarget* logTarget) {
     for (ELogRecordBuilder* recordBuilder : m_accumulatedRecordBuilders) {
         ELogRecord& logRecord = recordBuilder->getLogRecord();
         logRecord.m_logger = logger;
-        if (ELogSystem::filterLogMsg(logRecord)) {
+        if (elog::filterLogMsg(logRecord)) {
             logTarget->log(logRecord);
         }
     }

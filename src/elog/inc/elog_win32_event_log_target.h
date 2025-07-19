@@ -22,7 +22,7 @@ public:
      *
      * @param eventSourceName The event source name as it will appear in the event log reports.
      * If this parameter is left empty, then the application name as configured by the user via @ref
-     * ELogSystem::setAppName() will be used. If none was set, then the program name, as extracted
+     * elog::setAppName() will be used. If none was set, then the program name, as extracted
      * from the current executable image, will be used instead. If all fails the name "elog" will be
      * used as a last resort.
      * @param eventId The event id to use in the event log report. Since no message

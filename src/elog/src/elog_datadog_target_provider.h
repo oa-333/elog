@@ -14,6 +14,7 @@ public:
     ELogDatadogTargetProvider() {}
     ELogDatadogTargetProvider(const ELogDatadogTargetProvider&) = delete;
     ELogDatadogTargetProvider(ELogDatadogTargetProvider&&) = delete;
+    ELogDatadogTargetProvider& operator=(const ELogDatadogTargetProvider&) = delete;
     ~ELogDatadogTargetProvider() final {}
 
     /**

@@ -165,7 +165,8 @@ void ELogHttpClient::resendThread() {
         copyPendingBacklog();
 
         // compute a reasonable sleep time between resend attempt
-        size_t backlogCount = m_shippingBackLog.size();
+        // NOTE: due to hard limit we know we can convert from size_t to uint32_t
+        uint32_t backlogCount = (uint32_t)m_shippingBackLog.size();
         if (backlogCount == 0) {
             // nothing to send
             return;

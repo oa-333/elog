@@ -81,7 +81,7 @@ bool ELogConfigParser::parseLogAffinityList(const char* affinityListStr,
             }
             return false;
         }
-        ELogTargetId logTargetId = ELogSystem::getLogTargetId(token.c_str());
+        ELogTargetId logTargetId = elog::getLogTargetId(token.c_str());
         if (logTargetId == ELOG_INVALID_TARGET_ID) {
             ELOG_REPORT_ERROR("Invalid log target list, unknown log target '%s", token.c_str());
             return false;

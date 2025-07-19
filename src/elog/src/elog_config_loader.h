@@ -59,6 +59,10 @@ public:
     static bool getLogTargetIntProperty(const ELogConfigMapNode* logTargetCfg, const char* scheme,
                                         const char* propName, int64_t& propValue);
 
+    static bool getLogTargetUInt32Property(const ELogConfigMapNode* logTargetCfg,
+                                           const char* scheme, const char* propName,
+                                           uint32_t& propValue);
+
     static bool getLogTargetBoolProperty(const ELogConfigMapNode* logTargetCfg, const char* scheme,
                                          const char* propName, bool& propValue);
 
@@ -69,6 +73,10 @@ public:
     static bool getOptionalLogTargetIntProperty(const ELogConfigMapNode* logTargetCfg,
                                                 const char* scheme, const char* propName,
                                                 int64_t& propValue, bool* found = nullptr);
+
+    static bool getOptionalLogTargetInt32Property(const ELogConfigMapNode* logTargetCfg,
+                                                  const char* scheme, const char* propName,
+                                                  int32_t& propValue, bool* found = nullptr);
 
     static bool getOptionalLogTargetUIntProperty(const ELogConfigMapNode* logTargetCfg,
                                                  const char* scheme, const char* propName,

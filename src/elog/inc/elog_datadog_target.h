@@ -37,6 +37,7 @@ public:
 
     ELogDatadogTarget(const ELogDatadogTarget&) = delete;
     ELogDatadogTarget(ELogDatadogTarget&&) = delete;
+    ELogDatadogTarget& operator=(const ELogDatadogTarget&) = delete;
     ~ELogDatadogTarget() override {}
 
     /** @brief Embed headers in outgoing HTTP message. */

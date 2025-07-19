@@ -16,6 +16,9 @@ static const uint32_t ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS = 100;
 class ELogKafkaMsgQFieldReceptor : public ELogFieldReceptor {
 public:
     ELogKafkaMsgQFieldReceptor() : m_headers(nullptr) {}
+    ELogKafkaMsgQFieldReceptor(const ELogKafkaMsgQFieldReceptor&) = delete;
+    ELogKafkaMsgQFieldReceptor(ELogKafkaMsgQFieldReceptor&&) = delete;
+    ELogKafkaMsgQFieldReceptor& operator=(const ELogKafkaMsgQFieldReceptor&) = delete;
     ~ELogKafkaMsgQFieldReceptor() final {}
 
     /** @brief Receives a string log record field. */
@@ -50,16 +53,17 @@ public:
             return false;
         }
         for (uint32_t i = 0; i < m_headerValues.size(); ++i) {
-            rd_kafka_resp_err_t res =
-                rd_kafka_header_add(headers, headerNames[i].c_str(), headerNames[i].length(),
-                                    (void*)m_headerValues[i].c_str(), m_headerValues[i].length());
+            rd_kafka_resp_err_t res = rd_kafka_header_add(
+                headers, headerNames[i].c_str(), (ssize_t)headerNames[i].length(),
+                (void*)m_headerValues[i].c_str(), (ssize_t)m_headerValues[i].length());
             if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
                 ELOG_REPORT_ERROR("Failed to add kafka message header %s=%s: %s",
                                   headerNames[i].c_str(), m_headerValues[i].c_str(),
                                   rd_kafka_err2name(res));
                 return false;
             } else {
-                bytesWritten += m_headerValues[i].length();
+                // NOTE: no overflow is expected here
+                bytesWritten += (uint32_t)m_headerValues[i].length();
             }
         }
         return true;
@@ -140,7 +144,7 @@ bool ELogKafkaMsgQTarget::stopLogTarget() {
     if (flushTimeoutMillis == 0) {
         flushTimeoutMillis = ELOG_DEFAULT_KAFKA_SHUTDOWN_FLUSH_TIMEOUT_MILLIS;
     }
-    rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, flushTimeoutMillis);
+    rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, (int)flushTimeoutMillis);
     if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
         ELOG_REPORT_ERROR("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
         return false;
@@ -173,7 +177,7 @@ uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
     // prepare formatted log message
     std::string logMsg;
     formatLogMsg(logRecord, logMsg);
-    bytesWritten += logMsg.length();
+    bytesWritten += (uint32_t)logMsg.length();
 
     // unassigned partition, copy payload, no key specification, payload is formatted string
     // headers include specific log record fields
@@ -227,7 +231,7 @@ void ELogKafkaMsgQTarget::flushLogTarget() {
     if (flushTimeoutMillis == 0) {
         flushTimeoutMillis = ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS;
     }
-    rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, flushTimeoutMillis);
+    rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, (int)flushTimeoutMillis);
     if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
         ELOG_REPORT_ERROR("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
     }
@@ -235,7 +239,12 @@ void ELogKafkaMsgQTarget::flushLogTarget() {
 
 void ELogKafkaMsgQTarget::formatClientId() {
     std::stringstream s;
-    s << getHostName() << "." << getUserName() << "." << getProgramName() << "." << getpid();
+    s << getHostName() << "." << getUserName() << "." << getProgramName() << ".";
+#ifdef ELOG_WINDOWS
+    s << GetCurrentProcessId();
+#else
+    s << getpid();
+#endif  // ELOG_WINDOWS
     m_clientId = s.str();
 }
 

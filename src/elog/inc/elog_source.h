@@ -169,7 +169,9 @@ private:
 
     void propagateLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode);
 
-    friend class ELogSystem;
+    // allow these functions special access
+    friend ELogSource* createLogSource(ELogSourceId, const char*, ELogSource*, ELogLevel);
+    friend void deleteLogSource(ELogSource*);
 };
 
 }  // namespace elog

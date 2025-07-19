@@ -31,7 +31,7 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
 
     // log line time, common to all log lines until flush
     auto& values = m_logEntry["streams"][0]["values"];
-    uint32_t logLineCount = values.size();
+    size_t logLineCount = values.size();
     auto& logLine = values[logLineCount];
     // need to send local time, other Loki complains that timestamp is too new
     logLine[0] = std::to_string(
@@ -54,7 +54,7 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
     // NOTE: log data is being aggregated until flush, which sends HTTP message to server
 
     ELOG_REPORT_TRACE("Log message for Grafana Loki is ready");
-    return logMsg.size();
+    return (uint32_t)logMsg.size();
 }
 
 void ELogGrafanaJsonTarget::flushLogTarget() {

@@ -22,8 +22,8 @@ ELogDbTarget* ELogPGSQLDbTargetProvider::loadTarget(const ELogConfigMapNode* log
         return nullptr;
     }
 
-    int64_t port = 0;
-    if (!ELogConfigLoader::getLogTargetIntProperty(logTargetCfg, "PostgreSQL", "port", port)) {
+    uint32_t port = 0;
+    if (!ELogConfigLoader::getLogTargetUInt32Property(logTargetCfg, "PostgreSQL", "port", port)) {
         return nullptr;
     }
 

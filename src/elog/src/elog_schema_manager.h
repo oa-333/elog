@@ -22,7 +22,9 @@ private:
     static bool initSchemaHandlers();
     static void termSchemaHandlers();
 
-    friend class ELogSystem;
+    // allow initialization/termination functions special access
+    friend bool initGlobals();
+    friend void termGlobals();
 };
 
 }  // namespace elog
