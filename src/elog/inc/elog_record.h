@@ -7,6 +7,12 @@
 #include "elog_level.h"
 #include "elog_time.h"
 
+/** @def Flag denoting the log record message is already formatted. */
+#define ELOG_RECORD_FORMATTED 0x00
+
+/** @def Flag denoting the log record message is i nbinary form, and requires formatting. */
+#define ELOG_RECORD_BINARY 0x01
+
 namespace elog {
 
 // forward declaration
@@ -47,8 +53,11 @@ struct ELOG_API ELogRecord {
     /** @var Issuing line. */
     uint16_t m_line;
 
+    /** @var Record flags (formatted, binary, etc.). */
+    uint8_t m_flags;
+
     /** @var Reserved for internal use. */
-    uint16_t m_reserved;
+    uint8_t m_reserved;
 
     /** @brief Default constructor. */
     ELogRecord()

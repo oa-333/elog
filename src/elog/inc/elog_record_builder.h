@@ -38,6 +38,18 @@ public:
     /** @brief Appends a string to the log buffer. */
     inline bool append(const char* msg, size_t len = 0) { return m_buffer.append(msg, len); }
 
+    /** @brief Appends data (binary form). */
+    template <typename T>
+    inline bool appendData(const T& value) {
+        return m_buffer.appendRaw((const char*)&value, sizeof(T));
+    }
+
+    /** @brief Appends data (binary form). */
+    template <typename T>
+    inline bool appendDataAt(const T& value, uint32_t offset) {
+        return m_buffer.writeRawAt((const char*)&value, sizeof(T), offset);
+    }
+
 private:
     ELogBuffer m_buffer;
     ELogRecord m_logRecord;

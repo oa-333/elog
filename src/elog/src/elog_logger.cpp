@@ -19,6 +19,17 @@
 #include <unistd.h>
 #endif
 
+// reduce noise coming from fmt lib
+#ifdef ELOG_MSVC
+#pragma warning(push)
+#pragma warning(disable : 4582 4623 4625 4626 5027 5026)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+#include <fmt/args.h>
+#include <fmt/core.h>
+#endif
+
 namespace elog {
 
 static thread_local uint64_t sNextRecordId = 0;
@@ -125,7 +136,8 @@ void ELogLogger::finishLog(ELogRecordBuilder* recordBuilder) {
 }
 
 void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file,
-                                int line, const char* function) {
+                                int line, const char* function,
+                                uint8_t flags /* = ELOG_RECORD_FORMATTED */) {
     logRecord.m_logRecordId = sNextRecordId++;
     logRecord.m_logLevel = logLevel;
     logRecord.m_file = file;
@@ -136,6 +148,88 @@ void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const
     elogGetCurrentTime(logRecord.m_logTime);
     logRecord.m_threadId = getCurrentThreadId();
     logRecord.m_logger = this;
+    logRecord.m_flags = flags;
 }
 
+#ifdef ELOG_ENABLE_FMT_LIB
+bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
+    // prepare parameter array (use implicit alloca by compiler)
+    const char* bufPtr = logRecord.m_logMsg;
+    uint8_t paramCount = *(uint8_t*)bufPtr;
+    size_t offset = 1;
+    fmt::dynamic_format_arg_store<fmt::format_context> store;
+
+#define ELOG_COLLECT_ARG(argType)                        \
+    {                                                    \
+        argType argValue = *(argType*)(bufPtr + offset); \
+        store.push_back(argValue);                       \
+        offset += sizeof(argType);                       \
+        break;                                           \
+    }
+
+    for (uint8_t i = 0; i < paramCount; ++i) {
+        uint8_t code = *(uint8_t*)(bufPtr + offset);
+        ++offset;
+        switch (code) {
+            case ELOG_UINT8_CODE:
+                ELOG_COLLECT_ARG(uint8_t);
+
+            case ELOG_UINT16_CODE:
+                ELOG_COLLECT_ARG(uint16_t);
+
+            case ELOG_UINT32_CODE:
+                ELOG_COLLECT_ARG(uint32_t);
+
+            case ELOG_UINT64_CODE:
+                ELOG_COLLECT_ARG(uint64_t);
+
+            case ELOG_INT8_CODE:
+                ELOG_COLLECT_ARG(int8_t);
+
+            case ELOG_INT16_CODE:
+                ELOG_COLLECT_ARG(int16_t);
+
+            case ELOG_INT32_CODE:
+                ELOG_COLLECT_ARG(int32_t);
+
+            case ELOG_INT64_CODE:
+                ELOG_COLLECT_ARG(int64_t);
+
+            case ELOG_FLOAT_CODE:
+                ELOG_COLLECT_ARG(float);
+
+            case ELOG_DOUBLE_CODE:
+                ELOG_COLLECT_ARG(double);
+
+            case ELOG_BOOL_CODE:
+                ELOG_COLLECT_ARG(bool);
+
+            case ELOG_STRING_CODE: {
+                const char* arg = (const char*)(bufPtr + offset);
+                store.push_back(arg);
+                offset += (strlen(arg) + 1);  // skip over terminating null
+                break;
+            }
+
+            default:
+                ELOG_REPORT_ERROR("Invalid argument type code %u while resolving binary log record",
+                                  (unsigned)code);
+                return false;
+        }
+    }
+
+    // extract format string
+    const char* fmtStr = bufPtr + offset;
+
+    // now we can format
+    auto text = fmt::vformat(fmtStr, store);
+    logBuffer.append(text.c_str(), text.length());
+    return true;
+}
+#endif
+
 }  // namespace elog
+
+#ifdef ELOG_MSVC
+#pragma warning(pop)
+#endif

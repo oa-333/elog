@@ -10,6 +10,51 @@
 
 namespace elog {
 
+// binary logging helper functions
+#ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Generic template function for getting unique type encoding. */
+template <typename T>
+inline uint8_t encodeType() {
+    return 0;
+}
+
+/** @def Macro for declaring type encoding */
+#define ELOG_DECLARE_ENCODE_TYPE(type, value) \
+    template <>                               \
+    inline uint8_t encodeType<type>() {       \
+        return value;                         \
+    }
+
+/** @def Special codes for primitive type. */
+#define ELOG_UINT8_CODE ((uint8_t)0x01)
+#define ELOG_UINT16_CODE ((uint8_t)0x02)
+#define ELOG_UINT32_CODE ((uint8_t)0x03)
+#define ELOG_UINT64_CODE ((uint8_t)0x04)
+#define ELOG_INT8_CODE ((uint8_t)0x05)
+#define ELOG_INT16_CODE ((uint8_t)0x06)
+#define ELOG_INT32_CODE ((uint8_t)0x07)
+#define ELOG_INT64_CODE ((uint8_t)0x08)
+#define ELOG_FLOAT_CODE ((uint8_t)0x09)
+#define ELOG_DOUBLE_CODE ((uint8_t)0x0A)
+#define ELOG_BOOL_CODE ((uint8_t)0x0B)
+#define ELOG_STRING_CODE ((uint8_t)0xF0)
+
+// declare codes of primitive types
+ELOG_DECLARE_ENCODE_TYPE(uint8_t, ELOG_UINT8_CODE)
+ELOG_DECLARE_ENCODE_TYPE(uint16_t, ELOG_UINT16_CODE)
+ELOG_DECLARE_ENCODE_TYPE(uint32_t, ELOG_UINT32_CODE)
+ELOG_DECLARE_ENCODE_TYPE(uint64_t, ELOG_UINT64_CODE)
+ELOG_DECLARE_ENCODE_TYPE(int8_t, ELOG_INT8_CODE)
+ELOG_DECLARE_ENCODE_TYPE(int16_t, ELOG_INT16_CODE)
+ELOG_DECLARE_ENCODE_TYPE(int32_t, ELOG_INT32_CODE)
+ELOG_DECLARE_ENCODE_TYPE(int64_t, ELOG_INT64_CODE)
+ELOG_DECLARE_ENCODE_TYPE(float, ELOG_FLOAT_CODE)
+ELOG_DECLARE_ENCODE_TYPE(double, ELOG_DOUBLE_CODE)
+ELOG_DECLARE_ENCODE_TYPE(bool, ELOG_BOOL_CODE)
+ELOG_DECLARE_ENCODE_TYPE(char*, ELOG_STRING_CODE)
+ELOG_DECLARE_ENCODE_TYPE(const char*, ELOG_STRING_CODE)
+#endif
+
 class ELOG_API ELogLogger {
 public:
     /** @ref Destructor. */
@@ -107,6 +152,28 @@ public:
     /** @brief Retrieves the controlling log source. */
     inline ELogSource* getLogSource() const { return m_logSource; }
 
+#ifdef ELOG_ENABLE_FMT_LIB
+    /** @brief Logs a binary log record. */
+    template <typename... Args>
+    void logBinary(ELogLevel logLevel, const char* file, int line, const char* function,
+                   const char* fmt, Args... args) {
+        ELogRecordBuilder* recordBuilder = getRecordBuilder();
+        if (isLogging(recordBuilder)) {
+            recordBuilder = pushRecordBuilder();
+        }
+        startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function,
+                       ELOG_RECORD_BINARY);
+        // reserve 1 byte for parameter count
+        uint8_t paramCountReserve = 0;
+        recordBuilder->appendData(paramCountReserve);
+        encodeMsg(recordBuilder, fmt, 0, args...);
+        finishLog(recordBuilder);
+    }
+
+    /** @brief Resolves a binary log record, putting the resolved message into a log buffer. */
+    static bool resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBuffer);
+#endif
+
 protected:
     /**
      * @brief Constructor
@@ -142,7 +209,7 @@ private:
      * @param logLevel The log level. No log level checking takes place.
      */
     void startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file, int line,
-                        const char* function);
+                        const char* function, uint8_t flags = ELOG_RECORD_FORMATTED);
 
     inline void appendMsgV(ELogRecordBuilder* recordBuilder, const char* fmt, va_list args) {
         va_list argsCopy;
@@ -154,6 +221,31 @@ private:
     inline void appendMsg(ELogRecordBuilder* recordBuilder, const char* msg) {
         (void)recordBuilder->append(msg);
     }
+
+#ifdef ELOG_ENABLE_FMT_LIB
+    template <typename T, typename... Args>
+    void encodeMsg(ELogRecordBuilder* recordBuilder, const char* fmt, uint8_t paramCount, T arg,
+                   Args... args) {
+        recordBuilder->appendData(encodeType<T>());
+        recordBuilder->appendData(arg);
+        encodeMsg(recordBuilder, fmt, paramCount + 1, args...);
+    }
+
+    template <typename... Args>
+    void encodeMsg(ELogRecordBuilder* recordBuilder, const char* fmt, uint8_t paramCount,
+                   const char* arg, Args... args) {
+        recordBuilder->appendData(ELOG_STRING_CODE);
+        // NOTE: we must ensure terminating null is added, otherwise garbage will be added by other
+        // parameters or format string
+        recordBuilder->append(arg, strlen(arg) + 1);
+        encodeMsg(recordBuilder, fmt, paramCount + 1, args...);
+    }
+
+    void encodeMsg(ELogRecordBuilder* recordBuilder, const char* fmt, uint8_t paramCount) {
+        recordBuilder->append(fmt);
+        recordBuilder->appendDataAt(paramCount, 0);
+    }
+#endif
 };
 
 }  // namespace elog

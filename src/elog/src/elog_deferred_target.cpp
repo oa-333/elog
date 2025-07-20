@@ -4,7 +4,7 @@
 
 #include "elog.h"
 
-#define ELOG_FLUSH_REQUEST ((uint16_t)-1)
+#define ELOG_FLUSH_REQUEST ((uint8_t)-1)
 
 namespace elog {
 

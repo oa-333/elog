@@ -102,6 +102,19 @@ public:
      */
     bool append(const char* msg, size_t len = 0);
 
+    /**
+     * @brief Appends raw data to the log buffer. Unlike append(), the raw data may contain several
+     * null characters at any offset.
+     * @note Type size_t is used here for caller's convenience, but size limit @ref
+     * ELOG_MAX_BUFFER_SIZE is still enforced.
+     */
+    bool appendRaw(const char* data, size_t len);
+
+    /**
+     * @brief Writes raw data to the log buffer at the specified offset.
+     */
+    bool writeRawAt(const char* data, size_t len, size_t offset);
+
     /** @brief Appends a char repeatedly to the log buffer. */
     inline bool append(uint32_t count, char c) {
         if (m_bufferFull) {

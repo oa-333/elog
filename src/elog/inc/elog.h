@@ -16,8 +16,19 @@
 #include "dbg_stack_trace.h"
 #endif
 
+// include fmtlib main header
 #ifdef ELOG_ENABLE_FMT_LIB
+// reduce noise coming from fmt lib
+#ifdef ELOG_MSVC
+#pragma warning(push)
+#pragma warning(disable : 4582 4623 4625 4626 5027 5026)
+#endif
+
 #include <fmt/format.h>
+
+#ifdef ELOG_MSVC
+#pragma warning(pop)
+#endif
 #endif
 
 /** @file The elog module facade. */
@@ -717,8 +728,8 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
         }                                                                                         \
     }
 
-/** @brief Logs a formatted message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a formatted message to the server log (fmtlib style). */
 #define ELOG_FMT_EX(logger, level, fmtStr, ...)                                                 \
     {                                                                                           \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                           \
@@ -726,6 +737,15 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
             std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                            \
             validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
         }                                                                                       \
+    }
+
+/** @brief Logs a formatted message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_EX(logger, level, fmt, ...)                                                      \
+    {                                                                                             \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                             \
+        if (validLogger->canLog(level)) {                                                         \
+            validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
+        }                                                                                         \
     }
 #endif
 
@@ -737,10 +757,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_FATAL_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a fatal message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a fatal message to the server log (fmtlib style). */
 #define ELOG_FMT_FATAL_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a fatal message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_FATAL_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -751,10 +775,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_ERROR_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a error message to the server log (fmtlib style). */
 #define ELOG_FMT_ERROR_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a error message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_ERROR_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -765,10 +793,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_WARN_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a warning message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a warning message to the server log (fmtlib style). */
 #define ELOG_FMT_WARN_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a warning message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_WARN_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -779,10 +811,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_NOTICE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a notice message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a notice message to the server log (fmtlib style). */
 #define ELOG_FMT_NOTICE_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a notice message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_NOTICE_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -793,10 +829,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_INFO_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
 
-/** @brief Logs an informational message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs an informational message to the server log (fmtlib style). */
 #define ELOG_FMT_INFO_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+
+/** @brief Logs an informational message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_INFO_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -807,10 +847,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_TRACE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a trace message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a trace message to the server log (fmtlib style). */
 #define ELOG_FMT_TRACE_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a trace message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_TRACE_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -821,10 +865,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_DEBUG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a debug message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a debug message to the server log (fmtlib style). */
 #define ELOG_FMT_DEBUG_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a debug message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_DEBUG_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -835,10 +883,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_DIAG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a diagnostic message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a diagnostic message to the server log (fmtlib style). */
 #define ELOG_FMT_DIAG_EX(logger, fmt, ...) \
     ELOG_FMT_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_DIAG_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1020,12 +1072,22 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
         ELOG_EX(logger, level, fmt, ##__VA_ARGS__);          \
     }
 
-/** @brief Logs a formatted message to the server log, using default logger (fmtlib-style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a formatted message to the server log, using default logger (fmtlib-style). */
 #define ELOG_FMT(level, fmt, ...)                            \
     {                                                        \
         elog::ELogLogger* logger = elog::getDefaultLogger(); \
         ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);      \
+    }
+
+/**
+ * @brief Logs a formatted message to the server log, using default logger (fmtlib-style, binary
+ * form).
+ */
+#define ELOG_BIN(level, fmt, ...)                            \
+    {                                                        \
+        elog::ELogLogger* logger = elog::getDefaultLogger(); \
+        ELOG_BIN_EX(logger, level, fmt, ##__VA_ARGS__);      \
     }
 #endif
 
@@ -1036,9 +1098,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_FATAL(fmt, ...) ELOG(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a fatal message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a fatal message to the server log (fmtlib style). */
 #define ELOG_FMT_FATAL(fmt, ...) ELOG_FMT(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a fatal message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_FATAL(fmt, ...) ELOG_BIN(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1048,9 +1113,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_ERROR(fmt, ...) ELOG(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a error message to the server log (fmtlib style). */
 #define ELOG_FMT_ERROR(fmt, ...) ELOG_FMT(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a error message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_ERROR(fmt, ...) ELOG_BIN(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1060,9 +1128,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_WARN(fmt, ...) ELOG(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a warning message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a warning message to the server log (fmtlib style). */
 #define ELOG_FMT_WARN(fmt, ...) ELOG_FMT(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a warning message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_WARN(fmt, ...) ELOG_BIN(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1072,9 +1143,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_NOTICE(fmt, ...) ELOG(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a notice message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a notice message to the server log (fmtlib style). */
 #define ELOG_FMT_NOTICE(fmt, ...) ELOG_FMT(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a notice message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_NOTICE(fmt, ...) ELOG_BIN(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1084,9 +1158,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_INFO(fmt, ...) ELOG(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
 
-/** @brief Logs an informational message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs an informational message to the server log (fmtlib style). */
 #define ELOG_FMT_INFO(fmt, ...) ELOG_FMT(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+
+/** @brief Logs an informational message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_INFO(fmt, ...) ELOG_BIN(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1096,9 +1173,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_TRACE(fmt, ...) ELOG(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a trace message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a trace message to the server log (fmtlib style). */
 #define ELOG_FMT_TRACE(fmt, ...) ELOG_FMT(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a trace message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_TRACE(fmt, ...) ELOG_BIN(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1108,9 +1188,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_DEBUG(fmt, ...) ELOG(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a debug message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a debug message to the server log (fmtlib style). */
 #define ELOG_FMT_DEBUG(fmt, ...) ELOG_FMT(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a debug message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_DEBUG(fmt, ...) ELOG_BIN(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1120,9 +1203,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
  */
 #define ELOG_DIAG(fmt, ...) ELOG(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
 
-/** @brief Logs a diagnostic message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
+/** @brief Logs a diagnostic message to the server log (fmtlib style). */
 #define ELOG_FMT_DIAG(fmt, ...) ELOG_FMT(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form). */
+#define ELOG_BIN_DIAG(fmt, ...) ELOG_BIN(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
 #endif
 
 /**

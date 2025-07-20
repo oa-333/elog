@@ -148,4 +148,48 @@ bool ELogBuffer::append(const char* msg, size_t len /* = 0 */) {
     return true;
 }
 
+bool ELogBuffer::appendRaw(const char* data, size_t len) {
+    if (m_bufferFull) {
+        return false;
+    }
+    // NOTE: be careful of size truncation
+    if (len >= UINT32_MAX) {
+        return false;
+    }
+    if (!ensureBufferLength((uint32_t)len)) {
+        return false;
+    }
+    // NOTE: at this point it is guaranteed that the added len will not exceed maximum buffer size,
+    // otherwise ensureBufferLength() would have failed
+    memcpy(getRef() + m_offset, data, len);
+    m_offset += (uint32_t)len;
+    return true;
+}
+
+bool ELogBuffer::writeRawAt(const char* data, size_t len, size_t offset) {
+    // NOTE: be careful of size truncation
+    if (len >= UINT32_MAX) {
+        return false;
+    }
+
+    size_t targetSize = offset + len;
+    if (targetSize > m_bufferSize) {
+        if (m_bufferFull) {
+            return false;
+        }
+        size_t requiredLen = (targetSize - m_offset);
+        if (!ensureBufferLength((uint32_t)requiredLen)) {
+            return false;
+        }
+    }
+
+    // NOTE: at this point it is guaranteed that the added len will not exceed maximum buffer size,
+    // otherwise ensureBufferLength() would have failed
+    memcpy(getRef() + offset, data, len);
+    if (targetSize > m_offset) {
+        m_offset = (uint32_t)targetSize;
+    }
+    return true;
+}
+
 }  // namespace elog

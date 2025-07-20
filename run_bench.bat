@@ -5,8 +5,8 @@ REM change this to actual destination
 set INSTALL_DIR=C:\install
 set DEV_DIR=%~dp0
 
-REM build elog
-call .\build.bat --rel-with-debug-info --reconfigure --verbose
+REM build elog (enable fmtlib for binary quantum test)
+call .\build.bat --rel-with-debug-info --fmt-lib --reconfigure --verbose
 IF errorlevel 1 (
     echo ERROR: fBuild failed
     exit /b 1

@@ -7,8 +7,8 @@
 #include "elog_common.h"
 #include "elog_error.h"
 
-#define ELOG_FLUSH_REQUEST ((uint16_t)-1)
-#define ELOG_STOP_REQUEST ((uint16_t)-2)
+#define ELOG_FLUSH_REQUEST ((uint8_t)-1)
+#define ELOG_STOP_REQUEST ((uint8_t)-2)
 
 namespace elog {
 

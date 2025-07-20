@@ -9,8 +9,8 @@ else
 fi
 export INSTALL_DIR
 
-# build elog
-./build.sh --rel-with-debug-info --reconfigure --verbose
+# build elog (enable fmtlib for binary quantum test)
+./build.sh --rel-with-debug-info --fmt-lib --reconfigure --verbose
 if [ $? -ne 0 ]; then
     echo "ERROR: Build failed"
     exit 1

@@ -595,10 +595,26 @@ void ELogLevelSelector::selectField(const ELogRecord& record, ELogFieldReceptor*
 }
 
 void ELogMsgSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveLogMsg(getTypeId(), record.m_logMsg, m_fieldSpec);
+    // if log record is in binary form, it must be resolved
+    if (record.m_flags & ELOG_RECORD_BINARY) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        ELogBuffer logBuffer;
+        if (ELogLogger::resolveLogRecord(record, logBuffer)) {
+            if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
+                receptor->receiveLogMsg(getTypeId(), logBuffer.getRef(), m_fieldSpec);
+            } else {
+                receptor->receiveStringField(getTypeId(), logBuffer.getRef(), m_fieldSpec,
+                                             logBuffer.getOffset());
+            }
+        }
+#endif
     } else {
-        receptor->receiveStringField(getTypeId(), record.m_logMsg, m_fieldSpec, record.m_logMsgLen);
+        if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
+            receptor->receiveLogMsg(getTypeId(), record.m_logMsg, m_fieldSpec);
+        } else {
+            receptor->receiveStringField(getTypeId(), record.m_logMsg, m_fieldSpec,
+                                         record.m_logMsgLen);
+        }
     }
 }
 
