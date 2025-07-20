@@ -7,8 +7,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "elog.h"
 #include "elog_common.h"
-#include "elog_system.h"
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN

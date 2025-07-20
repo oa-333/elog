@@ -74,9 +74,9 @@ target_sources(
             elog_string_stream_receptor.h
             elog_string_receptor.h
             elog_syslog_target.h
-            elog_system.h
             elog_target_spec.h
             elog_target.h
             elog_time.h
             elog_tls.h
-            elog_win32_event_log_target.h)
+            elog_win32_event_log_target.h
+            elog.h)

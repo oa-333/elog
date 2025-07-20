@@ -1,7 +1,7 @@
 #include "elog_rolling_bitset.h"
 
+#include "elog.h"
 #include "elog_spin_ebo.h"
-#include "elog_system.h"
 
 namespace elog {
 

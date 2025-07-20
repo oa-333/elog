@@ -2,10 +2,10 @@
 
 #ifdef ELOG_WINDOWS
 
+#include "elog.h"
 #include "elog_error.h"
 #include "elog_field_selector.h"
 #include "elog_field_selector_internal.h"
-#include "elog_system.h"
 
 namespace elog {
 

@@ -75,9 +75,9 @@ target_sources(elog PRIVATE
     ./elog_string_receptor.cpp
     ./elog_sys_schema_handler.cpp
     ./elog_syslog_target.cpp
-    ./elog_system.cpp
     ./elog_target.cpp
     ./elog_time.cpp
     ./elog_tls.cpp
     ./elog_win32_dll_event.cpp
-    ./elog_win32_event_log_target.cpp)
+    ./elog_win32_event_log_target.cpp
+    ./elog.cpp)

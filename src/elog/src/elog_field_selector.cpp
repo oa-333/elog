@@ -40,9 +40,9 @@
 #include <iomanip>
 #include <unordered_map>
 
+#include "elog.h"
 #include "elog_common.h"
 #include "elog_error.h"
-#include "elog_system.h"
 
 namespace elog {
 

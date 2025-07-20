@@ -2,13 +2,13 @@
 
 #include <random>
 
+#include "elog.h"
 #include "elog_aligned_alloc.h"
 #include "elog_common.h"
 #include "elog_error.h"
 #include "elog_filter.h"
 #include "elog_flush_policy.h"
 #include "elog_formatter.h"
-#include "elog_system.h"
 #include "elog_tls.h"
 
 namespace elog {

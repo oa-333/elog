@@ -10,7 +10,7 @@
 #define DEFAULT_SERVER_ADDR "192.168.56.102"
 
 // include elog system first, then any possible connector
-#include "elog_system.h"
+#include "elog.h"
 
 #ifdef ELOG_WINDOWS
 #define WIN32_LEAN_AND_MEAN

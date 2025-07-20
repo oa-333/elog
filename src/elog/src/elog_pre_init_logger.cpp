@@ -1,8 +1,8 @@
 #include "elog_pre_init_logger.h"
 
+#include "elog.h"
 #include "elog_aligned_alloc.h"
 #include "elog_error.h"
-#include "elog_system.h"
 #include "elog_target.h"
 
 namespace elog {

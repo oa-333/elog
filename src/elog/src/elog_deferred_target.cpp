@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-#include "elog_system.h"
+#include "elog.h"
 
 #define ELOG_FLUSH_REQUEST ((uint16_t)-1)
 

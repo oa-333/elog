@@ -201,7 +201,7 @@ For more information, see [documentation](#documentation) below.
 
 ## Getting Started
 
-In order to use the library, include the main header "elog_system.h", which is the library facade.  
+In order to use the library, include the main header "elog.h", which is the library facade.  
 In the application code, make sure to call one of the elog::initializeXXX() functions before using any of the logging macros. After this, you can use ELOG_INFO() and the rest of the macros.  
 At application exit make sure to call elog::terminate().
 
@@ -319,7 +319,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
 
 The ELog library can be used out of box as follows:
 
-    #include "elog_system.h"
+    #include "elog.h"
     ...
 
     int main(int argc, char* argv[]) {
@@ -340,7 +340,7 @@ The ELog library can be used out of box as follows:
 
 The example exhibits the main parts of the ELog library:
 
-- Including the ELog library's main facade header "elog_system.h"
+- Including the ELog library's main facade header "elog.h"
 - Initialization (in this case using a log file)
 - Invoking the logging macros
 - Termination
@@ -348,7 +348,7 @@ The example exhibits the main parts of the ELog library:
 There are several initialization functions, which can all be found in the ELogSystem facade.
 In this example a synchronous segmented log file is used, with 4MB segment size:
 
-    #include "elog_system.h"
+    #include "elog.h"
     ...
     
     #define MB (1024 * 1024)

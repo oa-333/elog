@@ -2,10 +2,10 @@
 
 #include <cassert>
 
+#include "elog.h"
 #include "elog_aligned_alloc.h"
 #include "elog_common.h"
 #include "elog_error.h"
-#include "elog_system.h"
 
 #define ELOG_FLUSH_REQUEST ((uint16_t)-1)
 #define ELOG_STOP_REQUEST ((uint16_t)-2)

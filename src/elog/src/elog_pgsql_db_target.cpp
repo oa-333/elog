@@ -5,8 +5,8 @@
 #include <cstring>
 #include <sstream>
 
+#include "elog.h"
 #include "elog_error.h"
-#include "elog_system.h"
 
 namespace elog {
 

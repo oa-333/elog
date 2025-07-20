@@ -1,4 +1,4 @@
-#include "elog_system.h"
+#include "elog.h"
 
 #include <algorithm>
 #include <atomic>

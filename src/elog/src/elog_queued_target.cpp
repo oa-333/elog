@@ -1,6 +1,6 @@
 #include "elog_queued_target.h"
 
-#include "elog_system.h"
+#include "elog.h"
 
 namespace elog {
 
