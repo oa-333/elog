@@ -717,17 +717,6 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
         }                                                                                         \
     }
 
-#if 0
-#define ELOG_EX(logger, level, fmt, ...) if (logger != nullptr) {
-    if (logger->canLog(level)) {
-        logger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__);
-    }
-} else if (!elog::isInitialized()) {
-    elog::getPreInitLogger()->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt,
-                                                    ##__VA_ARGS__);
-}
-#endif
-
 /** @brief Logs a formatted message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_EX(logger, level, fmtStr, ...)                                                 \
@@ -738,19 +727,6 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
             validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
         }                                                                                       \
     }
-
-#if 0
-if (logger != nullptr) {
-    if (logger->canLog(level)) {
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
-        logger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str());
-    }
-} else if (!elog::isInitialized()) {
-    std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
-    elog::getPreInitLogger()->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION,
-                                                      logMsg.c_str());
-}
-#endif  // if 0
 #endif
 
 /**
@@ -880,17 +856,6 @@ if (logger != nullptr) {
         }                                                                                        \
     }
 
-#if 0
-    if (logger != nullptr) {                                                                     \
-        if (logger->canLog(level)) {                                                             \
-            logger->startLog(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__);      \
-        }                                                                                        \
-    } else if (!elog::isInitialized()) {                                             \
-        elog::getPreInitLogger()->startLog(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                                       fmt, ##__VA_ARGS__);                      \
-    }
-#endif
-
 /** @brief Begins a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_BEGIN_EX(logger, level, fmtStr, ...)                               \
@@ -902,19 +867,6 @@ if (logger != nullptr) {
                                           logMsg.c_str());                          \
         }                                                                           \
     }
-
-#if 0
-if (logger != nullptr) {
-    if (logger->canLog(level)) {
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
-        logger->startLogNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str());
-    }
-} else if (!elog::isInitialized()) {
-    std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);
-    elog::getPreInitLogger()->startLogNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION,
-                                                           logMsg.c_str());
-}
-#endif  // if 0
 #endif
 
 /**
@@ -925,14 +877,6 @@ if (logger != nullptr) {
  */
 #define ELOG_APPEND_EX(logger, fmt, ...) elog::getValidLogger(logger)->appendLog(fmt, ##__VA_ARGS__)
 
-#if 0
-if (logger != nullptr) {
-    logger->appendLog(fmt, ##__VA_ARGS__);
-} else if (!elog::isInitialized()) {
-    elog::getPreInitLogger()->appendLog(fmt, ##__VA_ARGS__);
-}
-#endif
-
 /** @brief Appends formatted message to a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_APPEND_EX(logger, fmtStr, ...)                          \
@@ -940,16 +884,6 @@ if (logger != nullptr) {
         std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);         \
         elog::getValidLogger(logger)->appendLogNoFormat(logMsg.c_str()); \
     }
-
-#if 0
-    if (logger != nullptr) {                                                     \
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                 \
-        logger->appendLogNoFormat(logMsg.c_str());                               \
-    } else if (!elog::isInitialized()) {                             \
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                 \
-        elog::getPreInitLogger()->appendLogNoFormat(logMsg.c_str()); \
-    }
-#endif  // if 0
 #endif
 
 /**
@@ -959,27 +893,11 @@ if (logger != nullptr) {
  */
 #define ELOG_APPEND_NF_EX(logger, msg) elog::getValidLogger(logger)->appendLogNoFormat(msg)
 
-#if 0
-    if (logger != nullptr) {                                          \
-        logger->appendLogNoFormat(msg);                               \
-    } else if (!elog::isInitialized()) {                  \
-        elog::getPreInitLogger()->appendLogNoFormat(msg); \
-    }
-#endif
-
 /**
  * @brief Terminates a multi-part log message and writes it to the server log.
  * @param logger The logger used for message formatting.
  */
 #define ELOG_END_EX(logger) elog::getValidLogger(logger)->finishLog()
-
-#if 0
-    if (logger != nullptr) {                               \
-        logger->finishLog();                               \
-    } else if (!elog::isInitialized()) {       \
-        elog::getPreInitLogger()->finishLog(); \
-    }
-#endif
 
 /**
  * @brief Logs a system error message to the server log.
@@ -997,14 +915,6 @@ if (logger != nullptr) {
         ELOG_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                  \
     }
 
-#if 0
-    if (logger != nullptr || !elog::isInitialized()) {                  \
-        ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
-                      elog::sysErrorToStr(sysErr));                     \
-        ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                  \
-    }
-#endif
-
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                     \
@@ -1014,14 +924,6 @@ if (logger != nullptr) {
                       elog::sysErrorToStr(sysErr));                                      \
         ELOG_FMT_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                              \
     }
-
-#if 0
-    if (logger != nullptr || !elog::isInitialized()) {                  \
-        ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
-                      elog::sysErrorToStr(sysErr));                     \
-        ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                              \
-    }
-#endif  // if 0
 #endif
 
 /**
@@ -1067,16 +969,6 @@ if (logger != nullptr) {
         ELOG_ERROR_EX(errLogger, fmt, ##__VA_ARGS__);                                           \
     }
 
-#if 0
-    if (logger != nullptr || !elog::isInitialized()) {                          \
-        char* errStr = elog::win32SysErrorToStr(sysErr);                        \
-        ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
-                      errStr);                                                              \
-        elog::win32FreeErrorStr(errStr);                                        \
-        ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                          \
-    }
-#endif
-
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                         \
@@ -1088,16 +980,6 @@ if (logger != nullptr) {
         elog::win32FreeErrorStr(errStr);                                                       \
         ELOG_FMT_ERROR_EX(errLogger, fmt, ##__VA_ARGS__);                                      \
     }
-
-#if 0
-    if (logger != nullptr || !elog::isInitialized()) {                          \
-        char* errStr = elog::win32SysErrorToStr(sysErr);                        \
-        ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
-                      errStr);                                                              \
-        elog::win32FreeErrorStr(errStr);                                        \
-        ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                      \
-    }
-#endif
 #endif
 
 /**
@@ -1416,18 +1298,6 @@ if (logger != nullptr) {
         }                                                             \
     }
 
-#if 0
-if (logger != nullptr) {
-    if (logger->canLog(level)) {
-        ELOG_EX(logger, level, fmt, ##__VA_ARGS__);
-        elog::logStackTrace(logger, level, title, skip);
-    }
-} else if (!elog::isInitialized()) {
-    ELOG_EX(logger, level, fmt, ##__VA_ARGS__);
-    elog::logStackTrace(elog::getPreInitLogger(), level, title, skip);
-}
-#endif
-
 /** @brief Logs the stack trace of the current thread (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
@@ -1438,18 +1308,6 @@ if (logger != nullptr) {
             elog::logStackTrace(logger, level, title, skip);          \
         }                                                             \
     }
-
-#if 0
-    if (logger != nullptr) {                                                                       \
-        if (logger->canLog(level)) {                                                               \
-            ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);                                        \
-            elog::logStackTrace(logger, level, title, skip);                           \
-        }                                                                                          \
-    } else if (!elog::isInitialized()) {                                               \
-        ELOG_FMT_EX(elog::getPreInitLogger(), level, fmt, ##__VA_ARGS__);              \
-        elog::logStackTrace(elog::getPreInitLogger(), level, title, skip); \
-    }
-#endif  // if 0
 #endif
 
 /**
@@ -1471,19 +1329,6 @@ if (logger != nullptr) {
         }                                                             \
     }
 
-#if 0
-    if (logger != nullptr) {                                                                   \
-        if (logger->canLog(level)) {                                                           \
-            ELOG_EX(logger, level, fmt, ##__VA_ARGS__);                                        \
-            elog::logAppStackTrace(level, title, skip);                            \
-        }                                                                                      \
-    } else if (!elog::isInitialized()) {                                           \
-        ELOG_EX(elog::getPreInitLogger(), level, fmt, ##__VA_ARGS__);              \
-        elog::logAppStackTrace(elog::getPreInitLogger(), level, title, \
-                                           skip);                                              \
-    }
-#endif
-
 /** @brief Logs the stack trace of all running threads in the application (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
@@ -1494,13 +1339,6 @@ if (logger != nullptr) {
             elog::logAppStackTrace(logger, level, title, skip);           \
         }                                                                 \
     }
-
-#if 0
-    if (logger != nullptr && logger->canLog(level)) {                     \
-        ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);                   \
-        elog::logAppStackTrace(level, title, skip);           \
-    }
-#endif  // if 0
 #endif
 
 /**
