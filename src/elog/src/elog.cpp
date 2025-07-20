@@ -184,6 +184,13 @@ bool initGlobals() {
     }
     ELOG_REPORT_TRACE("Global formatter initialized");
 
+    // format message cache
+    if (!ELogCache::initCache(ELOG_DEFAULT_CACHE_SIZE)) {
+        ELOG_REPORT_ERROR("Failed to initialize format message cache");
+        termGlobals();
+        return false;
+    }
+
 #ifdef ELOG_ENABLE_STACK_TRACE
     // connect to debug util library
     dbgutil::DbgUtilErr rc =
@@ -204,21 +211,7 @@ bool initGlobals() {
 }
 
 void termGlobals() {
-    // NOTE: since log target may have indirect dependencies (e.g. one log target, while writing a
-    // log message, issues another log message with is dispatched to all other log targets), we
-    // first stop all targets and then delete them, but this requires log target to be able to
-    // reject log messages after stop() was called.
-    for (ELogTarget* logTarget : sLogTargets) {
-        if (logTarget != nullptr) {
-            logTarget->stop();
-        }
-    }
-    for (ELogTarget* logTarget : sLogTargets) {
-        if (logTarget != nullptr) {
-            delete logTarget;
-        }
-    }
-    sLogTargets.clear();
+    clearAllLogTargets();
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     if (sDbgUtilInitialized) {
@@ -231,6 +224,7 @@ void termGlobals() {
     }
 #endif
 
+    ELogCache::destroyCache();
     setLogFormatter(nullptr);
     setLogFilter(nullptr);
     if (sDefaultLogTarget != nullptr) {
@@ -1157,6 +1151,24 @@ void removeLogTarget(ELogTargetId targetId) {
             --maxLogTargetId;
         }
     }
+}
+
+void clearAllLogTargets() {
+    // NOTE: since log target may have indirect dependencies (e.g. one log target, while writing a
+    // log message, issues another log message which is dispatched to all other log targets), we
+    // first stop all targets and then delete them, but this requires log target to be able to
+    // reject log messages after stop() was called.
+    for (ELogTarget* logTarget : sLogTargets) {
+        if (logTarget != nullptr) {
+            logTarget->stop();
+        }
+    }
+    for (ELogTarget* logTarget : sLogTargets) {
+        if (logTarget != nullptr) {
+            delete logTarget;
+        }
+    }
+    sLogTargets.clear();
 }
 
 void removeLogTarget(ELogTarget* target) {

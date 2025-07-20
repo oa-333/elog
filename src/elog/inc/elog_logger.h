@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdarg>
 
+#include "elog_common_def.h"
 #include "elog_level.h"
 #include "elog_record_builder.h"
 #include "elog_source.h"
@@ -170,6 +171,23 @@ public:
         finishLog(recordBuilder);
     }
 
+    /** @brief Logs a binary log record. */
+    template <typename... Args>
+    void logBinaryCached(ELogLevel logLevel, const char* file, int line, const char* function,
+                         ELogCacheEntryId cacheEntryId, Args... args) {
+        ELogRecordBuilder* recordBuilder = getRecordBuilder();
+        if (isLogging(recordBuilder)) {
+            recordBuilder = pushRecordBuilder();
+        }
+        startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function,
+                       ELOG_RECORD_BINARY | ELOG_RECORD_FMT_CACHED);
+        // reserve 1 byte for parameter count
+        uint8_t paramCountReserve = 0;
+        recordBuilder->appendData(paramCountReserve);
+        encodeMsg(recordBuilder, cacheEntryId, 0, args...);
+        finishLog(recordBuilder);
+    }
+
     /** @brief Resolves a binary log record, putting the resolved message into a log buffer. */
     static bool resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBuffer);
 #endif
@@ -243,6 +261,30 @@ private:
 
     void encodeMsg(ELogRecordBuilder* recordBuilder, const char* fmt, uint8_t paramCount) {
         recordBuilder->append(fmt);
+        recordBuilder->appendDataAt(paramCount, 0);
+    }
+
+    template <typename T, typename... Args>
+    void encodeMsg(ELogRecordBuilder* recordBuilder, ELogCacheEntryId cacheEntryId,
+                   uint8_t paramCount, T arg, Args... args) {
+        recordBuilder->appendData(encodeType<T>());
+        recordBuilder->appendData(arg);
+        encodeMsg(recordBuilder, cacheEntryId, paramCount + 1, args...);
+    }
+
+    template <typename... Args>
+    void encodeMsg(ELogRecordBuilder* recordBuilder, ELogCacheEntryId cacheEntryId,
+                   uint8_t paramCount, const char* arg, Args... args) {
+        recordBuilder->appendData(ELOG_STRING_CODE);
+        // NOTE: we must ensure terminating null is added, otherwise garbage will be added by other
+        // parameters or format string
+        recordBuilder->append(arg, strlen(arg) + 1);
+        encodeMsg(recordBuilder, cacheEntryId, paramCount + 1, args...);
+    }
+
+    void encodeMsg(ELogRecordBuilder* recordBuilder, ELogCacheEntryId cacheEntryId,
+                   uint8_t paramCount) {
+        recordBuilder->appendData(cacheEntryId);
         recordBuilder->appendDataAt(paramCount, 0);
     }
 #endif

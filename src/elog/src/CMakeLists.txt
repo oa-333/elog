@@ -7,6 +7,7 @@ target_sources(elog PRIVATE
     ./elog_buffer.cpp
     ./elog_buffered_file_target.cpp
     ./elog_buffered_file_writer.cpp
+    elog_cache.cpp
     ./elog_common.cpp
     ./elog_config_loader.cpp
     ./elog_config_parser.cpp

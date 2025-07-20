@@ -10,8 +10,11 @@
 /** @def Flag denoting the log record message is already formatted. */
 #define ELOG_RECORD_FORMATTED 0x00
 
-/** @def Flag denoting the log record message is i nbinary form, and requires formatting. */
+/** @def Flag denoting the log record message is in binary form, and requires formatting. */
 #define ELOG_RECORD_BINARY 0x01
+
+/** @def Flag denoting the log record format message is cached. */
+#define ELOG_RECORD_FMT_CACHED 0x02
 
 namespace elog {
 
@@ -73,6 +76,7 @@ struct ELOG_API ELogRecord {
           m_logMsg(nullptr),
           m_logMsgLen(0),
           m_line(0),
+          m_flags(0),
           m_reserved(0) {
     }
 

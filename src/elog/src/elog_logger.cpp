@@ -28,6 +28,8 @@
 #ifdef ELOG_ENABLE_FMT_LIB
 #include <fmt/args.h>
 #include <fmt/core.h>
+
+#include "elog_cache.h"
 #endif
 
 namespace elog {
@@ -219,9 +221,19 @@ bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBu
     }
 
     // extract format string
-    const char* fmtStr = bufPtr + offset;
+    const char* fmtStr = nullptr;
+    if (logRecord.m_flags & ELOG_RECORD_FMT_CACHED) {
+        ELogCacheEntryId cacheEntryId = *(ELogCacheEntryId*)(bufPtr + offset);
+        fmtStr = ELogCache::getCachedFormatMsg(cacheEntryId);
+    } else {
+        fmtStr = bufPtr + offset;
+    }
 
     // now we can format
+    // TODO: use vformat_to and try to avoid malloc/free, but we must have a safe iterator over the
+    // log buffer, such that if size limit is breached it will realloc
+    // currently it is no possible to do so with libfmt. we can optimize here with our own allocator
+    // maybe even use alloca to do faster than malloc/free
     auto text = fmt::vformat(fmtStr, store);
     logBuffer.append(text.c_str(), text.length());
     return true;

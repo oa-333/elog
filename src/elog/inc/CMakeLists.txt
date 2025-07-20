@@ -15,6 +15,7 @@ target_sources(
             elog_buffer.h
             elog_buffered_file_target.h
             elog_buffered_file_writer.h
+            elog_cache.h
             elog_common_def.h
             elog_concurrent_ring_buffer.h
             elog_config.h

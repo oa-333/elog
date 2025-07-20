@@ -1,6 +1,7 @@
 #ifndef __ELOG_SYSTEM_H__
 #define __ELOG_SYSTEM_H__
 
+#include "elog_cache.h"
 #include "elog_config.h"
 #include "elog_error_handler.h"
 #include "elog_filter.h"
@@ -421,6 +422,9 @@ extern ELOG_API void removeLogTarget(ELogTarget* target);
  */
 extern ELOG_API void removeLogTarget(ELogTargetId targetId);
 
+/** @brief Removes all log targets. */
+extern ELOG_API void clearAllLogTargets();
+
 /**
  * Log Source Management Interface
  */
@@ -747,6 +751,28 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
             validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
         }                                                                                         \
     }
+
+/** @brief Logs a formatted message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_EX(logger, level, fmt, ...)                                                   \
+    {                                                                                            \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
+        if (validLogger->canLog(level)) {                                                        \
+            static thread_local elog::ELogCacheEntryId cacheEntryId =                            \
+                elog::ELogCache::getOrCacheFormatMsg(fmt);                                       \
+            validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId, \
+                                         ##__VA_ARGS__);                                         \
+        }                                                                                        \
+    }
+
+/** @brief Logs a formatted message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_EX(logger, level, cacheEntryId, ...)                                             \
+    {                                                                                            \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
+        if (validLogger->canLog(level)) {                                                        \
+            validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId, \
+                                         ##__VA_ARGS__);                                         \
+        }                                                                                        \
+    }
 #endif
 
 /**
@@ -765,6 +791,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs a fatal message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_FATAL_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a fatal message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_FATAL_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a fatal message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_FATAL_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_FATAL, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -783,6 +817,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs a error message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_ERROR_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a error message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_ERROR_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a error message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_ERROR_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_ERROR, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -801,6 +843,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs a warning message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_WARN_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a warning message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_WARN_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a warning message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_WARN_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_WARN, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -819,6 +869,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs a notice message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_NOTICE_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a notice message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_NOTICE_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a notice message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_NOTICE_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_NOTICE, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -837,6 +895,17 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs an informational message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_INFO_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+
+/** @brief Logs an informational message to the server log (fmtlib style, binary form, auto-cached).
+ */
+#define ELOG_CACHE_INFO_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+
+/**
+ * @brief Logs a informational message to the server log (fmtlib style, binary form, pre-cached).
+ */
+#define ELOG_ID_INFO_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_INFO, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -855,6 +924,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs a trace message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_TRACE_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a trace message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_TRACE_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a trace message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_TRACE_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_TRACE, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -873,6 +950,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs a debug message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_DEBUG_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a debug message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_DEBUG_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a debug message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_DEBUG_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_DEBUG, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -891,6 +976,14 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 /** @brief Logs a diagnostic message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_DIAG_EX(logger, fmt, ...) \
     ELOG_BIN_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_DIAG_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_DIAG_EX(logger, cacheEntryId, ...) \
+    ELOG_ID_EX(logger, elog::ELEVEL_DIAG, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1089,6 +1182,26 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
         elog::ELogLogger* logger = elog::getDefaultLogger(); \
         ELOG_BIN_EX(logger, level, fmt, ##__VA_ARGS__);      \
     }
+
+/**
+ * @brief Logs a formatted message to the server log, using default logger (fmtlib-style, binary
+ * form, auto-cached).
+ */
+#define ELOG_CACHE(level, fmt, ...)                          \
+    {                                                        \
+        elog::ELogLogger* logger = elog::getDefaultLogger(); \
+        ELOG_CACHE_EX(logger, level, fmt, ##__VA_ARGS__);    \
+    }
+
+/**
+ * @brief Logs a formatted message to the server log, using default logger (fmtlib-style, binary
+ * form, pre-cached).
+ */
+#define ELOG_ID(level, cacheEntryId, ...)                       \
+    {                                                           \
+        elog::ELogLogger* logger = elog::getDefaultLogger();    \
+        ELOG_ID_EX(logger, level, cacheEntryId, ##__VA_ARGS__); \
+    }
 #endif
 
 /**
@@ -1104,6 +1217,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs a fatal message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_FATAL(fmt, ...) ELOG_BIN(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a fatal message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_FATAL(fmt, ...) ELOG_CACHE(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a fatal message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_FATAL(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_FATAL, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1119,6 +1238,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs a error message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_ERROR(fmt, ...) ELOG_BIN(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a error message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_ERROR(fmt, ...) ELOG_CACHE(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a error message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_ERROR(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_ERROR, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1134,6 +1259,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs a warning message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_WARN(fmt, ...) ELOG_BIN(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a warning message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_WARN(fmt, ...) ELOG_CACHE(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a warning message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_WARN(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_WARN, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1149,6 +1280,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs a notice message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_NOTICE(fmt, ...) ELOG_BIN(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a notice message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_NOTICE(fmt, ...) ELOG_CACHE(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a notice message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_NOTICE(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_NOTICE, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1164,6 +1301,16 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs an informational message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_INFO(fmt, ...) ELOG_BIN(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+
+/**
+ * @brief Logs an informational message to the server log (fmtlib style, binary form, auto-cached).
+ */
+#define ELOG_CACHE_INFO(fmt, ...) ELOG_CACHE(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+
+/**
+ * @brief Logs a informational message to the server log (fmtlib style, binary form, pre-cached).
+ */
+#define ELOG_ID_INFO(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_INFO, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1179,6 +1326,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs a trace message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_TRACE(fmt, ...) ELOG_BIN(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a trace message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_TRACE(fmt, ...) ELOG_CACHE(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a trace message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_TRACE(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_TRACE, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1194,6 +1347,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs a debug message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_DEBUG(fmt, ...) ELOG_BIN(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a debug message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_DEBUG(fmt, ...) ELOG_CACHE(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a debug message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_DEBUG(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_DEBUG, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1209,6 +1368,12 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
 
 /** @brief Logs a diagnostic message to the server log (fmtlib style, binary form). */
 #define ELOG_BIN_DIAG(fmt, ...) ELOG_BIN(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, auto-cached). */
+#define ELOG_CACHE_DIAG(fmt, ...) ELOG_CACHE(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, pre-cached). */
+#define ELOG_ID_DIAG(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_DIAG, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**

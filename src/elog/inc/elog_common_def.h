@@ -79,6 +79,12 @@ enum class ELogPropagateMode : uint32_t {
     PM_LOOSE
 };
 
+/** @def Cache entry id type. */
+typedef uint32_t ELogCacheEntryId;
+
+/** @def Invalid cache entry id value. */
+#define ELOG_INVALID_CACHE_ENTRY_ID ((ELogCacheEntryId)0xFFFFFFFF)
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

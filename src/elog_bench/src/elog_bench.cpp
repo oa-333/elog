@@ -121,6 +121,16 @@ static void runSingleThreadedTest(const char* title, const char* cfg, double& ms
 static void runSingleThreadedTestBinary(const char* title, const char* cfg, double& msgThroughput,
                                         double& ioThroughput, StatData& msgPercentile,
                                         uint32_t msgCount = ST_MSG_COUNT, bool enableTrace = false);
+static void runSingleThreadedTestBinaryCached(const char* title, const char* cfg,
+                                              double& msgThroughput, double& ioThroughput,
+                                              StatData& msgPercentile,
+                                              uint32_t msgCount = ST_MSG_COUNT,
+                                              bool enableTrace = false);
+static void runSingleThreadedTestBinaryPreCached(const char* title, const char* cfg,
+                                                 double& msgThroughput, double& ioThroughput,
+                                                 StatData& msgPercentile,
+                                                 uint32_t msgCount = ST_MSG_COUNT,
+                                                 bool enableTrace = false);
 #endif
 static void runMultiThreadTest(const char* title, const char* fileName, const char* cfg,
                                bool privateLogger = true, uint32_t minThreads = MIN_THREAD_COUNT,
@@ -131,6 +141,16 @@ static void runMultiThreadTestBinary(const char* title, const char* fileName, co
                                      uint32_t minThreads = MIN_THREAD_COUNT,
                                      uint32_t maxThreads = MAX_THREAD_COUNT,
                                      bool enableTrace = false);
+static void runMultiThreadTestBinaryCached(const char* title, const char* fileName, const char* cfg,
+                                           bool privateLogger = true,
+                                           uint32_t minThreads = MIN_THREAD_COUNT,
+                                           uint32_t maxThreads = MAX_THREAD_COUNT,
+                                           bool enableTrace = false);
+static void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName,
+                                              const char* cfg, bool privateLogger = true,
+                                              uint32_t minThreads = MIN_THREAD_COUNT,
+                                              uint32_t maxThreads = MAX_THREAD_COUNT,
+                                              bool enableTrace = false);
 #endif
 static void printMermaidChart(const char* name, std::vector<double>& msgThroughput,
                               std::vector<double>& byteThroughput);
@@ -148,6 +168,8 @@ static void testPerfQueuedFile();
 static void testPerfQuantumFile(bool privateLogger);
 #ifdef ELOG_ENABLE_FMT_LIB
 static void testPerfQuantumFileBinary();
+static void testPerfQuantumFileBinaryCached();
+static void testPerfQuantumFileBinaryPreCached();
 #endif
 static void testPerfAllSingleThread();
 
@@ -199,6 +221,13 @@ void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
 void testPerfSTQuantumBinary(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
                              std::vector<double>& msgp50, std::vector<double>& msgp95,
                              std::vector<double>& msgp99);
+void testPerfSTQuantumBinaryCached(std::vector<double>& msgThroughput,
+                                   std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                   std::vector<double>& msgp95, std::vector<double>& msgp99);
+void testPerfSTQuantumBinaryPreCached(std::vector<double>& msgThroughput,
+                                      std::vector<double>& ioThroughput,
+                                      std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                      std::vector<double>& msgp99);
 #endif
 
 // TODO: check rdtsc for percentile tests
@@ -517,6 +546,8 @@ static bool sTestPerfQuantumPrivateFile = false;
 static bool sTestPerfQuantumSharedFile = false;
 #ifdef ELOG_ENABLE_FMT_LIB
 static bool sTestPerfQuantumBinaryFile = false;
+static bool sTestPerfQuantumBinaryCachedFile = false;
+static bool sTestPerfQuantumBinaryPreCachedFile = false;
 #endif
 static bool sTestSingleThread = false;
 
@@ -543,6 +574,8 @@ static bool sTestSingleThreadQueued = false;
 static bool sTestSingleThreadQuantum = false;
 #ifdef ELOG_ENABLE_FMT_LIB
 static bool sTestSingleThreadQuantumBinary = false;
+static bool sTestSingleThreadQuantumBinaryCached = false;
+static bool sTestSingleThreadQuantumBinaryPreCached = false;
 #endif
 
 static int sGroupSize = 0;
@@ -573,6 +606,32 @@ static bool getPerfParam(const char* param) {
 #else
         fprintf(stderr, "Invalid option quantum-bin, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
         return false;
+#endif
+    } else if (strcmp(param, "quantum-bin-cache") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfQuantumBinaryCachedFile = true;
+#else
+        fprintf(stderr,
+                "Invalid option quantum-bin-cache, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
+    } else if (strcmp(param, "quantum-bin-pre-cache") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfQuantumBinaryPreCachedFile = true;
+#else
+        fprintf(stderr,
+                "Invalid option quantum-bin=pre-cache, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
+    } else if (strcmp(param, "multi-thread") == 0) {
+        sTestPerfDeferredFile = true;
+        sTestPerfQueuedFile = true;
+        sTestPerfQuantumPrivateFile = true;
+        sTestPerfQuantumSharedFile = true;
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfQuantumBinaryFile = true;
+        sTestPerfQuantumBinaryCachedFile = true;
+        sTestPerfQuantumBinaryPreCachedFile = true;
 #endif
     } else if (strcmp(param, "single-thread") == 0) {
         sTestSingleThread = true;
@@ -633,6 +692,22 @@ static bool getSingleParam(const char* param) {
         sTestSingleThreadQuantumBinary = true;
 #else
         fprintf(stderr, "Invalid option quantum-bin, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
+    } else if (strcmp(param, "quantum-bin-cache") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestSingleThreadQuantumBinaryCached = true;
+#else
+        fprintf(stderr,
+                "Invalid option quantum-bin-cache, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
+    } else if (strcmp(param, "quantum-bin-pre-cache") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestSingleThreadQuantumBinaryPreCached = true;
+#else
+        fprintf(stderr,
+                "Invalid option quantum-bin-pre-cache, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
         return false;
 #endif
     } else {
@@ -811,6 +886,12 @@ int main(int argc, char* argv[]) {
     }
 
     fprintf(stderr, "STARTING ELOG BENCHMARK\n");
+    if (!elog::initialize()) {
+        fprintf(stderr, "Failed to initialize elog system\n");
+        return 1;
+    }
+    fprintf(stderr, "ELog system initialized\n");
+
     if (sTestPerfAll || sTestPerfIdleLog) {
         testPerfPrivateLog();
         testPerfSharedLogger();
@@ -843,10 +924,19 @@ int main(int argc, char* argv[]) {
     if (sTestPerfAll || sTestPerfQuantumBinaryFile) {
         testPerfQuantumFileBinary();
     }
+    if (sTestPerfAll || sTestPerfQuantumBinaryCachedFile) {
+        testPerfQuantumFileBinaryCached();
+    }
+    if (sTestPerfAll || sTestPerfQuantumBinaryPreCachedFile) {
+        testPerfQuantumFileBinaryPreCached();
+    }
 #endif
     if (sTestPerfAll || sTestSingleThread) {
         testPerfAllSingleThread();
     }
+
+    elog::terminate();
+    return 0;
 }
 
 void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
@@ -858,11 +948,6 @@ void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
 }
 
 elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
-    if (!elog::initialize()) {
-        fprintf(stderr, "Failed to initialize elog system\n");
-        return nullptr;
-    }
-    fprintf(stderr, "ELog system initialized\n");
     if (sTestConns) {
         // elog::addStdErrLogTarget();
         elog::setCurrentThreadName("elog_bench_main");
@@ -928,13 +1013,18 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
     ELOG_BIN_INFO("This is a test binary message, with int {}, bool {} and string {}", (int)5, true,
                   "test string param");
+    ELOG_CACHE_INFO("This is a test binary auto-cached message, with int {}, bool {} and string {}",
+                    (int)5, true, "test string param");
+    elog::ELogCacheEntryId msgId = elog::ELogCache::getOrCacheFormatMsg(
+        "This is a test binary pre-cached message, with int {}, bool {} and string {}");
+    ELOG_ID_INFO(msgId, (int)5, true, "test string param");
     elog::removeLogTarget(id);
     elog::discardAccumulatedLogMessages();
 #endif
     return logTarget;
 }
 
-void termELog() { elog::terminate(); }
+void termELog() { elog::clearAllLogTargets(); }
 
 void testPerfPrivateLog() {
     // Private logger test
@@ -1504,6 +1594,9 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
 #ifdef ELOG_ENABLE_FMT_LIB
     ELOG_BIN_INFO_EX(logger, "This is a test binary message, with int {}, bool {} and string {}",
                      (int)5, true, "test string param");
+    ELOG_CACHE_INFO_EX(
+        logger, "This is a test binary auto-cached message, with int {}, bool {} and string {}",
+        (int)5, true, "test string param");
 #endif
 
     if (sTestException) {
@@ -1603,6 +1696,170 @@ void runSingleThreadedTestBinary(const char* title, const char* cfg, double& msg
         auto logStart = std::chrono::high_resolution_clock::now();
 #endif
         ELOG_BIN_INFO_EX(logger, "Single thread Test log {}", i);
+        auto logEnd = std::chrono::high_resolution_clock::now();
+#ifdef MEASURE_PERCENTILE
+        samples[i] =
+            std::chrono::duration_cast<std::chrono::microseconds>(logEnd - logStart).count();
+#endif
+    }
+    auto end0 = std::chrono::high_resolution_clock::now();
+    fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
+    uint64_t writeCount = 0;
+    uint64_t readCount = 0;
+    // uint64_t waitCount = 0;
+    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+        /*if (++waitCount % 10000 == 0) {
+            fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
+        }*/
+    }
+    // fputs("\n", stderr);
+    auto end = std::chrono::high_resolution_clock::now();
+    uint64_t bytesEnd = logTarget->getBytesWritten();
+    std::chrono::microseconds testTime0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+    std::chrono::microseconds testTime =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    // print test result
+    // fprintf(stderr, "Msg Test time: %u usec\n", (unsigned)testTime0.count());
+    // fprintf(stderr, "IO Test time: %u usec\n", (unsigned)testTime.count());
+
+    msgThroughput = msgCount / (double)testTime0.count() * 1000000.0f;
+    fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", msgThroughput);
+
+    ioThroughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
+    fprintf(stderr, "Throughput: %0.3f KB/Sec\n\n", ioThroughput);
+#ifdef MEASURE_PERCENTILE
+    getSamplePercentiles(samples, msgPercentile);
+#endif
+
+    termELog();
+}
+
+void runSingleThreadedTestBinaryCached(const char* title, const char* cfg, double& msgThroughput,
+                                       double& ioThroughput, StatData& msgPercentile,
+                                       uint32_t msgCount /* = ST_MSG_COUNT */,
+                                       bool enableTrace /* = false */) {
+    if (sMsgCnt > 0) {
+        msgCount = sMsgCnt;
+    }
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init %s test, aborting\n", title);
+        return;
+    }
+
+    if (enableTrace) {
+        elog::setTraceMode(true);
+    }
+
+    fprintf(stderr, "\nRunning %s single-thread test\n", title);
+    elog::ELogSource* logSource = elog::defineLogSource("elog.bench", true);
+    elog::ELogLogger* logger = logSource->createPrivateLogger();
+#ifdef MEASURE_PERCENTILE
+    std::vector<double> samples(msgCount, 0.0f);
+#endif
+    ELOG_ERROR_EX(logger, "This is a test error message");
+
+    if (sTestException) {
+        int msg = 0;
+        fprintf(stderr, "Exception test\n");
+        uint64_t inverse = 1 / msg;
+        uint64_t* ptr = nullptr;
+        *ptr = inverse;
+    }
+
+    uint64_t bytesStart = logTarget->getBytesWritten();
+    auto start = std::chrono::high_resolution_clock::now();
+    for (uint64_t i = 0; i < msgCount; ++i) {
+#ifdef MEASURE_PERCENTILE
+        auto logStart = std::chrono::high_resolution_clock::now();
+#endif
+        ELOG_CACHE_INFO_EX(logger, "Single thread Test log {}", i);
+        auto logEnd = std::chrono::high_resolution_clock::now();
+#ifdef MEASURE_PERCENTILE
+        samples[i] =
+            std::chrono::duration_cast<std::chrono::microseconds>(logEnd - logStart).count();
+#endif
+    }
+    auto end0 = std::chrono::high_resolution_clock::now();
+    fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
+    uint64_t writeCount = 0;
+    uint64_t readCount = 0;
+    // uint64_t waitCount = 0;
+    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+        /*if (++waitCount % 10000 == 0) {
+            fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
+        }*/
+    }
+    // fputs("\n", stderr);
+    auto end = std::chrono::high_resolution_clock::now();
+    uint64_t bytesEnd = logTarget->getBytesWritten();
+    std::chrono::microseconds testTime0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+    std::chrono::microseconds testTime =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    // print test result
+    // fprintf(stderr, "Msg Test time: %u usec\n", (unsigned)testTime0.count());
+    // fprintf(stderr, "IO Test time: %u usec\n", (unsigned)testTime.count());
+
+    msgThroughput = msgCount / (double)testTime0.count() * 1000000.0f;
+    fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", msgThroughput);
+
+    ioThroughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
+    fprintf(stderr, "Throughput: %0.3f KB/Sec\n\n", ioThroughput);
+#ifdef MEASURE_PERCENTILE
+    getSamplePercentiles(samples, msgPercentile);
+#endif
+
+    termELog();
+}
+
+void runSingleThreadedTestBinaryPreCached(const char* title, const char* cfg, double& msgThroughput,
+                                          double& ioThroughput, StatData& msgPercentile,
+                                          uint32_t msgCount /* = ST_MSG_COUNT */,
+                                          bool enableTrace /* = false */) {
+    if (sMsgCnt > 0) {
+        msgCount = sMsgCnt;
+    }
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init %s test, aborting\n", title);
+        return;
+    }
+
+    if (enableTrace) {
+        elog::setTraceMode(true);
+    }
+
+    fprintf(stderr, "\nRunning %s single-thread test\n", title);
+    elog::ELogSource* logSource = elog::defineLogSource("elog.bench", true);
+    elog::ELogLogger* logger = logSource->createPrivateLogger();
+#ifdef MEASURE_PERCENTILE
+    std::vector<double> samples(msgCount, 0.0f);
+#endif
+    ELOG_ERROR_EX(logger, "This is a test error message");
+
+    if (sTestException) {
+        int msg = 0;
+        fprintf(stderr, "Exception test\n");
+        uint64_t inverse = 1 / msg;
+        uint64_t* ptr = nullptr;
+        *ptr = inverse;
+    }
+
+    elog::ELogCacheEntryId msgId =
+        elog::ELogCache::getOrCacheFormatMsg("Single thread Test log {}");
+    uint64_t bytesStart = logTarget->getBytesWritten();
+    auto start = std::chrono::high_resolution_clock::now();
+    for (uint64_t i = 0; i < msgCount; ++i) {
+#ifdef MEASURE_PERCENTILE
+        auto logStart = std::chrono::high_resolution_clock::now();
+#endif
+        ELOG_ID_INFO_EX(logger, msgId, i);
         auto logEnd = std::chrono::high_resolution_clock::now();
 #ifdef MEASURE_PERCENTILE
         samples[i] =
@@ -1829,7 +2086,254 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
-                    ELOG_BIN_INFO_EX(logger, "Thread %u Test log %u", i, j);
+                    ELOG_BIN_INFO_EX(logger, "Thread {} Test log {}", i, j);
+                }
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::microseconds testTime =
+                    std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+                double throughput = msgCount / (double)testTime.count() * 1000000.0f;
+                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n",
+                (unsigned)testTime.count(), (unsigned)MSG_COUNT); fprintf(stderr, "Throughput:
+                %0.3f MSg/Sec\n", throughput);*/
+                resVec[i] = throughput;
+            }));
+        }
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            threads[i].join();
+        }
+        auto end0 = std::chrono::high_resolution_clock::now();
+        fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
+        uint64_t writeCount = 0;
+        uint64_t readCount = 0;
+        // uint64_t waitCount = 0;
+        while (!logTarget->isCaughtUp(writeCount, readCount)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(0));
+            /*if (++waitCount % 10000 == 0) {
+                fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
+            }*/
+            /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
+                    readCount);*/
+        }
+        // fputs("\n", stderr);
+        //  fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
+        //  readCount);
+        auto end = std::chrono::high_resolution_clock::now();
+        ELOG_INFO("%u Thread Test ended", threadCount);
+        uint64_t bytesEnd = logTarget->getBytesWritten();
+        double throughput = 0;
+        for (double val : resVec) {
+            throughput += val;
+        }
+        fprintf(stderr, "%u thread accumulated throughput: %0.2f\n", threadCount, throughput);
+        accumThroughput.push_back(throughput);
+
+        std::chrono::microseconds testTime0 =
+            std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+        std::chrono::microseconds testTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        throughput = threadCount * msgCount / (double)testTime0.count() * 1000000.0f;
+        /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
+                (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
+        fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
+        msgThroughput.push_back(throughput);
+        throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
+        fprintf(stderr, "%u thread Throughput: %0.3f KB/Sec\n\n", threadCount, throughput);
+        byteThroughput.push_back(throughput);
+    }
+
+    // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    termELog();
+
+    // printMermaidChart(title, msgThroughput, byteThroughput);
+    // printMarkdownTable(title, msgThroughput, byteThroughput);
+    writeCsvFile(fileName, msgThroughput, byteThroughput, accumThroughput, privateLogger);
+}
+
+void runMultiThreadTestBinaryCached(const char* title, const char* fileName, const char* cfg,
+                                    bool privateLogger /* = true */,
+                                    uint32_t minThreads /* = MIN_THREAD_COUNT */,
+                                    uint32_t maxThreads /* = MAX_THREAD_COUNT */,
+                                    bool enableTrace /* = false */) {
+    if (sMinThreadCnt > 0) {
+        minThreads = sMinThreadCnt;
+    }
+    if (sMaxThreadCnt > 0) {
+        maxThreads = sMaxThreadCnt;
+    }
+    uint32_t msgCount = MT_MSG_COUNT;
+    if (sMsgCnt > 0) {
+        msgCount = sMsgCnt;
+    }
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init %s test, aborting\n", title);
+        return;
+    }
+
+    if (enableTrace) {
+        elog::setTraceMode(true);
+    }
+
+    fprintf(stderr, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
+    std::vector<double> msgThroughput;
+    std::vector<double> byteThroughput;
+    std::vector<double> accumThroughput;
+    elog::ELogLogger* sharedLogger =
+        privateLogger ? nullptr : elog::getSharedLogger("elog_bench_logger");
+    for (uint32_t i = MIN_THREAD_COUNT; i < minThreads; ++i) {
+        msgThroughput.push_back(0);
+        byteThroughput.push_back(0);
+        accumThroughput.push_back(0);
+    }
+    for (uint32_t i = maxThreads + 1; i < MAX_THREAD_COUNT; ++i) {
+        msgThroughput.push_back(0);
+        byteThroughput.push_back(0);
+        accumThroughput.push_back(0);
+    }
+    for (uint32_t threadCount = minThreads; threadCount <= maxThreads; ++threadCount) {
+        // fprintf(stderr, "Running %u threads test\n", threadCount);
+        ELOG_INFO("Running %u Thread Test", threadCount);
+        std::vector<std::thread> threads;
+        std::vector<double> resVec(threadCount, 0.0);
+        auto start = std::chrono::high_resolution_clock::now();
+        std::vector<elog::ELogLogger*> loggers(threadCount);
+        // create private loggers before running threads, otherwise race condition may happen (log
+        // source is not thread-safe)
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            loggers[i] = sharedLogger != nullptr ? sharedLogger
+                                                 : elog::getPrivateLogger("elog_bench_logger");
+        }
+        uint64_t bytesStart = logTarget->getBytesWritten();
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            elog::ELogLogger* logger = loggers[i];
+            threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
+                auto start = std::chrono::high_resolution_clock::now();
+                for (uint64_t j = 0; j < msgCount; ++j) {
+                    ELOG_CACHE_INFO_EX(logger, "Thread {} Test log {}", i, j);
+                }
+                auto end = std::chrono::high_resolution_clock::now();
+                std::chrono::microseconds testTime =
+                    std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+                double throughput = msgCount / (double)testTime.count() * 1000000.0f;
+                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n",
+                (unsigned)testTime.count(), (unsigned)MSG_COUNT); fprintf(stderr, "Throughput:
+                %0.3f MSg/Sec\n", throughput);*/
+                resVec[i] = throughput;
+            }));
+        }
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            threads[i].join();
+        }
+        auto end0 = std::chrono::high_resolution_clock::now();
+        fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
+        uint64_t writeCount = 0;
+        uint64_t readCount = 0;
+        // uint64_t waitCount = 0;
+        while (!logTarget->isCaughtUp(writeCount, readCount)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(0));
+            /*if (++waitCount % 10000 == 0) {
+                fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
+            }*/
+            /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
+                    readCount);*/
+        }
+        // fputs("\n", stderr);
+        //  fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
+        //  readCount);
+        auto end = std::chrono::high_resolution_clock::now();
+        ELOG_INFO("%u Thread Test ended", threadCount);
+        uint64_t bytesEnd = logTarget->getBytesWritten();
+        double throughput = 0;
+        for (double val : resVec) {
+            throughput += val;
+        }
+        fprintf(stderr, "%u thread accumulated throughput: %0.2f\n", threadCount, throughput);
+        accumThroughput.push_back(throughput);
+
+        std::chrono::microseconds testTime0 =
+            std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+        std::chrono::microseconds testTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        throughput = threadCount * msgCount / (double)testTime0.count() * 1000000.0f;
+        /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
+                (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
+        fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
+        msgThroughput.push_back(throughput);
+        throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
+        fprintf(stderr, "%u thread Throughput: %0.3f KB/Sec\n\n", threadCount, throughput);
+        byteThroughput.push_back(throughput);
+    }
+
+    // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    termELog();
+
+    // printMermaidChart(title, msgThroughput, byteThroughput);
+    // printMarkdownTable(title, msgThroughput, byteThroughput);
+    writeCsvFile(fileName, msgThroughput, byteThroughput, accumThroughput, privateLogger);
+}
+
+void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, const char* cfg,
+                                       bool privateLogger /* = true */,
+                                       uint32_t minThreads /* = MIN_THREAD_COUNT */,
+                                       uint32_t maxThreads /* = MAX_THREAD_COUNT */,
+                                       bool enableTrace /* = false */) {
+    if (sMinThreadCnt > 0) {
+        minThreads = sMinThreadCnt;
+    }
+    if (sMaxThreadCnt > 0) {
+        maxThreads = sMaxThreadCnt;
+    }
+    uint32_t msgCount = MT_MSG_COUNT;
+    if (sMsgCnt > 0) {
+        msgCount = sMsgCnt;
+    }
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init %s test, aborting\n", title);
+        return;
+    }
+
+    if (enableTrace) {
+        elog::setTraceMode(true);
+    }
+
+    fprintf(stderr, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
+    std::vector<double> msgThroughput;
+    std::vector<double> byteThroughput;
+    std::vector<double> accumThroughput;
+    elog::ELogLogger* sharedLogger =
+        privateLogger ? nullptr : elog::getSharedLogger("elog_bench_logger");
+    for (uint32_t i = MIN_THREAD_COUNT; i < minThreads; ++i) {
+        msgThroughput.push_back(0);
+        byteThroughput.push_back(0);
+        accumThroughput.push_back(0);
+    }
+    for (uint32_t i = maxThreads + 1; i < MAX_THREAD_COUNT; ++i) {
+        msgThroughput.push_back(0);
+        byteThroughput.push_back(0);
+        accumThroughput.push_back(0);
+    }
+    elog::ELogCacheEntryId msgId = elog::ELogCache::getOrCacheFormatMsg("Thread {} Test log {}");
+    for (uint32_t threadCount = minThreads; threadCount <= maxThreads; ++threadCount) {
+        // fprintf(stderr, "Running %u threads test\n", threadCount);
+        ELOG_INFO("Running %u Thread Test", threadCount);
+        std::vector<std::thread> threads;
+        std::vector<double> resVec(threadCount, 0.0);
+        auto start = std::chrono::high_resolution_clock::now();
+        std::vector<elog::ELogLogger*> loggers(threadCount);
+        // create private loggers before running threads, otherwise race condition may happen (log
+        // source is not thread-safe)
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            loggers[i] = sharedLogger != nullptr ? sharedLogger
+                                                 : elog::getPrivateLogger("elog_bench_logger");
+        }
+        uint64_t bytesStart = logTarget->getBytesWritten();
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            elog::ELogLogger* logger = loggers[i];
+            threads.emplace_back(std::thread([i, msgId, &resVec, logger, msgCount]() {
+                auto start = std::chrono::high_resolution_clock::now();
+                for (uint64_t j = 0; j < msgCount; ++j) {
+                    ELOG_ID_INFO_EX(logger, msgId, i, j);
                 }
                 auto end = std::chrono::high_resolution_clock::now();
                 std::chrono::microseconds testTime =
@@ -2154,8 +2658,28 @@ void testPerfQuantumFileBinary() {
         "async://"
         "quantum?quantum_buffer_size=2000000&name=elog_bench"
         "|file:///./bench_data/elog_bench_quantum_bin.log?file_buffer_size=1048576&file_lock=no";
-    runMultiThreadTestBinary("Quantum 2000000 (1MB Buffer, Binary)", "elog_bench_quantum", cfg,
+    runMultiThreadTestBinary("Quantum 2000000 (1MB Buffer, Binary)", "elog_bench_quantum_bin", cfg,
                              true);
+}
+
+void testPerfQuantumFileBinaryCached() {
+    const char* cfg =
+        "async://"
+        "quantum?quantum_buffer_size=2000000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_quantum_bin_cache.log?file_buffer_size=1048576&file_lock=no";
+    runMultiThreadTestBinaryCached("Quantum 2000000 (1MB Buffer, Binary, Auto-Cached)",
+                                   "elog_bench_quantum_bin_auto_cache", cfg, true);
+}
+
+void testPerfQuantumFileBinaryPreCached() {
+    const char* cfg =
+        "async://"
+        "quantum?quantum_buffer_size=2000000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_quantum_bin_pre_cache.log?file_buffer_size=1048576&file_lock=no";
+    runMultiThreadTestBinaryPreCached("Quantum 2000000 (1MB Buffer, Binary, Pre-Cached)",
+                                      "elog_bench_quantum_bin_pre_cache", cfg, true);
 }
 #endif
 
@@ -2187,6 +2711,10 @@ static void writeSTCsv(const char* fname, const std::vector<double>& data) {
 #ifdef ELOG_ENABLE_FMT_LIB
     f << column << " Quantum-Bin " << std::fixed << std::setprecision(2) << data[column++]
       << std::endl;
+    f << column << " Quantum-Bin\nAuto-Cache " << std::fixed << std::setprecision(2)
+      << data[column++] << std::endl;
+    f << column << " Quantum-Bin\nPre-Cache " << std::fixed << std::setprecision(2)
+      << data[column++] << std::endl;
 #endif
     f.close();
 }
@@ -2237,6 +2765,12 @@ void testPerfAllSingleThread() {
 #ifdef ELOG_ENABLE_FMT_LIB
     if (sTestSingleAll || sTestSingleThreadQuantumBinary) {
         testPerfSTQuantumBinary(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadQuantumBinaryCached) {
+        testPerfSTQuantumBinaryCached(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
+    }
+    if (sTestSingleAll || sTestSingleThreadQuantumBinaryPreCached) {
+        testPerfSTQuantumBinaryPreCached(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
     }
 #endif
 
@@ -2542,6 +3076,50 @@ void testPerfSTQuantumBinary(std::vector<double>& msgThroughput, std::vector<dou
     double ioPerf = 0.0f;
     StatData statData;
     runSingleThreadedTestBinary("Quantum Binary", cfg, msgPerf, ioPerf, statData);
+    msgThroughput.push_back(msgPerf);
+    ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
+}
+
+void testPerfSTQuantumBinaryCached(std::vector<double>& msgThroughput,
+                                   std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                   std::vector<double>& msgp95, std::vector<double>& msgp99) {
+    const char* cfg =
+        "async://"
+        "quantum?quantum_buffer_size=2000000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_quantum_bin_cache_st.log?file_buffer_size=1048576&file_lock=no";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTestBinaryCached("Quantum Binary Cached", cfg, msgPerf, ioPerf, statData);
+    msgThroughput.push_back(msgPerf);
+    ioThroughput.push_back(ioPerf);
+#ifdef MEASURE_PERCENTILE
+    msgp50.push_back(statData.p50);
+    msgp95.push_back(statData.p95);
+    msgp99.push_back(statData.p99);
+#endif
+}
+
+void testPerfSTQuantumBinaryPreCached(std::vector<double>& msgThroughput,
+                                      std::vector<double>& ioThroughput,
+                                      std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                      std::vector<double>& msgp99) {
+    const char* cfg =
+        "async://"
+        "quantum?quantum_buffer_size=2000000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_quantum_bin_pre_cache_st.log?file_buffer_size=1048576&file_lock=no";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTestBinaryPreCached("Quantum Binary Pre-Cached", cfg, msgPerf, ioPerf,
+                                         statData);
     msgThroughput.push_back(msgPerf);
     ioThroughput.push_back(ioPerf);
 #ifdef MEASURE_PERCENTILE
