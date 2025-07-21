@@ -21,6 +21,14 @@ Using [fmtlib](https://github.com/fmtlib/fmt) formatting style (requires enablin
 
     ELOG_FMT_INFO("This is an unsigned integer {} and a string '{}'", 5, "hi");
 
+Using binary logging (fmtlib-style only):
+
+    ELOG_BIN_INFO("This message is not formatted at all during this call, param {}, param , param {}, 2, true, "some string param");
+
+Using binary logging with format message caching (fmtlib-style only):
+
+    ELOG_CACHE_INFO("This format message cached and referred by id, instead of being copied, param {}, param , param {}, 2, true, "some string param");
+
 Logging with a designated [logger](#defining-log-sources-and-loggers) (no error checking):
 
     // initialize a thread-safe shared logger
@@ -97,18 +105,31 @@ The effect is the following line format:
 The ELog library provides the following notable features:
 
 - High performance
-    - Although perhaps not the fastest out there, ELog still provides high performance logging with low overhead
+    - Although perhaps not the fastest out there, ELog still provides very high performance logging with low overhead
     - Minimal formatting on logging application side, possibly combined with lock-free asynchronous logging
     - Full formatting takes place on background thread
-    - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, *scalable* in multi-threaded scenarios)
+    - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, **scalable** in multi-threaded scenarios)
     - Check out the [benchmarks](#Benchmarks) below
 - Synchronous and asynchronous logging schemes
     - Synchronous logging to file, allowing for efficient buffering and log rotation/segmentation
-    - **Lock-free** synchronous log file rotation/segmentation
+    - **Lock-free** synchronous log file rotation/segmentation (no performance "hiccups" during segment switch)
+- Optimized logging macros
+    - If log level does not enable, then no argument evaluation takes place
+    - With normal logging macros, only partial message formatting takes place on caller's side
+- Binary logging macros
+    - Allow performing entire formatting on logging end (fmtlib-style only)
+    - Significant impact when complex formatting is used
+- Format message caching macros
+    - Allow further optimizing, by avoiding copying format message to binary log buffer
+    - Huge impact with long format messages
+    - Combined with lock-free asynchronous logging, **scalable** top performance can be achieved
+- Logging macros flexibility
+    - It is possible to choose at each logging instance whether to use normal, binary or cached logging
+    - No special configuration required
+    - No predefined message file required
 - Wide range of predefined log targets (i.e. "log sinks/appenders"):
-    - stdout/stderr
-    - syslog
-    - Windows event log
+    - stdout, stderr
+    - syslog, Windows event log
     - log file (including rotation/segmentation)
     - databases (PostgreSQL, SQLite, MySQL)
     - message queues (Kafka)
@@ -118,10 +139,11 @@ The ELog library provides the following notable features:
     - User can define multiple log targets
     - combine with complex filtering schemes and flush policies
     - possibly employing rate limiting
-    - Can combine several log targets under one framework and apply common restrictions and properties
+    - Can group several log targets under one framework and apply common restrictions and properties
 - Pre-initialization Logging
     - Accumulates log messages issued during static initialization (or any message before the ELog library is initialized) and issues the accumulated log messages in each added log target.
-- *Full Call Stack Dumping* (with function/file/line information)
+- Full Call Stack Dumping (**with function, file and line information**)
+    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
     - Voluntary current thread call stack dumping (i.e. not in signal handler, so no thread context pointer required)
     - Voluntary full application call stack dumping (i.e. stack trace of all active threads)
 - Exception/Crash Handling
@@ -129,7 +151,7 @@ The ELog library provides the following notable features:
     - Writes to log full exception information, including call stack
     - Generates core dump (mini-dump file on Windows)
 - Configurability
-    - The entire library is *fully configurable* from file or string, including very complex scenarios (see [basic examples](#basic-examples) above)
+    - The entire library is **fully configurable** from file or string, including very complex scenarios (see [basic examples](#basic-examples) above)
     - The purpose is to reduce amount of boilerplate code required just to get things started
     - The following can be configured by file or string:
         - log levels
@@ -161,12 +183,13 @@ The ELog library provides the following notable features:
 - Extensive Documentation
     - Below you can find a clear and elaborate explanation on how to use, configure and extend the ELog library
 
-Planned/considered future features:
+### Planned/considered future features:
 
 - Support on MacOS
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
+- Logging hub framework for log pre-processing before shipping to server analysis (offload to endpoints)
 
 
 ## Common Use Cases
@@ -271,20 +294,23 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
 - [Basic Usage](#basic-usage)
     - [Initialization and Termination](#initialization-and-termination)
     - [Logging Macros](#logging-macros)
-    - [Defining Log Sources and Loggers](#defining-log-sources-and-loggers)
+    - [Log Levels](#log-levels)
+    - [Log Sources and Loggers](#log-sources-and-loggers)
+    - [Log Level Propagation](#log-level-propagation)
     - [Configuring Log Line Format](#configuring-log-line-format)
     - [Log Record Field Reference Tokens](#log-record-field-reference-tokens)
+    - [Log Targets](#log-targets)
+    - [Configuration Styles](#configuration-styles)
+    - [Flush Policy](#flush-policy)
     - [Filtering Log Messages](#filtering-log-messages)
     - [Limiting Log Rate](#limiting-log-rate)
-    - [Log Targets](#log-targets)
-    - [Flush Policy](#flush-policy)
 - [Configuring from File or String](#configuring-from-file-or-string)
     - [Configuring Log Level](#configuring-log-level)
     - [Configuring Log Targets](#configuring-log-targets)
     - [Individual Log Target Configuration](#individual-log-target-configuration)
     - [Configuring Flush Policy](#configuring-flush-policy)
     - [Configuring Log Filters](#configuring-log-filters)
-    - [Compound Log Targets](#compound-log-targets)
+    - [Configuring Asynchronous Log Targets](#configuring-asynchronous-log-targets)
     - [Configuring Database Log Targets](#configuring-database-log-targets)
     - [Connecting to PostgreSQL](#connecting-to-postgresql)
     - [Connecting to SQLite](#connecting-to-sqlite)
@@ -374,43 +400,100 @@ In this example a synchronous segmented log file is used, with 4MB segment size:
 
 ### Logging Macros
 
-The ELog system defines utility macros for logging.  
-One group of macros requires a logger, and another group of macros does not.  
-This is the easiest form of logging, without any logger defined:
+The ELog system defines 5 groups of utility macros for logging:
+
+- Normal logging macros
+- fmtlib-style logging macros
+- binary logging macros
+- binary auto-cached logging macros
+- binary pre-cached logging macros
+
+Each group of macros can be used with or without a logger.  
+
+The easiest form of logging is without any logger defined:
 
     ELOG_INFO("Sample message with string parameter: %s", someStr);
 
-In order to specify a logger, use the ELOG_xxx_EX() macro set, as follows:
+In order to specify a logger, use the _EX() suffix, as follows:
 
-    ELOG_INFO_EX(logger, "Sample message with string parameter: %s", someStr);
+    ELOG_WARN_EX(logger, "Sample message with string parameter: %s", someStr);
 
-### Defining Log Sources and Loggers
+See [log sources and loggers](#log-sources-and-loggers) for more information on how a logger can be obtained.
+
+### Log Levels
+
+The following table summarizes the supported log levels in their intended meaning:
+
+| Log Level | Meaning |
+| -- | -- |
+| FATAL | Fatal error occurred, program cannot continue |
+| ERROR | Operation failed, program can continue |
+| WARN | Something went wrong, operation can finish |
+| NOTICE | Something requires user attention, probable API misuse, operation can finish |
+| INFO | Informational message, reporting application state, operation progress, etc., not frequent |
+| TRACE | Used for debugging purposes, low frequency printing |
+| DEBUG | Used for debugging purposes, high frequency printing |
+| DIAG | Used for debugging purposes, expected log flooding |
+
+There is no global log level configuration, for two main reasons:
+
+- Using such a "central valve" may cause performance degradation in heavy multi-threaded scenarios
+- If such a global log level restriction exists, then how it should be combined with log level at the log source?
+    - If we require to choose the more restrictive level, then configuring log level of log sources is meaningless,  
+    since we would have to configure the global log level as well (for instance in DEBUG)
+    - If we choose the less restrictive level, then we don't need a global log level at all, and the log level  
+    of the log source suffices to decide whether to allow to log the message or not
+
+For these reasons, log levels can be specified at the log source:
+
+- elog::ELogSource::setLogLevel()
+
+See [log level propagation](#log-level-propagation) below for more details.
+
+NOTE: Regardless of the above, a "main valve" is defined in each log target, but is normally totally loose.  
+For more details please refer to [log targets](#log-targets).
+
+### Log Sources and Loggers
 
 One of the main entities in the ELog system is the Log Source.  
-It serves as a semantic module entity.  
+The log source serves as a semantic module entity.  
+It assists in organizing log messages, by allowing to specify from where the message came.
+
 From one Log Source many loggers can be obtained, one for each logging class/file.
 A logger is the logging client's end point, with which log messages are partially formatted,  
 before being sent to log targets for actual logging.
 
-Here is a simple example of defining a log source and obtaining a logger.
+Here is a simple example of defining a log source and obtaining a shared logger:
 
-    elog::ELogSource* logSource = elog::defineLogSource("core");
-    if (logSource == nullptr) {
-        // NOTE: we use here the default logger
+    elog::ELogLogger* logger = elog::getSharedLogger("core");
+    if (logger == nullptr) {
+        // NOTE: we use here the default logger, which is always defined
         ELOG_ERROR("Failed to define log source with name core");
     } else {
-        elog::ELogLogger* logger = logSource->createSharedLogger();
-        ELOG_INFO_EX(logger, "Obtained a logger from source %s with id %u",
-            logSource->getQualifiedName(), 
-            logSource->getId());
+        ELOG_INFO_EX(logger, "Obtained a shared logger from source %s with id %u",
+            logger->getLogSource()->getQualifiedName(), 
+            logger->getLogSource()->getId());
     }
 
 Log sources form a tree hierarchy according to their qualified name, which is separated by dots.  
 The root log source has an empty name, and does not have a dot following its name, so that second level  
-log sources have a qualified name that is equal to their bare name.
+log sources have a qualified name that is equal to their bare name.  
 
-The log level of each log source may be controlled individually.  
-The log level of a log source affects all log sources underneath it, unless they specify a log level separately.  
+The module name for a log source is set by default to the qualified name of its parent log source.  
+So if the log source's qualified name is "core.files", its module name is "core".
+The module name can be modified as follows:
+
+    elog::ELogLogger* logger = elog::getSharedLogger("core.files");
+    if (logger != nullptr) {
+        logger->getLogSource()->setModuleName("infra");
+    }
+
+Pay attention that the default logger will emit "elog_root" for log source name, and "elog" for module name.
+
+### Log Level Propagation
+
+The log level of each log source may be controlled either individually, or in a way such that it affect  
+all log sources underneath it.  
 For instance, suppose the following log source hierarchy is defined:
 
     core
@@ -418,17 +501,26 @@ For instance, suppose the following log source hierarchy is defined:
     core.thread
     core.net
 
-The core log source may define log level of NOTICE, but the core.thread log level may define log level TRACE.  
-The core.files, and core.net log sources will inherit the NOTICE level from the core parent log source.
+The core log source may define log level of NOTICE, but the core.thread log level may define log level DEBUG.  
+Suppose we want to reduce the log level of "core" log source to TRACE, such the all loggers underneath it will  
+also be configured with level TRACE. This is one use case.  
 
-In order to enable better level of control over the log level of the log source hierarchy, the log source  
+Now suppose we want to reduce the log level of core log source to TRACE, such the all loggers underneath it will  
+also be configured with level TRACE, but this time, if there is a logger with a lower log level (say DEBUG),  
+it will not be affected.  
+
+The final use case is where would like to restrict log level of the "core" log source to WARN, and have all  
+log sources underneath it also be configured with level ERROR, unless it already has a more restrictive log  
+level (say FATAL).
+
+In order to enable better granularity of control over the log level of the log source hierarchy, the log source  
 provides the setLogLevel() method, which allows specifying how to propagate the log level to child log sources:
 
     void setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode);
 
-In particular there are 4 propagation modes:
+In particular there are 4 propagation modes, corresponding to the use cases presented above:
 
-- none: No log level propagation takes place at all.
+- none: No log level propagation takes place at all, only the configured log source is affected.
 - set: Each descendant log source inherits the log level of the log source ancestor
 - restrict: Each descendent log source cannot have less restrictive log level than the log source ancestor
 - loose: Each descendent log source cannot have more restrictive log level than the log source ancestor
@@ -437,7 +529,8 @@ This allows for more flexibility in configuring the log source tree.
 
 ### Configuring Log Line Format
 
-The ELog system allows configuring log line format using a format specification string that supports special log field reference tokens.  
+The ELog system allows configuring log line format using a format specification string  
+that supports special log record field reference tokens.  
 For instance, the default log line format specification that is used by ELog is:
 
     ${time} ${level:6} [${tid}] ${msg}
@@ -461,17 +554,20 @@ We see here all 4 components expanded:
 - logging thread id, enclosed with brackets
 - formatted log message
 
+Following is a specification of all predefined log record field reference tokens.  
+This list may be extended by the library user.
+
 ### Log Record Field Reference Tokens
 
-The following special log field reference tokens are understood by the ELog system:
+The following special log record field reference tokens are understood by the ELog library:
 
-- ${rid} - the log record id.
+- ${rid} - the log record id (unique per thread).
 - ${time} - the logging time.
 - ${host} - the host name.
 - ${user} - the logged in user.
 - ${os_name} - the operating system name.
 - ${os_ver} - the operating system version.
-- ${app} - configurable application name.
+- ${app} - configurable application name (requires user collaboration).
 - ${prog} - the program name (extracted from executable image file name).
 - ${pid} - the process id.
 - ${tid} - the logging thread id.
@@ -481,25 +577,141 @@ The following special log field reference tokens are understood by the ELog syst
 - ${line} - The logging line.
 - ${func} - The logging function.
 - ${src} - the log source of the logger (qualified name).
-- ${mod} - the alternative module name associated with the source.
+- ${mod} - the module name associated with the log source.
 - ${msg} - the log message.
 
-Tokens may contain justification number, where positive means justify to the left,  
+Reference tokens may contain justification number, where positive means justify to the left,  
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
+
+Log record field reference tokens may be specified in several places in the configuration file:
+
+- log line format
+- log filters
+- attributes passed to external systems (monitoring tools, message queues, databases, etc.)
 
 An extended syntax for reference token was defined for special terminal formatting escape sequences (colors and fonts).
 See [terminal text formatting](#terminal-text-formatting) for more details.
 
+
+### Log Targets
+
+Log targets are where log records are sent to after being optionally partially formatted (and filtered).  
+Each log target usually performs final formatting (which may be different in each log target),  
+and writes the formatted log message to some destination (e.g. file).  
+
+Although there is API in place, it is most convenient to configure log target by URL strings.  
+For instance, a simple log file target can be defined as follows:
+
+    elog::configureLogTarget("file:///./app.log");
+
+In the same manner a rotating log file can be defined:
+
+    elog::configureLogTarget("file:///./app.log?file_segment_size_mb=4&file_segment_count=20");
+
+This defines a total of at most 20 log segments, each having at most 4 MB of log data.  
+The segment size restriction is not a hard limit, and at times of load this limit may be slightly breached.  
+
+File buffering may be specified to optimize I/O as follows:
+
+    elog::configureLogTarget("file:///./app.log?file_buffer_size=4096");
+
+Pay attention that whatever can be achieved through configuration by string, can also be configured from file.
+
+The above can be achieved programmatically, if required, through exposed APIs:
+
+    - elog::addLogFileTarget()
+    - elog::addStdErrLogTarget()
+    - elog::addStdOutLogTarget()
+    - elog::addSysLogTarget()
+    - elog::addWin32EventLogTarget()
+
+Once a log target is configured, it will receive all logged messages, unless log level does not allow,  
+or there is some other restrictive [filter](#filtering-log-messages) on the way.
+
+Several aspects of the log target can be configured through the URL string for any target:
+
+- log level
+- log filter
+- flush policy
+- rate limiting
+- log line format
+- name
+
+These are common aspects of all targets, but their meaning may vary sometimes.  
+For instance, the flush policy determines when to flush a file when using a file log target,  
+but when using a monitoring tool log target (e.g. Grafana Loki), the flush policy actually determines  
+when to send log data through the HTTP client. Implied by that also is the amount of log data aggregated  
+in the HTTP message payload.
+
+Be advised that configuring these aspects programmatically can result in a lot of code,  
+so it might be simpler to use configuration URL strings instead.  
+Check out the [configuration](#configuring-from-file-or-string) section for more details on how quite  
+complex log target configuration can be achieved with a one-liner URL string.
+
+For more elaborate details on how to configure log targets, please refer to [this](#configuring-log-targets) section.
+
+### Configuration Styles
+
+In the following sections, several configuration styles may be referred.  
+The purpose is to let the user choose what he prefers.  
+In particular, the following configuration styles are used:
+
+- URL string
+    - a string in URL-like form, with some modified and permissive syntax
+    - used only for configuring log target in a configuration file or by a string
+- Nested style
+    - when URL strings become too complex, it is possible to specify them in nested form
+    - This is very similar to a permissive JSON format
+- Expression Predicate Style
+    - As flush policies and filter may become quite complex, the URL (or the nested form) gets bloated, so it is possible to specify filters and flush policies in a free-style form
+    - Some filter cannot be specified in any other way
+    - This form is distinguished by being enclosed with parenthesis
+    - It has the form of a predicate, usually being used in conjunction with AND/OR/NOT operators
+    - Can be specified within URLs or nested form specification
+
+### Flush Policy
+
+As some log targets may require flushing (as in file, or any buffered channel), a policy can be defined.  
+By default, all log targets do NOT flush after each message logging.  
+The following flush policies are pre-defined by the ELog library:
+
+- none (no flush policy defined, use default behavior currently defined in ELog)
+- immediate (flush after each logged message)
+- never (never flush, rely on transport layer to manage itself)
+- count (flush after a configured amount of messages has been logged)
+- size (flush after a configured amount of messages data has been logged)
+- time (flush after a configured amount time has passed)
+
+For instance, the following URL string defined flush every 5 log messages:
+
+    log_target = file:///./app.log?flush_policy=count&flush_count=5
+
+The same can be achieved with more convenient free-style predicate form:
+
+    log_target = file:///./app.log?flush_policy=(count == 5)
+
+Flush policies are defined on a per-target basis, and there is no global flush policy defined.  
+For more details on how to configure flush policies, please refer to [this](#configuring-flush-policy) section.
+
 ### Filtering Log Messages
 
-By default, all messages are logged, but in some use cases, it may be required to filter out some log messages.
-In general, the log level may be used to control which messages are logged, and this may be controlled at
-each log source. There are some occasions that more fine-grained filtering is required.
-In this case ELogFilter may be derived to provide more specialized control.
+By default, all messages are logged, unless log level does not permit, as configured by each log source.  
+There are some occasions that a more fine-grained filtering is required.  
+In that case a log filter may be configured, and that may be done either globally or per log target.  
 
-Pay attention that log filtering is usually applied at the global level, by the call:
+The log filters predefined by ELog relate to log record fields, and apply some comparator to them:
 
-    elog::setLogFilter(logFilter);
+    log_target = file:///./app.log?filter=(log_module != core)
+
+The above example allows all message to be passed to the file log target, except for messages originating from the "core" module. Other log targets are not affected by this filter.  
+
+Note that the [configuration style](#configuration-styles) above uses expression predicates.  
+The same can be achieved programmatically as follows:
+
+    ELogFilter* filter = new ELogModuleFilter("core", ELogCmpOp::CMP_OP_NE);
+    logTarget->setLogFilter(filter);
+
+For more details on how to configure log filter, refer to [this](#configuring-log-filters) section.
 
 ### Limiting Log Rate
 
@@ -509,84 +721,13 @@ A special instance of a log filter is the rate limiter, which may be applied glo
     elog::ELogRateLimiter* rateLimiter = new elog::ELogRateLimiter(500);
     elog::setLogFilter(rateLimiter);
 
+In configuration, the following expression syntax may be used:
 
-### Log Targets
+    log_target = file:///./app.log?filter=(rate_limit == 500)
 
-Log targets are where log records are sent to after being partially formatted (and filtered).
-The log target usually performs final formatting and writes the formatted log message to a file.
-But, as mentioned above, much more can be done.
+Alternatively, the normal configuration style can be used:
 
-So, first the ELogFileTarget is defined for simple logging to file, in the logger's context.
-In addition, the ELogSegmentedFileTarget is defined for segmented logging, where the segment size
-can be specified.
-
-If it is required to avoid logging (and possibly flushing, see below), on the logger's context, 
-it is possible to defer that to another context by using the ELogDeferredTarget.
-This log target takes another target as the final destination:
-
-    // define a segmented log target with 4K segment size
-    elog::ELogTarget* fileTarget = new elog::ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
-
-    // combine it with a deferred log target
-    elog::ELogTarget* deferredTarget = new elog::ELogDeferredTarget(fileTarget);
-
-    // now set it as the system log target
-    elog::setLogTarget(deferredTarget);
-
-The ELogDeferredTarget is quite simplistic. It wakes up the logging thread for each log message.
-The ELogQueuedTarget provides more control, by allowing to specify a batch size and a timeout,
-so the logging thread wakes up either when the queued number of log messages exceeds some limit, or that 
-a specified timeout has passed since last time it woke up.
-In the example above we can change it like this:
-
-    // define a segmented log target with 4K segment size
-    elog::ELogTarget* fileTarget = new elog::ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
-
-    // combine it with a queued log target with batch size 64, and 500 milliseconds timeout
-    elog::ELogTarget* queuedTarget = new elog::ELogQueuedTarget(fileTarget, 64, 500);
-
-    // now set it as the system log target
-    elog::setLogTarget(queuedTarget);
-
-The ELogQuantumTarget mentioned above can be use das follows:
-
-    // define a segmented log target with 4K segment size
-    elog::ELogTarget* fileTarget = new elog::ELogSegmentedFileTarget("logs", "app.log", 4096, nullptr);
-
-    // combine it with a quantum log target that can handle a burst of 1 million log messages
-    elog::ELogTarget* quantumTarget = new elog::ELogQuantumTarget(&fileTarget, 1024 * 1024);
-
-    // now set it as the system log target
-    elog::setLogTarget(quantumTarget);
-
-The ELogSQLiteDbTarget can be used as follows:
-
-    elog::ELogTarget* sqliteTarget = new elog::ELogSQLiteDbTarget("test.db", "INSERT INTO log_records values(${rid}, ${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})");
-
-    // add it as an additional log target
-    elog::addLogTarget(sqliteTarget);
-
-### Flush Policy
-
-As some log targets may require flushing (as in file, or any buffered channel), a policy can be defined.
-By default, all log targets flush after each message logging.
-This strategy is implemented by the ELogImmediateFlushPolicy class.
-
-It may be preferred to avoid flushing altogether.  
-This strategy is implemented by the ELogNeverFlushPolicy class.
-
-It may be preferred to flush every X messages.
-For this case the ELogCountFlushPolicy can be used.
-
-Another strategy is to flush whenever the amount of logged data exceeds some size limit.
-For this case the ELogSizeFlushPolicy can be used.
-
-If a timeout is required (without using a deferred log target), the ELogTimedFlushPolicy can be used.
-This is an active policy, which launches a designated thread for this purpose.
-
-In case a combination of strategies is needed, either ELogAndFlushPolicy or ELogOrFlushPolicy can be used.
-
-For any other specialized flush policy, derive from ELogFlushPolicy and override the shouldFlush() virtual method.
+    log_target = file:///./app.log?filter=rate_limit&max_msg_per_sec=500
 
 ## Configuring from File or String
 
@@ -759,7 +900,7 @@ argument types and parenthesis.
 Pay attention that some filters may have significant performance impact, and they should normally used  
 in scenarios where one is chasing a bug and trying to narrow down what is being logged.
 
-### Compound Log Targets
+### Configuring Asynchronous Log Targets
 
 When using asynchronous logging schemes, it is required to specify two log targets: the asynchronous "outer" log target, and the "inner" end log target. In order to simplify syntax, the pipe sign '|' is used as follows:
 
@@ -1163,7 +1304,7 @@ For instance, suppose we have a syslog target configured with log level ERROR, b
                 }
             },
             {
-                filter = rate_limiter,
+                filter = rate_limit,
                 max_msg_per_sec = 10
             }
         ]
@@ -1191,7 +1332,7 @@ In case of simply limiting the rate for all incoming messages, the configuration
         scheme = sys,
         path = syslog,
         log_level = ERROR,
-        filter = rate_limiter,
+        filter = rate_limit,
         max_msg_per_sec = 10
     }
 
