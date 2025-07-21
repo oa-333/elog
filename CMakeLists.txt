@@ -118,8 +118,15 @@ if (ELOG_ENABLE_FMT_LIB)
     )
     FetchContent_MakeAvailable(fmt)
 
-    # use non-header-only version (faster compile, smaller binary files, but runtime dependency)
-    target_link_libraries(elog fmt::fmt)
+    # although we prefer to use non-header-only version (faster compile, smaller binary files, 
+    # but also has runtime dependency), on Linux it is recommended to use header only version, 
+    # so to avoid relocation errors during link.
+    # see more details here: https://github.com/fmtlib/fmt/issues/548
+    if(LINUX)
+        target_link_libraries(elog fmt::fmt-header-only)
+    else()
+        target_link_libraries(elog fmt::fmt)
+    endif()
 endif()
 
 #############################################################
