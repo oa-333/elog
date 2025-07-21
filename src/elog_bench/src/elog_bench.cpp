@@ -2710,9 +2710,9 @@ static void writeSTCsv(const char* fname, const std::vector<double>& data) {
 #ifdef ELOG_ENABLE_FMT_LIB
     f << column << " Quantum-Bin " << std::fixed << std::setprecision(2) << data[column++]
       << std::endl;
-    f << column << " Quantum-Bin\nAuto-Cache " << std::fixed << std::setprecision(2)
+    f << column << " Quantum-Bin\\nAuto-Cache " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
-    f << column << " Quantum-Bin\nPre-Cache " << std::fixed << std::setprecision(2)
+    f << column << " Quantum-Bin\\nPre-Cache " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
 #endif
     f.close();
