@@ -55,7 +55,7 @@ protected:
 
     tstamp_t getTstamp();
 
-    ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limiter);
+    ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limit);
 };
 
 }  // namespace elog

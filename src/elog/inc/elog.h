@@ -109,8 +109,8 @@ extern ELOG_API bool registerSchemaHandler(const char* schemeName,
  * to leaf is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
-extern ELOG_API bool configureByPropFile(const char* configPath, bool defineLogSources = false,
-                                         bool defineMissingPath = false);
+extern ELOG_API bool configureByPropFile(const char* configPath, bool defineLogSources = true,
+                                         bool defineMissingPath = true);
 
 /**
  * @brief Configures the ELog System from a properties map.
@@ -129,8 +129,7 @@ extern ELOG_API bool configureByPropFile(const char* configPath, bool defineLogS
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByProps(const ELogPropertySequence& props,
-                                      bool defineLogSources = false,
-                                      bool defineMissingPath = false);
+                                      bool defineLogSources = true, bool defineMissingPath = true);
 
 /**
  * @brief Configures the ELog System from a properties configuration file (extended
@@ -150,8 +149,8 @@ extern ELOG_API bool configureByProps(const ELogPropertySequence& props,
  * to leaf is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
-extern ELOG_API bool configureByPropFileEx(const char* configPath, bool defineLogSources = false,
-                                           bool defineMissingPath = false);
+extern ELOG_API bool configureByPropFileEx(const char* configPath, bool defineLogSources = true,
+                                           bool defineMissingPath = true);
 
 /**
  * @brief Configures the ELog System from a properties map (extended functionality, loading
@@ -171,8 +170,8 @@ extern ELOG_API bool configureByPropFileEx(const char* configPath, bool defineLo
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByPropsEx(const ELogPropertyPosSequence& props,
-                                        bool defineLogSources = false,
-                                        bool defineMissingPath = false);
+                                        bool defineLogSources = true,
+                                        bool defineMissingPath = true);
 
 /**
  * @brief Configures the ELog System from a configuration file (see README for format).
@@ -192,8 +191,8 @@ extern ELOG_API bool configureByPropsEx(const ELogPropertyPosSequence& props,
  * to leaf is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
-extern ELOG_API bool configureByFile(const char* configPath, bool defineLogSources = false,
-                                     bool defineMissingPath = false);
+extern ELOG_API bool configureByFile(const char* configPath, bool defineLogSources = true,
+                                     bool defineMissingPath = true);
 
 /**
  * @brief Configures the ELog System from a configuration string (see README for format).
@@ -212,8 +211,8 @@ extern ELOG_API bool configureByFile(const char* configPath, bool defineLogSourc
  * to leaf is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
-extern ELOG_API bool configureByStr(const char* configStr, bool defineLogSources = false,
-                                    bool defineMissingPath = false);
+extern ELOG_API bool configureByStr(const char* configStr, bool defineLogSources = true,
+                                    bool defineMissingPath = true);
 
 /**
  * @brief Configures the ELog System from a configuration object.
@@ -232,8 +231,8 @@ extern ELOG_API bool configureByStr(const char* configStr, bool defineLogSources
  * to leaf is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
-extern ELOG_API bool configure(ELogConfig* config, bool defineLogSources = false,
-                               bool defineMissingPath = false);
+extern ELOG_API bool configure(ELogConfig* config, bool defineLogSources = true,
+                               bool defineMissingPath = true);
 
 /**
  * Log Target Management Interface
@@ -258,7 +257,7 @@ extern ELOG_API ELogTargetId addLogTarget(ELogTarget* target);
  * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
  * failed.
  */
-extern ELOG_API ELogTargetId configureLogTargetString(const char* logTargetCfg);
+extern ELOG_API ELogTargetId configureLogTarget(const char* logTargetCfg);
 
 /**
  * @brief Adds a file log target, optionally buffered, segmented or rotating.
@@ -441,7 +440,7 @@ extern ELOG_API void clearAllLogTargets();
  * @return ELogSource The resulting log source or null if failed.
  */
 extern ELOG_API ELogSource* defineLogSource(const char* qualifiedName,
-                                            bool defineMissingPath = false);
+                                            bool defineMissingPath = true);
 
 /** @brief Retrieves a log source by its qualified name. Returns null if not found. */
 extern ELOG_API ELogSource* getLogSource(const char* qualifiedName);
@@ -467,16 +466,30 @@ extern ELOG_API ELogLogger* getDefaultLogger();
 /**
  * @brief Retrieves a private (can be used by only one thread) logger from a log source by its
  * qualified name. The logger is managed and should not be deleted by the caller.
+ * @param qualifiedSourceName The qualified log source name, from which a logger is to be obtained.
+ * @param defineLogSourceIfMissing[opt] Orders to define the log source, in case it is not defined.
+ * @param defineMissingPath[opt] In case @ref defineLogSource is true, then optionally define
+ * all missing loggers along the name path. If not specified, and a logger on the path from root
+ * to leaf is missing, then the call fails.
  * @note This call is NOT thread safe.
  */
-extern ELOG_API ELogLogger* getPrivateLogger(const char* qualifiedSourceName);
+extern ELOG_API ELogLogger* getPrivateLogger(const char* qualifiedSourceName,
+                                             bool defineLogSourceIfMissing = true,
+                                             bool defineMissingPath = true);
 
 /**
  * @brief Retrieves a shared (can be used by more than one thread) logger from a log source by
  * its qualified name. The logger is managed and should not be deleted by the caller.
+ * @param qualifiedSourceName The qualified log source name, from which a logger is to be obtained.
+ * @param defineLogSourceIfMissing[opt] Orders to define the log source, in case it is not defined.
+ * @param defineMissingPath[opt] In case @ref defineLogSource is true, then optionally define
+ * all missing loggers along the name path. If not specified, and a logger on the path from root
+ * to leaf is missing, then the call fails.
  * @note This call is NOT thread safe.
  */
-extern ELOG_API ELogLogger* getSharedLogger(const char* qualifiedSourceName);
+extern ELOG_API ELogLogger* getSharedLogger(const char* qualifiedSourceName,
+                                            bool defineLogSource = true,
+                                            bool defineMissingPath = true);
 
 /**
  * Log Level Interface
@@ -715,7 +728,7 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
 }
 
 /** @brief Queries whether the default logger can log a record with a given log level. */
-inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(logLevel); }
+// inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(logLevel); }
 
 }  // namespace elog
 

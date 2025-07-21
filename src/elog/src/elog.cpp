@@ -73,8 +73,9 @@ extern void deleteLogSource(ELogSource* logSource);
 // local helpers
 static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
 static bool configureRateLimit(const std::string& rateLimitCfg);
-static bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id = nullptr);
-static bool configureLogTarget(const ELogConfigMapNode* logTargetCfg, ELogTargetId* id = nullptr);
+static bool configureLogTargetImpl(const std::string& logTargetCfg, ELogTargetId* id = nullptr);
+static bool configureLogTargetNode(const ELogConfigMapNode* logTargetCfg,
+                                   ELogTargetId* id = nullptr);
 static bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap);
 
 bool initGlobals() {
@@ -305,7 +306,7 @@ bool configureRateLimit(const std::string& rateLimitCfg) {
     return setRateLimit(maxMsgPerSec);
 }
 
-bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id /* = nullptr */) {
+bool configureLogTargetImpl(const std::string& logTargetCfg, ELogTargetId* id /* = nullptr */) {
     // the following formats are currently supported as a URL-like string
     //
     // sys://stdout
@@ -348,7 +349,7 @@ bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id /* =
         return false;
     }
     const ELogConfigMapNode* mapNode = (const ELogConfigMapNode*)rootNode;
-    if (!configureLogTarget(mapNode)) {
+    if (!configureLogTargetNode(mapNode)) {
         ELOG_REPORT_ERROR("Failed to configure log target");
         delete logTargetConfig;
         return false;
@@ -357,7 +358,8 @@ bool configureLogTargetEx(const std::string& logTargetCfg, ELogTargetId* id /* =
     return true;
 }
 
-bool configureLogTarget(const ELogConfigMapNode* logTargetCfg, ELogTargetId* id /* = nullptr */) {
+bool configureLogTargetNode(const ELogConfigMapNode* logTargetCfg,
+                            ELogTargetId* id /* = nullptr */) {
     // load the target (common properties already configured)
     ELogTarget* logTarget = ELogConfigLoader::loadLogTarget(logTargetCfg);
     if (logTarget == nullptr) {
@@ -378,8 +380,8 @@ bool configureLogTarget(const ELogConfigMapNode* logTargetCfg, ELogTargetId* id 
     return true;
 }
 
-bool configureByPropFile(const char* configPath, bool defineLogSources /* = false */,
-                         bool defineMissingPath /* = false */) {
+bool configureByPropFile(const char* configPath, bool defineLogSources /* = true */,
+                         bool defineMissingPath /* = true */) {
     // elog requires properties in order due to log level propagation
     ELogPropertySequence props;
     if (!ELogConfigLoader::loadFileProperties(configPath, props)) {
@@ -388,8 +390,8 @@ bool configureByPropFile(const char* configPath, bool defineLogSources /* = fals
     return configureByProps(props, defineLogSources, defineMissingPath);
 }
 
-bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /* = false */,
-                      bool defineMissingPath /* = false */) {
+bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /* = true */,
+                      bool defineMissingPath /* = true */) {
     // TODO: Allow override from env also log_format, log_filter, and perhaps global flush policy
 
     // configure log format (unrelated to order of appearance)
@@ -480,7 +482,7 @@ bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /
         // check for log target
         if (prop.first.compare(ELOG_TARGET_CONFIG_NAME) == 0) {
             // configure log target
-            if (!configureLogTargetEx(prop.second)) {
+            if (!configureLogTargetImpl(prop.second)) {
                 return false;
             }
             continue;
@@ -544,8 +546,8 @@ bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /
     return true;
 }
 
-bool configureByPropFileEx(const char* configPath, bool defineLogSources /* = false */,
-                           bool defineMissingPath /* = false */) {
+bool configureByPropFileEx(const char* configPath, bool defineLogSources /* = true */,
+                           bool defineMissingPath /* = true */) {
     // elog requires properties in order due to log level propagation
     ELogConfig* config = ELogConfig::loadFromPropFile(configPath);
     if (config == nullptr) {
@@ -557,8 +559,8 @@ bool configureByPropFileEx(const char* configPath, bool defineLogSources /* = fa
     return res;
 }
 
-bool configureByPropsEx(const ELogPropertyPosSequence& props, bool defineLogSources /* = false */,
-                        bool defineMissingPath /* = false */) {
+bool configureByPropsEx(const ELogPropertyPosSequence& props, bool defineLogSources /* = true */,
+                        bool defineMissingPath /* = true */) {
     // we first convert properties to configuration object and then load from cfg object
     ELogConfig* config = ELogConfig::loadFromProps(props);
     if (config == nullptr) {
@@ -570,8 +572,8 @@ bool configureByPropsEx(const ELogPropertyPosSequence& props, bool defineLogSour
     return res;
 }
 
-bool configureByFile(const char* configPath, bool defineLogSources /* = false */,
-                     bool defineMissingPath /* = false */) {
+bool configureByFile(const char* configPath, bool defineLogSources /* = true */,
+                     bool defineMissingPath /* = true */) {
     // elog requires properties in order due to log level propagation
     ELogConfig* config = ELogConfig::loadFromFile(configPath);
     if (config == nullptr) {
@@ -638,8 +640,8 @@ bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap) {
     return true;
 }
 
-bool configureByStr(const char* configStr, bool defineLogSources /* = false */,
-                    bool defineMissingPath /* = false */) {
+bool configureByStr(const char* configStr, bool defineLogSources /* = true */,
+                    bool defineMissingPath /* = true */) {
     ELogConfig* config = ELogConfig::loadFromString(configStr);
     if (config == nullptr) {
         ELOG_REPORT_ERROR("Failed to load configuration from string: %s", configStr);
@@ -671,8 +673,8 @@ inline bool validateConfigValueIntType(const ELogConfigValue* value, const char*
     return validateConfigValueType(value, ELogConfigValueType::ELOG_CONFIG_INT_VALUE, key);
 }
 
-bool configure(ELogConfig* config, bool defineLogSources /* = false */,
-               bool defineMissingPath /* = false */) {
+bool configure(ELogConfig* config, bool defineLogSources /* = true */,
+               bool defineMissingPath /* = true */) {
     // verify root node is of map type
     if (config->getRootNode()->getNodeType() != ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {
         ELOG_REPORT_ERROR("Top-level configuration node is not a map node");
@@ -755,7 +757,7 @@ bool configure(ELogConfig* config, bool defineLogSources /* = false */,
             // configure log target
             if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
                 const char* logTargetStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
-                if (!configureLogTargetEx(logTargetStr)) {
+                if (!configureLogTargetImpl(logTargetStr)) {
                     ELOG_REPORT_ERROR("Failed to configure log target (context: %s)",
                                       cfgValue->getFullContext());
                     return false;
@@ -763,7 +765,7 @@ bool configure(ELogConfig* config, bool defineLogSources /* = false */,
             } else if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_MAP_VALUE) {
                 const ELogConfigMapNode* logTargetCfg =
                     ((const ELogConfigMapValue*)cfgValue)->getMapNode();
-                if (!configureLogTarget(logTargetCfg)) {
+                if (!configureLogTargetNode(logTargetCfg)) {
                     return false;
                 }
             } else {
@@ -887,9 +889,9 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
     return logTargetId;
 }
 
-ELogTargetId configureLogTargetString(const char* logTargetCfg) {
+ELogTargetId configureLogTarget(const char* logTargetCfg) {
     ELogTargetId id = ELOG_INVALID_TARGET_ID;
-    if (!configureLogTargetEx(logTargetCfg, &id)) {
+    if (!configureLogTargetImpl(logTargetCfg, &id)) {
         return ELOG_INVALID_TARGET_ID;
     }
     return id;
@@ -1061,7 +1063,7 @@ ELogTargetId addTracer(const char* traceFilePath, uint32_t traceBufferSize, cons
     std::string cfg = s.str();
 
     // add log target from configuration string
-    ELogTargetId id = configureLogTargetString(cfg.c_str());
+    ELogTargetId id = configureLogTarget(cfg.c_str());
     if (id == ELOG_INVALID_TARGET_ID) {
         return id;
     }
@@ -1228,7 +1230,7 @@ ELogSource* addChildSource(ELogSource* parent, const char* sourceName) {
 }
 
 // log sources
-ELogSource* defineLogSource(const char* qualifiedName, bool defineMissingPath /* = false */) {
+ELogSource* defineLogSource(const char* qualifiedName, bool defineMissingPath /* = true */) {
     std::unique_lock<std::mutex> lock(sSourceTreeLock);
     // parse name to components and start traveling up to last component
     std::vector<std::string> namePath;
@@ -1320,18 +1322,28 @@ ELogSource* getRootLogSource() { return sRootLogSource; }
 // logger interface
 ELogLogger* getDefaultLogger() { return sDefaultLogger; }
 
-ELogLogger* getSharedLogger(const char* qualifiedSourceName) {
+ELogLogger* getSharedLogger(const char* qualifiedSourceName,
+                            bool defineLogSourceIfMissing /* = true */,
+                            bool defineMissingPath /* = true */) {
     ELogLogger* logger = nullptr;
     ELogSource* source = getLogSource(qualifiedSourceName);
+    if (source == nullptr && defineLogSourceIfMissing) {
+        source = defineLogSource(qualifiedSourceName, defineMissingPath);
+    }
     if (source != nullptr) {
         logger = source->createSharedLogger();
     }
     return logger;
 }
 
-ELogLogger* getPrivateLogger(const char* qualifiedSourceName) {
+ELogLogger* getPrivateLogger(const char* qualifiedSourceName,
+                             bool defineLogSourceIfMissing /* = true */,
+                             bool defineMissingPath /* = true */) {
     ELogLogger* logger = nullptr;
     ELogSource* source = getLogSource(qualifiedSourceName);
+    if (source == nullptr && defineLogSourceIfMissing) {
+        source = defineLogSource(qualifiedSourceName, defineMissingPath);
+    }
     if (source != nullptr) {
         logger = source->createPrivateLogger();
     }
