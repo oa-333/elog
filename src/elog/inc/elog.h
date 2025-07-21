@@ -1,7 +1,6 @@
 #ifndef __ELOG_SYSTEM_H__
 #define __ELOG_SYSTEM_H__
 
-#include "elog_cache.h"
 #include "elog_config.h"
 #include "elog_error_handler.h"
 #include "elog_filter.h"
@@ -573,18 +572,37 @@ extern ELOG_API bool configureLogFormat(const char* logFormat);
 extern ELOG_API void setLogFormatter(ELogFormatter* logFormatter);
 
 /**
- * @brief Formats a log message, using the installed log formatter.
- * @param logRecord The log record to format.
- * @param[out] logMsg The resulting formatted log message.
+ * Format message caching
  */
-extern ELOG_API void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
 
 /**
- * @brief Formats a log message, using the installed log formatter.
- * @param logRecord The log record to format.
- * @param[out] logBuffer The resulting formatted log buffer.
+ * @brief Caches a format message.
+ *
+ * @param fmt The format message to cache
+ * @return The format messages's cache entry id, or @ref ELOG_INVALID_CACHE_ENTRY_ID if failed.
  */
-extern ELOG_API void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
+extern ELOG_API ELogCacheEntryId cacheFormatMsg(const char* fmt);
+
+/**
+ * @brief Retrieves a previously cached format message.
+ *
+ * @param entryId The format messages' cache entry id.
+ * @return The cached format message or null if not found.
+ */
+extern ELOG_API const char* getCachedFormatMsg(ELogCacheEntryId entryId);
+
+/**
+ * @brief Retrieves a previously cached format message, or caches it if not found
+ *
+ * @param fmt The format message whose cache entry id is to be retrieved. If not found, then the
+ * format message is cached, and the new cache entry id is returned.
+ * @return The format messages's cache entry id, or @ref ELOG_INVALID_CACHE_ENTRY_ID if failed.
+ */
+extern ELOG_API ELogCacheEntryId getOrCacheFormatMsg(const char* fmt);
+
+/**
+ * User-controlled field selector configuration
+ */
 
 /** @brief Sets the application's name, to be referenced by token ${app}. */
 extern ELOG_API void setAppName(const char* appName);
@@ -626,18 +644,8 @@ extern ELOG_API bool setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFi
 extern ELOG_API bool filterLogMsg(const ELogRecord& logRecord);
 
 /**
- * Logging Interface
+ * Stack Trace Logging Interface
  */
-
-/**
- * @brief Logs a log record. In essence to log record is sent to all registered log targets.
- * @param logRecord The lgo record to process.
- * @param logTargetAffinityMask Optionally restricts the message to be directed to a specific
- * log target.
- */
-extern ELOG_API void logMsg(
-    const ELogRecord& logRecord,
-    ELogTargetAffinityMask logTargetAffinityMask = ELOG_ALL_TARGET_AFFINITY_MASK);
 
 #ifdef ELOG_ENABLE_STACK_TRACE
 /**
@@ -680,6 +688,10 @@ extern ELOG_API void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel = E
                                       dbgutil::StackEntryFormatter* formatter = nullptr);
 #endif
 
+/**
+ * System Error Logging Interface
+ */
+
 /** @brief Converts system error code to string. */
 extern ELOG_API char* sysErrorToStr(int sysErrorCode);
 
@@ -691,8 +703,7 @@ extern ELOG_API char* win32SysErrorToStr(unsigned long sysErrorCode);
 extern ELOG_API void win32FreeErrorStr(char* errStr);
 #endif
 
-/*private:*/
-
+/** @brief Retrieves any valid logger (helper function for logging macros). */
 inline ELogLogger* getValidLogger(ELogLogger* logger) {
     if (logger != nullptr) {
         return logger;
@@ -758,7 +769,7 @@ inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
         if (validLogger->canLog(level)) {                                                        \
             static thread_local elog::ELogCacheEntryId cacheEntryId =                            \
-                elog::ELogCache::getOrCacheFormatMsg(fmt);                                       \
+                elog::getOrCacheFormatMsg(fmt);                                                  \
             validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId, \
                                          ##__VA_ARGS__);                                         \
         }                                                                                        \

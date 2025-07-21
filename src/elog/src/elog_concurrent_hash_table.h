@@ -138,6 +138,10 @@ private:
         ValueType m_value;
 
         Entry() : m_key(0) {}
+        Entry(const Entry&) = delete;
+        Entry(Entry&&) = delete;
+        Entry& operator=(const Entry&) = delete;
+        ~Entry() {}
     };
     Entry* m_entries;
     size_t m_size;
@@ -159,15 +163,18 @@ private:
         const uint32_t r = 24;
 
         // Initialize the hash to a random value
-        char* data = (char*)&key;
+        uint8_t* data = (uint8_t*)&key;
         uint32_t length = sizeof(uint64_t);
         uint32_t h = seed ^ length;
         uint32_t length4 = length / 4;
 
+        const uint32_t mask = 0xFFu;
         for (uint32_t i = 0; i < length4; i++) {
             const uint32_t i4 = i * 4;
-            uint32_t k = (data[i4 + 0] & 0xff) + ((data[i4 + 1] & 0xff) << 8) +
-                         ((data[i4 + 2] & 0xff) << 16) + ((data[i4 + 3] & 0xff) << 24);
+            uint32_t k = (((uint32_t)data[i4 + 0u]) & mask) +
+                         ((((uint32_t)data[i4 + 1u]) & mask) << 8u) +
+                         ((((uint32_t)data[i4 + 2u]) & mask) << 16u) +
+                         ((((uint32_t)data[i4 + 3u]) & mask) << 24u);
             k *= m;
             k ^= k >> r;
             k *= m;
@@ -176,14 +183,16 @@ private:
         }
 
         // Handle the last few bytes of the input array
-        switch (length % 4) {
-            case 3:
-                h ^= (data[(length & ~3) + 2] & 0xff) << 16;
-            case 2:
-                h ^= (data[(length & ~3) + 1] & 0xff) << 8;
-            case 1:
-                h ^= (data[length & ~3] & 0xff);
-                h *= m;
+        uint32_t rem = length % 4;
+        if (rem == 3) {
+            h ^= (((uint32_t)data[(length & ~3u) + 2u]) & mask) << 16u;
+        }
+        if (rem >= 2) {
+            h ^= (((uint32_t)data[(length & ~3u) + 1u]) & mask) << 8u;
+        }
+        if (rem >= 1) {
+            h ^= (((uint32_t)data[length & ~3u]) & mask);
+            h *= m;
         }
 
         h ^= h >> 13;

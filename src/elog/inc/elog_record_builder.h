@@ -41,7 +41,7 @@ public:
     /** @brief Appends data (binary form). */
     template <typename T>
     inline bool appendData(const T& value) {
-        return m_buffer.appendRaw((const char*)&value, sizeof(T));
+        return m_buffer.appendData(value);
     }
 
     /** @brief Appends data (binary form). */

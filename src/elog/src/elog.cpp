@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "elog_buffered_file_target.h"
+#include "elog_cache.h"
 #include "elog_common.h"
 #include "elog_config.h"
 #include "elog_config_loader.h"
@@ -1378,6 +1379,16 @@ void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
 
 void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
     sGlobalFormatter->formatLogBuffer(logRecord, logBuffer);
+}
+
+ELogCacheEntryId cacheFormatMsg(const char* fmt) { return ELogCache::cacheFormatMsg(fmt); }
+
+const char* getCachedFormatMsg(ELogCacheEntryId entryId) {
+    return ELogCache::getCachedFormatMsg(entryId);
+}
+
+ELogCacheEntryId getOrCacheFormatMsg(const char* fmt) {
+    return ELogCache::getOrCacheFormatMsg(fmt);
 }
 
 void setAppName(const char* appName) { setAppNameField(appName); }

@@ -1015,7 +1015,7 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
                   "test string param");
     ELOG_CACHE_INFO("This is a test binary auto-cached message, with int {}, bool {} and string {}",
                     (int)5, true, "test string param");
-    elog::ELogCacheEntryId msgId = elog::ELogCache::getOrCacheFormatMsg(
+    elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg(
         "This is a test binary pre-cached message, with int {}, bool {} and string {}");
     ELOG_ID_INFO(msgId, (int)5, true, "test string param");
     elog::removeLogTarget(id);
@@ -1851,8 +1851,7 @@ void runSingleThreadedTestBinaryPreCached(const char* title, const char* cfg, do
         *ptr = inverse;
     }
 
-    elog::ELogCacheEntryId msgId =
-        elog::ELogCache::getOrCacheFormatMsg("Single thread Test log {}");
+    elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg("Single thread Test log {}");
     uint64_t bytesStart = logTarget->getBytesWritten();
     auto start = std::chrono::high_resolution_clock::now();
     for (uint64_t i = 0; i < msgCount; ++i) {
@@ -2313,7 +2312,7 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
         byteThroughput.push_back(0);
         accumThroughput.push_back(0);
     }
-    elog::ELogCacheEntryId msgId = elog::ELogCache::getOrCacheFormatMsg("Thread {} Test log {}");
+    elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg("Thread {} Test log {}");
     for (uint32_t threadCount = minThreads; threadCount <= maxThreads; ++threadCount) {
         // fprintf(stderr, "Running %u threads test\n", threadCount);
         ELOG_INFO("Running %u Thread Test", threadCount);

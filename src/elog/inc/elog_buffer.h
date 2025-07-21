@@ -102,6 +102,20 @@ public:
      */
     bool append(const char* msg, size_t len = 0);
 
+    template <typename T>
+    bool appendData(const T& value) {
+        if (m_bufferFull) {
+            return false;
+        }
+        uint32_t len = (uint32_t)sizeof(T);
+        if (!ensureBufferLength(len)) {
+            return false;
+        }
+        *((T*)(getRef() + m_offset)) = value;
+        m_offset += len;
+        return true;
+    }
+
     /**
      * @brief Appends raw data to the log buffer. Unlike append(), the raw data may contain several
      * null characters at any offset.

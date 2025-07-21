@@ -155,7 +155,7 @@ bool ELogPGSQLDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
         std::string logMsg;
-        elog::formatLogMsg(logRecord, logMsg);
+        formatLogMsg(logRecord, logMsg);
         ELOG_REPORT_ERROR(
             "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
             statusStr, logMsg.c_str());
@@ -286,7 +286,7 @@ void ELogPGSQLDbTarget::log(const ELogRecord& logRecord) {
         char* errStr = res ? PQresultErrorMessage(res) : (char*)"N/A";
         char* statusStr = res ? PQresStatus(status) : (char*)"N/A";
         std::string logMsg;
-        elog::formatLogMsg(logRecord, logMsg);
+        formatLogMsg(logRecord, logMsg);
         ELOG_REPORT_ERROR(
             "Failed to execute prepared PostgreSQL statement: %s (status: %s, log msg: %s)", errStr,
             statusStr, logMsg.c_str());

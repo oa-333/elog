@@ -9,6 +9,7 @@
 #include "elog_filter.h"
 #include "elog_flush_policy.h"
 #include "elog_formatter.h"
+#include "elog_internal.h"
 #include "elog_tls.h"
 
 namespace elog {
