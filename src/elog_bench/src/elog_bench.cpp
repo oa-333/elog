@@ -181,53 +181,62 @@ static void testPerfSizeFlushPolicy();
 static void testPerfTimeFlushPolicy();
 static void testPerfCompoundFlushPolicy();
 
-void testPerfSTFlushImmediate(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
-                              std::vector<double>& msgp50, std::vector<double>& msgp95,
-                              std::vector<double>& msgp99);
-void testPerfSTFlushNever(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
-                          std::vector<double>& msgp50, std::vector<double>& msgp95,
-                          std::vector<double>& msgp99);
+static void testPerfSTFlushImmediate(std::vector<double>& msgThroughput,
+                                     std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                     std::vector<double>& msgp95, std::vector<double>& msgp99);
+static void testPerfSTFlushNever(std::vector<double>& msgThroughput,
+                                 std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                 std::vector<double>& msgp95, std::vector<double>& msgp99);
 void testPerfSTFlushGroup(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
                           std::vector<double>& msgp50, std::vector<double>& msgp95,
                           std::vector<double>& msgp99);
-void testPerfSTFlushCount4096(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
-                              std::vector<double>& msgp50, std::vector<double>& msgp95,
-                              std::vector<double>& msgp99);
-void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
-                            std::vector<double>& msgp50, std::vector<double>& msgp95,
-                            std::vector<double>& msgp99);
-void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
-                              std::vector<double>& msgp50, std::vector<double>& msgp95,
-                              std::vector<double>& msgp99);
-void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
-                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
-                               std::vector<double>& msgp95, std::vector<double>& msgp99);
-void testPerfSTSegmentedFile1mb(std::vector<double>& msgThroughput,
-                                std::vector<double>& ioThroughput, std::vector<double>& msgp50,
-                                std::vector<double>& msgp95, std::vector<double>& msgp99);
-void testPerfSTRotatingFile1mb(std::vector<double>& msgThroughput,
-                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
-                               std::vector<double>& msgp95, std::vector<double>& msgp99);
-void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
-                                 std::vector<double>& ioThroughput, std::vector<double>& msgp50,
-                                 std::vector<double>& msgp95, std::vector<double>& msgp99);
-void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
-                               std::vector<double>& ioThroughput, std::vector<double>& msgp50,
-                               std::vector<double>& msgp95, std::vector<double>& msgp99);
-void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
-                                std::vector<double>& ioThroughput, std::vector<double>& msgp50,
-                                std::vector<double>& msgp95, std::vector<double>& msgp99);
-#ifdef ELOG_ENABLE_FMT_LIB
-void testPerfSTQuantumBinary(std::vector<double>& msgThroughput, std::vector<double>& ioThroughput,
-                             std::vector<double>& msgp50, std::vector<double>& msgp95,
-                             std::vector<double>& msgp99);
-void testPerfSTQuantumBinaryCached(std::vector<double>& msgThroughput,
+static void testPerfSTFlushCount4096(std::vector<double>& msgThroughput,
+                                     std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                     std::vector<double>& msgp95, std::vector<double>& msgp99);
+static void testPerfSTFlushSize1mb(std::vector<double>& msgThroughput,
                                    std::vector<double>& ioThroughput, std::vector<double>& msgp50,
                                    std::vector<double>& msgp95, std::vector<double>& msgp99);
-void testPerfSTQuantumBinaryPreCached(std::vector<double>& msgThroughput,
+static void testPerfSTFlushTime200ms(std::vector<double>& msgThroughput,
+                                     std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                     std::vector<double>& msgp95, std::vector<double>& msgp99);
+static void testPerfSTBufferedFile1mb(std::vector<double>& msgThroughput,
                                       std::vector<double>& ioThroughput,
                                       std::vector<double>& msgp50, std::vector<double>& msgp95,
                                       std::vector<double>& msgp99);
+static void testPerfSTSegmentedFile1mb(std::vector<double>& msgThroughput,
+                                       std::vector<double>& ioThroughput,
+                                       std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                       std::vector<double>& msgp99);
+static void testPerfSTRotatingFile1mb(std::vector<double>& msgThroughput,
+                                      std::vector<double>& ioThroughput,
+                                      std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                      std::vector<double>& msgp99);
+static void testPerfSTDeferredCount4096(std::vector<double>& msgThroughput,
+                                        std::vector<double>& ioThroughput,
+                                        std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                        std::vector<double>& msgp99);
+static void testPerfSTQueuedCount4096(std::vector<double>& msgThroughput,
+                                      std::vector<double>& ioThroughput,
+                                      std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                      std::vector<double>& msgp99);
+static void testPerfSTQuantumCount4096(std::vector<double>& msgThroughput,
+                                       std::vector<double>& ioThroughput,
+                                       std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                       std::vector<double>& msgp99);
+#ifdef ELOG_ENABLE_FMT_LIB
+static void testPerfSTQuantumBinary(std::vector<double>& msgThroughput,
+                                    std::vector<double>& ioThroughput, std::vector<double>& msgp50,
+                                    std::vector<double>& msgp95, std::vector<double>& msgp99);
+static void testPerfSTQuantumBinaryCached(std::vector<double>& msgThroughput,
+                                          std::vector<double>& ioThroughput,
+                                          std::vector<double>& msgp50, std::vector<double>& msgp95,
+                                          std::vector<double>& msgp99);
+static void testPerfSTQuantumBinaryPreCached(std::vector<double>& msgThroughput,
+                                             std::vector<double>& ioThroughput,
+                                             std::vector<double>& msgp50,
+                                             std::vector<double>& msgp95,
+                                             std::vector<double>& msgp99);
+static void testPerfBinaryAcceleration();
 #endif
 
 // TODO: check rdtsc for percentile tests
@@ -576,6 +585,7 @@ static bool sTestSingleThreadQuantum = false;
 static bool sTestSingleThreadQuantumBinary = false;
 static bool sTestSingleThreadQuantumBinaryCached = false;
 static bool sTestSingleThreadQuantumBinaryPreCached = false;
+static bool sTestPerfBinaryAcceleration = false;
 #endif
 
 static int sGroupSize = 0;
@@ -635,6 +645,9 @@ static bool getPerfParam(const char* param) {
 #endif
     } else if (strcmp(param, "single-thread") == 0) {
         sTestSingleThread = true;
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfBinaryAcceleration = true;
+#endif
     } else {
         return false;
     }
@@ -708,6 +721,13 @@ static bool getSingleParam(const char* param) {
 #else
         fprintf(stderr,
                 "Invalid option quantum-bin-pre-cache, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
+    } else if (strcmp(param, "bin-accel") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfBinaryAcceleration = true;
+#else
+        fprintf(stderr, "Invalid option bin-accel, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
         return false;
 #endif
     } else {
@@ -1614,8 +1634,8 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
         auto logStart = std::chrono::high_resolution_clock::now();
 #endif
         ELOG_INFO_EX(logger, "Single thread Test log %u", i);
-        auto logEnd = std::chrono::high_resolution_clock::now();
 #ifdef MEASURE_PERCENTILE
+        auto logEnd = std::chrono::high_resolution_clock::now();
         samples[i] =
             std::chrono::duration_cast<std::chrono::microseconds>(logEnd - logStart).count();
 #endif
@@ -1696,8 +1716,8 @@ void runSingleThreadedTestBinary(const char* title, const char* cfg, double& msg
         auto logStart = std::chrono::high_resolution_clock::now();
 #endif
         ELOG_BIN_INFO_EX(logger, "Single thread Test log {}", i);
-        auto logEnd = std::chrono::high_resolution_clock::now();
 #ifdef MEASURE_PERCENTILE
+        auto logEnd = std::chrono::high_resolution_clock::now();
         samples[i] =
             std::chrono::duration_cast<std::chrono::microseconds>(logEnd - logStart).count();
 #endif
@@ -1777,8 +1797,8 @@ void runSingleThreadedTestBinaryCached(const char* title, const char* cfg, doubl
         auto logStart = std::chrono::high_resolution_clock::now();
 #endif
         ELOG_CACHE_INFO_EX(logger, "Single thread Test log {}", i);
-        auto logEnd = std::chrono::high_resolution_clock::now();
 #ifdef MEASURE_PERCENTILE
+        auto logEnd = std::chrono::high_resolution_clock::now();
         samples[i] =
             std::chrono::duration_cast<std::chrono::microseconds>(logEnd - logStart).count();
 #endif
@@ -1859,8 +1879,8 @@ void runSingleThreadedTestBinaryPreCached(const char* title, const char* cfg, do
         auto logStart = std::chrono::high_resolution_clock::now();
 #endif
         ELOG_ID_INFO_EX(logger, msgId, i);
-        auto logEnd = std::chrono::high_resolution_clock::now();
 #ifdef MEASURE_PERCENTILE
+        auto logEnd = std::chrono::high_resolution_clock::now();
         samples[i] =
             std::chrono::duration_cast<std::chrono::microseconds>(logEnd - logStart).count();
 #endif
@@ -2771,6 +2791,9 @@ void testPerfAllSingleThread() {
     if (sTestSingleAll || sTestSingleThreadQuantumBinaryPreCached) {
         testPerfSTQuantumBinaryPreCached(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
     }
+    if (sTestPerfAll || sTestPerfBinaryAcceleration) {
+        testPerfBinaryAcceleration();
+    }
 #endif
 
     // now write CSV for drawing bar chart with gnuplot
@@ -3269,3 +3292,400 @@ static void testPerfCompoundFlushPolicy() {
         "}";
     runMultiThreadTest("File (Compound Flush Policy)", "elog_bench_compound", cfg);
 }
+
+#ifdef ELOG_ENABLE_FMT_LIB
+enum LogType { LT_NORMAL, LT_FMT, LT_BIN, LT_BIN_CACHE, LT_BIN_PRE_CACHE };
+
+struct Param0 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param0(LogType type) : m_type(type) {}
+    inline void prep() { m_id = elog::getOrCacheFormatMsg("Single thread Test log"); }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log");
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log");
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log");
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log");
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param1Printf {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param1Printf(LogType type) : m_type(type) {}
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            ELOG_INFO_EX(logger, "Single thread Test log %u", i);
+        }
+    }
+};
+
+struct Param1 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param1(LogType type) : m_type(type) {}
+    inline void prep() { m_id = elog::getOrCacheFormatMsg("Single thread Test log {}"); }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u", i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {}", i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {}", i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {}", i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param2 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param2(LogType type) : m_type(type) {}
+    inline void prep() { m_id = elog::getOrCacheFormatMsg("Single thread Test log {} {}"); }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u %u", i, i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} {}", i, i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} {}", i, i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} {}", i, i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param3 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param3(LogType type) : m_type(type) {}
+    inline void prep() { m_id = elog::getOrCacheFormatMsg("Single thread Test log {} {} {}"); }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u %u %u", i, i, i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} {} {}", i, i, i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} {} {}", i, i, i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} {} {}", i, i, i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i, i, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param4 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param4(LogType type) : m_type(type) {}
+    inline void prep() { m_id = elog::getOrCacheFormatMsg("Single thread Test log {} {} {} {}"); }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u %u %u %u", i, i, i, i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} {} {} {}", i, i, i, i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} {} {} {}", i, i, i, i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} {} {} {}", i, i, i, i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i, i, i, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param5 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param5(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg("Single thread Test log {} {} {} {} {}");
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u %u %u %u %u", i, i, i, i, i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} {} {} {} {}", i, i, i, i,
+                                     i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} {} {} {} {}", i, i, i, i,
+                                     i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} {} {} {} {}", i, i, i, i,
+                                       i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i, i, i, i, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param6 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param6(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg("Single thread Test log {} {} {} {} {} {}");
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u %u %u %u %u %u", i, i, i, i, i,
+                                 i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {}", i, i, i, i,
+                                     i, i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {}", i, i, i, i,
+                                     i, i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {}", i, i, i,
+                                       i, i, i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i, i, i, i, i, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param7 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param7(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg("Single thread Test log {} {} {} {} {} {} {}");
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u %u %u %u %u %u %u", i, i, i, i,
+                                 i, i, i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {} {}", i, i, i,
+                                     i, i, i, i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {} {}", i, i, i,
+                                     i, i, i, i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {} {}", i, i,
+                                       i, i, i, i, i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i, i, i, i, i, i, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct Param8 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    Param8(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg("Single thread Test log {} {} {} {} {} {} {} {}");
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u %u %u %u %u %u %u %u", i, i, i,
+                                 i, i, i, i, i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {} {} {}", i, i,
+                                     i, i, i, i, i, i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {} {} {}", i, i,
+                                     i, i, i, i, i, i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} {} {} {} {} {} {} {}", i,
+                                       i, i, i, i, i, i, i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i, i, i, i, i, i, i, i);
+                    break;
+            }
+        }
+    }
+};
+
+template <typename TestCode>
+static void runBinaryAccelTest(const char* title, const char* cfg, TestCode& testCode,
+                               double& msgThroughput, uint32_t msgCount = ST_MSG_COUNT,
+                               bool enableTrace = false) {
+    if (sMsgCnt > 0) {
+        msgCount = sMsgCnt;
+    }
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init %s test, aborting\n", title);
+        return;
+    }
+
+    if (enableTrace) {
+        elog::setTraceMode(true);
+    }
+
+    fprintf(stderr, "\nRunning %s binary acceleration test\n", title);
+    elog::ELogSource* logSource = elog::defineLogSource("elog.bench", true);
+    elog::ELogLogger* logger = logSource->createPrivateLogger();
+
+    // execute test
+    testCode.prep();
+    uint64_t bytesStart = logTarget->getBytesWritten();
+    auto start = std::chrono::high_resolution_clock::now();
+    testCode.run(logger, msgCount);
+    auto end0 = std::chrono::high_resolution_clock::now();
+    fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
+
+    uint64_t writeCount = 0;
+    uint64_t readCount = 0;
+    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    uint64_t bytesEnd = logTarget->getBytesWritten();
+    std::chrono::microseconds testTime0 =
+        std::chrono::duration_cast<std::chrono::microseconds>(end0 - start);
+    std::chrono::microseconds testTime =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    // print test result
+    msgThroughput = msgCount / (double)testTime0.count() * 1000000.0f;
+    fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", msgThroughput);
+
+    termELog();
+}
+
+static void writeAccelCsvFile(const char* baseName, std::vector<double>& msgThroughput) {
+    std::string fname = std::string("./bench_data/elog_bench_bin_accel_") + baseName + "_msg.csv";
+    std::ofstream f(fname, std::ios_base::trunc);
+
+    // print in CSV format for gnuplot
+    for (uint32_t i = 0; i < msgThroughput.size(); ++i) {
+        f << i << ", " << std::fixed << std::setprecision(2) << msgThroughput[i] << std::endl;
+    }
+    f.close();
+}
+
+void testPerfBinaryAcceleration() {
+    // test single-threaded for normal, binary, cached, pre-cached over quantum log target:
+    // 0-8 int params, normal size log format message
+    // varying message length, 1 parameter
+    const char* cfg =
+        "async://quantum?quantum_buffer_size=2000000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_quantum_accel_baseline.log?file_buffer_size=1mb&file_lock=no";
+    std::vector<double> normalThroughput;
+    std::vector<double> fmtThroughput;
+    std::vector<double> binThroughput;
+    std::vector<double> binCacheThroughput;
+    std::vector<double> binPreCacheThroughput;
+
+    double msgPerf = 0.0f;
+
+#define RUN_TEST(id, type, resArray)                                                            \
+    {                                                                                           \
+        Param##id param##id(type);                                                              \
+        runBinaryAccelTest("Binary Acceleration Param" #id " " #type, cfg, param##id, msgPerf); \
+        resArray.push_back(msgPerf);                                                            \
+    }
+
+#define RUN_TEST_SET(type, resArray) \
+    RUN_TEST(0, type, resArray);     \
+    RUN_TEST(1, type, resArray);     \
+    RUN_TEST(2, type, resArray);     \
+    RUN_TEST(3, type, resArray);     \
+    RUN_TEST(4, type, resArray);     \
+    RUN_TEST(5, type, resArray);     \
+    RUN_TEST(6, type, resArray);     \
+    RUN_TEST(7, type, resArray);     \
+    RUN_TEST(8, type, resArray);
+
+    RUN_TEST_SET(LT_NORMAL, normalThroughput);
+    RUN_TEST_SET(LT_FMT, fmtThroughput);
+    RUN_TEST_SET(LT_BIN, binThroughput);
+    RUN_TEST_SET(LT_BIN_CACHE, binCacheThroughput);
+    RUN_TEST_SET(LT_BIN_PRE_CACHE, binPreCacheThroughput);
+
+    // write results
+    writeAccelCsvFile("normal", normalThroughput);
+    writeAccelCsvFile("fmt", fmtThroughput);
+    writeAccelCsvFile("bin", binThroughput);
+    writeAccelCsvFile("bin_cache", binCacheThroughput);
+    writeAccelCsvFile("bin_pre_cache", binPreCacheThroughput);
+}
+#endif
