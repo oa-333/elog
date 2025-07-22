@@ -35,6 +35,12 @@
 
 namespace elog {
 
+/**************************************************************************************
+ *
+ *                          Initialization/Termination Interface
+ *
+ **************************************************************************************/
+
 /**
  * @brief Initializes the ELog library.
  * @param configFile Optional configuration file, matching the format specified by @ref
@@ -77,6 +83,12 @@ extern ELOG_API bool isTraceEnabled();
 /** @brief Registers a schema handler by name. */
 extern ELOG_API bool registerSchemaHandler(const char* schemeName,
                                            ELogSchemaHandler* schemaHandler);
+
+/**************************************************************************************
+ *
+ *                              Configuration Interface
+ *
+ **************************************************************************************/
 
 /**
  * @brief Configures the ELog System from a properties configuration file.
@@ -234,9 +246,11 @@ extern ELOG_API bool configureByStr(const char* configStr, bool defineLogSources
 extern ELOG_API bool configure(ELogConfig* config, bool defineLogSources = true,
                                bool defineMissingPath = true);
 
-/**
- * Log Target Management Interface
- */
+/**************************************************************************************
+ *
+ *                        Log Target Management Interface
+ *
+ **************************************************************************************/
 
 /**
  * @brief Adds a log target to existing log targets.
@@ -423,9 +437,11 @@ extern ELOG_API void removeLogTarget(ELogTargetId targetId);
 /** @brief Removes all log targets. */
 extern ELOG_API void clearAllLogTargets();
 
-/**
- * Log Source Management Interface
- */
+/**************************************************************************************
+ *
+ *                        Log Source Management Interface
+ *
+ **************************************************************************************/
 
 // log sources
 /**
@@ -451,9 +467,11 @@ extern ELOG_API ELogSource* getLogSource(ELogSourceId logSourceId);
 /** @brief Retrieves the root log source. */
 extern ELOG_API ELogSource* getRootLogSource();
 
-/**
- * Logger Utility Interface
- */
+/**************************************************************************************
+ *
+ *                           Logger Access Interface
+ *
+ **************************************************************************************/
 
 /**
  * @brief Retrieves the default logger of the elog system.
@@ -491,9 +509,11 @@ extern ELOG_API ELogLogger* getSharedLogger(const char* qualifiedSourceName,
                                             bool defineLogSource = true,
                                             bool defineMissingPath = true);
 
-/**
- * Log Level Interface
- */
+/**************************************************************************************
+ *
+ *                              Log Level Interface
+ *
+ **************************************************************************************/
 
 /**
  * @brief Retrieves the global log level (the log level of the root log source).
@@ -547,9 +567,11 @@ extern ELOG_API void setLogLevel(ELogLevel logLevel, ELogPropagateMode propagate
  */
 // extern ELOG_API bool configureLogLevelFormat(const char* logLevelConfig);
 
-/**
- * Log Formatting Interface
- */
+/**************************************************************************************
+ *
+ *                              Log Formatting Interface
+ *
+ **************************************************************************************/
 
 /**
  * @brief Configures the format of log lines.
@@ -584,9 +606,11 @@ extern ELOG_API bool configureLogFormat(const char* logFormat);
 /** @brief Installs a custom log formatter. */
 extern ELOG_API void setLogFormatter(ELogFormatter* logFormatter);
 
-/**
- * Format message caching
- */
+/**************************************************************************************
+ *
+ *                      Format Message Caching Interface
+ *
+ **************************************************************************************/
 
 /**
  * @brief Caches a format message.
@@ -613,9 +637,11 @@ extern ELOG_API const char* getCachedFormatMsg(ELogCacheEntryId entryId);
  */
 extern ELOG_API ELogCacheEntryId getOrCacheFormatMsg(const char* fmt);
 
-/**
- * User-controlled field selector configuration
- */
+/**************************************************************************************
+ *
+ *                  User-controlled Field Selector Configuration
+ *
+ **************************************************************************************/
 
 /** @brief Sets the application's name, to be referenced by token ${app}. */
 extern ELOG_API void setAppName(const char* appName);
@@ -623,9 +649,11 @@ extern ELOG_API void setAppName(const char* appName);
 /** @brief Sets the current thread's name, to be referenced by token ${tname}. */
 extern ELOG_API void setCurrentThreadName(const char* threadName);
 
-/**
- * Log Filtering Interface
- */
+/**************************************************************************************
+ *
+ *                              Log Filtering Interface
+ *
+ **************************************************************************************/
 
 /** @brief Configures top-level log filter form configuration string. */
 extern ELOG_API bool configureLogFilter(const char* logFilterCfg);
@@ -656,9 +684,11 @@ extern ELOG_API bool setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFi
  */
 extern ELOG_API bool filterLogMsg(const ELogRecord& logRecord);
 
-/**
- * Stack Trace Logging Interface
- */
+/**************************************************************************************
+ *
+ *                          Stack Trace Logging Interface
+ *
+ **************************************************************************************/
 
 #ifdef ELOG_ENABLE_STACK_TRACE
 /**
@@ -701,9 +731,11 @@ extern ELOG_API void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel = E
                                       dbgutil::StackEntryFormatter* formatter = nullptr);
 #endif
 
-/**
- * System Error Logging Interface
- */
+/**************************************************************************************
+ *
+ *                          System Error Logging Interface
+ *
+ **************************************************************************************/
 
 /** @brief Converts system error code to string. */
 extern ELOG_API char* sysErrorToStr(int sysErrorCode);
@@ -727,10 +759,13 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
     }
 }
 
-/** @brief Queries whether the default logger can log a record with a given log level. */
-// inline bool canLog(ELogLevel logLevel) { return getValidLogger(nullptr)->canLog(logLevel); }
-
 }  // namespace elog
+
+/**************************************************************************************
+ *
+ *                                  Logging Macros
+ *
+ **************************************************************************************/
 
 /** @def Define a unified function name macro */
 #ifdef ELOG_GCC
