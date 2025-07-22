@@ -167,7 +167,10 @@ public:
         // reserve 1 byte for parameter count
         uint8_t paramCountReserve = 0;
         recordBuilder->appendData(paramCountReserve);
-        encodeMsg(recordBuilder, fmt, 0, args...);
+        // append early format string, instead of passing it around in variadic template
+        // NOTE: we must append terminating null as well, for deserialization
+        recordBuilder->append(fmt, strlen(fmt) + 1);
+        encodeMsg(recordBuilder, 0, args...);
         finishLog(recordBuilder);
     }
 
@@ -184,7 +187,10 @@ public:
         // reserve 1 byte for parameter count
         uint8_t paramCountReserve = 0;
         recordBuilder->appendData(paramCountReserve);
-        encodeMsg(recordBuilder, cacheEntryId, 0, args...);
+        // append early cache entry id, instead of passing it around in variadic template
+        // NOTE: we must append terminating null as well, for deserialization
+        recordBuilder->appendData(cacheEntryId);
+        encodeMsg(recordBuilder, 0, args...);
         finishLog(recordBuilder);
     }
 
@@ -242,50 +248,24 @@ private:
 
 #ifdef ELOG_ENABLE_FMT_LIB
     template <typename T, typename... Args>
-    void encodeMsg(ELogRecordBuilder* recordBuilder, const char* fmt, uint8_t paramCount, T arg,
+    void encodeMsg(ELogRecordBuilder* recordBuilder, uint64_t paramCount, T arg, Args... args) {
+        recordBuilder->appendData(encodeType<T>());
+        recordBuilder->appendData(arg);
+        encodeMsg(recordBuilder, paramCount + 1, args...);
+    }
+
+    template <typename... Args>
+    void encodeMsg(ELogRecordBuilder* recordBuilder, uint64_t paramCount, const char* arg,
                    Args... args) {
-        recordBuilder->appendData(encodeType<T>());
-        recordBuilder->appendData(arg);
-        encodeMsg(recordBuilder, fmt, paramCount + 1, args...);
-    }
-
-    template <typename... Args>
-    void encodeMsg(ELogRecordBuilder* recordBuilder, const char* fmt, uint8_t paramCount,
-                   const char* arg, Args... args) {
         recordBuilder->appendData(ELOG_STRING_CODE);
         // NOTE: we must ensure terminating null is added, otherwise garbage will be added by other
         // parameters or format string
         recordBuilder->append(arg, strlen(arg) + 1);
-        encodeMsg(recordBuilder, fmt, paramCount + 1, args...);
+        encodeMsg(recordBuilder, paramCount + 1, args...);
     }
 
-    void encodeMsg(ELogRecordBuilder* recordBuilder, const char* fmt, uint8_t paramCount) {
-        recordBuilder->append(fmt);
-        recordBuilder->appendDataAt(paramCount, 0);
-    }
-
-    template <typename T, typename... Args>
-    void encodeMsg(ELogRecordBuilder* recordBuilder, ELogCacheEntryId cacheEntryId,
-                   uint8_t paramCount, T arg, Args... args) {
-        recordBuilder->appendData(encodeType<T>());
-        recordBuilder->appendData(arg);
-        encodeMsg(recordBuilder, cacheEntryId, paramCount + 1, args...);
-    }
-
-    template <typename... Args>
-    void encodeMsg(ELogRecordBuilder* recordBuilder, ELogCacheEntryId cacheEntryId,
-                   uint8_t paramCount, const char* arg, Args... args) {
-        recordBuilder->appendData(ELOG_STRING_CODE);
-        // NOTE: we must ensure terminating null is added, otherwise garbage will be added by other
-        // parameters or format string
-        recordBuilder->append(arg, strlen(arg) + 1);
-        encodeMsg(recordBuilder, cacheEntryId, paramCount + 1, args...);
-    }
-
-    void encodeMsg(ELogRecordBuilder* recordBuilder, ELogCacheEntryId cacheEntryId,
-                   uint8_t paramCount) {
-        recordBuilder->appendData(cacheEntryId);
-        recordBuilder->appendDataAt(paramCount, 0);
+    void encodeMsg(ELogRecordBuilder* recordBuilder, uint64_t paramCount) {
+        recordBuilder->appendDataAt((uint8_t)paramCount, 0);
     }
 #endif
 };

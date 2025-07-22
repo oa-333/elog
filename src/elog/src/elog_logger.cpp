@@ -160,6 +160,19 @@ bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBu
     const char* bufPtr = logRecord.m_logMsg;
     uint8_t paramCount = *(uint8_t*)bufPtr;
     size_t offset = 1;
+
+    // extract format string
+    const char* fmtStr = nullptr;
+    if (logRecord.m_flags & ELOG_RECORD_FMT_CACHED) {
+        ELogCacheEntryId cacheEntryId = *(ELogCacheEntryId*)(bufPtr + offset);
+        fmtStr = ELogCache::getCachedFormatMsg(cacheEntryId);
+        offset += sizeof(ELogCacheEntryId);
+    } else {
+        fmtStr = bufPtr + offset;
+        offset += strlen(fmtStr) + 1;
+    }
+
+    // prepare argument list for fmtlib
     fmt::dynamic_format_arg_store<fmt::format_context> store;
 
 #define ELOG_COLLECT_ARG(argType)                        \
@@ -219,15 +232,6 @@ bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBu
                                   (unsigned)code);
                 return false;
         }
-    }
-
-    // extract format string
-    const char* fmtStr = nullptr;
-    if (logRecord.m_flags & ELOG_RECORD_FMT_CACHED) {
-        ELogCacheEntryId cacheEntryId = *(ELogCacheEntryId*)(bufPtr + offset);
-        fmtStr = ELogCache::getCachedFormatMsg(cacheEntryId);
-    } else {
-        fmtStr = bufPtr + offset;
     }
 
     // now we can format
