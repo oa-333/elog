@@ -3630,18 +3630,21 @@ static void runBinaryAccelTest(const char* title, const char* cfg, TestCode& tes
     termELog();
 }
 
-static void writeAccelCsvFile(const char* baseName, std::vector<double>& msgThroughput) {
-    std::string fname = std::string("./bench_data/elog_bench_bin_accel_") + baseName + "_msg.csv";
+static void writeAccelCsvFile(const char* testName, const char* baseName,
+                              std::vector<double>& msgThroughput, uint32_t* tics = nullptr) {
+    std::string fname =
+        std::string("./bench_data/elog_bench_bin_accel_") + testName + "_" + baseName + "_msg.csv";
     std::ofstream f(fname, std::ios_base::trunc);
 
     // print in CSV format for gnuplot
     for (uint32_t i = 0; i < msgThroughput.size(); ++i) {
-        f << i << ", " << std::fixed << std::setprecision(2) << msgThroughput[i] << std::endl;
+        f << ((tics == nullptr) ? i : tics[i]) << ", " << std::fixed << std::setprecision(2)
+          << msgThroughput[i] << std::endl;
     }
     f.close();
 }
 
-void testPerfBinaryAcceleration() {
+void testPerfParamCount() {
     // test single-threaded for normal, binary, cached, pre-cached over quantum log target:
     // 0-8 int params, normal size log format message
     // varying message length, 1 parameter
@@ -3682,10 +3685,424 @@ void testPerfBinaryAcceleration() {
     RUN_TEST_SET(LT_BIN_PRE_CACHE, binPreCacheThroughput);
 
     // write results
-    writeAccelCsvFile("normal", normalThroughput);
-    writeAccelCsvFile("fmt", fmtThroughput);
-    writeAccelCsvFile("bin", binThroughput);
-    writeAccelCsvFile("bin_cache", binCacheThroughput);
-    writeAccelCsvFile("bin_pre_cache", binPreCacheThroughput);
+    writeAccelCsvFile("param_count", "normal", normalThroughput);
+    writeAccelCsvFile("param_count", "fmt", fmtThroughput);
+    writeAccelCsvFile("param_count", "bin", binThroughput);
+    writeAccelCsvFile("param_count", "bin_cache", binCacheThroughput);
+    writeAccelCsvFile("param_count", "bin_pre_cache", binPreCacheThroughput);
+}
+
+struct MsgTest50 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    MsgTest50(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg("Single thread Test log {} 50 chars long xxxxxxxxxx");
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger, "Single thread Test log %u 50 chars long xxxxxxxxxx", i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger, "Single thread Test log {} 50 chars long xxxxxxxxxx",
+                                     i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger, "Single thread Test log {} 50 chars long xxxxxxxxxx",
+                                     i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(logger, "Single thread Test log {} 50 chars long xxxxxxxxxx",
+                                       i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct MsgTest100 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    MsgTest100(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg(
+            "Single thread Test log {} 100 chars long "                      // 41
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");  // 59
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(logger,
+                                 "Single thread Test log {} 100 chars long "
+                                 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                                 i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(logger,
+                                     "Single thread Test log {} 100 chars long "
+                                     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                                     i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(logger,
+                                     "Single thread Test log {} 100 chars long "
+                                     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                                     i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 100 chars long "
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct MsgTest200 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    MsgTest200(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg(
+            "Single thread Test log {} 200 chars long "                     // 41
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");                    // 40
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 200 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 200 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 200 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 200 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct MsgTest500 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    MsgTest500(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg(
+            "Single thread Test log {} 500 chars long "                     // 41
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");                    // 40
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 500 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 500 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 500 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 500 chars long "                     // 41
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   // 59
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i);
+                    break;
+            }
+        }
+    }
+};
+
+struct MsgTest1000 {
+    LogType m_type;
+    elog::ELogCacheEntryId m_id;
+    MsgTest1000(LogType type) : m_type(type) {}
+    inline void prep() {
+        m_id = elog::getOrCacheFormatMsg(
+            "Single thread Test log {} 1000 chars long "                    // 42
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"    // 58
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");                    // 40
+    }
+    inline void run(elog::ELogLogger* logger, uint32_t msgCount) {
+        for (uint32_t i = 0; i < msgCount; ++i) {
+            switch (m_type) {
+                case LT_NORMAL:
+                    ELOG_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 1000 chars long "                    // 42
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"    // 58
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_FMT:
+                    ELOG_FMT_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 1000 chars long "                    // 42
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"    // 58
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN:
+                    ELOG_BIN_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 1000 chars long "                    // 42
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"    // 58
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN_CACHE:
+                    ELOG_CACHE_INFO_EX(
+                        logger,
+                        "Single thread Test log {} 1000 chars long "                    // 42
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"    // 58
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                      // 40
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  // 60
+                        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                        i);
+                    break;
+                case LT_BIN_PRE_CACHE:
+                    ELOG_ID_INFO_EX(logger, m_id, i);
+                    break;
+            }
+        }
+    }
+};
+
+void testPerfMsgLen() {
+    // test single-threaded for normal, binary, cached, pre-cached over quantum log target:
+    // varying message length, 1 parameter
+    const char* cfg =
+        "async://quantum?quantum_buffer_size=2000000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_quantum_accel_baseline.log?file_buffer_size=1mb&file_lock=no";
+    std::vector<double> normalThroughput;
+    std::vector<double> fmtThroughput;
+    std::vector<double> binThroughput;
+    std::vector<double> binCacheThroughput;
+    std::vector<double> binPreCacheThroughput;
+
+    double msgPerf = 0.0f;
+
+#define RUN_MSG_LEN_TEST(len, type, resArray)                          \
+    {                                                                  \
+        MsgTest##len test##len(type);                                  \
+        std::string testName = "Binary Acceleration Message Length ("; \
+        testName += std::to_string(len);                               \
+        testName += " bytes)";                                         \
+        runBinaryAccelTest(testName.c_str(), cfg, test##len, msgPerf); \
+        resArray.push_back(msgPerf);                                   \
+    }
+
+#define RUN_MSG_LEN_TEST_SET(type, resArray) \
+    RUN_MSG_LEN_TEST(50, type, resArray);    \
+    RUN_MSG_LEN_TEST(100, type, resArray);   \
+    RUN_MSG_LEN_TEST(200, type, resArray);   \
+    RUN_MSG_LEN_TEST(500, type, resArray);   \
+    RUN_MSG_LEN_TEST(1000, type, resArray);
+
+    RUN_MSG_LEN_TEST_SET(LT_NORMAL, normalThroughput);
+    RUN_MSG_LEN_TEST_SET(LT_FMT, fmtThroughput);
+    RUN_MSG_LEN_TEST_SET(LT_BIN, binThroughput);
+    RUN_MSG_LEN_TEST_SET(LT_BIN_CACHE, binCacheThroughput);
+    RUN_MSG_LEN_TEST_SET(LT_BIN_PRE_CACHE, binPreCacheThroughput);
+
+    // write results
+    uint32_t tics[] = {10, 100, 200, 500, 1000};
+    writeAccelCsvFile("msg_len", "normal", normalThroughput, tics);
+    writeAccelCsvFile("msg_len", "fmt", fmtThroughput, tics);
+    writeAccelCsvFile("msg_len", "bin", binThroughput, tics);
+    writeAccelCsvFile("msg_len", "bin_cache", binCacheThroughput, tics);
+    writeAccelCsvFile("msg_len", "bin_pre_cache", binPreCacheThroughput, tics);
+}
+
+void testPerfBinaryAcceleration() {
+    testPerfParamCount();
+    testPerfMsgLen();
 }
 #endif

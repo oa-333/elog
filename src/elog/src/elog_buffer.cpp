@@ -35,15 +35,7 @@ bool ELogBuffer::resize(uint32_t newSize) {
         }
         m_dynamicBuffer = newBuffer;
         if (shouldCopy && m_offset > 0) {
-            size_t bytesCopied =
-                elog_strncpy(m_dynamicBuffer, m_fixedBuffer, actualNewSize, m_offset);
-            if (bytesCopied != m_offset) {
-                ELOG_REPORT_ERROR(
-                    "Internal error, failed to copy all bytes in log buffer (expecting %u, but "
-                    "only %zu bytes copied)",
-                    m_offset, bytesCopied);
-                return false;
-            }
+            memcpy(m_dynamicBuffer, m_fixedBuffer, m_offset);
         }
         m_bufferSize = actualNewSize;
     }
@@ -73,7 +65,7 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     int res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, args);
     if (res < 0) {
         // output error occurred, report this, this is highly unexpected
-        ELOG_REPORT_ERROR("Failed to format message buffer");
+        ELOG_REPORT_ERROR("Failed to format message buffer, I/O error");
         return false;
     }
 
@@ -92,8 +84,8 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
         return true;
     }
 
-    // buffer too small
-    if (!ensureBufferLength(res32)) {
+    // buffer too small (make room also for terminating null, otherwise we can fail again)
+    if (!ensureBufferLength(res32 + 1)) {
         return false;
     }
     // this time we must succeed
@@ -104,7 +96,7 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     // check again for error
     if (res < 0) {
         // output error occurred, report this, this is highly unexpected
-        ELOG_REPORT_ERROR("Failed to format message buffer (second time)");
+        ELOG_REPORT_ERROR("Failed to format message buffer (I/O error, second time)");
         return false;
     }
 
@@ -113,9 +105,12 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
 
     // NOTE: cast to int is safe (since size is limited to ELOG_MAX_BUFFER_SIZE = 16KB)
     if (res32 >= sizeLeft) {
-        ELOG_REPORT_ERROR("Failed to format string second time (unexpected truncation)");
+        ELOG_REPORT_ERROR(
+            "Internal error, failed to format string second time (unexpected truncation)");
         return false;
     }
+
+    // NOTE: we continue appending at the same position of the terminating null
     m_offset += res32;
     return true;
 }
@@ -131,20 +126,16 @@ bool ELogBuffer::append(const char* msg, size_t len /* = 0 */) {
     if (len >= UINT32_MAX) {
         return false;
     }
-    if (!ensureBufferLength((uint32_t)len)) {
+    // make room also for terminating null
+    if (!ensureBufferLength((uint32_t)(len + 1))) {
         return false;
     }
     // NOTE: at this point it is guaranteed that the added len will not exceed maximum buffer size,
     // otherwise ensureBufferLength() would have failed
-    size_t bytesCopied = elog_strncpy(getRef() + m_offset, msg, size() - m_offset, len);
-    if (bytesCopied != len) {
-        ELOG_REPORT_ERROR(
-            "Internal error, failed to copy all bytes in log buffer (expecting %u, but only %zu "
-            "bytes copied)",
-            m_bufferSize, bytesCopied);
-        return false;
-    }
-    m_offset += (uint32_t)bytesCopied;
+    memcpy(getRef() + m_offset, msg, len + 1);
+    m_offset += (uint32_t)len;
+
+    // NOTE: we continue appending at the same position of the terminating null
     return true;
 }
 
