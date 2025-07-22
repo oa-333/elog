@@ -117,7 +117,7 @@ The ELog library provides the following notable features:
     - Although perhaps not the fastest out there, ELog still provides very high performance logging with low overhead
     - Minimal formatting on logging application side, possibly combined with lock-free asynchronous logging
     - Full formatting takes place on background thread
-    - **160 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, **scalable** in multi-threaded scenarios)
+    - **130 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, **scalable** in multi-threaded scenarios), coupled with binary, pre-cached logging
     - Check out the [benchmarks](#Benchmarks) below
 - Synchronous and asynchronous logging schemes
     - Synchronous logging to file, allowing for efficient buffering and log rotation/segmentation
@@ -199,7 +199,7 @@ The ELog library provides the following notable features:
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
-- Logging hub framework for log pre-processing before shipping to server analysis (offload to endpoints)
+- Logging hub framework for log pre-processing before shipping to server analysis (offload to edge compute)
 
 
 ## Common Use Cases
@@ -1820,38 +1820,54 @@ TBD
 
 The following unofficial benchmarks results illustrate the high performance of the ELog library.  
 
-The benchmark is divided into four parts:
+The benchmark is divided into five parts:
 
 - Test the impact of empty logging with private and shared logger
 - Search for best configuration of each flush policy (count, size, time)
 - Single-threaded comparison of all log targets (file, async file)
 - Multi-threaded scaling of each tested configuration
+- Binary Logging and Caching Acceleration Test
 
 All multi-threaded tests were conducted with each thread hammering its own private logger.
 Shared logger multi-threaded tests are provided only for the quantum log target.
 
 All tests were performed on Windows, compiling with g++ for MinGW, running under MSYSTEM console.  
-All tests were conducted on commodity hardware.
+All tests were conducted on commodity hardware (16 CPU machine, 32 hyper-threaded).
 
-Please note that all benchmarks calculate the average value and not percentiles.  
-The reason for that is that collecting each sample time affected greatly the test, reducing performance up to 20%.  
-Since there is no interaction with external system (at least in this benchmark), only averages are presented,  
+Please note that all benchmarks calculate the average value and not percentiles,  
+due to the great effect of sample collection with each log operation, resulting in performance degradation of up to 20%.  
+Since there is no interaction with external systems (at least in this benchmark), only averages are presented,  
 as outliers are not expected.
 
 ### Benchmark Highlights
 
-The following table summarizes the main KPIs of the ELog library:
+The following table summarizes the throughput of various logging scenarios:
+
+| KPI | Value |
+|:---|---:|
+| Synchronous Logging Throughput (flush each message) | 184181 Msg/Sec |
+| Synchronous Logging Throughput (no flush) | 1.88 Million Msg/Sec |
+| Synchronous Buffered* Logging Throughput (no flush) | 2.33 Million Msg/Sec |
+| Asynchronous Logging Throughput | 2.89 Million Msg/Sec |
+| Asynchronous Lock-free Logging Throughput | 5.3 Million Msg/Sec |
+| Asynchronous Lock-free Binary Pre-Cached Logging Throughput** | 7.6 Million Msg/Sec |
+
+The following table summarizes the latency of various logging scenarios:
 
 | KPI | Value |
 |:---|---:|
 | Private Logger Latency (no log issued) | 0.2 nano-seconds |
 | Shared Logger Latency (no log issued) | 1.3 nano-seconds |
-| Synchronous Logging Throughput (flush each message) | 163444 Msg/Sec |
-| Synchronous Logging Throughput (delayed flush) | 2.4 Million Msg/Sec |
-| Asynchronous Logging Throughput* (single-threaded) | 6.4 Million Msg/Sec |
-| Asynchronous Logging Latency (single-threaded) | 156 nano-seconds |
+| Synchronous Logging Latency (flush each message) | 5.5 micro-seconds |
+| Synchronous Logging Latency (no flush) | 533 nano-seconds |
+| Synchronous Buffered Logging Latency (no flush) | 429 nano-seconds |
+| Asynchronous Logging Throughput Latency | 347 nano-seconds |
+| Asynchronous Lock-free Logging Throughput Latency | 189 nano-seconds |
+| Asynchronous Lock-free Binary Pre-Cached Logging Throughput* | 132 nano-seconds |
 
-NOTE: Asynchronous logging throughput refers to the logger's capacity to push messages to the end log target, not to the throughput of disk writing.
+Notes:  
+1. The buffered logging is an internal buffering implemented by ELog, which exhibits slightly better performance than default OS implementation.  
+2. Asynchronous logging throughput refers to the logger's capacity to push messages for logging, not to the actual disk writing throughput.
 
 ### Empty Logging Benchmark
 
@@ -1869,14 +1885,25 @@ So although both exhibit very low impact (10000 messages took 2 and 13 microseco
 the private is clearly performing better (X6.5 times faster).  
 Note that the latency on the logging application is minimal: 0.2 and 1.3 nano-seconds on private and shared logger respectively. 
 
+### Synchronous File Log Target Flush Baseline
+
+The following table summarizes the baseline results for all flush policy tests:
+
+| Flush Policy | Value |
+|:---|---:|
+| Immediate (flush each message) | 184181 Msg/Sec |
+| Never (no flush) | 1.88 Million Msg/Sec |
+
 ### Synchronous File Log Target with Count Flush Policy
 
 Following are the benchmark test results for synchronous file log target with flush_policy=count, setting varying count values:
 
 ![plot](./src/elog_bench/png/flush_count.png)
 
-As it can be seen, flush_count=512 and flush_count=1024 both yield the best results (around 2.4 Million messages per second), and setting a higher number does need yield any better results.  
+As it can be seen, form flush_count=256 and above, all graphs look asymptotic to each other, peaking at around 2.5M msg/sec at 3 threads, after which the behavior becomes not scalable.  
 Most probably this has to do with underlying system file buffers.  
+Therefore, both for single-threaded and multi-threaded scenarios, it suffices to set flush_count to 256.
+
 NOTE: Doing direct/async I/O is not being considered at this time.
 
 ### Synchronous File Log Target with Size Flush Policy
@@ -1886,8 +1913,8 @@ Following are the benchmark test results for synchronous file log target with fl
 ![plot](./src/elog_bench/png/flush_size.png)
 
 The results of this test are rather illuminating.
-First, we can conclude that setting buffer size of 64KB yields top results, peaking at around 2.2 Million messages per second.
-Second, increasing the buffer size does not have any notable effect.  
+First, we can conclude that setting flush_size to 64KB yields top results, peaking at around 2.5M msg/sec at 3 threads, after which the behavior becomes not scalable.  
+Second, increasing the flush_size does not have any notable effect. flush_size of 1MB looks just the same.  
 Again, this is most probably related to the underlying system file buffers.
 
 ### Synchronous File Log Target with Time Flush Policy
@@ -1896,10 +1923,72 @@ Following are the benchmark test results for synchronous file log target with fl
 
 ![plot](./src/elog_bench/png/flush_time.png)
 
-The results here shows that a flush period of 500 ms and 1000ms yield the best results, but the differences are not so clear.  
-This again probably has to do with underlying buffer size, and the right timing to flush them (not too early and not too late).
+The fact that all the graphs look the same indicates, that the time value has no effect.  
+Most probably the internal buffer gets full before the flush policy has a chance to flush, except for occasionally flushing semi-full buffers.  
 
-### Single-threaded Synchronous File Log Target Comparison
+### Synchronous File Log Target Flush Policy Summary
+
+The following plot compares several flush policy with baseline (multi-threaded test):
+
+![plot](./src/elog_bench/png/flush.png)
+
+As it can be seen, all flush policies behave the same, regardless of configuration, just like the Never Flush Policy.  
+This means that using a simple FILE* without flushing is probably the best thing to do.  
+But before we come up with that kind of a conclusion, let's first take a look at buffered, segmented, and rotation log targets.
+
+### Synchronous Buffered File Log Target
+
+Following are the benchmark test results for synchronous file log target, using internal buffering scheme, without flushing:
+
+![plot](./src/elog_bench/png/file_buffered.png)
+
+Although behavior is a bit unstable, we can see a trend:
+
+1. There is only a slight performance degradation
+2. Buffer size of 64 kb performs quite well compared with much higher buffer sizes
+3. Although large buffer sizes may at times exhibit better performance, their behavior is inconsistent
+
+Overall, compared with other flush policy, and especially compared with Never Flush Policy, we see better results, both with respect to single-threaded performance, and with respect to multi-threaded scalability.
+
+### Synchronous Segmented File Log Target
+
+This type of log target poses a different challenge, with two more occasional file I/O operations: open and close.  
+The segmented file log target uses a temporary queue during the segment switch, such that logging threads are not stuck waiting for a new segment to be opened, unless the queue gets full. Only the segment switching thread pays the penalty of open and close file.  
+The segmented file log target can be used in conjunction with buffered logging.
+
+The segmented file log target was conducted with buffered logging, using 64kb buffer size:
+
+![plot](./src/elog_bench/png/file_segmented.png)
+
+Here are some key points to take from this benchmark:
+
+1. For single-threaded scenario it may benefit to use larger segment sizes
+2. For multi-threaded scenarios the segment size has no real effect
+3. From some point on, performance is somewhat steady, around 2M msg/sec
+
+Compared with single file logging, the segmented file log target demonstrates better behavior, and that is due to the lock-free queue being used during segment switch, which allows logging threads to fill the pending message queue. If the queue gets full, then logging threads begin to wait, so it depends how much time it takes to open a new segment. The tests above were done with 1 million pending log messages per segment.
+
+More experimentation may be required with this log target in order to achieve better results.
+
+### Synchronous Rotating File Log Target
+
+The rotating file log target is very similar to the segmented log target, only that at some point it reuses old segments,  
+after truncating them.  
+The test was conduct with rotation of 5 log segments, using varying segment size, and 64kb file buffering.  
+The amount of log data causes rotation to take place 15 times (i.e. there is a total of 75 segments).  
+
+Here are the results of the benchmark:
+We expect to see therefore similar results as with segmented log file target:
+
+![plot](./src/elog_bench/png/file_rotating.png)
+
+Although the behavior is a bit chaotic, we can see that it is similar to segmented logging:
+
+1. For single-threaded scenario it may benefit to use larger segment sizes
+2. For multi-threaded scenarios the segment size has no real effect
+3. From some point on, performance is somewhat steady, around 2M msg/sec
+
+### Single-threaded File Log Target Comparison
 
 In the following bar chart, all synchronous file log target configurations are compared together:
 
@@ -1909,7 +1998,9 @@ This last comparison needs further explanation:
 
 - The 'immediate' policy flushes after each log message write, and exhibits the lowest performance
 - The 'never' policy simply never flushes, and serves as a baseline for other configurations
-- All other synchronous logging methods exhibit the same single-threaded performance (around 950,000 messages per second)
+- All other synchronous logging methods with single file exhibit the same single-threaded performance (around 1.8M msg/sec)
+- Buffered file log target behave a bit better with 2.2M msg/sec
+- Segmented and rotating file log target, coupled with 64kn buffer, shows a small degradation, with 2M msg/sec
 
 The last 3 logging methods are asynchronous and mostly exhibit high performance as expected, but it should be noted that  
 this does not relate to disk write performance, but rather to logger throughput.  
@@ -1917,9 +2008,12 @@ In other words, this actually illustrates the logger latency when using asynchro
 
 Points to note:
 
-- The deferred log target can receive 4.2 Million messages per second, that is an average latency of 238 nano-seconds per message
-- The quantum log target can receive 6.4 Million messages per second, that is an average latency of 156 nano-seconds per message
-- The queued log target can receive 1.6 Million messages per second, and requires further investigation
+- The deferred log target can receive 2.8M msg/sec, that is an average latency of 347 nano-seconds per message
+- The queued log target can receive 2.7M msg/sec
+- The quantum log target can receive 5.3M msg/sec, that is an average latency of 189 nano-seconds per message
+- The quantum log target, with binary logging, can receive 6.6M msg/sec, that is an average latency of 151 nano-seconds per message
+- The quantum log target, with binary logging and auto-cache, can receive 6.7M msg/sec
+- The quantum log target, with binary logging and pre-cache, can receive 7M msg/sec (at times 10M msg/sec was observed)
 
 All asynchronous loggers were configured with generous buffer sizes for testing peak performance.  
 In reality this measures the peak performance during a log message burst.  
@@ -1934,4 +2028,38 @@ This test checks the scalability of each log target, and the results are interes
 As the graph depicts, the deferred and queued log targets are not scalable, since both impose a lock,  
 whereas the quantum log target employs a lock-free ring buffer.  
 The results show that the quantum logger is fully scalable, as much as system resources allow.  
-In addition, when using a shared logger (for instance, in a code section that is concurrently accessed by many threads), the quantum logger is still scalable, though slightly lagging behind the private logger performance.
+In addition, when using a shared logger (for instance, in a code section that is concurrently accessed by many threads), the quantum logger is still scalable, though slightly lagging behind the private logger performance.  
+
+Finally, binary logging shows slightly better performance, and the reason is that the log format message is rather short (25 characters long), having only one integer parameter to format.
+
+### Binary Logging and Format Message Caching
+
+Binary Logging allows to put the entire formatting in another context.  
+First, the effect of using an increasing number of format parameters was tested with a short log message.  
+This is a single-threaded test, that logs a format message with increasing number of integer format parameters.
+
+Here are the results:
+
+![plot](./src/elog_bench/png/bin_accel_param_count.png)
+
+Here are some interesting key points from this chart:
+
+1. The "regular" logging techniques, i.e. formatting with printf or fmtlib, does not scale well as the format message has an increasing number of parameters to format.
+2. All forms of binary logging techniques behave well and are not affected by number of parameters, since copying a few integers into a buffer is not a significantly heavy task
+3. Binary logging with automated caching was slightly slower than other binary logging techniques, and that is a bit surprising. This could be a marginal error, or that the format message is rather short, so there is no real gain in caching.
+4. Binary logging with pre-caching was fighting neck-to-neck with binary logging, and that could be due to the fact that unlike automated-caching, it does not need access to a thread local variable, which requires less steps to get the variable, and also allows a more cache-friendly execution (maybe even put in register)
+
+The second benchmark that was conducted, was with varying format message length, this time using only 1 integer parameters.  
+The purpose was to test the effect of format message caching.
+This is a single-threaded test, using asynchronous lock-free logging, combined with buffered file logging.
+
+Here are the results:
+
+![plot](./src/elog_bench/png/bin_accel_msg_len.png)
+
+The results are rather dramatic:
+
+1. Both "regular" printf and fmtlib formatting are not scalable with respect to format message size, and degrade from 5M msg/sec to 0.5M msg/sec
+2. The binary logging scheme, without any caching, does not scale, and starting from 200 bytes format message size, it begins to degrade, starting from 8M msg/sec, until it reaches 1M msg/sec when format message size is 1000 bytes long
+3. Both Binary logging with automated caching and with pre-caching scale well and preserve steady performance as would be expected
+4. Pre-cached binary logging performs slightly better probably, as explained in the previous section, due to the fact it has optimized access to the cache entry id, not requiring access to thread-local variable, but rather local variable, which is more cache-friendly.

@@ -223,6 +223,12 @@ bool ELogSegmentedFileTarget::SegmentData::open(const char* segmentPath,
 
 bool ELogSegmentedFileTarget::SegmentData::log(const char* logMsg, size_t len) {
     // NOTE: we do not log error message to avoid log flooding
+    // TODO: we can optimize here, since each logging thread can grab its own section of the buffer,
+    // and the one the causes overflow should wait for buffer flush, this will avoid using a lock,
+    // but then again, the flushing thread will have to wait for all previous logging threads to
+    // finish memcpy (can be achieved with GC/epoch), and then all that came after the overlowing
+    // thread, will have to wait too for buffer flush. Does this complexity worth the effort? Seems
+    // that gain is marginal due to constant waiting for buffer flush
     if (m_bufferedFileWriter != nullptr) {
         return m_bufferedFileWriter->logMsg(logMsg, len);
     } else {
@@ -387,7 +393,7 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
         return;
     }
 
-    // NOTE: the following call to fputs() is guaranteed to be atomic according to POSIX
+    // write data to current log segment
     if (!segmentData->log(formattedLogMsg, length)) {
         // TODO: in order to avoid log flooding, this error message must be emitted only once!
         // alternatively, the log target should be marked as unusable and reject all requests to log

@@ -2581,38 +2581,40 @@ void testPerfBufferedFile() {
 
 void testPerfSegmentedFile() {
     const char* cfg =
-        "file:///./bench_data/"
-        "elog_bench_segmented_1mb.log?file_segment_size=1mb&file_buffer_size=1mb&flush_policy="
-        "none";
+        "file:///./bench_data/elog_bench_segmented_1mb.log?"
+        "file_segment_size=1mb&file_buffer_size=64kb&flush_policy=none";
     runMultiThreadTest("Segmented File (1MB segment size)", "elog_bench_segmented_1mb", cfg);
 
     cfg =
-        "file:///./bench_data/"
-        "elog_bench_segmented_2mb.log?file_segment_size=2mb&flush_policy=none";
+        "file:///./bench_data/elog_bench_segmented_2mb.log?"
+        "file_segment_size=2mb&file_buffer_size=64kb&flush_policy=none";
     runMultiThreadTest("Segmented File (2MB segment size)", "elog_bench_segmented_2mb", cfg);
 
     cfg =
-        "file:///./bench_data/"
-        "elog_bench_segmented_4mb.log?file_segment_size=4mb&flush_policy=none";
+        "file:///./bench_data/elog_bench_segmented_4mb.log?"
+        "file_segment_size=4mb&file_buffer_size=64kb&flush_policy=none";
     runMultiThreadTest("Segmented File (4MB segment size)", "elog_bench_segmented_4mb", cfg);
 }
 
 void testPerfRotatingFile() {
     const char* cfg =
-        "file:///./bench_data/"
-        "elog_bench_rotating_1mb.log?file_segment_size=1mb&file_buffer_size=1mb&"
-        "file_segment_count=5&flush_policy=none";
+        "file:///./bench_data/elog_bench_rotating_1mb.log?"
+        "file_segment_size=1mb&file_segment_count=5&"
+        "file_buffer_size=64kb&"
+        "flush_policy=none";
     runMultiThreadTest("Rotating File (1MB segment size)", "elog_bench_rotating_1mb", cfg);
 
     cfg =
-        "file:///./bench_data/"
-        "elog_bench_rotating_2mb.log?file_segment_size=2mb&file_segment_count=5&"
+        "file:///./bench_data/elog_bench_rotating_2mb.log?"
+        "file_segment_size=2mb&file_segment_count=5&"
+        "file_buffer_size=64kb&"
         "flush_policy=none";
     runMultiThreadTest("Rotating File (2MB segment size)", "elog_bench_rotating_2mb", cfg);
 
     cfg =
-        "file:///./bench_data/"
-        "elog_bench_rotating_4mb.log?file_segment_size=4mb&file_segment_count=5&"
+        "file:///./bench_data/elog_bench_rotating_4mb.log?"
+        "file_segment_size=4mb&file_segment_count=5&"
+        "file_buffer_size=64kb&"
         "flush_policy=none";
     runMultiThreadTest("Rotating File (4MB segment size)", "elog_bench_rotating_4mb", cfg);
 }
