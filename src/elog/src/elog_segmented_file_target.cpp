@@ -193,7 +193,7 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 #endif
 
 bool ELogSegmentedFileTarget::SegmentData::open(const char* segmentPath,
-                                                uint32_t fileBufferSizeBytes /* = 0 */,
+                                                uint64_t fileBufferSizeBytes /* = 0 */,
                                                 bool useLock /* = true */,
                                                 bool truncateSegment /* = false */) {
     m_segmentFile = elog_fopen(segmentPath, truncateSegment ? "w" : "a");
@@ -287,26 +287,26 @@ bool ELogSegmentedFileTarget::SegmentData::close() {
 }
 
 ELogSegmentedFileTarget::ELogSegmentedFileTarget(
-    const char* logPath, const char* logName, uint32_t segmentLimitMB,
+    const char* logPath, const char* logName, uint64_t segmentLimitBytes,
     uint32_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
-    uint32_t fileBufferSizeBytes /* = 0 */, uint32_t segmentCount /* = 0 */,
+    uint64_t fileBufferSizeBytes /* = 0 */, uint32_t segmentCount /* = 0 */,
     ELogFlushPolicy* flushPolicy /* = nullptr */)
     : ELogTarget("segmented-file", flushPolicy),
-      m_segmentLimitBytes(segmentLimitMB * 1024 * 1024),
-      m_segmentRingSize(segmentRingSize),
+      m_segmentLimitBytes(segmentLimitBytes),
       m_fileBufferSizeBytes(fileBufferSizeBytes),
+      m_segmentRingSize(segmentRingSize),
       m_segmentCount(segmentCount),
       m_currentSegment(nullptr),
       m_epoch(0),
       m_logPath(logPath),
       m_logName(logName) {
     // check for limits
-    if (segmentLimitMB > ELOG_MAX_SEGMENT_LIMIT_MB) {
-        ELOG_REPORT_WARN(
-            "Truncating segment size limit from %u MB to %u MB (exceeding allowed limit), at "
-            "segmented/rotating log target at %s",
-            segmentLimitMB, (unsigned)ELOG_MAX_SEGMENT_LIMIT_MB);
-        m_segmentLimitBytes = ELOG_MAX_SEGMENT_LIMIT_MB * 1024 * 1024;
+    if (segmentLimitBytes > ELOG_MAX_SEGMENT_LIMIT_BYTES) {
+        ELOG_REPORT_WARN("Truncating segment size limit from %" PRIu64 " bytes to %" PRIu64
+                         " bytes (exceeding allowed limit), at "
+                         "segmented/rotating log target at %s",
+                         segmentLimitBytes, ELOG_MAX_SEGMENT_LIMIT_BYTES);
+        m_segmentLimitBytes = ELOG_MAX_SEGMENT_LIMIT_BYTES * 1024 * 1024;
     }
     if (m_segmentRingSize > ELOG_MAX_SEGMENT_RING_SIZE) {
         ELOG_REPORT_WARN(

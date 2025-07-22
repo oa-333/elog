@@ -279,7 +279,7 @@ public:
                        const std::string& params, const std::string& serverCA,
                        const std::string& clientCA, const std::string& clientKey,
                        ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
-                       uint32_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
+                       uint64_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
         : ELogRpcTarget(server.c_str(), "", 0, ""),
           m_errorHandler(errorHandler),
           m_params(params),
@@ -287,8 +287,8 @@ public:
           m_clientCA(clientCA),
           m_clientKey(clientKey),
           m_clientMode(clientMode),
-          m_deadlineTimeoutMillis(deadlineTimeoutMillis),
           m_maxInflightCalls(maxInflightCalls),
+          m_deadlineTimeoutMillis(deadlineTimeoutMillis),
           m_streamContext(nullptr),
           m_reactor(nullptr) {}
 
@@ -318,8 +318,8 @@ private:
     std::string m_clientCA;
     std::string m_clientKey;
     ELogGRPCClientMode m_clientMode;
-    uint32_t m_deadlineTimeoutMillis;
     uint32_t m_maxInflightCalls;
+    uint64_t m_deadlineTimeoutMillis;
 
     // the stub
     std::unique_ptr<StubType> m_serviceStub;
@@ -374,7 +374,7 @@ public:
                                            const std::string& serverCA, const std::string& clientCA,
                                            const std::string& clientKey,
                                            ELogGRPCClientMode clientMode,
-                                           uint32_t deadlineTimeoutMillis,
+                                           uint64_t deadlineTimeoutMillis,
                                            uint32_t maxInflightCalls) = 0;
 
 protected:
@@ -400,7 +400,7 @@ public:
     ELogRpcTarget* createLogTarget(ELogErrorHandler* errorHandler, const std::string& server,
                                    const std::string& params, const std::string& serverCA,
                                    const std::string& clientCA, const std::string& clientKey,
-                                   ELogGRPCClientMode clientMode, uint32_t deadlineTimeoutMillis,
+                                   ELogGRPCClientMode clientMode, uint64_t deadlineTimeoutMillis,
                                    uint32_t maxInflightCalls) final {
         return new ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                                       ReceptorType>(errorHandler, server, params, serverCA,

@@ -147,20 +147,20 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     }
 
     // optional flush timeout
-    uint64_t timeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(
-            logTargetCfg, "Sentry", "flush_timeout_millis", timeoutMillis)) {
+    params.m_flushTimeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, "Sentry", "flush_timeout", params.m_flushTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
-    params.m_flushTimeoutMillis = timeoutMillis;
 
     // optional shutdown timeout
-    timeoutMillis = ELOG_SENTRY_DEFAULT_SHUTDOWN_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(
-            logTargetCfg, "Sentry", "shutdown_timeout_millis", timeoutMillis)) {
+    params.m_shutdownTimeoutMillis = ELOG_SENTRY_DEFAULT_SHUTDOWN_TIMEOUT_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, "Sentry", "shutdown_timeout", params.m_shutdownTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
-    params.m_shutdownTimeoutMillis = timeoutMillis;
 
     // optional debug flag
     if (!ELogConfigLoader::getOptionalLogTargetBoolProperty(logTargetCfg, "Sentry", "debug",

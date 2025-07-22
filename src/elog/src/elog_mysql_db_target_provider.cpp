@@ -13,7 +13,7 @@ ELogDbTarget* ELogMySqlDbTargetProvider::loadTarget(const ELogConfigMapNode* log
                                                     const std::string& insertQuery,
                                                     ELogDbTarget::ThreadModel threadModel,
                                                     uint32_t maxThreads,
-                                                    uint32_t reconnectTimeoutMillis) {
+                                                    uint64_t reconnectTimeoutMillis) {
     // we expect 3 properties: db, user, password (optional)
     std::string db;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "MySQL", "db", db)) {

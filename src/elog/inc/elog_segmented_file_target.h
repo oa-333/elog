@@ -12,17 +12,17 @@
 
 namespace elog {
 
-/** @def Maximum value allowed for segment limit (MB). Currently totalling in 4GB. */
-#define ELOG_MAX_SEGMENT_LIMIT_MB ((uint32_t)4096)
+/** @def Maximum value allowed for segment limit (bytes). Currently totalling in 4GB. */
+#define ELOG_MAX_SEGMENT_LIMIT_BYTES (4ull * 1024ull * 1024ull * 1024ull)
 
 /** @def Maximum value allowed for segment ring size. Currently totalling in 64 million items. */
-#define ELOG_MAX_SEGMENT_RING_SIZE ((uint32_t)(64 * 1024 * 1024))
+#define ELOG_MAX_SEGMENT_RING_SIZE (64ul * 1024ul * 1024ul)
 
 /** @def Maximum value allowed for segment count (for rotating log target). */
-#define ELOG_MAX_SEGMENT_COUNT ((uint32_t)(1024 * 1024))
+#define ELOG_MAX_SEGMENT_COUNT (1024ul * 1024ul)
 
 /** @def The default ring buffer size used for pending messages during segment switch. */
-#define ELOG_DEFAULT_SEGMENT_RING_SIZE ((uint32_t)(1024 * 1024))
+#define ELOG_DEFAULT_SEGMENT_RING_SIZE (1024ul * 1024ul)
 
 /**
  * @brief A lock-free segmented log file target, that breaks log file into segments by a configured
@@ -42,7 +42,7 @@ public:
      * @param logPath The path to the directory in which log file segments are to be put.
      * @param logName The base name of the log file segments. This should not include ".log"
      * extension, as it is being automatically added.
-     * @param segmentLimitMB The maximum segment size in megabytes.
+     * @param segmentLimitBytes The maximum segment size in bytes.
      * @param segmentRingSize Optional size of the pending message ring buffer used
      * during segment switch.
      * @param segmentCount Optionally specify the maximum number of segments to use. This will cause
@@ -53,9 +53,9 @@ public:
      * file buffering is not used.
      * @param flushPolicy Optional flush policy to be used in conjunction with this log target.
      */
-    ELogSegmentedFileTarget(const char* logPath, const char* logName, uint32_t segmentLimitMB,
+    ELogSegmentedFileTarget(const char* logPath, const char* logName, uint64_t segmentLimitBytes,
                             uint32_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
-                            uint32_t fileBufferSizeBytes = 0, uint32_t segmentCount = 0,
+                            uint64_t fileBufferSizeBytes = 0, uint32_t segmentCount = 0,
                             ELogFlushPolicy* flushPolicy = nullptr);
     ELogSegmentedFileTarget(const ELogSegmentedFileTarget&) = delete;
     ELogSegmentedFileTarget(ELogSegmentedFileTarget&&) = delete;
@@ -98,7 +98,7 @@ private:
         SegmentData& operator=(const SegmentData&) = delete;
         ~SegmentData() { m_pendingMsgs.terminate(); }
 
-        bool open(const char* segmentPath, uint32_t fileBufferSizeBytes = 0, bool useLock = true,
+        bool open(const char* segmentPath, uint64_t fileBufferSizeBytes = 0, bool useLock = true,
                   bool truncateSegment = false);
         bool log(const char* logMsg, size_t len);
         bool drain();
@@ -106,9 +106,9 @@ private:
         bool close();
     };
 
-    uint32_t m_segmentLimitBytes;
+    uint64_t m_segmentLimitBytes;
+    uint64_t m_fileBufferSizeBytes;
     uint32_t m_segmentRingSize;
-    uint32_t m_fileBufferSizeBytes;
     uint32_t m_segmentCount;
     std::atomic<SegmentData*> m_currentSegment;
     std::atomic<uint64_t> m_epoch;

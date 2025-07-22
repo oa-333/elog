@@ -28,7 +28,7 @@ public:
     virtual ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg,
                                    const std::string& connString, const std::string& insertQuery,
                                    ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads,
-                                   uint32_t reconnectTimeoutMillis) = 0;
+                                   uint64_t reconnectTimeoutMillis) = 0;
 
 protected:
     ELogDbTargetProvider() {}

@@ -335,26 +335,23 @@ bool configureLogTargetImpl(const std::string& logTargetCfg, ELogTargetId* id /*
     //      log_target = [{ scheme = file, path = ...}, {}, {}]}
     //
     // in theory nesting level is not restricted, but it doesn't make sense to have more than 2
-    ELogConfig* logTargetConfig = ELogConfigParser::parseLogTargetConfig(logTargetCfg);
-    if (logTargetConfig == nullptr) {
-        ELOG_REPORT_ERROR("Failed to parse log target URL: %s", logTargetCfg.c_str());
+
+    // load the target (common properties already configured)
+    ELogTarget* logTarget = ELogConfigLoader::loadLogTarget(logTargetCfg.c_str());
+    if (logTarget == nullptr) {
         return false;
     }
-    const ELogConfigNode* rootNode = logTargetConfig->getRootNode();
-    if (rootNode->getNodeType() != ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {
-        ELOG_REPORT_ERROR("Invalid node type, expecting map node, seeing instead %s (context: %s)",
-                          configNodeTypeToString(rootNode->getNodeType()),
-                          rootNode->getFullContext());
-        delete logTargetConfig;
+
+    // finally add the log target
+    if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
+        ELOG_REPORT_ERROR("Failed to add log target %s with scheme %s", logTarget->getName(),
+                          logTarget->getTypeName());
+        delete logTarget;
         return false;
     }
-    const ELogConfigMapNode* mapNode = (const ELogConfigMapNode*)rootNode;
-    if (!configureLogTargetNode(mapNode)) {
-        ELOG_REPORT_ERROR("Failed to configure log target");
-        delete logTargetConfig;
-        return false;
+    if (id != nullptr) {
+        *id = logTarget->getId();
     }
-    delete logTargetConfig;
     return true;
 }
 

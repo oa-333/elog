@@ -85,6 +85,36 @@ typedef uint32_t ELogCacheEntryId;
 /** @def Invalid cache entry id value. */
 #define ELOG_INVALID_CACHE_ENTRY_ID ((ELogCacheEntryId)0xFFFFFFFF)
 
+/** @enum Timeout units (used in flush policy protected helper parsing methods). */
+enum class ELogTimeoutUnits : uint32_t {
+    /** @brief Seconds */
+    TU_SECONDS,
+
+    /** @brief Milli-seconds */
+    TU_MILLI_SECONDS,
+
+    /** @brief Micro-seconds */
+    TU_MICRO_SECONDS,
+
+    /** @brief Nano-seconds */
+    TU_NANO_SECONDS
+};
+
+/** @enum Size units (used in flush policy protected helper parsing methods). */
+enum class ELogSizeUnits : uint32_t {
+    /** @brief Bytes. */
+    SU_BYTES,
+
+    /** @brief Kilo-Bytes. */
+    SU_KILO_BYTES,
+
+    /** @brief Mega-Bytes. */
+    SU_MEGA_BYTES,
+
+    /** @brief Giga-Bytes. */
+    SU_GIGA_BYTES
+};
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

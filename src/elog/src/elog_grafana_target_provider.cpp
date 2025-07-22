@@ -16,12 +16,12 @@ ELogMonTarget* ELogGrafanaTargetProvider::loadTarget(const ELogConfigMapNode* lo
     //  loki_address=http://host:port&
     //  labels={JSON_FORMAT}&
     //  log_line_metadata={JSON_FORMAT}&
-    //  connect_timeout_millis=value&
-    //  write_timeout_millis=value&
-    //  read_timeout_millis=value&
-    //  resend_period_millis=value&
-    //  backlog_limit_bytes=value&
-    //  shutdown_timeout_millis=value
+    //  connect_timeout=value&
+    //  write_timeout=value&
+    //  read_timeout=value&
+    //  resend_period=value&
+    //  backlog_limit=value&
+    //  shutdown_timeout=value
 
     // NOTE: The JSON_FORMAT above is permissive and should not contains any quotes
 

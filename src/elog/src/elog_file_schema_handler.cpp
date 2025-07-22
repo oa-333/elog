@@ -19,9 +19,9 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
     }
 
     // there could be optional property file_buffer_size
-    uint32_t bufferSize = 0;
-    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "file",
-                                                              "file_buffer_size", bufferSize)) {
+    uint64_t bufferSizeBytes = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetSizeProperty(
+            logTargetCfg, "file", "file_buffer_size", bufferSizeBytes, ELogSizeUnits::SU_BYTES)) {
         return nullptr;
     }
 
@@ -35,10 +35,10 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
         return nullptr;
     }
 
-    // there could be optional property file_segment_size_mb
-    uint32_t segmentSizeMB = 0;
-    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
-            logTargetCfg, "file", "file_segment_size_mb", segmentSizeMB)) {
+    // there could be optional property file_segment_size
+    uint64_t segmentSizeBytes = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetSizeProperty(
+            logTargetCfg, "file", "file_segment_size", segmentSizeBytes, ELogSizeUnits::SU_BYTES)) {
         return nullptr;
     }
 
@@ -56,12 +56,13 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
         return nullptr;
     }
 
-    return createLogTarget(path, bufferSize, useFileLock, segmentSizeMB, segmentRingSize,
+    return createLogTarget(path, bufferSizeBytes, useFileLock, segmentSizeBytes, segmentRingSize,
                            segmentCount);
 }
 
-ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, uint32_t bufferSize,
-                                                   bool useFileLock, uint32_t segmentSizeMB,
+ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path,
+                                                   uint64_t bufferSizeBytes, bool useFileLock,
+                                                   uint64_t segmentSizeBytes,
                                                    uint32_t segmentRingSize,
                                                    uint32_t segmentCount) {
     // when invoked from ELogSystem, the ring size is zero, so we fix it to default value
@@ -70,12 +71,12 @@ ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, uint
     }
 
     ELogTarget* logTarget = nullptr;
-    if (segmentSizeMB > 0) {
+    if (segmentSizeBytes > 0) {
         std::string::size_type lastSlashPos = path.find_last_of("\\/");
         // assuming segmented log is to be created in current folder, and path is the file name
         if (lastSlashPos == std::string::npos) {
             logTarget = new (std::nothrow) ELogSegmentedFileTarget(
-                "", path.c_str(), segmentSizeMB, segmentRingSize, bufferSize, segmentCount);
+                "", path.c_str(), segmentSizeBytes, segmentRingSize, bufferSizeBytes, segmentCount);
         } else {
             std::string logPath = path.substr(0, lastSlashPos);
             std::string logName = path.substr(lastSlashPos + 1);
@@ -83,13 +84,13 @@ ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path, uint
                 logName = logName.substr(0, logName.size() - strlen(LOG_SUFFIX));
             }
             logTarget = new (std::nothrow)
-                ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeMB,
-                                        segmentRingSize, bufferSize, segmentCount);
+                ELogSegmentedFileTarget(logPath.c_str(), logName.c_str(), segmentSizeBytes,
+                                        segmentRingSize, bufferSizeBytes, segmentCount);
         }
     } else {
-        if (bufferSize > 0) {
-            logTarget =
-                new (std::nothrow) ELogBufferedFileTarget(path.c_str(), bufferSize, useFileLock);
+        if (bufferSizeBytes > 0) {
+            logTarget = new (std::nothrow)
+                ELogBufferedFileTarget(path.c_str(), bufferSizeBytes, useFileLock);
         } else {
             logTarget = new (std::nothrow) ELogFileTarget(path.c_str());
         }

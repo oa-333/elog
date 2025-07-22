@@ -20,12 +20,12 @@ ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* lo
     //  tags={JSON_FORMAT}&
     //  stack_trace=yes/no&
     //  compress=yes/no&
-    //  connect_timeout_millis=value&
-    //  write_timeout_millis=value&
-    //  read_timeout_millis=value
-    //  resend_period_millis=value&
-    //  backlog_limit_bytes=value&
-    //  shutdown_timeout_millis=value
+    //  connect_timeout=value&
+    //  write_timeout=value&
+    //  read_timeout=value
+    //  resend_period=value&
+    //  backlog_limit=value&
+    //  shutdown_timeout=value
 
     // we expect the following properties: address (mandatory), tags, source, service, compress and
     // connect timeout, write timeout, aggregation may be controlled by flush policy tags is normal

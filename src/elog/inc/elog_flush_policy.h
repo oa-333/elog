@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+#include "elog_common_def.h"
 #include "elog_config.h"
 #include "elog_expression.h"
 #include "elog_gc.h"
@@ -90,8 +91,20 @@ protected:
 
     bool loadIntFlushPolicy(const ELogConfigMapNode* flushPolicyCfg, const char* flushPolicyName,
                             const char* propName, uint64_t& value);
+    bool loadTimeoutFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
+                                const char* flushPolicyName, const char* propName, uint64_t& value,
+                                ELogTimeoutUnits targetUnits);
+    bool loadSizeFlushPolicy(const ELogConfigMapNode* flushPolicyCfg, const char* flushPolicyName,
+                             const char* propName, uint64_t& value, ELogSizeUnits targetUnits);
+
     bool loadIntFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
                             uint64_t& value, const char* propName = nullptr);
+    bool loadTimeoutFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
+                                uint64_t& value, ELogTimeoutUnits targetUnits,
+                                const char* propName = nullptr);
+    bool loadSizeFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
+                             uint64_t& value, ELogSizeUnits targetUnits,
+                             const char* propName = nullptr);
 
 private:
     bool m_isActive;

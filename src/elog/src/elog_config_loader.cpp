@@ -4,6 +4,7 @@
 #include <fstream>
 
 #include "elog_common.h"
+#include "elog_config_parser.h"
 #include "elog_deferred_target.h"
 #include "elog_error.h"
 #include "elog_expression_parser.h"
@@ -126,6 +127,29 @@ bool ELogConfigLoader::loadFileProperties(const char* configPath, ELogPropertySe
     }
 
     return true;
+}
+
+ELogTarget* ELogConfigLoader::loadLogTarget(const char* logTargetCfg) {
+    ELogConfig* logTargetConfig = ELogConfigParser::parseLogTargetConfig(logTargetCfg);
+    if (logTargetConfig == nullptr) {
+        ELOG_REPORT_ERROR("Failed to parse log target URL: %s", logTargetCfg);
+        return nullptr;
+    }
+
+    const ELogConfigNode* rootNode = logTargetConfig->getRootNode();
+    if (rootNode->getNodeType() != ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {
+        ELOG_REPORT_ERROR("Invalid node type, expecting map node, seeing instead %s (context: %s)",
+                          configNodeTypeToString(rootNode->getNodeType()),
+                          rootNode->getFullContext());
+        delete logTargetConfig;
+        return nullptr;
+    }
+
+    const ELogConfigMapNode* mapNode = (const ELogConfigMapNode*)rootNode;
+    ELogTarget* logTarget = loadLogTarget(mapNode);
+
+    delete logTargetConfig;
+    return logTarget;
 }
 
 ELogTarget* ELogConfigLoader::loadLogTarget(const ELogConfigMapNode* logTargetCfg) {
@@ -354,6 +378,45 @@ bool ELogConfigLoader::getLogTargetBoolProperty(const ELogConfigMapNode* logTarg
     return true;
 }
 
+bool ELogConfigLoader::getLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
+                                                   const char* scheme, const char* propName,
+                                                   uint64_t& propValue,
+                                                   ELogTimeoutUnits targetUnits) {
+    bool found = false;
+    std::string value;
+    if (!logTargetCfg->getStringValue(propName, found, value)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid %s log target specification, missing required property '%s' (context: %s)",
+            scheme, propName, logTargetCfg->getFullContext());
+        return false;
+    }
+    return parseTimeoutProp(propName, "", value, propValue, targetUnits);
+}
+
+bool ELogConfigLoader::getLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg,
+                                                const char* scheme, const char* propName,
+                                                uint64_t& propValue, ELogSizeUnits targetUnits) {
+    bool found = false;
+    std::string value;
+    if (!logTargetCfg->getStringValue(propName, found, value)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR(
+            "Invalid %s log target specification, missing required property '%s' (context: %s)",
+            scheme, propName, logTargetCfg->getFullContext());
+        return false;
+    }
+    return parseSizeProp(propName, "", value, propValue, targetUnits);
+}
+
 bool ELogConfigLoader::getOptionalLogTargetStringProperty(const ELogConfigMapNode* logTargetCfg,
                                                           const char* scheme, const char* propName,
                                                           std::string& propValue,
@@ -480,6 +543,48 @@ bool ELogConfigLoader::getOptionalLogTargetBoolProperty(const ELogConfigMapNode*
         *found = foundLocal;
     }
     return true;
+}
+
+bool ELogConfigLoader::getOptionalLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
+                                                           const char* scheme, const char* propName,
+                                                           uint64_t& propValue,
+                                                           ELogTimeoutUnits targetUnits,
+                                                           bool* found /* = nullptr */) {
+    bool foundLocal = false;
+    std::string value;
+    if (!logTargetCfg->getStringValue(propName, foundLocal, value)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
+    if (!foundLocal) {
+        return true;
+    }
+    return parseTimeoutProp(propName, "", value, propValue, targetUnits);
+}
+
+bool ELogConfigLoader::getOptionalLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg,
+                                                        const char* scheme, const char* propName,
+                                                        uint64_t& propValue,
+                                                        ELogSizeUnits targetUnits,
+                                                        bool* found /* = nullptr */) {
+    bool foundLocal = false;
+    std::string value;
+    if (!logTargetCfg->getStringValue(propName, foundLocal, value)) {
+        ELOG_REPORT_ERROR("Failed to retrieve '%s' property of %s log target (context: %s)",
+                          propName, scheme, logTargetCfg->getFullContext());
+        return false;
+    }
+    if (found != nullptr) {
+        *found = foundLocal;
+    }
+    if (!foundLocal) {
+        return true;
+    }
+    return parseSizeProp(propName, "", value, propValue, targetUnits);
 }
 
 ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExprStr(const char* flushPolicyExpr,

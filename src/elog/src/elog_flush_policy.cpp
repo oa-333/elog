@@ -132,6 +132,42 @@ bool ELogFlushPolicy::loadIntFlushPolicy(const ELogConfigMapNode* flushPolicyCfg
     return true;
 }
 
+bool ELogFlushPolicy::loadTimeoutFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
+                                             const char* flushPolicyName, const char* propName,
+                                             uint64_t& value, ELogTimeoutUnits targetUnits) {
+    bool found = false;
+    std::string strValue;
+    if (!flushPolicyCfg->getStringValue(propName, found, strValue)) {
+        ELOG_REPORT_ERROR("Failed to configure %s flush policy (context: %s)", flushPolicyName,
+                          flushPolicyCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR("Invalid flush policy configuration, missing %s property (context: %s)",
+                          propName, flushPolicyCfg->getFullContext());
+        return false;
+    }
+    return parseTimeoutProp(propName, "", strValue, value, targetUnits);
+}
+
+bool ELogFlushPolicy::loadSizeFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
+                                          const char* flushPolicyName, const char* propName,
+                                          uint64_t& value, ELogSizeUnits targetUnits) {
+    bool found = false;
+    std::string strValue;
+    if (!flushPolicyCfg->getStringValue(propName, found, strValue)) {
+        ELOG_REPORT_ERROR("Failed to configure %s flush policy (context: %s)", flushPolicyName,
+                          flushPolicyCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR("Invalid flush policy configuration, missing %s property (context: %s)",
+                          propName, flushPolicyCfg->getFullContext());
+        return false;
+    }
+    return parseSizeProp(propName, "", strValue, value, targetUnits);
+}
+
 bool ELogFlushPolicy::loadIntFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
                                          uint64_t& value, const char* propName /* = nullptr */) {
     if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
@@ -152,6 +188,63 @@ bool ELogFlushPolicy::loadIntFlushPolicy(const ELogExpression* expr, const char*
     if (!parseIntProp("", "", opExpr->m_rhs, value, false)) {
         ELOG_REPORT_ERROR(
             "Invalid expression operand '%s' for %s flush policy, required integer type (property: "
+            "%s)",
+            opExpr->m_rhs.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
+        return false;
+    }
+    return true;
+}
+
+bool ELogFlushPolicy::loadTimeoutFlushPolicy(const ELogExpression* expr,
+                                             const char* flushPolicyName, uint64_t& value,
+                                             ELogTimeoutUnits targetUnits,
+                                             const char* propName /* = nullptr */) {
+    if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression type, operator expression required for loading %s flush policy "
+            "(property: %s)",
+            flushPolicyName, propName ? propName : flushPolicyName);
+        return false;
+    }
+    const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
+    if (opExpr->m_op.compare("==") != 0 && opExpr->m_op.compare(":") != 0) {
+        ELOG_REPORT_ERROR(
+            "Invalid comparison operator '%s' for %s flush policy, only '==' or ':' is allowed in "
+            "this context (property: %s)",
+            opExpr->m_op.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
+        return false;
+    }
+    if (!parseTimeoutProp(propName, "", opExpr->m_rhs, value, targetUnits, false)) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression operand '%s' for %s flush policy, required timeout type (property: "
+            "%s)",
+            opExpr->m_rhs.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
+        return false;
+    }
+    return true;
+}
+
+bool ELogFlushPolicy::loadSizeFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
+                                          uint64_t& value, ELogSizeUnits targetUnits,
+                                          const char* propName /* = nullptr */) {
+    if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression type, operator expression required for loading %s flush policy "
+            "(property: %s)",
+            flushPolicyName, propName ? propName : flushPolicyName);
+        return false;
+    }
+    const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
+    if (opExpr->m_op.compare("==") != 0 && opExpr->m_op.compare(":") != 0) {
+        ELOG_REPORT_ERROR(
+            "Invalid comparison operator '%s' for %s flush policy, only '==' or ':' is allowed in "
+            "this context (property: %s)",
+            opExpr->m_op.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
+        return false;
+    }
+    if (!parseSizeProp(propName, "", opExpr->m_rhs, value, targetUnits, false)) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression operand '%s' for %s flush policy, required size type (property: "
             "%s)",
             opExpr->m_rhs.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
         return false;
@@ -364,11 +457,12 @@ bool ELogCountFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
 }
 
 bool ELogSizeFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
-    return loadIntFlushPolicy(flushPolicyCfg, "size", "flush_size_bytes", m_logSizeLimitBytes);
+    return loadSizeFlushPolicy(flushPolicyCfg, "size", "flush_size", m_logSizeLimitBytes,
+                               ELogSizeUnits::SU_BYTES);
 }
 
 bool ELogSizeFlushPolicy::loadExpr(const ELogExpression* expr) {
-    return loadIntFlushPolicy(expr, "size", m_logSizeLimitBytes);
+    return loadSizeFlushPolicy(expr, "size", m_logSizeLimitBytes, ELogSizeUnits::SU_BYTES);
 }
 
 bool ELogSizeFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
@@ -393,11 +487,13 @@ ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarg
 ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
 
 bool ELogTimedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
-    return loadIntFlushPolicy(flushPolicyCfg, "time", "flush_timeout_millis", m_logTimeLimitMillis);
+    return loadTimeoutFlushPolicy(flushPolicyCfg, "time", "flush_timeout", m_logTimeLimitMillis,
+                                  ELogTimeoutUnits::TU_MILLI_SECONDS);
 }
 
 bool ELogTimedFlushPolicy::loadExpr(const ELogExpression* expr) {
-    return loadIntFlushPolicy(expr, "time", m_logTimeLimitMillis);
+    return loadTimeoutFlushPolicy(expr, "time", m_logTimeLimitMillis,
+                                  ELogTimeoutUnits::TU_MILLI_SECONDS);
 }
 
 bool ELogTimedFlushPolicy::start() {
@@ -578,32 +674,15 @@ void ELogChainedFlushPolicy::propagateLogTarget(ELogTarget* logTarget) {
 }
 
 bool ELogGroupFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
-    bool found = false;
-    int64_t groupSize = 0;
-    if (!flushPolicyCfg->getIntValue("group_size", found, groupSize)) {
-        ELOG_REPORT_ERROR("Failed to configure group flush policy (context: %s)",
-                          flushPolicyCfg->getFullContext());
-        return false;
-    }
-    if (!found) {
-        ELOG_REPORT_ERROR(
-            "Invalid group flush policy configuration, missing group_size property (context: %s)",
-            flushPolicyCfg->getFullContext());
+    uint64_t groupSize = 0;
+    if (!loadIntFlushPolicy(flushPolicyCfg, "group", "size", groupSize)) {
         return false;
     }
     m_groupSize = (uint32_t)groupSize;
 
-    int64_t groupTimeoutMicros = 0;
-    if (!flushPolicyCfg->getIntValue("group_timeout_micros", found, groupSize)) {
-        ELOG_REPORT_ERROR("Failed to configure group flush policy (context: %s)",
-                          flushPolicyCfg->getFullContext());
-        return false;
-    }
-    if (!found) {
-        ELOG_REPORT_ERROR(
-            "Invalid group flush policy configuration, missing group_timeout_micros property "
-            "(context: %s)",
-            flushPolicyCfg->getFullContext());
+    uint64_t groupTimeoutMicros = 0;
+    if (!loadTimeoutFlushPolicy(flushPolicyCfg, "group", "timeout", groupTimeoutMicros,
+                                ELogTimeoutUnits::TU_MICRO_SECONDS)) {
         return false;
     }
     m_groupTimeoutMicros = (Micros)groupTimeoutMicros;
@@ -624,12 +703,12 @@ bool ELogGroupFlushPolicy::loadExpr(const ELogExpression* expr) {
             "sub-expressions");
         return false;
     }
-    if (!loadIntFlushPolicy(funcExpr->m_expressions[0], "group", m_groupSize, "group_size")) {
+    if (!loadIntFlushPolicy(funcExpr->m_expressions[0], "group", m_groupSize, "size")) {
         return false;
     }
     uint64_t groupTimeoutMicros = 0;
-    if (!loadIntFlushPolicy(funcExpr->m_expressions[1], "group", groupTimeoutMicros,
-                            "group_timeout_micros")) {
+    if (!loadTimeoutFlushPolicy(funcExpr->m_expressions[1], "group", groupTimeoutMicros,
+                                ELogTimeoutUnits::TU_MICRO_SECONDS, "timeout")) {
         return false;
     }
     m_groupTimeoutMicros = Micros(groupTimeoutMicros);

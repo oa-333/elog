@@ -45,7 +45,7 @@ Initialize elog and configure an asynchronous (based on lock-free ring-buffer) r
     elog::initialize();
     elog::configureTargetFromStr(
         "async://quantum?quantum_buffer_size=1000 | "
-        "file:///./app.log?file_segment_size_mb=4&file_segment_count=20");
+        "file:///./app.log?file_segment_size=4mb&file_segment_count=20");
 
     // all log messages are now directed to the asynchronous rotating logger
     ELOG_INFO("App starting");
@@ -73,7 +73,17 @@ It is also possible to dump stack trace of all running threads (experimental):
 
     ELOG_APP_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing application stack trace");
 
-This examples adds an asynchronous log target to send log lines to Grafana-Loki, while flushing (i.e. send HTTP message with accumulated log lines) each 100 log lines or 5 seconds, and restricting log shipping to ERROR log level, with retry timeout of 5 seconds (when Loki is down), and backlog of 1 MB of data (after which old log data is discard while Loki is down):
+In this example, the [log line format](#configuring-log-line-format) can be configured:
+
+    elog::configureLogFormat("${time} ${level:6} [${tid}] ${src} ${msg}");
+
+The effect is the following line format:
+
+- time stamp
+- followed by log level aligned to the left using width of 6 characters
+- followed by thread id, log source name and log message
+
+This final examples adds an asynchronous log target to send log lines to Grafana-Loki, with following configuration:
 
     elog::configureTargetFromStr(
         "async://quantum?quantum_buffer_size=1000&log_level=ERROR | "
@@ -84,21 +94,20 @@ This examples adds an asynchronous log target to send log lines to Grafana-Loki,
         "stack_trace=yes&"
         "flush_policy=((count == 100) OR (time == 5000))");
 
+The log target is configured with the following properties:
+
+- Flush (i.e. send HTTP message with accumulated log lines) each 100 log lines or 5 seconds
+- Restrict log shipping to ERROR log level
+- Use global log line format
+- Use default HTTP client configuration:
+    - Retry resend failed message every 5 seconds, when Loki is down
+    - Use backlog of 1 MB of data (after which old log data is discard while Loki is down)
+
 Each log line is accompanied by:
 
 - "app" label, which equals to configured application name (see [field reference tokens](#log-record-field-reference-tokens) for more details)
 - Log line metadata, containing the log source and thread name issuing the log message
 - Logging thread's fully resolved call stack with function/file/line data for each frame
-
-In this example, the [log line format](#configuring-log-line-format) can be configured:
-
-    elog::configureLogFormat("${time} ${level:6} [${tid}] ${src} ${msg}");
-
-The effect is the following line format:
-
-- time stamp
-- followed by log level aligned to the left using width of 6 characters
-- followed by thread id, log source name and log message
 
 ## Features
 
@@ -127,6 +136,15 @@ The ELog library provides the following notable features:
     - It is possible to choose at each logging instance whether to use normal, binary or cached logging
     - No special configuration required
     - No predefined message file required
+- Full Call Stack Dumping (**with function, file and line information**)
+    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
+    - Supported platforms: Windows, Linux, MinGW
+    - Voluntary current thread call stack dumping (i.e. not in signal handler, so no thread context pointer required)
+    - Voluntary full application call stack dumping (i.e. stack trace of all active threads)
+- Exception/Crash Handling
+    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
+    - Writes to log full exception information, including call stack with function, file and line information
+    - Generates core dump (mini-dump file on Windows)
 - Wide range of predefined log targets (i.e. "log sinks/appenders"):
     - stdout, stderr
     - syslog, Windows event log
@@ -142,14 +160,6 @@ The ELog library provides the following notable features:
     - Can group several log targets under one framework and apply common restrictions and properties
 - Pre-initialization Logging
     - Accumulates log messages issued during static initialization (or any message before the ELog library is initialized) and issues the accumulated log messages in each added log target.
-- Full Call Stack Dumping (**with function, file and line information**)
-    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
-    - Voluntary current thread call stack dumping (i.e. not in signal handler, so no thread context pointer required)
-    - Voluntary full application call stack dumping (i.e. stack trace of all active threads)
-- Exception/Crash Handling
-    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
-    - Writes to log full exception information, including call stack
-    - Generates core dump (mini-dump file on Windows)
 - Configurability
     - The entire library is **fully configurable** from file or string, including very complex scenarios (see [basic examples](#basic-examples) above)
     - The purpose is to reduce amount of boilerplate code required just to get things started
@@ -304,7 +314,8 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Flush Policy](#flush-policy)
     - [Filtering Log Messages](#filtering-log-messages)
     - [Limiting Log Rate](#limiting-log-rate)
-- [Configuring from File or String](#configuring-from-file-or-string)
+- [Configuration](#configuring)
+    - [Configuration Units](#configuration-units)
     - [Configuring Log Level](#configuring-log-level)
     - [Configuring Log Targets](#configuring-log-targets)
     - [Individual Log Target Configuration](#individual-log-target-configuration)
@@ -606,7 +617,7 @@ For instance, a simple log file target can be defined as follows:
 
 In the same manner a rotating log file can be defined:
 
-    elog::configureLogTarget("file:///./app.log?file_segment_size_mb=4&file_segment_count=20");
+    elog::configureLogTarget("file:///./app.log?file_segment_size=4mb&file_segment_count=20");
 
 This defines a total of at most 20 log segments, each having at most 4 MB of log data.  
 The segment size restriction is not a hard limit, and at times of load this limit may be slightly breached.  
@@ -729,7 +740,7 @@ Alternatively, the normal configuration style can be used:
 
     log_target = file:///./app.log?filter=rate_limit&max_msg_per_sec=500
 
-## Configuring from File or String
+## Configuration
 
 The ELog library provides utility functions to load configuration from file or string:
 
@@ -742,6 +753,42 @@ The ELog library provides utility functions to load configuration from file or s
 - configure (load from configuration object)
 
 TODO: refine API, we don't need so many functions
+
+### Configuration Units
+
+The Elog library allows to configure timeout and size with unit specification.  
+In particular timeout can be specified as follows (case insensitive, space not required but can be specified):
+
+    flush_timeout = 200ms
+    flush_timeout = 200 millis
+    flush_timeout = 500 microseconds
+
+The following table summarized the allowed units:
+
+| Unit | Allowed Specification |
+| -- | -- |
+| seconds | s, second, seconds |
+| milliseconds | ms, milli, millis, milliseconds |
+| microseconds | us, micro, micros, microseconds |
+| nanoseconds | ns, nano, nanos, nanoseconds |
+
+In a similar manner sizes may be specified as follows:
+
+    file_buffer_size = 4096 bytes
+    file_buffer_size = 4k
+    file_buffer_size = 1mb
+
+The following table summarized the allowed units:
+
+| Unit | Allowed Specification |
+| -- | -- |
+| bytes | b, byte, bytes |
+| kilobytes | k, kb, kilobyte, kilobytes |
+| megabytes | m, mb, megabyte, megabytes |
+| gigabytes | g, gb, gigabyte, gigabytes |
+
+Pay attention that in the context of flush policy expressions,  
+white space between the value and the units (whether timeout or size) is **not** allowed.
 
 ### Configuring Log Level
 
@@ -794,7 +841,7 @@ The following syntax is supported:
     sys://stderr - add log target to standard error stream
     sys://syslog - add log target to syslog (or Windows event log, when running on Windows)
     file://path - add regular log target
-    file://path?file_segment_size_mb=<file-segment-size-mb> - add segmented file log target
+    file://path?file_segment_size=<file-segment-size> - add segmented file log target
     db://provider?conn_string=<url>&insert_query=<insert-query>...
     msgq://provider?... (see example below for more details)
     rpc://provider?rpc_server=<host:port>&rpc_call=<function-name>(<param-list>)
@@ -836,8 +883,8 @@ Where each value designates a different policy:
 The last three flush policies require the following addition parameter each respectively:
 
 - flush_count
-- flush_size_bytes
-- flush_timeout_millis
+- flush_size
+- flush_timeout
 
 Complex flush policies can be defined with the following free style syntax:
 
@@ -904,7 +951,7 @@ in scenarios where one is chasing a bug and trying to narrow down what is being 
 
 When using asynchronous logging schemes, it is required to specify two log targets: the asynchronous "outer" log target, and the "inner" end log target. In order to simplify syntax, the pipe sign '|' is used as follows:
 
-    log_target = async://deferred | file://logs/app.log?file_segment_size_mb=4
+    log_target = async://deferred | file://logs/app.log?file_segment_size=4mb
 
 So one URL is piped into another URL. The outer URL results in a log target that is added to the global list of log targets, while the inner URL generates a private log target that is managed by the outer log target.
 
@@ -918,24 +965,24 @@ The deferred log target uses a simple logging thread with a queue guarded by a m
 
 The queued log target is based on the deferred log target, but adds logic of lazier wake-up, whenever timeout passes or queue size reaches some level. The queued log target therefore uses the following mandatory parameters:
 
-    queue_batch_size=<batch-size>
-    queue_timeout_millis=<timeout-millis>
+    queue_batch_size=<number of queued log messages>
+    queue_timeout=<timeout>
 
 The quantum log target uses a lock free ring buffer and a CPU-tight logging thread. The quantum log target requires the following mandatory parameter to be defined:
 
-    quantum_buffer_size=<ring-buffer-size>
+    quantum_buffer_size=<number of items in ring buffer>
 
 All asynchronous log target may be configured with log format, log level, filter and flush policy.
 
 Here is an example for a deferred log target that uses count flush policy and passes logged message to a segmented file log target:
 
-    log_target = async://deferred?flush_policy=count&flush_count=4096 | file://logs/app.log?file_segment_size_mb=4
+    log_target = async://deferred?flush_policy=count&flush_count=4096 | file://logs/app.log?file_segment_size=4mb
 
 ### Configuring Database Log Targets
 
 Here is another example for connecting to a MySQL database behind a queued log target:
 
-    log_target = async://queued?queue_batch_size=1024&queue_timeout_millis=100 | 
+    log_target = async://queued?queue_batch_size=1024&queue_timeout=100ms | 
         db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&
         insert_query=INSERT INTO log_records values(${time}, ${level}, ${host}, ${user}, ${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})
 
@@ -943,7 +990,7 @@ Pay attention to the outer log target:
 - scheme: async
 - path: queued (denoting queued asynchronous log target)
 - queue_batch_size: Triggers background thread to wake up when log message queue reaches this size
-- queue_timeout_millis: Triggers background thread to wake up each time this timeout passes
+- queue_timeout: Triggers background thread to wake up each time this timeout passes
 
 Pay attention to the inner log target:
 
@@ -968,8 +1015,8 @@ The following parameters are optional for database target configuration:
 - db_max_threads: When specifying db_thread_model=conn-per-thread it is possible also to configure the maximum  
     number of threads expected to concurrently send log messages to the database log target.  
     If not specified, then a default value of 4096 is used.
-- db_reconnect_timeout_millis: When using database log target, a background thread is used to reconnect to the  
-    database after disconnect. This value determines the timeout in milliseconds between any two consecutive reconnect attempts.
+- db_reconnect_timeout: When using database log target, a background thread is used to reconnect to the  
+    database after disconnect. This value determines the timeout between any two consecutive reconnect attempts.
 
 Additional required components may differ from one database to another.
 
@@ -1033,9 +1080,12 @@ Pay attention that in the example above, the global log format is used as the me
 If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
 
 In case a flush policy is used, then the flush timeouts, both during regular flush, and during shutdown flush,  
-can be configured via 'kafka_flush_timeout_millis' and 'kafka_shutdown_flush_timeout_millis' respectively:
+can be configured via 'kafka_flush_timeout' and 'kafka_shutdown_flush_timeout' respectively:
 
-    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&msgq_topic=log_records&kafka_flush_timeout_millis=50&flush_policy=immediate
+    log_target = msgq://kafka?kafka_bootstrap_servers=localhost:9092&
+        msgq_topic=log_records&
+        kafka_flush_timeout=50millis&
+        flush_policy=immediate
 
 Pay attention that the flush_policy parameter enforces kafka message flush after each message is being produced.  
 Different flush policies can be applied, as explained above.
@@ -1077,7 +1127,7 @@ Benchmark shows (as well as gRPC recommendations) that async_callback_stream has
 
 The following optional parameters are also recognized:
 
-- grpc_deadline_timeout_millis
+- grpc_deadline_timeout
 - grpc_server_ca_path
 - grpc_client_ca_path
 - grpc_client_key_path
@@ -1197,7 +1247,7 @@ so this option mostly suites FATAL and crash reports. If mixed reports are requi
 then consider setting up two Sentry log targets, one for ERROR reports without stack trace, and one for FATAL  
 and crash reports, with stack trace.  
 
-Optional flush and shutdown timeout parameters may be specified with 'flush_timeout_millis' and 'shutdown_timeout_millis'.
+Optional flush and shutdown timeout parameters may be specified with 'flush_timeout' and 'shutdown_timeout'.
 
 Finally, in order to debug issues with the Sentry log target's connectivity with the Sentry server, the 'debug' parameter may be used, set to true. This will have Sentry native SDK log/trace messages to be redirected to ELog, and printed to the standard error stream via specialized logger and log source, using the log source name "elog.sentry".  
 The 'logger_level' parameter controls the level of Sentry native SDK message being printed out.
@@ -1215,12 +1265,12 @@ If a more specialized message pay load is required, then add a 'log_format' para
 Several log targets (currently Grafana Loki and Datadog) use HTTP client for their communication with an end server.  
 For these kind of log targets the following common configuration properties can be specified in the configuration string URL of the log target:
 
-- connect_timeout_millis
-- write_timeout_millis
-- read_timeout_millis
-- resend_timeout_millis
-- backlog_limit_bytes
-- shutdown_timeout_millis
+- connect_timeout
+- write_timeout
+- read_timeout
+- resend_timeout
+- backlog_limit
+- shutdown_timeout
 
 The connect timeout is used to determine when a server connection setup failed.  
 It may be that the server is not down, but setting up HTTP connection takes too much time.  
@@ -1236,12 +1286,12 @@ The following table summarizes the default values for these configuration parame
 
 | Parameter  | Default Value |
 | ------------- | ------------- |
-| connect_timeout_millis  | 200  |
-| write_timeout_millis  | 50  |
-| read_timeout_millis  | 100  |
-| resend_timeout_millis  | 5000  |
-| backlog_limit_bytes  | 1048576 (1MB)  |
-| shutdown_timeout_millis  | 5000  |
+| connect_timeout  | 200 milliseconds |
+| write_timeout  | 50 milliseconds |
+| read_timeout  | 100 milliseconds |
+| resend_timeout  | 5 seconds  |
+| backlog_limit  | 1MB  |
+| shutdown_timeout  | 5 seconds  |
 
 ### Nested Specification Style
 
@@ -1697,26 +1747,29 @@ The flush policy is not something simple as "(count == 10)".
 We could model it as an if-else statement, but that would be too complex.  
 Instead, we can model it as something similar to a function call:
 
-    sys_state(normal_size_bytes == 1024, urgent_size_bytes == 4096, overloaded_size_bytes == 8192)
+    sys_state(normal_size == 1kb, urgent_size == 4kb, overloaded_size == 8kb)
 
 Actually, a more readable form would be:
 
-    sys_state(normal_size_bytes: 1024, urgent_size_bytes: 4096, overloaded_size_bytes: 8192)
+    sys_state(normal_size: 1kb, urgent_size: 4kb, overloaded_size: 8kb)
 
 Both forms of syntax above are supported by ELog.  
 In a similar manner, when using string URL or nested-style we can require the following properties:
 
-    - normal_size_bytes
-    - urgent_size_bytes
-    - overloaded_size_bytes
+    - normal_size
+    - urgent_size
+    - overloaded_size
 
 With this we can now implement the loading functions:
 
     bool SystemStateFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
         // this takes care both of string URL and nested style configuration
-        return loadIntFlushPolicy(flushPolicyCfg, "sys_state", "normal_size_bytes", m_normalLimitBytes) &&
-            loadIntFlushPolicy(flushPolicyCfg, "sys_state", "urgent_size_bytes", m_urgentLimitBytes) &&
-            loadIntFlushPolicy(flushPolicyCfg, "sys_state", "overloaded_size_bytes", m_overloadedLimitBytes);
+        return loadSizeFlushPolicy(flushPolicyCfg, "sys_state", "normal_size", m_normalLimitBytes, 
+                    ELogSizeUnits::SU_BYTES) &&
+            loadSizeFlushPolicy(flushPolicyCfg, "sys_state", "urgent_size", m_urgentLimitBytes, 
+                    ELogSizeUnits::SU_BYTES) &&
+            loadSizeFlushPolicy(flushPolicyCfg, "sys_state", "overloaded_size", m_overloadedLimitBytes, 
+                    ELogSizeUnits::SU_BYTES);
     }
 
     bool SystemStateFlushPolicy::loadExpr(const ELogExpression* expr) {
@@ -1733,14 +1786,17 @@ With this we can now implement the loading functions:
 
         // finally, load all sub-expressions
         // for simplicity, we assume strict order
-        return loadIntFlushPolicy(funcExpr->m_expressions[0], "sys_state", m_normalLimitBytes, "normal_size_bytes") &&
-            loadIntFlushPolicy(funcExpr->m_expressions[1], "sys_state", m_urgentLimitBytes, "urgent_size_bytes") &&
-            loadIntFlushPolicy(funcExpr->m_expressions[2], "sys_state", m_overloadedLimitBytes, "overloaded_size_bytes");
+        return loadSizeFlushPolicy(funcExpr->m_expressions[0], "sys_state", "normal_size", m_normalLimitBytes, 
+                    ELogSizeUnits::SU_BYTES) &&
+            loadSizeFlushPolicy(funcExpr->m_expressions[1], "sys_state", "urgent_size", m_urgentLimitBytes, 
+                    ELogSizeUnits::SU_BYTES) &&
+            loadSizeFlushPolicy(funcExpr->m_expressions[2], "sys_state", "overloaded_size", 
+                    m_overloadedLimitBytes, ELogSizeUnits::SU_BYTES);
     }
 
 With this in hand we can now specify in configuration:
 
-    flush_policy=(sys_state(normal_size_bytes: 1024, urgent_size_bytes: 4096, overloaded_size_bytes: 8192))
+    flush_policy=(sys_state(normal_size: 1kb, urgent_size: 4kb, overloaded_size: 8kb))
 
 Notice that the flush policy must be surrounded by parenthesis, so that it gets parsed as an expression.  
 

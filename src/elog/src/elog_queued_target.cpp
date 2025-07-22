@@ -5,7 +5,7 @@
 namespace elog {
 
 ELogQueuedTarget::ELogQueuedTarget(ELogTarget* logTarget, uint32_t batchSize,
-                                   uint32_t timeoutMillis)
+                                   uint64_t timeoutMillis)
     : ELogDeferredTarget(logTarget), m_batchSize(batchSize), m_timeoutMillis(timeoutMillis) {}
 
 ELogQueuedTarget::~ELogQueuedTarget() {}

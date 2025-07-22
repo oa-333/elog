@@ -140,7 +140,7 @@ bool ELogKafkaMsgQTarget::startLogTarget() {
 
 bool ELogKafkaMsgQTarget::stopLogTarget() {
     // wait for 5 seconds for all produces messages to be flushed
-    uint32_t flushTimeoutMillis = m_shutdownFlushTimeoutMillis;
+    uint64_t flushTimeoutMillis = m_shutdownFlushTimeoutMillis;
     if (flushTimeoutMillis == 0) {
         flushTimeoutMillis = ELOG_DEFAULT_KAFKA_SHUTDOWN_FLUSH_TIMEOUT_MILLIS;
     }
@@ -227,7 +227,7 @@ uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
 }
 
 void ELogKafkaMsgQTarget::flushLogTarget() {
-    uint32_t flushTimeoutMillis = m_flushTimeoutMillis;
+    uint64_t flushTimeoutMillis = m_flushTimeoutMillis;
     if (flushTimeoutMillis == 0) {
         flushTimeoutMillis = ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS;
     }

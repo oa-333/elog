@@ -15,7 +15,7 @@ public:
                       const std::string& user, const std::string& passwd,
                       const std::string& insertStmt, ELogDbTarget::ThreadModel threadModel,
                       uint32_t maxThreads = ELOG_DB_MAX_THREADS,
-                      uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
+                      uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
         : ELogDbTarget("PostgreSQL", insertStmt.c_str(),
                        ELogDbFormatter::QueryStyle::QS_DOLLAR_ORDINAL, threadModel, maxThreads,
                        reconnectTimeoutMillis) {

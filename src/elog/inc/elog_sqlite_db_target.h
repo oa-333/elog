@@ -16,7 +16,7 @@ public:
     ELogSQLiteDbTarget(const std::string& filePath, const std::string& insertStmt,
                        ELogDbTarget::ThreadModel threadModel,
                        uint32_t maxThreads = ELOG_DB_MAX_THREADS,
-                       uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
+                       uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
         : ELogDbTarget("SQLite", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_QMARK,
                        threadModel, maxThreads, reconnectTimeoutMillis),
           m_filePath(filePath),

@@ -36,7 +36,7 @@ public:
      * file, then the log message is appended to the buffer. If the log message is larger than the
      * buffer size, then it is written directly to file without buffering.
      */
-    ELogBufferedFileWriter(uint32_t bufferSizeBytes, bool useLock)
+    ELogBufferedFileWriter(uint64_t bufferSizeBytes, bool useLock)
         : m_fd(0), m_bufferSizeBytes(bufferSizeBytes), m_bufferOffset(0), m_useLock(useLock) {
         if (m_bufferSizeBytes > ELOG_MAX_FILE_BUFFER_BYTES) {
             m_bufferSizeBytes = ELOG_MAX_FILE_BUFFER_BYTES;
@@ -68,8 +68,8 @@ public:
 
 private:
     int m_fd;
-    size_t m_bufferSizeBytes;
-    size_t m_bufferOffset;
+    uint64_t m_bufferSizeBytes;
+    uint64_t m_bufferOffset;
     alignas(8) std::vector<char> m_logBuffer;
     bool m_useLock;
     alignas(8) std::mutex m_lock;

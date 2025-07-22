@@ -43,14 +43,14 @@ enum class ELogExpressionType : uint32_t {
 // interpreted as size filter and time filter, so we introduce a new syntax with colon character,
 // denoting named value, rather than predicate, like this:
 //
-//      group(group_size:4, group_timeout_micros:100)
+//      group(size: 4, timeout: 100micros)
 //
 // Now, for group flush policy this is not enough, since we need to specify both when flush should
 // take place (the controlling policy) and how (the moderating policy), so for this purpose the
 // CHAIN syntax is introduced. The CHAIN keyword denotes tying two policies together, the first
 // being the controlling policy and the second being the moderating policy:
 //
-//      flush_policy=(CHAIN(immediate, group(group_size:4, group_timeout_micros:100)))
+//      flush_policy=(CHAIN(immediate, group(size:4, timeout: 100micros)))
 //
 // CHAIN syntax for group flush could have been done just like AND/OR as follows:
 //

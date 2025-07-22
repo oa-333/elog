@@ -5,12 +5,13 @@
 
 namespace elog {
 
-ELogBufferedFileTarget::ELogBufferedFileTarget(const char* filePath, uint32_t bufferSize /* = 0 */,
+ELogBufferedFileTarget::ELogBufferedFileTarget(const char* filePath,
+                                               uint64_t bufferSizeBytes /* = 0 */,
                                                bool useLock /* = true */,
                                                ELogFlushPolicy* flushPolicy /* = nullptr */)
     : ELogTarget("file", flushPolicy),
       m_filePath(filePath),
-      m_fileWriter(bufferSize, useLock),
+      m_fileWriter(bufferSizeBytes, useLock),
       m_fileHandle(nullptr),
       m_shouldClose(false) {
     if (useLock) {

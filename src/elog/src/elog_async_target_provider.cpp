@@ -1,6 +1,7 @@
 #include "elog_async_target_provider.h"
 
 #include "elog_config_loader.h"
+#include "elog_config_parser.h"
 #include "elog_error.h"
 
 namespace elog {
@@ -53,9 +54,16 @@ ELogTarget* ELogAsyncTargetProvider::loadNestedTarget(const ELogConfigMapNode* l
         return combinedTarget;
     }
 
-    // TODO: we need to support flat string type here (URL style)
+    // we need to support flat string type here (URL style)
     if (value->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
-        // TODO: implement
+        const ELogConfigStringValue* strValue = (const ELogConfigStringValue*)value;
+        ELogTarget* logTarget = ELogConfigLoader::loadLogTarget(strValue->getStringValue());
+        if (logTarget == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to load nested log target by configuration '%s' (context: %s)",
+                strValue->getStringValue(), logTargetCfg->getFullContext());
+            return nullptr;
+        }
     }
 
     ELOG_REPORT_ERROR(

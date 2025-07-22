@@ -2,7 +2,9 @@
 
 #ifdef ELOG_ENABLE_HTTP
 
+#include <cassert>
 #include <chrono>
+#include <cinttypes>
 
 #include "elog_error.h"
 
@@ -171,10 +173,12 @@ void ELogHttpClient::resendThread() {
             // nothing to send
             return;
         }
-        uint32_t resendPeriodMillis = m_config.m_shutdownTimeoutMillis / (backlogCount + 1);
+        uint64_t resendPeriodMillis = m_config.m_shutdownTimeoutMillis / (backlogCount + 1);
 
         // attempt resending failed messages
-        auto start = std::chrono::high_resolution_clock::now();
+        // NOTE: theoretically, high resolution clock CAN go backwards, resulting in negative time
+        // diff, so we use instead steady clock here, which is guaranteed to be monotonic
+        auto start = std::chrono::steady_clock::now();
         std::chrono::milliseconds timePassedMillis;
         do {
             // try to resend backlog
@@ -187,9 +191,11 @@ void ELogHttpClient::resendThread() {
             std::this_thread::sleep_for(std::chrono::milliseconds(resendPeriodMillis));
 
             // compute time passed
-            auto end = std::chrono::high_resolution_clock::now();
+            auto end = std::chrono::steady_clock::now();
             timePassedMillis = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        } while (timePassedMillis.count() <= m_config.m_shutdownTimeoutMillis);
+            // NOTE: due to usage of steady clock, time diff cannot be negative
+            assert(timePassedMillis.count() > 0);
+        } while ((uint64_t)timePassedMillis.count() <= m_config.m_shutdownTimeoutMillis);
     }
 
     size_t backlogCount = m_shippingBackLog.size();
@@ -201,7 +207,7 @@ void ELogHttpClient::resendThread() {
 
 void ELogHttpClient::copyPendingBacklog() {
     while (!m_pendingBackLog.empty()) {
-        m_backlogSizeBytes += (uint32_t)m_pendingBackLog.front().m_body.size();
+        m_backlogSizeBytes += m_pendingBackLog.front().m_body.size();
         m_shippingBackLog.push_back(m_pendingBackLog.front());
         m_pendingBackLog.pop_front();
     }
@@ -211,22 +217,20 @@ void ELogHttpClient::dropExcessBacklog() {
     while (m_backlogSizeBytes >= m_config.m_backlogLimitBytes) {
         if (m_shippingBackLog.empty()) {
             // impossible, but we still must not generate core dump
-            ELOG_REPORT_ERROR(
-                "Invalid resend thread state: backlog size (%u bytes) exceeds limit, but "
-                "backlog is empty",
-                m_backlogSizeBytes);
+            ELOG_REPORT_ERROR("Invalid resend thread state: backlog size (%" PRIu64
+                              " bytes) exceeds limit, but backlog is empty",
+                              m_backlogSizeBytes);
             break;
         }
         size_t messageSize = m_shippingBackLog.front().m_body.size();
         if (messageSize > m_backlogSizeBytes) {
             // impossible, but still be careful
-            ELOG_REPORT_ERROR(
-                "Message body size (%zu bytes) exceeds current backlog size (%u bytes), "
-                "resetting backlog size to zero",
-                messageSize, m_backlogSizeBytes);
+            ELOG_REPORT_ERROR("Message body size (%zu bytes) exceeds current backlog size (%" PRIu64
+                              " bytes), resetting backlog size to zero",
+                              messageSize, m_backlogSizeBytes);
             m_config.m_backlogLimitBytes = 0;
         } else {
-            m_backlogSizeBytes -= (uint32_t)messageSize;
+            m_backlogSizeBytes -= messageSize;
         }
         m_shippingBackLog.pop_front();
     }

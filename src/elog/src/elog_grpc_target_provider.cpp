@@ -77,7 +77,7 @@ static ELogRpcTarget* constructGRPCTarget(const char* name, const std::string& s
                                           const std::string& params, const std::string& serverCA,
                                           const std::string& clientCA, const std::string& clientKey,
                                           ELogGRPCClientMode clientMode,
-                                          uint32_t deadlineTimeoutMillis,
+                                          uint64_t deadlineTimeoutMillis,
                                           uint32_t maxInflightCalls) {
     ELogGRPCTargetConstructorMap::iterator itr = sTargetConstructorMap.find(name);
     if (itr == sTargetConstructorMap.end()) {
@@ -112,9 +112,10 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(const ELogConfigMapNode* logTa
     }
 
     // a deadline may also be specified
-    uint32_t deadlineTimeoutMillis = ELOG_GRPC_DEFAULT_DEADLINE_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
-            logTargetCfg, "gRPC", "grpc_deadline_timeout_millis", deadlineTimeoutMillis)) {
+    uint64_t deadlineTimeoutMillis = ELOG_GRPC_DEFAULT_DEADLINE_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, "gRPC", "grpc_deadline_timeout", deadlineTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 

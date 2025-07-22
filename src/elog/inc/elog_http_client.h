@@ -119,7 +119,7 @@ private:
 
     std::list<HttpMessage> m_pendingBackLog;
     std::list<HttpMessage> m_shippingBackLog;
-    uint32_t m_backlogSizeBytes;
+    uint64_t m_backlogSizeBytes;
     std::mutex m_lock;
     std::condition_variable m_cv;
 

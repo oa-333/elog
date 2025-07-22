@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 
+#include "elog_common_def.h"
 #include "elog_def.h"
 #include "elog_props.h"
 
@@ -87,6 +88,16 @@ extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
 extern bool parseBoolProp(const char* propName, const std::string& logTargetCfg,
                           const std::string& prop, bool& value, bool issueError = true);
 
+/** @brief Helper function for parsing a timeout property, with suffix ms, us, ns. */
+extern bool parseTimeoutProp(const char* propName, const std::string& logTargetCfg,
+                             const std::string& prop, uint64_t& timeout,
+                             ELogTimeoutUnits targetUnits, bool issueError = true);
+
+/** @brief Helper function for parsing a timeout property, with suffix ms, us, ns. */
+extern bool parseSizeProp(const char* propName, const std::string& logTargetCfg,
+                          const std::string& prop, uint64_t& size, ELogSizeUnits targetUnits,
+                          bool issueError = true);
+
 /** @brief Trims a string's prefix from the left side (in-place). */
 inline void ltrim(std::string& s) { s.erase(0, s.find_first_not_of(" \n\r\t")); }
 
@@ -98,6 +109,13 @@ inline std::string trim(const std::string& s) {
     std::string res = s;
     ltrim(res);
     rtrim(res);
+    return res;
+}
+
+inline std::string toLower(const std::string& s) {
+    std::string res = s;
+    std::transform(res.begin(), res.end(), res.begin(),
+                   [](char c) { return (char)std::tolower(c); });
     return res;
 }
 

@@ -12,7 +12,7 @@ ELogDbTarget* ELogSQLiteDbTargetProvider::loadTarget(const ELogConfigMapNode* lo
                                                      const std::string& insertQuery,
                                                      ELogDbTarget::ThreadModel threadModel,
                                                      uint32_t maxThreads,
-                                                     uint32_t reconnectTimeoutMillis) {
+                                                     uint64_t reconnectTimeoutMillis) {
     ELogDbTarget* target = new (std::nothrow) ELogSQLiteDbTarget(
         connString, insertQuery, threadModel, maxThreads, reconnectTimeoutMillis);
     if (target == nullptr) {

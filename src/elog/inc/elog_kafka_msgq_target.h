@@ -15,7 +15,7 @@ class ELOG_API ELogKafkaMsgQTarget : public ELogMsgQTarget {
 public:
     ELogKafkaMsgQTarget(const std::string& bootstrapServers, const std::string& topicName,
                         const std::string& headers, int partition = -1,
-                        uint32_t flushTimeoutMillis = 0, uint32_t shutdownFlushTimeoutMillis = 0)
+                        uint64_t flushTimeoutMillis = 0, uint64_t shutdownFlushTimeoutMillis = 0)
         : m_bootstrapServers(bootstrapServers),
           m_topicName(topicName),
           m_headers(headers),
@@ -50,8 +50,8 @@ private:
     std::string m_topicName;
     std::string m_headers;
     int m_partition;
-    uint32_t m_flushTimeoutMillis;
-    uint32_t m_shutdownFlushTimeoutMillis;
+    uint64_t m_flushTimeoutMillis;
+    uint64_t m_shutdownFlushTimeoutMillis;
 
     std::string m_clientId;
     rd_kafka_conf_t* m_conf;

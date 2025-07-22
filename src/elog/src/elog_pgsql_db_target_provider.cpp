@@ -14,7 +14,7 @@ ELogDbTarget* ELogPGSQLDbTargetProvider::loadTarget(const ELogConfigMapNode* log
                                                     const std::string& insertQuery,
                                                     ELogDbTarget::ThreadModel threadModel,
                                                     uint32_t maxThreads,
-                                                    uint32_t reconnectTimeoutMillis) {
+                                                    uint64_t reconnectTimeoutMillis) {
     // we expect 4 properties: db, port, user, passwd (optional)
     // the connection string actually contains the host name/ip
     std::string db;

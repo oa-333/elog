@@ -11,9 +11,9 @@ ELogAsyncTarget* ELogQuantumTargetProvider::loadTarget(const ELogConfigMapNode* 
     // make sure that we have quantum_buffer_size and
 
     // parse quantum buffer size property
-    int64_t quantumBufferSize = 0;
-    if (!ELogConfigLoader::getLogTargetIntProperty(logTargetCfg, "asynchronous",
-                                                   "quantum_buffer_size", quantumBufferSize)) {
+    uint32_t quantumBufferSize = 0;
+    if (!ELogConfigLoader::getLogTargetUInt32Property(logTargetCfg, "asynchronous",
+                                                      "quantum_buffer_size", quantumBufferSize)) {
         return nullptr;
     }
 

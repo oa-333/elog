@@ -126,6 +126,7 @@
         "dllexport",
         "fmtlib",
         "fsanitize",
+        "GIGA",
         "GRPCPP",
         "grpcpublicheaders",
         "hexa",

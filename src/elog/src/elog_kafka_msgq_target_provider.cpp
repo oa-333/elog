@@ -13,23 +13,24 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const ELogConfigMapNode*
                                                         const std::string& topic,
                                                         const std::string& headers) {
     // we expect 4 properties: kafka_bootstrap_servers, and optional partition,
-    // kafka_flush_timeout_millis, kafka_shutdown_flush_timeout_millis
+    // kafka_flush_timeout, kafka_shutdown_flush_timeout
     std::string bootstrapServers;
     if (!ELogConfigLoader::getLogTargetStringProperty(
             logTargetCfg, "Kafka", "kafka_bootstrap_servers", bootstrapServers)) {
         return nullptr;
     }
 
-    uint32_t flushTimeoutMillis = 0;
-    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
-            logTargetCfg, "Kafka", "kafka_flush_timeout_millis", flushTimeoutMillis)) {
+    uint64_t flushTimeoutMillis = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, "Kafka", "kafka_flush_timeout", flushTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 
-    uint32_t shutdownFlushTimeoutMillis = 0;
-    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "Kafka",
-                                                              "kafka_shutdown_flush_timeout_millis",
-                                                              shutdownFlushTimeoutMillis)) {
+    uint64_t shutdownFlushTimeoutMillis = 0;
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, "Kafka", "kafka_shutdown_flush_timeout", shutdownFlushTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 

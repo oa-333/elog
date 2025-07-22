@@ -11,48 +11,36 @@ namespace elog {
 
 bool ELogHttpConfigLoader::loadHttpConfig(const ELogConfigMapNode* logTargetCfg,
                                           const char* targetName, ELogHttpConfig& httpConfig) {
-    if (!loadHttpConfigValue(logTargetCfg, targetName, "connect_timeout_millis",
-                             httpConfig.m_connectTimeoutMillis)) {
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, targetName, "connect_timeout", httpConfig.m_connectTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return false;
     }
-    if (!loadHttpConfigValue(logTargetCfg, targetName, "write_timeout_millis",
-                             httpConfig.m_writeTimeoutMillis)) {
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, targetName, "write_timeout", httpConfig.m_writeTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return false;
     }
-    if (!loadHttpConfigValue(logTargetCfg, targetName, "read_timeout_millis",
-                             httpConfig.m_readTimeoutMillis)) {
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, targetName, "read_timeout", httpConfig.m_readTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return false;
     }
-    if (!loadHttpConfigValue(logTargetCfg, targetName, "resend_timeout_millis",
-                             httpConfig.m_resendPeriodMillis)) {
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, targetName, "resend_timeout", httpConfig.m_resendPeriodMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return false;
     }
-    if (!loadHttpConfigValue(logTargetCfg, targetName, "backlog_limit_bytes",
-                             httpConfig.m_backlogLimitBytes)) {
+    if (!ELogConfigLoader::getOptionalLogTargetSizeProperty(
+            logTargetCfg, targetName, "backlog_limit", httpConfig.m_backlogLimitBytes,
+            ELogSizeUnits::SU_BYTES)) {
         return false;
     }
-    if (!loadHttpConfigValue(logTargetCfg, targetName, "shutdown_timeout_millis",
-                             httpConfig.m_shutdownTimeoutMillis)) {
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, targetName, "shutdown_timeout", httpConfig.m_shutdownTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return false;
     }
-    return true;
-}
-
-bool ELogHttpConfigLoader::loadHttpConfigValue(const ELogConfigMapNode* logTargetCfg,
-                                               const char* targetName, const char* propName,
-                                               uint32_t& value) {
-    int64_t value64 = value;
-    if (!ELogConfigLoader::getOptionalLogTargetIntProperty(logTargetCfg, targetName, propName,
-                                                           value64)) {
-        return false;
-    }
-    if (value64 >= UINT32_MAX) {
-        ELOG_REPORT_ERROR("Property %s value %" PRId64
-                          " in log target %s exceeds maximum allowed %u",
-                          propName, value64, targetName, (unsigned)UINT32_MAX);
-        return false;
-    }
-    value = (uint32_t)value64;
     return true;
 }
 

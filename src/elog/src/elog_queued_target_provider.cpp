@@ -11,16 +11,17 @@ ELogAsyncTarget* ELogQueuedTargetProvider::loadTarget(const ELogConfigMapNode* l
     // make sure that we have queue_batch_size and
 
     // parse queue batch size property
-    int64_t queueBatchSize = 0;
-    if (!ELogConfigLoader::getLogTargetIntProperty(logTargetCfg, "asynchronous", "queue_batch_size",
-                                                   queueBatchSize)) {
+    uint32_t queueBatchSize = 0;
+    if (!ELogConfigLoader::getLogTargetUInt32Property(logTargetCfg, "asynchronous",
+                                                      "queue_batch_size", queueBatchSize)) {
         return nullptr;
     }
 
     // parse queue timeout millis property
-    int64_t queueTimeoutMillis = 0;
-    if (!ELogConfigLoader::getLogTargetIntProperty(logTargetCfg, "asynchronous",
-                                                   "queue_timeout_millis", queueTimeoutMillis)) {
+    uint64_t queueTimeoutMillis = 0;
+    if (!ELogConfigLoader::getLogTargetTimeoutProperty(logTargetCfg, "asynchronous",
+                                                       "queue_timeout", queueTimeoutMillis,
+                                                       ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 
@@ -30,8 +31,8 @@ ELogAsyncTarget* ELogQueuedTargetProvider::loadTarget(const ELogConfigMapNode* l
         return nullptr;
     }
 
-    ELogAsyncTarget* asyncTarget = new (std::nothrow)
-        ELogQueuedTarget(target, (uint32_t)queueBatchSize, (uint32_t)queueTimeoutMillis);
+    ELogAsyncTarget* asyncTarget =
+        new (std::nothrow) ELogQueuedTarget(target, queueBatchSize, queueTimeoutMillis);
     if (asyncTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create queued log target, out of memory");
         delete target;

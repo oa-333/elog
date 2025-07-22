@@ -9,6 +9,9 @@
 #pragma warning(disable : 4464 4626 5267 4242)
 #endif
 
+// compiler complains this is not defined, so we set it to 1
+// TODO: find out more about
+#define CONCPP_BUILD_SHARED 1
 #include <mysql/jdbc.h>
 
 #ifdef ELOG_MSVC
@@ -27,7 +30,7 @@ public:
                       const std::string& passwd, const std::string& insertStmt,
                       ELogDbTarget::ThreadModel threadModel,
                       uint32_t maxThreads = ELOG_DB_MAX_THREADS,
-                      uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
+                      uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
         : ELogDbTarget("MySQL", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_QMARK,
                        threadModel, maxThreads, reconnectTimeoutMillis),
           m_url(url),

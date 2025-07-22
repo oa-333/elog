@@ -31,22 +31,22 @@ namespace elog {
 /** @brief Pack all HTTP configuration in one place. */
 struct ELOG_API ELogHttpConfig {
     /** @brief The timeout for HTTP connect to be declared as failed. */
-    uint32_t m_connectTimeoutMillis;
+    uint64_t m_connectTimeoutMillis;
 
     /** @brief The timeout for HTTP write to be declared as failed. */
-    uint32_t m_writeTimeoutMillis;
+    uint64_t m_writeTimeoutMillis;
 
     /** @brief The timeout for HTTP read to be declared as failed. */
-    uint32_t m_readTimeoutMillis;
+    uint64_t m_readTimeoutMillis;
 
     /** @brief The interval between resend attempt of previously failed HTTP message send. */
-    uint32_t m_resendPeriodMillis;
+    uint64_t m_resendPeriodMillis;
 
     /** @brief The size limit of the backlog used for storing messages after failed send attempt. */
-    uint32_t m_backlogLimitBytes;
+    uint64_t m_backlogLimitBytes;
 
     /** @brief The timeout used for final attempt to resend all unsent HTTP messages. */
-    uint32_t m_shutdownTimeoutMillis;
+    uint64_t m_shutdownTimeoutMillis;
 
     ELogHttpConfig()
         : m_connectTimeoutMillis(ELOG_HTTP_DEFAULT_CONNECT_TIMEOUT_MILLIS),

@@ -1,6 +1,7 @@
 #ifndef __ELOG_CONFIG_LOADER_H__
 #define __ELOG_CONFIG_LOADER_H__
 
+#include "elog_common.h"
 #include "elog_config.h"
 #include "elog_expression.h"
 #include "elog_flush_policy.h"
@@ -29,7 +30,12 @@ public:
     static bool loadFileProperties(const char* configPath, ELogPropertySequence& props);
 
     /**
-     * @brief Adds a log target from target specification (internal use only).
+     * @brief Loads a log target from target specification (internal use only).
+     */
+    static ELogTarget* loadLogTarget(const char* logTargetCfg);
+
+    /**
+     * @brief Loads a log target from target specification (internal use only).
      */
     static ELogTarget* loadLogTarget(const ELogConfigMapNode* logTargetCfg);
 
@@ -66,6 +72,14 @@ public:
     static bool getLogTargetBoolProperty(const ELogConfigMapNode* logTargetCfg, const char* scheme,
                                          const char* propName, bool& propValue);
 
+    static bool getLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
+                                            const char* scheme, const char* propName,
+                                            uint64_t& propValue, ELogTimeoutUnits targetUnits);
+
+    static bool getLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg, const char* scheme,
+                                         const char* propName, uint64_t& propValue,
+                                         ELogSizeUnits targetUnits);
+
     static bool getOptionalLogTargetStringProperty(const ELogConfigMapNode* logTargetCfg,
                                                    const char* scheme, const char* propName,
                                                    std::string& propValue, bool* found = nullptr);
@@ -89,6 +103,17 @@ public:
     static bool getOptionalLogTargetBoolProperty(const ELogConfigMapNode* logTargetCfg,
                                                  const char* scheme, const char* propName,
                                                  bool& propValue, bool* found = nullptr);
+
+    static bool getOptionalLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
+                                                    const char* scheme, const char* propName,
+                                                    uint64_t& propValue,
+                                                    ELogTimeoutUnits targetUnits,
+                                                    bool* found = nullptr);
+
+    static bool getOptionalLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg,
+                                                 const char* scheme, const char* propName,
+                                                 uint64_t& propValue, ELogSizeUnits targetUnits,
+                                                 bool* found = nullptr);
 
 private:
     static ELogFlushPolicy* loadFlushPolicyExprStr(const char* flushPolicyExpr, bool& result);

@@ -13,7 +13,7 @@ public:
     /**
      * @brief Construct a new ELogBufferedFileTarget object.
      * @param filePath The path to the log file.
-     * @param bufferSize The buffer size to use. Cannot be zero.
+     * @param bufferSizeBytes The buffer size to use. Cannot be zero.
      * @param useLock Specifies whether to use lock. If buffering is used in a multi-threaded
      * scenario, then a lock is required, and without a lock behavior is undefined. If buffering is
      * disabled, then lock is not required, unless it is desired to avoid log messages from
@@ -21,24 +21,27 @@ public:
      * @param flushPolicy Optional flush policy to use.
      * @see @ref ELofBufferedFileWriter.
      */
-    ELogBufferedFileTarget(const char* filePath, uint32_t bufferSize = 0, bool useLock = true,
-                           ELogFlushPolicy* flushPolicy = nullptr);
+    ELogBufferedFileTarget(const char* filePath,
+                           uint64_t bufferSizeBytes = ELOG_DEFAULT_FILE_BUFFER_SIZE_BYTES,
+                           bool useLock = true, ELogFlushPolicy* flushPolicy = nullptr);
 
     /**
      * @brief Construct a new ELogBufferedFileTarget object using an existing file handle.
      * @note This constructor is usually used for logging to the standard error and output streams.
      * @param fileHandle The open file handle to use.
-     * @param bufferSize The buffer size to use. Specify zero to default buffer size.
+     * @param bufferSizeBytes The buffer size to use. Specify zero to default buffer size.
      * @param useLock Specifies whether to use lock. If buffering is used in a multi-threaded
      * scenario, the a lock is required, and without a lock behavior is undefined.
      * @param flushPolicy Optional flush policy to use.
      * @param shouldClose Optionally specify whether the file handle should be closed when done.
      * @see @ref ELofBufferedFileWriter.
      */
-    ELogBufferedFileTarget(FILE* fileHandle, uint32_t bufferSize = 0, bool useLock = true,
-                           ELogFlushPolicy* flushPolicy = nullptr, bool shouldClose = false)
+    ELogBufferedFileTarget(FILE* fileHandle,
+                           uint32_t bufferSizeBytes = ELOG_DEFAULT_FILE_BUFFER_SIZE_BYTES,
+                           bool useLock = true, ELogFlushPolicy* flushPolicy = nullptr,
+                           bool shouldClose = false)
         : ELogTarget("buffered-file", flushPolicy),
-          m_fileWriter(bufferSize, useLock),
+          m_fileWriter(bufferSizeBytes, useLock),
           m_fileHandle(fileHandle),
           m_shouldClose(shouldClose) {
         if (useLock) {

@@ -84,7 +84,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
     }
 
     // in addition, we expect at least two properties: conn_string, insert_query, db_thread_model,
-    // db_max_threads, db_reconnect_timeout_millis
+    // db_max_threads, db_reconnect_timeout
     std::string connString;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "database", "conn_string",
                                                       connString)) {
@@ -130,10 +130,11 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
         return nullptr;
     }
 
-    // check for optional db_reconnect_timeout_millis
-    uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS;
-    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
-            logTargetCfg, "database", "db_reconnect_timeout_millis", reconnectTimeoutMillis)) {
+    // check for optional db_reconnect_timeout
+    uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS;
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, "database", "db_reconnect_timeout", reconnectTimeoutMillis,
+            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 

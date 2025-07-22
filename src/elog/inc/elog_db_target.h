@@ -43,7 +43,7 @@ protected:
                  ELogDbFormatter::QueryStyle queryStyle,
                  ThreadModel threadModel = ThreadModel::TM_LOCK,
                  uint32_t maxThreads = ELOG_DB_MAX_THREADS,
-                 uint32_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
+                 uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
         : ELogTarget("db"),
           m_dbName(dbName),
           m_formatter(queryStyle),
@@ -136,7 +136,7 @@ private:
 
     ThreadModel m_threadModel;
     uint32_t m_maxThreads;
-    uint32_t m_reconnectTimeoutMillis;
+    uint64_t m_reconnectTimeoutMillis;
 
     // single thread slot
     struct ThreadSlot {
