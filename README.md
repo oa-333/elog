@@ -1,7 +1,8 @@
 # ELog Logging Library
 
-The ELog (Error Log) library is a simple, lightweight, high-performant and feature-rich C++ logging library.  
-The library has connectors for various widely-used external systems, and was designed such that it can be extended  
+ELog (Error Log) is a comprehensive, high-performant and feature-rich C++ logging framework.  
+Much attention was given to usability, so that developers can easily achieve much with just very few lines of code.  
+The library has predefined connectors for various widely-used external systems, and was designed such that it can be extended  
 for a broad range of use cases. In addition, it is fully configurable from file or string input (see examples below).
 
 The project is still in pre-Beta phase, and more is expected to come.
@@ -21,7 +22,7 @@ Using [fmtlib](https://github.com/fmtlib/fmt) formatting style (requires enablin
 
     ELOG_FMT_INFO("This is an unsigned integer {} and a string '{}'", 5, "hi");
 
-Using binary logging (fmtlib-style only):
+Using binary logging (fmtlib-style only, no formatting takes place in macro):
 
     ELOG_BIN_INFO("This message is not formatted at all during this call, param {}, param , param {}, 2, true, "some string param");
 
@@ -29,7 +30,7 @@ Using binary logging with format message caching (fmtlib-style only):
 
     ELOG_CACHE_INFO("This format message cached and referred by id, instead of being copied, param {}, param , param {}, 2, true, "some string param");
 
-Logging with a designated [logger](#defining-log-sources-and-loggers) (no error checking):
+Logging with a designated [logger](#defining-log-sources-and-loggers) (error checking omitted):
 
     // initialize a thread-safe shared logger
     elog::ELogSource* logSource = elog::defineLogSource("core");
@@ -43,14 +44,14 @@ Logging with a designated [logger](#defining-log-sources-and-loggers) (no error 
 Initialize elog and configure an asynchronous (based on lock-free ring-buffer) rotating file log target, having log segment size 4M, and 20 log segments at most:
 
     elog::initialize();
-    elog::configureTargetFromStr(
+    elog::configureLogTarget(
         "async://quantum?quantum_buffer_size=1000 | "
         "file:///./app.log?file_segment_size=4mb&file_segment_count=20");
 
     // all log messages are now directed to the asynchronous rotating logger
     ELOG_INFO("App starting");
 
-When stack traces are enabled (build ELog with ELOG_ENABLE_STACK_TRACE=ON), a stack trace containing file and line can be dumped:
+When stack traces are enabled (build ELog with ELOG_ENABLE_STACK_TRACE=ON), a stack trace containing file and line can be written to log (voluntarily, not necessarily within exception handler, and no thread context is required):
 
     ELOG_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing current thread stack trace");
 
@@ -69,7 +70,7 @@ Sample output (Linux):
     8# 0x716a4842a28b __libc_start_main()                      at <N/A>  (libc.so.6)
     9# 0x5c4bddcba745 _start() +37                             at <N/A>  (wal_test_linux)
 
-It is also possible to dump stack trace of all running threads (experimental):
+It is also possible to dump stack trace of all running threads, as in pstack (experimental):
 
     ELOG_APP_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing application stack trace");
 
@@ -89,16 +90,17 @@ This final examples adds an asynchronous log target to send log lines to Grafana
         "async://quantum?quantum_buffer_size=1000&log_level=ERROR | "
         "mon://grafana?mode=json&"
         "loki_endpoint=http://192.168.108.111:3100&"
-        "labels={\"app\": \"${app}$\"}&"
-        "log_line_metadata={\"log_source\": \"${src}\", \"thread_name\": \"${tname}\"}&"
+        "labels={app: ${app}}&"
+        "log_line_metadata={log_source: ${src}, thread_name: ${tname}}&"
         "stack_trace=yes&"
         "flush_policy=((count == 100) OR (time == 5000))");
 
 The log target is configured with the following properties:
 
-- Flush (i.e. send HTTP message with accumulated log lines) each 100 log lines or 5 seconds
+- Asynchronous logging (lock-free, ring buffer size is 1000)
 - Restrict log shipping to ERROR log level
-- Use global log line format
+- Flush (i.e. send HTTP message with accumulated log lines) each 100 log lines or 5 seconds
+- Use global log line format for reported log lines
 - Use default HTTP client configuration:
     - Retry resend failed message every 5 seconds, when Loki is down
     - Use backlog of 1 MB of data (after which old log data is discard while Loki is down)
@@ -307,7 +309,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Log Levels](#log-levels)
     - [Log Sources and Loggers](#log-sources-and-loggers)
     - [Log Level Propagation](#log-level-propagation)
-    - [Configuring Log Line Format](#configuring-log-line-format)
+    - [Log Line Format](#log-line-format)
     - [Log Record Field Reference Tokens](#log-record-field-reference-tokens)
     - [Log Targets](#log-targets)
     - [Configuration Styles](#configuration-styles)
@@ -538,7 +540,7 @@ In particular there are 4 propagation modes, corresponding to the use cases pres
 
 This allows for more flexibility in configuring the log source tree.
 
-### Configuring Log Line Format
+### Log Line Format
 
 The ELog system allows configuring log line format using a format specification string  
 that supports special log record field reference tokens.  
