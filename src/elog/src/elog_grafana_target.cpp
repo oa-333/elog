@@ -2,8 +2,8 @@
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 
-#include "elog_error.h"
 #include "elog_json_receptor.h"
+#include "elog_report.h"
 
 namespace elog {
 

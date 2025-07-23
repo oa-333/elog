@@ -4,9 +4,9 @@
 
 #include "elog_config_loader.h"
 #include "elog_deferred_target_provider.h"
-#include "elog_error.h"
 #include "elog_quantum_target_provider.h"
 #include "elog_queued_target_provider.h"
+#include "elog_report.h"
 
 namespace elog {
 

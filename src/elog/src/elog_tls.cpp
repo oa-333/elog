@@ -1,6 +1,6 @@
 #include "elog_tls.h"
 
-#include "elog_error.h"
+#include "elog_report.h"
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN

@@ -14,7 +14,7 @@
 #include <thread>
 
 #include "elog_common.h"
-#include "elog_error.h"
+#include "elog_report.h"
 
 // TODO: need hard coded limits for all configuration values, and from there we can derive required
 // type. in addition, load functions with limits should be written to check limits

@@ -1,7 +1,7 @@
 #include "elog_rpc_formatter.h"
 
 #include "elog_common.h"
-#include "elog_error.h"
+#include "elog_report.h"
 
 namespace elog {
 

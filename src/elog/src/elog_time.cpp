@@ -6,7 +6,7 @@
 #include <ctime>
 #include <new>
 
-#include "elog_error.h"
+#include "elog_report.h"
 
 #ifdef ELOG_TIME_USE_CHRONO
 #include <sstream>

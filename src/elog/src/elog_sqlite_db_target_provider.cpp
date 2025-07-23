@@ -2,7 +2,7 @@
 
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
 
-#include "elog_error.h"
+#include "elog_report.h"
 #include "elog_sqlite_db_target.h"
 
 namespace elog {

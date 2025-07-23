@@ -6,7 +6,7 @@
 #include "elog.h"
 #include "elog_async_schema_handler.h"
 #include "elog_common.h"
-#include "elog_error.h"
+#include "elog_report.h"
 #include "elog_schema_manager.h"
 
 namespace elog {

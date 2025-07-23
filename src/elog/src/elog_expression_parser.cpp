@@ -2,8 +2,8 @@
 
 #include <cstring>
 
-#include "elog_error.h"
 #include "elog_expression_tokenizer.h"
+#include "elog_report.h"
 
 namespace elog {
 

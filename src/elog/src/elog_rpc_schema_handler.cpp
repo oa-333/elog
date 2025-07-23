@@ -4,7 +4,7 @@
 
 #include "elog_config_loader.h"
 #include "elog_config_parser.h"
-#include "elog_error.h"
+#include "elog_report.h"
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
 #include "elog_grpc_target_provider.h"

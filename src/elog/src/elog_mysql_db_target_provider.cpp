@@ -3,8 +3,8 @@
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
 #include "elog_config_loader.h"
-#include "elog_error.h"
 #include "elog_mysql_db_target.h"
+#include "elog_report.h"
 
 namespace elog {
 

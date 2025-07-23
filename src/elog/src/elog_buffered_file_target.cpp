@@ -1,7 +1,7 @@
 #include "elog_buffered_file_target.h"
 
 #include "elog_common.h"
-#include "elog_error.h"
+#include "elog_report.h"
 
 namespace elog {
 

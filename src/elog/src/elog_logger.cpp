@@ -11,8 +11,8 @@
 
 #include "elog.h"
 #include "elog_common.h"
-#include "elog_error.h"
 #include "elog_internal.h"
+#include "elog_report.h"
 
 #ifndef ELOG_WINDOWS
 #include <sys/stat.h>

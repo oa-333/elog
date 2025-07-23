@@ -3,8 +3,8 @@
 #include <cstdio>
 #include <ctime>
 
-#include "elog_error.h"
 #include "elog_logger.h"
+#include "elog_report.h"
 
 namespace elog {
 

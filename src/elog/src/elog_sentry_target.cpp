@@ -6,9 +6,9 @@
 
 #include "elog.h"
 #include "elog_common.h"
-#include "elog_error.h"
 #include "elog_field_selector_internal.h"
 #include "elog_logger.h"
+#include "elog_report.h"
 
 #ifdef ELOG_ENABLE_STACK_TRACE
 #include "elog_stack_trace.h"

@@ -2,7 +2,7 @@
 
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 
-#include "elog_error.h"
+#include "elog_report.h"
 
 namespace elog {
 

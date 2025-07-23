@@ -4,9 +4,9 @@
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
-#include "elog_error.h"
 #include "elog_mysql_db_target_provider.h"
 #include "elog_pgsql_db_target_provider.h"
+#include "elog_report.h"
 #include "elog_sqlite_db_target_provider.h"
 
 namespace elog {

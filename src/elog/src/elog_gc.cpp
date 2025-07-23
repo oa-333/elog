@@ -4,7 +4,7 @@
 
 #include "elog.h"
 #include "elog_common.h"
-#include "elog_error.h"
+#include "elog_report.h"
 
 #define ELOG_INVALID_GC_SLOT_ID ((uint64_t)-1)
 #define ELOG_WORD_SIZE sizeof(uint64_t)

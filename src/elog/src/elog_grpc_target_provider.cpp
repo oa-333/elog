@@ -7,8 +7,8 @@
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
-#include "elog_error.h"
 #include "elog_grpc_target.h"
+#include "elog_report.h"
 
 #define ELOG_MAX_GRPC_TARGETS 10
 

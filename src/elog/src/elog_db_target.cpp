@@ -1,6 +1,6 @@
 #include "elog_db_target.h"
 
-#include "elog_error.h"
+#include "elog_report.h"
 
 // Threading model design
 // ======================

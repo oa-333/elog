@@ -1,5 +1,3 @@
-#include "elog_error.h"
-
 #include <atomic>
 #include <cerrno>
 #include <cstdint>
@@ -10,6 +8,7 @@
 #include "elog.h"
 #include "elog_common.h"
 #include "elog_common_def.h"
+#include "elog_report.h"
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN

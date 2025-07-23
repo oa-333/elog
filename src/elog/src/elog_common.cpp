@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-#include "elog_error.h"
+#include "elog_report.h"
 
 namespace elog {
 

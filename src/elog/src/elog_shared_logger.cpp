@@ -3,7 +3,7 @@
 #include <cassert>
 
 #include "elog_aligned_alloc.h"
-#include "elog_error.h"
+#include "elog_report.h"
 #include "elog_tls.h"
 
 namespace elog {

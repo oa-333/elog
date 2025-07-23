@@ -1,8 +1,8 @@
 #include "elog_field_spec.h"
 
 #include "elog_common.h"
-#include "elog_error.h"
 #include "elog_font_color.h"
+#include "elog_report.h"
 
 namespace elog {
 
