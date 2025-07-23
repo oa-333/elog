@@ -20,7 +20,6 @@ target_sources(elog PRIVATE
     elog_dbg_util_log_handler.cpp
     elog_deferred_target.cpp
     elog_deferred_target_provider.cpp
-    elog_error.cpp
     elog_expression_parser.cpp
     elog_expression_tokenizer.cpp
     elog_field_selector.cpp
@@ -58,6 +57,7 @@ target_sources(elog PRIVATE
     elog_queued_target_provider.cpp
     elog_rate_limiter.cpp
     elog_record.cpp
+    elog_report.cpp
     elog_report.h
     elog_rolling_bitset.cpp
     elog_rpc_formatter.cpp
