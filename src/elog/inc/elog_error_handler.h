@@ -2,48 +2,52 @@
 #define __ELOG_ERROR_HANDLER_H__
 
 #include "elog_def.h"
+#include "elog_level.h"
 
 namespace elog {
 
 /**
- * @brief Error handling interface. User can derive, implement and pass to ELog initialization
- * functions.
+ * @brief ELog internal message report handling interface. User can derive, implement and pass to
+ * ELog initialization function.
+ * @see @ref elog::initialize().
  */
-class ELOG_API ELogErrorHandler {
+class ELOG_API ELogReportHandler {
 public:
     /** @brief Disable copy constructor. */
-    ELogErrorHandler(const ELogErrorHandler&) = delete;
+    ELogReportHandler(const ELogReportHandler&) = delete;
 
     /** @brief Disable move constructor. */
-    ELogErrorHandler(ELogErrorHandler&&) = delete;
+    ELogReportHandler(ELogReportHandler&&) = delete;
 
     /** @brief Disable assignment operator. */
-    ELogErrorHandler& operator=(const ELogErrorHandler&) = delete;
+    ELogReportHandler& operator=(const ELogReportHandler&) = delete;
 
     /** @brief Destructor. */
-    virtual ~ELogErrorHandler() {}
+    virtual ~ELogReportHandler() {}
 
-    /** @brief React to internal ELog error. */
-    virtual void onError(const char* msg) = 0;
+    /** @brief Reports ELog internal log message. */
+    virtual void onReportV(ELogLevel logLevel, const char* file, int line, const char* function,
+                           const char* fmt, va_list args) = 0;
 
-    /** @brief React to internal ELog warning. */
-    virtual void onWarn(const char* msg) = 0;
+    /** @brief Reports ELog internal log message. */
+    virtual void onReport(ELogLevel logLevel, const char* file, int line, const char* function,
+                          const char* msg) = 0;
 
-    /** @brief React to internal ELog trace (only if trace mode is enabled). */
-    virtual void onTrace(const char* msg) = 0;
+    /** @brief Configures elog report level. */
+    virtual void setReportLevel(ELogLevel reportLevel) { m_reportLevel = reportLevel; }
 
-    /** @brief Configures elog tracing. */
-    virtual void setTraceMode(bool enableTrace) { m_isTraceEnabled = enableTrace; }
+    /** @brief Retrieves report level. */
+    inline ELogLevel getReportLevel() { return m_reportLevel; }
 
     /** @brief Queries whether trace mode is enabled. */
-    inline bool isTraceEnabled() { return m_isTraceEnabled; }
+    inline bool isTraceEnabled() { return m_reportLevel >= ELEVEL_TRACE; }
 
 protected:
     /** @brief Constructor. */
-    ELogErrorHandler(bool enableTrace = false) : m_isTraceEnabled(enableTrace) {}
+    ELogReportHandler(ELogLevel reportLevel = ELEVEL_WARN) : m_reportLevel(reportLevel) {}
 
 private:
-    bool m_isTraceEnabled;
+    ELogLevel m_reportLevel;
 };
 
 }  // namespace elog

@@ -603,7 +603,7 @@ bool parseColorComponent(const char* color, uint8_t& value, const char* name) {
 
 bool parseTokenTextAttribute(const std::string& specToken, ELogFontSpec& fontSpec) {
     std::string propValue;
-    if (!parsePropValue(specToken, "text", propValue)) {
+    if (!parsePropValue(specToken, "font", propValue)) {
         ELOG_REPORT_ERROR("Failed to parse text specification, invalid syntax: %s",
                           specToken.c_str());
         return false;

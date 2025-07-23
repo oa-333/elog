@@ -87,7 +87,7 @@ static ELogRpcTarget* constructGRPCTarget(const char* name, const std::string& s
 
     ELogGRPCBaseTargetConstructor* constructor = itr->second;
     ELogRpcTarget* logTarget = constructor->createLogTarget(
-        ELogError::getErrorHandler(), server, params, serverCA, clientCA, clientKey, clientMode,
+        ELogReport::getReportHandler(), server, params, serverCA, clientCA, clientKey, clientMode,
         deadlineTimeoutMillis, maxInflightCalls);
     if (logTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create gRPC target by name '%s', out of memory", name);

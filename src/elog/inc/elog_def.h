@@ -51,4 +51,13 @@
 #define ELOG_CACHE_LINE 64
 #define ELOG_CACHE_ALIGN alignas(ELOG_CACHE_LINE)
 
+/** @def Define a unified function name macro */
+#ifdef ELOG_GCC
+#define ELOG_FUNCTION __PRETTY_FUNCTION__
+#elif defined(ELOG_MSVC)
+#define ELOG_FUNCTION __FUNCSIG__
+#else
+#define ELOG_FUNCTION __func__
+#endif
+
 #endif  // __ELOG_DEF_H__

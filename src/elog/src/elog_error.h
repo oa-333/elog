@@ -6,37 +6,27 @@
 
 #include "elog_def.h"
 #include "elog_error_handler.h"
+#include "elog_level.h"
 
 namespace elog {
 
-class ELogError {
+class ELogReport {
 public:
-    /** @brief Installs an error handler. */
-    static void setErrorHandler(ELogErrorHandler* errorHandler);
+    /** @brief Installs an report handler. */
+    static void setReportHandler(ELogReportHandler* reportHandler);
 
-    /** @brief Retrieves the installed an error handler. */
-    static ELogErrorHandler* getErrorHandler();
+    /** @brief Retrieves the installed a report handler. */
+    static ELogReportHandler* getReportHandler();
 
-    /** @brief Configures elog tracing. */
-    static void setTraceMode(bool enableTrace = true);
+    /** @brief Configures elog internal log message report level. */
+    static void setReportLevel(ELogLevel reportLevel);
 
-    /** @brief Queries whether trace mode is enabled. */
-    static bool isTraceEnabled();
+    /** @brief Retrieves elog internal log message report level. */
+    static ELogLevel getReportLevel();
 
-    /** @brief Reports an error to enclosing application/library. */
-    static void reportError(const char* errorMsgFmt, ...);
-
-    /** @brief Reports a system call error to enclosing application/library. */
-    static void reportSysError(const char* sysCall, const char* errorMsgFmt, ...);
-
-    /** @brief Reports a system call error to enclosing application/library. */
-    static void reportSysErrorCode(const char* sysCall, int errCode, const char* errorMsgFmt, ...);
-
-    /** @brief Report a warning message to enclosing application/library. */
-    static void reportWarn(const char* fmt, ...);
-
-    /** @brief Trace a debug message. */
-    static void reportTrace(const char* fmt, ...);
+    /** @brief Reports an ELog's internal log message. */
+    static void report(ELogLevel logLevel, const char* file, int line, const char* function,
+                       const char* fmt, ...);
 
     /** @brief Converts system error code to string. */
     static char* sysErrorToStr(int sysErrorCode);
@@ -50,24 +40,30 @@ public:
 #endif
 
 private:
-    static void initError();
-
-    enum ReportType { RT_ERROR, RT_WARN, RT_TRACE };
-
-    /** @brief Reports an error/warn/trace message. */
-    static void reportV(ReportType reportType, const char* msgFmt, va_list args);
+    // initialize reporting mechanism
+    static void initReport();
 
     // allow initialization function special access
     friend bool initGlobals();
 };
 
+#define ELOG_REPORT(level, fmt, ...) \
+    ELogReport::report(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
+
 /** @brief Report error message to enclosing application/library. */
-#define ELOG_REPORT_ERROR(fmt, ...) ELogError::reportError(fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_FATAL(fmt, ...) ELOG_REPORT(ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_ERROR(fmt, ...) ELOG_REPORT(ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_WARN(fmt, ...) ELOG_REPORT(ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_NOTICE(fmt, ...) ELOG_REPORT(ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_INFO(fmt, ...) ELOG_REPORT(ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_TRACE(fmt, ...) ELOG_REPORT(ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_DEBUG(fmt, ...) ELOG_REPORT(ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_DIAG(fmt, ...) ELOG_REPORT(ELEVEL_DIAG, fmt, ##__VA_ARGS__)
 
 /** @brief Report system call failure with error code to enclosing application/library. */
 #define ELOG_REPORT_SYS_ERROR_NUM(sysCall, sysErr, fmt, ...)                \
     ELOG_REPORT_ERROR("System call " #sysCall "() failed: %d (%s)", sysErr, \
-                      elog::ELogError::sysErrorToStr(sysErr));              \
+                      elog::ELogReport::sysErrorToStr(sysErr));             \
     ELOG_REPORT_ERROR(fmt, ##__VA_ARGS__);
 
 /**
@@ -80,9 +76,9 @@ private:
 #ifdef ELOG_WINDOWS
 #define ELOG_REPORT_WIN32_ERROR_NUM(sysCall, sysErr, fmt, ...)                                    \
     {                                                                                             \
-        char* errStr = elog::ELogError::win32SysErrorToStr(sysErr);                               \
+        char* errStr = elog::ELogReport::win32SysErrorToStr(sysErr);                              \
         ELOG_REPORT_ERROR("Windows system call " #sysCall "() failed: %lu (%s)", sysErr, errStr); \
-        elog::ELogError::win32FreeErrorStr(errStr);                                               \
+        elog::ELogReport::win32FreeErrorStr(errStr);                                              \
         ELOG_REPORT_ERROR(fmt, ##__VA_ARGS__);                                                    \
     }
 
@@ -90,18 +86,6 @@ private:
     ELOG_REPORT_WIN32_ERROR_NUM(sysCall, ::GetLastError(), fmt, ##__VA_ARGS__);
 
 #endif  // ELOG_WINDOWS
-
-/** @brief Report warnning message to enclosing application/library. */
-#define ELOG_REPORT_WARN(fmt, ...)                       \
-    if (elog::ELogError::isTraceEnabled()) {             \
-        elog::ELogError::reportWarn(fmt, ##__VA_ARGS__); \
-    }
-
-/** @brief Report error message to enclosing application/library. */
-#define ELOG_REPORT_TRACE(fmt, ...)                       \
-    if (elog::ELogError::isTraceEnabled()) {              \
-        elog::ELogError::reportTrace(fmt, ##__VA_ARGS__); \
-    }
 
 }  // namespace elog
 

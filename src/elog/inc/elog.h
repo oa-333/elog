@@ -45,12 +45,17 @@ namespace elog {
  * @brief Initializes the ELog library.
  * @param configFile Optional configuration file, matching the format specified by @ref
  * configureByFile().
- * @param errorHandler Optional error handler. If none specified, then all internal errors are
- * sent to the standard output stream.
+ * @param reloadPeriodMillis Optionally specify configuration reload period. Only log levels will be
+ * updated. If zero period is specified, then no periodic reloading will take place.
+ * @param elogReportHandler Optional elog internal log message report handler. If none specified,
+ * then all internal log messages of teh ELog library are sent to the standard output stream,
+ * through a dedicated logger under the log source name 'elog'.
+ * @param elogReportLevel Sets the log level or log messages issued by ELog.
  * @return true If succeeded, otherwise false.
  */
-extern ELOG_API bool initialize(const char* configFile = nullptr,
-                                ELogErrorHandler* errorHandler = nullptr);
+extern ELOG_API bool initialize(const char* configFile = nullptr, uint32_t reloadPeriodMillis = 0,
+                                ELogReportHandler* elogReportHandler = nullptr,
+                                ELogLevel elogReportLevel = ELEVEL_WARN);
 
 /** @brief Releases all resources allocated for the ELogSystem. */
 extern ELOG_API void terminate();
@@ -71,14 +76,14 @@ extern ELOG_API ELogLogger* getPreInitLogger();
  */
 extern ELOG_API void discardAccumulatedLogMessages();
 
-/** @brief Installs an error handler. */
-extern ELOG_API void setErrorHandler(ELogErrorHandler* errorHandler);
+/** @brief Installs a handler for ELog's internal log message reporting. */
+extern ELOG_API void setReportHandler(ELogReportHandler* reportHandler);
 
-/** @brief Configures elog tracing. */
-extern ELOG_API void setTraceMode(bool enableTrace = true);
+/** @brief Configures the log level of ELog's internal log message reports. */
+extern ELOG_API void setReportLevel(ELogLevel reportLevel);
 
-/** @brief Queries whether trace mode is enabled. */
-extern ELOG_API bool isTraceEnabled();
+/** @brief Retrieves the log level of ELog's internal log message reports. */
+extern ELOG_API ELogLevel getReportLevel();
 
 /** @brief Registers a schema handler by name. */
 extern ELOG_API bool registerSchemaHandler(const char* schemeName,
@@ -766,15 +771,6 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  *                                  Logging Macros
  *
  **************************************************************************************/
-
-/** @def Define a unified function name macro */
-#ifdef ELOG_GCC
-#define ELOG_FUNCTION __PRETTY_FUNCTION__
-#elif defined(ELOG_MSVC)
-#define ELOG_FUNCTION __FUNCSIG__
-#else
-#define ELOG_FUNCTION __func__
-#endif
 
 /**
  * @brief Logs a formatted message to the server log.

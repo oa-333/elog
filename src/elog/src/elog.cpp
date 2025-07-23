@@ -66,6 +66,7 @@ static ELogFormatter* sGlobalFormatter = nullptr;
 // these functions are defined as external because they are friends of some classes
 extern bool initGlobals();
 extern void termGlobals();
+static void setReportLevelFromEnv();
 extern ELogSource* createLogSource(ELogSourceId sourceId, const char* name,
                                    ELogSource* parent = nullptr, ELogLevel logLevel = ELEVEL_INFO);
 extern void deleteLogSource(ELogSource* logSource);
@@ -79,8 +80,8 @@ static bool configureLogTargetNode(const ELogConfigMapNode* logTargetCfg,
 static bool augmentConfigFromEnv(ELogConfigMapNode* cfgMap);
 
 bool initGlobals() {
-    // init the error log so we can have trace messages as early as possible
-    ELogError::initError();
+    // allow elog tracing early as possible
+    setReportLevelFromEnv();
 
     // initialize the date table
     if (!initDateTable()) {
@@ -88,6 +89,7 @@ bool initGlobals() {
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Date table initialized");
 
     // create thread local storage key for log buffers
     if (!ELogTarget::createLogBufferKey()) {
@@ -95,6 +97,7 @@ bool initGlobals() {
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Log buffer TLS key initialized");
 
     // create thread local storage key for log buffers
     if (!ELogSharedLogger::createRecordBuilderKey()) {
@@ -102,6 +105,7 @@ bool initGlobals() {
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Record builder TLS key initialized");
 
     ELOG_REPORT_TRACE("Starting ELog initialization sequence");
     if (!initFieldSelectors()) {
@@ -192,6 +196,7 @@ bool initGlobals() {
         termGlobals();
         return false;
     }
+    ELOG_REPORT_TRACE("Format message cache initialized");
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     // connect to debug util library
@@ -208,7 +213,12 @@ bool initGlobals() {
     sDbgUtilInitialized = true;
 #endif
 
-    ELOG_REPORT_TRACE("ELog initialized successfully");
+    // now we can enable elog's self logger
+    // any error up until now will be printed into stderr with no special formatting
+    ELOG_REPORT_TRACE("Setting up ELog internal logger");
+    ELogReport::initReport();
+
+    ELOG_REPORT_INFO("ELog initialized successfully");
     return true;
 }
 
@@ -254,13 +264,15 @@ void termGlobals() {
     sPreInitLogger.discardAccumulatedLogMessages();
 }
 
-bool initialize(const char* configFile /* = nullptr */,
-                ELogErrorHandler* errorHandler /* = nullptr */) {
+bool initialize(const char* configFile /* = nullptr */, uint32_t reloadPeriodMillis /* = 0 */,
+                ELogReportHandler* elogReportHandler /* = nullptr */,
+                ELogLevel elogReportLevel /* = ELEVEL_WARN */) {
     if (sInitialized) {
         ELOG_REPORT_ERROR("Duplicate attempt to initialize rejected");
         return false;
     }
-    setErrorHandler(errorHandler);
+    setReportHandler(elogReportHandler);
+    setReportLevel(elogReportLevel);  // env setting can override this
     if (!initGlobals()) {
         return false;
     }
@@ -287,11 +299,27 @@ ELogLogger* getPreInitLogger() { return &sPreInitLogger; }
 
 void discardAccumulatedLogMessages() { sPreInitLogger.discardAccumulatedLogMessages(); }
 
-void setErrorHandler(ELogErrorHandler* errorHandler) { ELogError::setErrorHandler(errorHandler); }
+void setReportLevelFromEnv() {
+    std::string elogReportLevel;
+    if (elog_getenv("ELOG_REPORT_LEVEL", elogReportLevel)) {
+        ELogLevel reportLevel = ELEVEL_WARN;
+        if (!elogLevelFromStr(elogReportLevel.c_str(), reportLevel)) {
+            fprintf(stderr,
+                    "Invalid value for ELOG_REPORT_LEVEL environment variable was ignored: %s\n",
+                    elogReportLevel.c_str());
+        } else {
+            setReportLevel(reportLevel);
+        }
+    }
+}
 
-void setTraceMode(bool enableTrace /* = true */) { ELogError::setTraceMode(enableTrace); }
+void setReportHandler(ELogReportHandler* reportHandler) {
+    ELogReport::setReportHandler(reportHandler);
+}
 
-bool isTraceEnabled() { return ELogError::isTraceEnabled(); }
+void setReportLevel(ELogLevel reportLevel) { ELogReport::setReportLevel(reportLevel); }
+
+ELogLevel getReportLevel() { return ELogReport::getReportLevel(); }
 
 bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler) {
     return ELogSchemaManager::registerSchemaHandler(schemeName, schemaHandler);
@@ -1323,9 +1351,15 @@ ELogLogger* getSharedLogger(const char* qualifiedSourceName,
                             bool defineLogSourceIfMissing /* = true */,
                             bool defineMissingPath /* = true */) {
     ELogLogger* logger = nullptr;
-    ELogSource* source = getLogSource(qualifiedSourceName);
-    if (source == nullptr && defineLogSourceIfMissing) {
+    ELogSource* source = nullptr;
+    // if we call getLogSource an error will be printed, but this is incorrect when
+    // defineLogSourceIfMissing is set to true
+    // in that case we simply define the log source, if it already exists, nothing happens and it
+    // will be retrieved
+    if (defineLogSourceIfMissing) {
         source = defineLogSource(qualifiedSourceName, defineMissingPath);
+    } else {
+        source = getLogSource(qualifiedSourceName);
     }
     if (source != nullptr) {
         logger = source->createSharedLogger();
@@ -1337,9 +1371,15 @@ ELogLogger* getPrivateLogger(const char* qualifiedSourceName,
                              bool defineLogSourceIfMissing /* = true */,
                              bool defineMissingPath /* = true */) {
     ELogLogger* logger = nullptr;
-    ELogSource* source = getLogSource(qualifiedSourceName);
-    if (source == nullptr && defineLogSourceIfMissing) {
+    ELogSource* source = nullptr;
+    // if we call getLogSource an error will be printed, but this is incorrect when
+    // defineLogSourceIfMissing is set to true
+    // in that case we simply define the log source, if it already exists, nothing happens and it
+    // will be retrieved
+    if (defineLogSourceIfMissing) {
         source = defineLogSource(qualifiedSourceName, defineMissingPath);
+    } else {
+        source = getLogSource(qualifiedSourceName);
     }
     if (source != nullptr) {
         logger = source->createPrivateLogger();
@@ -1553,14 +1593,14 @@ void logMsg(const ELogRecord& logRecord,
     }
 }
 
-char* sysErrorToStr(int sysErrorCode) { return ELogError::sysErrorToStr(sysErrorCode); }
+char* sysErrorToStr(int sysErrorCode) { return ELogReport::sysErrorToStr(sysErrorCode); }
 
 #ifdef ELOG_WINDOWS
 char* win32SysErrorToStr(unsigned long sysErrorCode) {
-    return ELogError::win32SysErrorToStr(sysErrorCode);
+    return ELogReport::win32SysErrorToStr(sysErrorCode);
 }
 
-void win32FreeErrorStr(char* errStr) { ELogError::win32FreeErrorStr(errStr); }
+void win32FreeErrorStr(char* errStr) { ELogReport::win32FreeErrorStr(errStr); }
 #endif
 
 }  // namespace elog

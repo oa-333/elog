@@ -893,70 +893,73 @@ int main(int argc, char* argv[]) {
     if (!parseArgs(argc, argv)) {
         return 1;
     }
-    if (argc == 2) {
-        if (sTestConns) {
-            return testConnectors();
-        } else if (sTestColors) {
-            return testColors();
-        } else if (sTestException) {
-            return testException();
-        } else if (sTestEventLog) {
-            return testEventLog();
-        }
-    }
 
-    fprintf(stderr, "STARTING ELOG BENCHMARK\n");
     if (!elog::initialize()) {
         fprintf(stderr, "Failed to initialize elog system\n");
         return 1;
     }
-    fprintf(stderr, "ELog system initialized\n");
+    ELOG_INFO("ELog system initialized");
 
-    if (sTestPerfAll || sTestPerfIdleLog) {
-        testPerfPrivateLog();
-        testPerfSharedLogger();
-    }
-    if (sTestPerfAll || sTestPerfFileFlush) {
-        testPerfFileFlushPolicy();
-    }
-    if (sTestPerfAll || sTestPerfBufferedFile) {
-        testPerfBufferedFile();
-    }
-    if (sTestPerfAll || sTestPerfSegmentedFile) {
-        testPerfSegmentedFile();
-    }
-    if (sTestPerfAll || sTestPerfRotatingFile) {
-        testPerfRotatingFile();
-    }
-    if (sTestPerfAll || sTestPerfDeferredFile) {
-        testPerfDeferredFile();
-    }
-    if (sTestPerfAll || sTestPerfQueuedFile) {
-        testPerfQueuedFile();
-    }
-    if (sTestPerfAll || sTestPerfQuantumPrivateFile) {
-        testPerfQuantumFile(true);
-    }
-    if (sTestPerfAll || sTestPerfQuantumSharedFile) {
-        testPerfQuantumFile(false);
-    }
+    int res = 0;
+    if (argc == 2) {
+        if (sTestConns) {
+            res = testConnectors();
+        } else if (sTestColors) {
+            res = testColors();
+        } else if (sTestException) {
+            res = testException();
+        } else if (sTestEventLog) {
+            res = testEventLog();
+        }
+    } else {
+        fprintf(stderr, "STARTING ELOG BENCHMARK\n");
+
+        if (sTestPerfAll || sTestPerfIdleLog) {
+            testPerfPrivateLog();
+            testPerfSharedLogger();
+        }
+        if (sTestPerfAll || sTestPerfFileFlush) {
+            testPerfFileFlushPolicy();
+        }
+        if (sTestPerfAll || sTestPerfBufferedFile) {
+            testPerfBufferedFile();
+        }
+        if (sTestPerfAll || sTestPerfSegmentedFile) {
+            testPerfSegmentedFile();
+        }
+        if (sTestPerfAll || sTestPerfRotatingFile) {
+            testPerfRotatingFile();
+        }
+        if (sTestPerfAll || sTestPerfDeferredFile) {
+            testPerfDeferredFile();
+        }
+        if (sTestPerfAll || sTestPerfQueuedFile) {
+            testPerfQueuedFile();
+        }
+        if (sTestPerfAll || sTestPerfQuantumPrivateFile) {
+            testPerfQuantumFile(true);
+        }
+        if (sTestPerfAll || sTestPerfQuantumSharedFile) {
+            testPerfQuantumFile(false);
+        }
 #ifdef ELOG_ENABLE_FMT_LIB
-    if (sTestPerfAll || sTestPerfQuantumBinaryFile) {
-        testPerfQuantumFileBinary();
-    }
-    if (sTestPerfAll || sTestPerfQuantumBinaryCachedFile) {
-        testPerfQuantumFileBinaryCached();
-    }
-    if (sTestPerfAll || sTestPerfQuantumBinaryPreCachedFile) {
-        testPerfQuantumFileBinaryPreCached();
-    }
+        if (sTestPerfAll || sTestPerfQuantumBinaryFile) {
+            testPerfQuantumFileBinary();
+        }
+        if (sTestPerfAll || sTestPerfQuantumBinaryCachedFile) {
+            testPerfQuantumFileBinaryCached();
+        }
+        if (sTestPerfAll || sTestPerfQuantumBinaryPreCachedFile) {
+            testPerfQuantumFileBinaryPreCached();
+        }
 #endif
-    if (sTestPerfAll || sTestSingleThread) {
-        testPerfAllSingleThread();
+        if (sTestPerfAll || sTestSingleThread) {
+            testPerfAllSingleThread();
+        }
     }
 
     elog::terminate();
-    return 0;
+    return res;
 }
 
 void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
@@ -1211,7 +1214,7 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
     sGrpcMsgCount.store(0, std::memory_order_relaxed);
 
     if (opts & GRPC_OPT_TRACE) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     runSingleThreadedTest(testName.c_str(), cfg.c_str(), msgPerf, ioPerf, statData, stMsgCount);
@@ -1601,7 +1604,7 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s single-thread test\n", title);
@@ -1690,7 +1693,7 @@ void runSingleThreadedTestBinary(const char* title, const char* cfg, double& msg
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s single-thread test\n", title);
@@ -1771,7 +1774,7 @@ void runSingleThreadedTestBinaryCached(const char* title, const char* cfg, doubl
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s single-thread test\n", title);
@@ -1852,7 +1855,7 @@ void runSingleThreadedTestBinaryPreCached(const char* title, const char* cfg, do
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s single-thread test\n", title);
@@ -1943,7 +1946,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
@@ -2067,7 +2070,7 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
@@ -2190,7 +2193,7 @@ void runMultiThreadTestBinaryCached(const char* title, const char* fileName, con
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
@@ -2313,7 +2316,7 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
@@ -3598,7 +3601,7 @@ static void runBinaryAccelTest(const char* title, const char* cfg, TestCode& tes
     }
 
     if (enableTrace) {
-        elog::setTraceMode(true);
+        elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
     fprintf(stderr, "\nRunning %s binary acceleration test\n", title);

@@ -155,10 +155,10 @@ template <typename StubType = elog_grpc::ELogGRPCService::Stub,
           typename ReceptorType = ELogGRPCReceptor>
 class ELogGRPCBaseReactor : public grpc::ClientWriteReactor<MessageType> {
 public:
-    ELogGRPCBaseReactor(ELogErrorHandler* errorHandler, StubType* stub,
+    ELogGRPCBaseReactor(ELogReportHandler* reportHandler, StubType* stub,
                         ELogRpcFormatter* rpcFormatter,
                         uint32_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS)
-        : m_errorHandler(errorHandler),
+        : m_reportHandler(reportHandler),
           m_stub(stub),
           m_rpcFormatter(rpcFormatter),
           m_state(ReactorState::RS_INIT),
@@ -173,7 +173,8 @@ public:
         }
         m_inFlightRequests = new (std::nothrow) CallData[m_maxInflightCalls];
         if (m_inFlightRequests == nullptr) {
-            m_errorHandler->onError(
+            m_reportHandler->onReport(
+                ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                 "Failed to allocate in-flight message array in gRPC base reactor");
         }
     }
@@ -217,7 +218,7 @@ public:
     void OnDone(const grpc::Status& status) override;
 
 private:
-    ELogErrorHandler* m_errorHandler;
+    ELogReportHandler* m_reportHandler;
     grpc::ClientContext m_context;
     grpc::Status m_status;
     StubType* m_stub;
@@ -275,13 +276,13 @@ template <typename ServiceType = elog_grpc::ELogGRPCService, typename StubType =
           typename ReceptorType = ELogGRPCReceptor>
 class ELogGRPCBaseTarget : public ELogRpcTarget {
 public:
-    ELogGRPCBaseTarget(ELogErrorHandler* errorHandler, const std::string& server,
+    ELogGRPCBaseTarget(ELogReportHandler* reportHandler, const std::string& server,
                        const std::string& params, const std::string& serverCA,
                        const std::string& clientCA, const std::string& clientKey,
                        ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
                        uint64_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
         : ELogRpcTarget(server.c_str(), "", 0, ""),
-          m_errorHandler(errorHandler),
+          m_reportHandler(reportHandler),
           m_params(params),
           m_serverCA(serverCA),
           m_clientCA(clientCA),
@@ -312,7 +313,7 @@ protected:
 
 private:
     // configuration
-    ELogErrorHandler* m_errorHandler;
+    ELogReportHandler* m_reportHandler;
     std::string m_params;
     std::string m_serverCA;
     std::string m_clientCA;
@@ -369,7 +370,7 @@ class ELOG_API ELogGRPCBaseTargetConstructor {
 public:
     virtual ~ELogGRPCBaseTargetConstructor() {}
 
-    virtual ELogRpcTarget* createLogTarget(ELogErrorHandler* errorHandler,
+    virtual ELogRpcTarget* createLogTarget(ELogReportHandler* reportHandler,
                                            const std::string& server, const std::string& params,
                                            const std::string& serverCA, const std::string& clientCA,
                                            const std::string& clientKey,
@@ -397,13 +398,13 @@ public:
     ELogGRPCTargetConstructor() {}
     ~ELogGRPCTargetConstructor() final {}
 
-    ELogRpcTarget* createLogTarget(ELogErrorHandler* errorHandler, const std::string& server,
+    ELogRpcTarget* createLogTarget(ELogReportHandler* reportHandler, const std::string& server,
                                    const std::string& params, const std::string& serverCA,
                                    const std::string& clientCA, const std::string& clientKey,
                                    ELogGRPCClientMode clientMode, uint64_t deadlineTimeoutMillis,
                                    uint32_t maxInflightCalls) final {
         return new ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                                      ReceptorType>(errorHandler, server, params, serverCA,
+                                      ReceptorType>(reportHandler, server, params, serverCA,
                                                     clientCA, clientKey, clientMode,
                                                     deadlineTimeoutMillis, maxInflightCalls);
     }  // namespace elog

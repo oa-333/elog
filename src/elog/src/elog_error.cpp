@@ -9,6 +9,7 @@
 
 #include "elog.h"
 #include "elog_common.h"
+#include "elog_common_def.h"
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
@@ -17,186 +18,136 @@
 
 namespace elog {
 
-static std::atomic<ELogTargetId> sStderrTargetId = ELOG_INVALID_TARGET_ID;
-
-class ELogDefaultErrorHandler : public ELogErrorHandler {
+class ELogDefaultReportHandler : public ELogReportHandler {
 public:
-    ELogDefaultErrorHandler() {}
-    ELogDefaultErrorHandler(const ELogDefaultErrorHandler&) = delete;
-    ELogDefaultErrorHandler(ELogDefaultErrorHandler&&) = delete;
-    ELogDefaultErrorHandler& operator=(const ELogDefaultErrorHandler&) = delete;
-    ~ELogDefaultErrorHandler() final {}
+    ELogDefaultReportHandler() {}
+    ELogDefaultReportHandler(const ELogDefaultReportHandler&) = delete;
+    ELogDefaultReportHandler(ELogDefaultReportHandler&&) = delete;
+    ELogDefaultReportHandler& operator=(const ELogDefaultReportHandler&) = delete;
+    ~ELogDefaultReportHandler() final {}
 
-    void onError(const char* msg) final {
-        fprintf(stderr, "<ELOG> ERROR: %s\n", msg);
+    void onReportV(ELogLevel logLevel, const char* file, int line, const char* function,
+                   const char* fmt, va_list args) override {
+        // TODO: this may get scattered if other threads are also writing to stderr
+        fprintf(stderr, "<ELOG> %s: ", elogLevelToStr(logLevel));
+        vfprintf(stderr, fmt, args);
+        fprintf(stderr, "\n");
+        if (logLevel <= ELEVEL_ERROR) {
+            fprintf(stderr, "Error location: file: %s, line: %d, function: %s\n", file, line,
+                    function);
+        }
         fflush(stderr);
     }
 
-    void onWarn(const char* msg) final {
-        fprintf(stderr, "<ELOG> WARN: %s\n", msg);
-        fflush(stderr);
-    }
-
-    void onTrace(const char* msg) final {
-        fprintf(stderr, "<ELOG> TRACE: %s\n", msg);
+    void onReport(ELogLevel logLevel, const char* file, int line, const char* function,
+                  const char* msg) override {
+        // TODO: this may get scattered if other threads are also writing to stderr
+        fprintf(stderr, "<ELOG> %s: %s\n", elogLevelToStr(logLevel), msg);
+        fprintf(stderr, "Error location: file: %s, line: %d, function: %s\n", file, line, function);
         fflush(stderr);
     }
 };
 
-class ELogSelfErrorHandler : public ELogErrorHandler {
+class ELogSelfReportHandler : public ELogReportHandler {
 public:
-    ELogSelfErrorHandler() : m_logSource(nullptr), m_logger(nullptr) {}
-    ELogSelfErrorHandler(const ELogSelfErrorHandler&) = delete;
-    ELogSelfErrorHandler(ELogSelfErrorHandler&&) = delete;
-    ELogSelfErrorHandler& operator=(const ELogSelfErrorHandler&) = delete;
-    ~ELogSelfErrorHandler() final {}
+    ELogSelfReportHandler() : m_logger(nullptr) {}
+    ELogSelfReportHandler(const ELogSelfReportHandler&) = delete;
+    ELogSelfReportHandler(ELogSelfReportHandler&&) = delete;
+    ELogSelfReportHandler& operator=(const ELogSelfReportHandler&) = delete;
+    ~ELogSelfReportHandler() final {}
 
     void init() {
-        m_logSource = elog::defineLogSource("elog");
-        if (m_logSource != nullptr) {
-            m_logger = m_logSource->createSharedLogger();
-        }
-        // NOTE: it is too soon to restrict this logger to stderr, so we postpone it to a later
-        // phase
+        // at this point we can create a logger and restrict to stderr
+        m_logger = elog::getSharedLogger("elog");
+        restrictToStdErr();
     }
 
-    void setTraceMode(bool enableTrace) final {
-        m_logSource->setLogLevel(enableTrace ? ELEVEL_TRACE : ELEVEL_INFO,
-                                 ELogPropagateMode::PM_SET);
-        ELogErrorHandler::setTraceMode(enableTrace);
+    void onReportV(ELogLevel logLevel, const char* file, int line, const char* function,
+                   const char* fmt, va_list args) override {
+        m_logger->logFormatV(logLevel, file, line, function, fmt, args);
     }
 
-    void onError(const char* msg) final {
-        if (restrictToStdErr()) {
-            ELOG_ERROR_EX(m_logger, msg);
-        }
-    }
-
-    void onWarn(const char* msg) final {
-        if (restrictToStdErr()) {
-            ELOG_WARN_EX(m_logger, msg);
-        }
-    }
-
-    void onTrace(const char* msg) final {
-        if (restrictToStdErr()) {
-            ELOG_TRACE_EX(m_logger, msg);
-        }
+    void onReport(ELogLevel logLevel, const char* file, int line, const char* function,
+                  const char* msg) override {
+        m_logger->logFormat(logLevel, file, line, function, msg);
     }
 
 private:
-    ELogSource* m_logSource;
     ELogLogger* m_logger;
 
     inline bool restrictToStdErr() {
-        ELogTargetId logTargetId = sStderrTargetId.load(std::memory_order_relaxed);
+        // we create a dedicated stderr target with colored formatting
+        const char* cfg =
+            "sys://stderr?name=elog_internal&"
+            "log_format=${fmt:begin-font=faint}"
+            "${time} "
+            "${switch: ${level}:"
+            "   ${case: ${const-level: WARN}: ${fmt:begin-fg-color=yellow}} :"
+            "   ${case: ${const-level: ERROR}: ${fmt:begin-fg-color=red}} :"
+            "   ${case: ${const-level: FATAL}: ${fmt:begin-fg-color=red}}}"
+            "${level:6}${fmt:default} "
+            "${fmt:begin-font=faint}"
+            "[${tid}] ${src:font=underline} "
+            "${fmt:begin-font=faint}"
+            "${msg}"
+            "${fmt:default}";
+        ELogTargetId logTargetId = elog::configureLogTarget(cfg);
         if (logTargetId == ELOG_INVALID_TARGET_ID) {
-            ELogTargetId stderrTargetId = elog::getLogTargetId("stderr");
-            if (stderrTargetId != ELOG_INVALID_TARGET_ID) {
-                if (sStderrTargetId.compare_exchange_strong(logTargetId, stderrTargetId,
-                                                            std::memory_order_seq_cst)) {
-                    ELogTargetAffinityMask mask = 0;
-                    ELOG_ADD_TARGET_AFFINITY_MASK(mask, stderrTargetId);
-                    m_logSource->setLogTargetAffinity(mask);
-                    logTargetId = stderrTargetId;
-                }
-                // if we failed to CAS it is possible that that the thread that made CAS will
-                // experience context switch before actually restricting the log source, so this
-                // thread must wait for next round
-            }
+            ELOG_REPORT_ERROR("Failed to configure log target for ELog reports");
+            return false;
         }
-        return (logTargetId != ELOG_INVALID_TARGET_ID);
+
+        // get the log target
+        ELogTarget* logTarget = elog::getLogTarget(logTargetId);
+        if (logTarget == nullptr) {
+            ELOG_REPORT_ERROR("Could not find ELog reports target by id %u", logTargetId);
+            return false;
+        }
+
+        // bind the logger to this specific target
+        ELogTargetAffinityMask mask = 0;
+        ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTargetId);
+        m_logger->getLogSource()->setLogTargetAffinity(mask);
+
+        // make sure no one else sends to this target
+        logTarget->setPassKey();
+        m_logger->getLogSource()->addPassKey(logTarget->getPassKey());
+        return true;
     }
 };
 
-static ELogDefaultErrorHandler sDefaultErrorHandler;
-static ELogSelfErrorHandler sSelfErrorHandler;
-static ELogErrorHandler* sErrorHandler = &sDefaultErrorHandler;
+static ELogDefaultReportHandler sDefaultReportHandler;
+static ELogSelfReportHandler sSelfReportHandler;
+static ELogReportHandler* sReportHandler = &sDefaultReportHandler;
+static ELogLevel sReportLevel = ELEVEL_WARN;
 
-void ELogError::setErrorHandler(ELogErrorHandler* errorHandler) {
-    if (errorHandler != nullptr) {
-        sErrorHandler = errorHandler;
+void ELogReport::setReportHandler(ELogReportHandler* reportHandler) {
+    if (reportHandler != nullptr) {
+        sReportHandler = reportHandler;
     } else {
-        sErrorHandler = &sDefaultErrorHandler;
+        sReportHandler = &sDefaultReportHandler;
     }
+    sReportHandler->setReportLevel(sReportLevel);
 }
 
-ELogErrorHandler* ELogError::getErrorHandler() { return sErrorHandler; }
+ELogReportHandler* ELogReport::getReportHandler() { return sReportHandler; }
 
-void ELogError::setTraceMode(bool enableTrace) { sErrorHandler->setTraceMode(enableTrace); }
+void ELogReport::setReportLevel(ELogLevel reportLevel) { sReportLevel = reportLevel; }
 
-bool ELogError::isTraceEnabled() { return sErrorHandler->isTraceEnabled(); }
+ELogLevel ELogReport::getReportLevel() { return sReportLevel; }
 
-void ELogError::reportError(const char* errorMsgFmt, ...) {
-    va_list args;
-    va_start(args, errorMsgFmt);
-    reportV(RT_ERROR, errorMsgFmt, args);
-    va_end(args);
-}
-
-void ELogError::reportSysError(const char* sysCall, const char* errorMsgFmt, ...) {
-    int errCode = errno;
-    ELOG_REPORT_ERROR("System call %s() failed: %d (%s)", sysCall, errCode, sysErrorToStr(errCode));
-
-    va_list args;
-    va_start(args, errorMsgFmt);
-    ELOG_REPORT_ERROR(errorMsgFmt, args);
-    va_end(args);
-}
-
-void ELogError::reportSysErrorCode(const char* sysCall, int errCode, const char* errorMsgFmt, ...) {
-    ELOG_REPORT_ERROR("System call %s() failed: %d (%s)", sysCall, errCode, sysErrorToStr(errCode));
-
-    va_list args;
-    va_start(args, errorMsgFmt);
-    ELOG_REPORT_ERROR(errorMsgFmt, args);
-    va_end(args);
-}
-
-void ELogError::reportWarn(const char* fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    reportV(RT_WARN, fmt, args);
-    va_end(args);
-}
-
-void ELogError::reportTrace(const char* fmt, ...) {
-    // TODO: allocating a buffer each time is not such a good idea, at least we can use thread local
-    // fixed buffer
-    static thread_local bool isTracing = false;
-    if (sErrorHandler->isTraceEnabled() && !isTracing) {
-        isTracing = true;
+void ELogReport::report(ELogLevel logLevel, const char* file, int line, const char* function,
+                        const char* fmt, ...) {
+    if (logLevel <= sReportLevel) {
         va_list args;
         va_start(args, fmt);
-
-        // check how many bytes are required
-        va_list argsCopy;
-        va_copy(argsCopy, args);
-        int res = vsnprintf(nullptr, 0, fmt, argsCopy);
-        if (res < 0) {
-            // output error occurred, report this, this is highly unexpected
-            ELOG_REPORT_ERROR("Failed to format trace buffer");
-            return;
-        }
-
-        // now we can safely make the cast
-        uint32_t requiredBytes = ((uint32_t)res) + 1;
-
-        // format trace message
-        char* traceMsg = (char*)malloc(requiredBytes);
-        vsnprintf(traceMsg, requiredBytes, fmt, args);
-
-        // report error
-        sErrorHandler->onTrace(traceMsg);
-        free(traceMsg);
-        va_end(argsCopy);
-
+        ELogReportHandler* reportHandler = sReportHandler ? sReportHandler : &sDefaultReportHandler;
+        reportHandler->onReportV(logLevel, file, line, function, fmt, args);
         va_end(args);
-        isTracing = false;
     }
 }
 
-char* ELogError::sysErrorToStr(int sysErrorCode) {
+char* ELogReport::sysErrorToStr(int sysErrorCode) {
     const int BUF_LEN = 256;
     static thread_local char buf[BUF_LEN];
 #ifdef ELOG_WINDOWS
@@ -213,7 +164,7 @@ char* ELogError::sysErrorToStr(int sysErrorCode) {
 }
 
 #ifdef ELOG_WINDOWS
-char* ELogError::win32SysErrorToStr(unsigned long sysErrorCode) {
+char* ELogReport::win32SysErrorToStr(unsigned long sysErrorCode) {
     LPSTR messageBuffer = nullptr;
     FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -222,67 +173,12 @@ char* ELogError::win32SysErrorToStr(unsigned long sysErrorCode) {
     return messageBuffer;
 }
 
-void ELogError::win32FreeErrorStr(char* errStr) { LocalFree(errStr); }
+void ELogReport::win32FreeErrorStr(char* errStr) { LocalFree(errStr); }
 #endif
 
-void ELogError::initError() {
-    std::string elogSink;
-    if (elog_getenv("ELOG_SINK", elogSink)) {
-        ELOG_REPORT_TRACE("Setting Log sink: %s", elogSink.c_str());
-        if (elogSink.compare("logger") == 0) {
-            sSelfErrorHandler.init();
-            setErrorHandler(&sSelfErrorHandler);
-        }
-    }
-
-    std::string elogTrace;
-    if (elog_getenv("ELOG_TRACE", elogTrace)) {
-        if (elogTrace.compare("TRUE") == 0) {
-            setTraceMode(true);
-        }
-    }
-}
-
-void ELogError::reportV(ReportType reportType, const char* msgFmt, va_list args) {
-    // compute error message length, this requires copying variadic argument pointer
-    va_list argsCopy;
-    va_copy(argsCopy, args);
-    int res = vsnprintf(nullptr, 0, msgFmt, argsCopy);
-    if (res < 0) {
-        // output error occurred, report this, this is highly unexpected
-        ELOG_REPORT_ERROR("Failed to format trace buffer");
-        return;
-    }
-
-    // now we can safely make the cast
-    uint32_t requiredBytes = ((uint32_t)res) + 1;
-
-    // format error message
-    char* formattedMsg = (char*)malloc(requiredBytes);
-    vsnprintf(formattedMsg, requiredBytes, msgFmt, args);
-
-    // report error
-    ELogErrorHandler* errorHandler = sErrorHandler ? sErrorHandler : &sDefaultErrorHandler;
-    switch (reportType) {
-        case RT_ERROR:
-            errorHandler->onError(formattedMsg);
-            break;
-
-        case RT_WARN:
-            errorHandler->onWarn(formattedMsg);
-            break;
-
-        case RT_TRACE:
-            errorHandler->onTrace(formattedMsg);
-            break;
-
-        default:
-            assert(false);
-            break;
-    }
-
-    free(formattedMsg);
-    va_end(argsCopy);
+void ELogReport::initReport() {
+    sSelfReportHandler.init();
+    setReportHandler(&sSelfReportHandler);
 }
 
 }  // namespace elog
