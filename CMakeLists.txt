@@ -209,7 +209,7 @@ if (ELOG_ENABLE_STACK_TRACE)
         message(STATUS "Fetching dbgutil from github")
         FetchContent_Declare(dbgutil
             GIT_REPOSITORY https://github.com/oa-333/dbgutil.git
-            GIT_TAG v0.1.0
+            GIT_TAG v0.1.1
         )
     endif()
     FetchContent_MakeAvailable(dbgutil)
@@ -489,19 +489,29 @@ if (ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
 endif()
 
 #############################################################
-# C++ Version
+# C++ version, should be inherited from outer project
+# Otherwise defaults to C++ 20 standard on Windows, and C++ 23 on other platforms
 #############################################################
 
-# Using C++ 20 standard on Windows, and C++ 23 on other platforms
-if (MSVC)
-    target_compile_features(elog PRIVATE cxx_std_20)
+if (DEFINED CMAKE_CXX_STANDARD)
+    message(STATUS "elog Using externally defined CXX standard: ${CMAKE_CXX_STANDARD}")
+    target_compile_features(elog PRIVATE ${CMAKE_CXX_STANDARD})
     if (ELOG_BUILD_BENCH)
-        target_compile_features(elog_bench PRIVATE cxx_std_20)
+        target_compile_features(elog_bench PRIVATE ${CMAKE_CXX_STANDARD})
     endif()
 else()
-    target_compile_features(elog PRIVATE cxx_std_23)
-    if (ELOG_BUILD_BENCH)
-        target_compile_features(elog_bench PRIVATE cxx_std_23)
+    if (MSVC)
+        message(STATUS "CXX standard not defined, eog defaulting to cxx_std_20")
+        target_compile_features(elog PRIVATE cxx_std_20)
+        if (ELOG_BUILD_BENCH)
+            target_compile_features(elog_bench PRIVATE cxx_std_20)
+        endif()
+    else()
+        message(STATUS "CXX standard not defined, elog defaulting to cxx_std_23")
+        target_compile_features(elog PRIVATE cxx_std_23)
+        if (ELOG_BUILD_BENCH)
+            target_compile_features(elog_bench PRIVATE cxx_std_23)
+        endif()
     endif()
 endif()
 
