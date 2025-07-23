@@ -57,7 +57,7 @@ enum class ELogGRPCClientMode : uint32_t {
     GRPC_CM_ASYNC_CALLBACK_STREAM
 };
 
-template <typename MessageType = elog_grpc::ELogGRPCRecordMsg>
+template <typename MessageType = elog_grpc::ELogRecordMsg>
 class ELogGRPCBaseReceptor : public ELogFieldReceptor {
 public:
     ELogGRPCBaseReceptor()
@@ -150,9 +150,8 @@ typedef ELogGRPCBaseReceptor<> ELogGRPCReceptor;
 // the client write reactor used with asynchronous callback streaming
 // unfortunately, in order to make this code (mostly) lock-free, the implementation had to be a bit
 // complex
-template <typename StubType = elog_grpc::ELogGRPCService::Stub,
-          typename MessageType = elog_grpc::ELogGRPCRecordMsg,
-          typename ReceptorType = ELogGRPCReceptor>
+template <typename StubType = elog_grpc::ELogService::Stub,
+          typename MessageType = elog_grpc::ELogRecordMsg, typename ReceptorType = ELogGRPCReceptor>
 class ELogGRPCBaseReactor : public grpc::ClientWriteReactor<MessageType> {
 public:
     ELogGRPCBaseReactor(ELogReportHandler* reportHandler, StubType* stub,
@@ -270,9 +269,9 @@ private:
 
 typedef ELogGRPCBaseReactor<> ELogGRPCReactor;
 
-template <typename ServiceType = elog_grpc::ELogGRPCService, typename StubType = ServiceType::Stub,
-          typename MessageType = elog_grpc::ELogGRPCRecordMsg,
-          typename ResponseType = elog_grpc::ELogGRPCStatus,
+template <typename ServiceType = elog_grpc::ELogService, typename StubType = ServiceType::Stub,
+          typename MessageType = elog_grpc::ELogRecordMsg,
+          typename ResponseType = elog_grpc::ELogStatusMsg,
           typename ReceptorType = ELogGRPCReceptor>
 class ELogGRPCBaseTarget : public ELogRpcTarget {
 public:

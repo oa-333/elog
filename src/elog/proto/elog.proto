@@ -8,17 +8,17 @@ option objc_class_prefix = "ELOG";
 package elog_grpc;
 
 // Interface exported by the server.
-service ELogGRPCService {
+service ELogService {
 
   // Sends a log record to the server.
-  rpc SendLogRecord(ELogGRPCRecordMsg) returns (ELogGRPCStatus) {}
+  rpc SendLogRecord(ELogRecordMsg) returns (ELogStatusMsg) {}
 
   // Sends a stream of log records to the server
-  rpc StreamLogRecords(stream ELogGRPCRecordMsg) returns (ELogGRPCStatus) {}
+  rpc StreamLogRecords(stream ELogRecordMsg) returns (ELogStatusMsg) {}
 }
 
 // ELog Record
-message ELogGRPCRecordMsg {
+message ELogRecordMsg {
     optional uint64 recordId = 1;
     optional uint64 timeUTCMillis = 2;
     optional string hostName = 3;
@@ -39,4 +39,4 @@ message ELogGRPCRecordMsg {
     optional string logMsg = 18;
 }
 
-message ELogGRPCStatus {}
+message ELogStatusMsg {}

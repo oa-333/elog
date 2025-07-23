@@ -15,8 +15,8 @@
 namespace elog {
 
 // register default implementation
-DECLARE_ELOG_GRPC_TARGET(elog_grpc::ELogGRPCService, elog_grpc::ELogGRPCRecordMsg,
-                         elog_grpc::ELogGRPCStatus, elog)
+DECLARE_ELOG_GRPC_TARGET(elog_grpc::ELogService, elog_grpc::ELogRecordMsg, elog_grpc::ELogStatusMsg,
+                         elog)
 
 struct ELogGRPCTargetNameConstructor {
     const char* m_name;

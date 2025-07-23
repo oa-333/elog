@@ -250,7 +250,7 @@ static void testPerfBinaryAcceleration();
 static std::mutex coutLock;
 
 std::atomic<uint64_t> sGrpcMsgCount;
-static void handleLogRecord(const elog_grpc::ELogGRPCRecordMsg* msg) {
+static void handleLogRecord(const elog_grpc::ELogRecordMsg* msg) {
     // TODO: conduct a real test - collect messages, verify they match the log messages
     sGrpcMsgCount.fetch_add(1, std::memory_order_relaxed);
     return;
@@ -321,21 +321,21 @@ static void handleLogRecord(const elog_grpc::ELogGRPCRecordMsg* msg) {
     std::cout << s.str() << std::endl;
 }
 
-class TestGRPCServer final : public elog_grpc::ELogGRPCService::Service {
+class TestGRPCServer final : public elog_grpc::ELogService::Service {
 public:
     TestGRPCServer() {}
 
     ::grpc::Status SendLogRecord(::grpc::ServerContext* context,
-                                 const ::elog_grpc::ELogGRPCRecordMsg* request,
-                                 ::elog_grpc::ELogGRPCStatus* response) final {
+                                 const ::elog_grpc::ELogRecordMsg* request,
+                                 ::elog_grpc::ELogStatusMsg* response) final {
         handleLogRecord(request);
         return grpc::Status::OK;
     }
 
     ::grpc::Status StreamLogRecords(::grpc::ServerContext* context,
-                                    ::grpc::ServerReader< ::elog_grpc::ELogGRPCRecordMsg>* reader,
-                                    ::elog_grpc::ELogGRPCStatus* response) {
-        elog_grpc::ELogGRPCRecordMsg msg;
+                                    ::grpc::ServerReader< ::elog_grpc::ELogRecordMsg>* reader,
+                                    ::elog_grpc::ELogStatusMsg* response) {
+        elog_grpc::ELogRecordMsg msg;
         while (reader->Read(&msg)) {
             handleLogRecord(&msg);
         }
@@ -343,7 +343,7 @@ public:
     }
 };
 
-class TestGRPCAsyncServer final : public elog_grpc::ELogGRPCService::AsyncService {
+class TestGRPCAsyncServer final : public elog_grpc::ELogService::AsyncService {
 public:
     TestGRPCAsyncServer() {}
 
@@ -389,7 +389,7 @@ private:
         // Take in the "service" instance (in this case representing an asynchronous
         // server) and the completion queue "cq" used for asynchronous communication
         // with the gRPC runtime.
-        CallData(elog_grpc::ELogGRPCService::AsyncService* service, grpc::ServerCompletionQueue* cq)
+        CallData(elog_grpc::ELogService::AsyncService* service, grpc::ServerCompletionQueue* cq)
             : m_service(service), m_cq(cq), m_responder(&m_serverContext), m_callState(CS_CREATE) {
             // Invoke the serving logic right away.
             Proceed();
@@ -431,7 +431,7 @@ private:
     private:
         // The means of communication with the gRPC runtime for an asynchronous
         // server.
-        elog_grpc::ELogGRPCService::AsyncService* m_service;
+        elog_grpc::ELogService::AsyncService* m_service;
         // The producer-consumer queue where for asynchronous server notifications.
         grpc::ServerCompletionQueue* m_cq;
         // Context for the rpc, allowing to tweak aspects of it such as the use
@@ -440,12 +440,12 @@ private:
         grpc::ServerContext m_serverContext;
 
         // What we get from the client.
-        elog_grpc::ELogGRPCRecordMsg m_logRecordMsg;
+        elog_grpc::ELogRecordMsg m_logRecordMsg;
         // What we send back to the client.
-        elog_grpc::ELogGRPCStatus m_statusMsg;
+        elog_grpc::ELogStatusMsg m_statusMsg;
 
         // The means to get back to the client.
-        grpc::ServerAsyncResponseWriter<elog_grpc::ELogGRPCStatus> m_responder;
+        grpc::ServerAsyncResponseWriter<elog_grpc::ELogStatusMsg> m_responder;
 
         // Let's implement a tiny state machine with the following states.
         enum CallState { CS_CREATE, CS_PROCESS, CS_FINISH };
@@ -453,16 +453,16 @@ private:
     };
 };
 
-class TestGRPCAsyncCallbackServer final : public elog_grpc::ELogGRPCService::CallbackService {
+class TestGRPCAsyncCallbackServer final : public elog_grpc::ELogService::CallbackService {
 public:
     TestGRPCAsyncCallbackServer() {}
 
     grpc::ServerUnaryReactor* SendLogRecord(grpc::CallbackServerContext* context,
-                                            const elog_grpc::ELogGRPCRecordMsg* request,
-                                            elog_grpc::ELogGRPCStatus* response) override {
+                                            const elog_grpc::ELogRecordMsg* request,
+                                            elog_grpc::ELogStatusMsg* response) override {
         class Reactor : public grpc::ServerUnaryReactor {
         public:
-            Reactor(const elog_grpc::ELogGRPCRecordMsg& logRecordMsg) {
+            Reactor(const elog_grpc::ELogRecordMsg& logRecordMsg) {
                 handleLogRecord(&logRecordMsg);
                 Finish(grpc::Status::OK);
             }
@@ -473,9 +473,9 @@ public:
         return new Reactor(*request);
     }
 
-    grpc::ServerReadReactor< ::elog_grpc::ELogGRPCRecordMsg>* StreamLogRecords(
-        ::grpc::CallbackServerContext* context, ::elog_grpc::ELogGRPCStatus* response) override {
-        class StreamReactor : public grpc::ServerReadReactor<elog_grpc::ELogGRPCRecordMsg> {
+    grpc::ServerReadReactor< ::elog_grpc::ELogRecordMsg>* StreamLogRecords(
+        ::grpc::CallbackServerContext* context, ::elog_grpc::ELogStatusMsg* response) override {
+        class StreamReactor : public grpc::ServerReadReactor<elog_grpc::ELogRecordMsg> {
         public:
             StreamReactor() { StartRead(&m_logRecord); }
 
@@ -495,7 +495,7 @@ public:
             }
 
         private:
-            elog_grpc::ELogGRPCRecordMsg m_logRecord;
+            elog_grpc::ELogRecordMsg m_logRecord;
         };
         return new StreamReactor();
     }
@@ -887,7 +887,30 @@ static bool parseArgs(int argc, char* argv[]) {
     return true;
 }
 
+static void printPreInitMessages() {
+    // this should trigger printing of pre-init messages
+    elog::ELogTargetId id = elog::addStdErrLogTarget();
+    elog::removeLogTarget(id);
+    // elog::discardAccumulatedLogMessages();
+}
+
+static void testFmtLibSanity() {
+#ifdef ELOG_ENABLE_FMT_LIB
+    // all will be printed to default log target (stderr)
+    int someInt = 5;
+    ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
+    ELOG_BIN_INFO("This is a test binary message, with int {}, bool {} and string {}", (int)5, true,
+                  "test string param");
+    ELOG_CACHE_INFO("This is a test binary auto-cached message, with int {}, bool {} and string {}",
+                    (int)5, true, "test string param");
+    elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg(
+        "This is a test binary pre-cached message, with int {}, bool {} and string {}");
+    ELOG_ID_INFO(msgId, (int)5, true, "test string param");
+#endif
+}
+
 int main(int argc, char* argv[]) {
+    // print some messages before elog starts
     ELOG_INFO("Accumulated message 1");
     ELOG_ERROR("Accumulated message 2");
     if (!parseArgs(argc, argv)) {
@@ -899,6 +922,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     ELOG_INFO("ELog system initialized");
+    printPreInitMessages();
+    testFmtLibSanity();
 
     int res = 0;
     if (argc == 2) {
@@ -1029,21 +1054,6 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     elog::ELogTargetAffinityMask mask = 0;
     ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
     logSource->setLogTargetAffinity(mask);
-#ifdef ELOG_ENABLE_FMT_LIB
-    // elog::discardAccumulatedLogMessages();
-    elog::ELogTargetId id = elog::addStdErrLogTarget();
-    int someInt = 5;
-    ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
-    ELOG_BIN_INFO("This is a test binary message, with int {}, bool {} and string {}", (int)5, true,
-                  "test string param");
-    ELOG_CACHE_INFO("This is a test binary auto-cached message, with int {}, bool {} and string {}",
-                    (int)5, true, "test string param");
-    elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg(
-        "This is a test binary pre-cached message, with int {}, bool {} and string {}");
-    ELOG_ID_INFO(msgId, (int)5, true, "test string param");
-    elog::removeLogTarget(id);
-    elog::discardAccumulatedLogMessages();
-#endif
     return logTarget;
 }
 
@@ -1137,6 +1147,7 @@ int testGRPC() {
     if (res != 0) {
         return res;
     }
+    elog::discardAccumulatedLogMessages();
 
     res = testGRPCStream();
     if (res != 0) {
@@ -1219,8 +1230,8 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
 
     runSingleThreadedTest(testName.c_str(), cfg.c_str(), msgPerf, ioPerf, statData, stMsgCount);
     uint32_t receivedMsgCount = (uint32_t)sGrpcMsgCount.load(std::memory_order_relaxed);
-    // total: 2 pre-init + 1 test error message + stMsgCount single-thread messages
-    uint32_t totalMsg = stMsgCount + 1;
+    // total: 2 pre-init + stMsgCount single-thread messages
+    uint32_t totalMsg = stMsgCount;
     if (opts & GRPC_OPT_HAS_PRE_INIT) {
         totalMsg += 2;
     }
@@ -1228,7 +1239,7 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
         fprintf(
             stderr,
             "%s gRPC client test failed, missing messages on server side, expected %u, got %u\n",
-            clientType, stMsgCount, receivedMsgCount);
+            clientType, totalMsg, receivedMsgCount);
         server->Shutdown();
         t.join();
         fprintf(stderr, "%s gRPC client test FAILED\n", clientType);
@@ -1252,13 +1263,14 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
     const uint32_t phaseCount = 4;
     const uint32_t exMsgPerPhase = 2;
     totalMsg = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
+    if (opts & GRPC_OPT_HAS_PRE_INIT) {
+        totalMsg += 2;
+    }
     if (receivedMsgCount != totalMsg) {
         fprintf(
             stderr,
             "%s gRPC client test failed, missing messages on server side, expected %u, got %u\n",
             clientType, totalMsg, receivedMsgCount);
-        server->Shutdown();
-        t.join();
         fprintf(stderr, "%s gRPC client test FAILED\n", clientType);
         return 2;
     }
@@ -1612,14 +1624,6 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     elog::ELogLogger* logger = logSource->createPrivateLogger();
 #ifdef MEASURE_PERCENTILE
     std::vector<double> samples(msgCount, 0.0f);
-#endif
-    ELOG_ERROR_EX(logger, "This is a test error message");
-#ifdef ELOG_ENABLE_FMT_LIB
-    ELOG_BIN_INFO_EX(logger, "This is a test binary message, with int {}, bool {} and string {}",
-                     (int)5, true, "test string param");
-    ELOG_CACHE_INFO_EX(
-        logger, "This is a test binary auto-cached message, with int {}, bool {} and string {}",
-        (int)5, true, "test string param");
 #endif
 
     if (sTestException) {
