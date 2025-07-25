@@ -1139,7 +1139,6 @@ static int testLogStackTrace() {
         return 1;
     }
 
-    ELOG_INFO("Test thread name/id, expecting elog_bench_main/%u", getCurrentThreadId());
     ELOG_STACK_TRACE(elog::ELEVEL_INFO, "some test title", 0, "Testing stack trace for thread %u",
                      getCurrentThreadId());
 
