@@ -170,6 +170,13 @@ private:
         ELogBufferedStats m_bufferedStats;
     };
 
+    struct SegmentInfo {
+        std::string m_fileName;  // without containing folder
+        uint32_t m_segmentId;
+        uint64_t m_fileSizeBytes;
+        uint64_t m_lastModifyTime;
+    };
+
     uint64_t m_segmentLimitBytes;
     uint64_t m_fileBufferSizeBytes;
     uint32_t m_segmentRingSize;
@@ -182,10 +189,13 @@ private:
     SegmentedStats* m_segmentedStats;
 
     bool openSegment();
+    bool openRotatingSegment();
+    bool getSegmentInfo(std::vector<SegmentInfo>& segmentInfo);
     bool getSegmentCount(uint32_t& segmentCount, uint64_t& lastSegmentSizeBytes);
     bool scanDirFiles(const char* dirPath, std::vector<std::string>& fileNames);
     bool getSegmentIndex(const std::string& fileName, uint32_t& segmentIndex);
     bool getFileSize(const char* filePath, uint64_t& fileSize);
+    bool getFileTime(const char* filePath, uint64_t& fileTime);
     void formatSegmentPath(std::string& segmentPath, uint32_t segmentId);
     bool advanceSegment(uint32_t segmentId, const std::string& logMsg, uint64_t currentEpoch);
     void logMsgQueue(std::list<std::string>& logMsgs, FILE* segmentFile);

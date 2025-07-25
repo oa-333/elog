@@ -11,6 +11,18 @@
 namespace elog {
 
 /**
+ * @def By default we use 50 milliseconds sleep time between consecutive attempts to read from the
+ * ring buffer, after it got empty. This allows the queue to "breath", before entering another phase
+ * of fighting between writers and reader over read/write pos. If log target access is sporadic,
+ * this default is good enough to collect ring buffer items before it gets full. If log target
+ * access is rather frequent, consider lowering this period. If log flooding scenarios (short
+ * bursts, not steady state), it is best to use a very large ring buffer size, and collect period of
+ * zero. Performance will degrade a bit (less than 10%), but the ring buffer will not get full. The
+ * downside is that one CPU core will be 100% busy.
+ */
+#define ELOG_DEFAULT_COLLECT_PERIOD_MICROS 50000
+
+/**
  * @brief The quantum logger was designed to solve log flooding use case scenario that is usually
  * required when trying to pinpoint some very elusive bugs. In these situations, enabling many log
  * messages causes log flooding, and the incurred overhead may result in the bug not being
@@ -52,9 +64,12 @@ public:
      * @brief Construct a new quantum log target object.
      * @param logTarget The receiving log target on the other end.
      * @param bufferSize The ring buffer size used by the quantum log target.
+     * @param collectPeriodMicros The time to wait between consecutive attempts to read from the
+     * ring buffer. Zero means a tight loop, no CUP yield (yet).
      * @param congestionPolicy Specifies how to handle "no space for log record" condition.
      */
     ELogQuantumTarget(ELogTarget* logTarget, uint32_t bufferSize,
+                      uint64_t collectPeriodMicros = ELOG_DEFAULT_COLLECT_PERIOD_MICROS,
                       CongestionPolicy congestionPolicy = CongestionPolicy::CP_WAIT);
     ELogQuantumTarget(const ELogQuantumTarget&) = delete;
     ELogQuantumTarget(ELogQuantumTarget&&) = delete;
@@ -103,6 +118,7 @@ private:
     ELOG_CACHE_ALIGN ELogRecordData* m_ringBuffer;
     ELogBuffer* m_bufferArray;
     uint64_t m_ringBufferSize;
+    uint64_t m_collectPeriodMicros;
 
     // NOTE: write pos is usually very noisy, so we don't want it to affect read pos, which usually
     // is much slower, therefore, we put read pos in a separate cache line

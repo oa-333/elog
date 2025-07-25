@@ -17,6 +17,14 @@ ELogAsyncTarget* ELogQuantumTargetProvider::loadTarget(const ELogConfigMapNode* 
         return nullptr;
     }
 
+    // parse quantum collect period (micros)
+    uint64_t quantumCollectPeriodMicros = ELOG_DEFAULT_COLLECT_PERIOD_MICROS;
+    if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
+            logTargetCfg, "asynchronous", "quantum_collect_period", quantumCollectPeriodMicros,
+            ELogTimeoutUnits::TU_MICRO_SECONDS)) {
+        return nullptr;
+    }
+
     // load nested target
     ELogTarget* target = loadNestedTarget(logTargetCfg);
     if (target == nullptr) {
@@ -24,7 +32,7 @@ ELogAsyncTarget* ELogQuantumTargetProvider::loadTarget(const ELogConfigMapNode* 
     }
 
     ELogAsyncTarget* asyncTarget =
-        new (std::nothrow) ELogQuantumTarget(target, (uint32_t)quantumBufferSize);
+        new (std::nothrow) ELogQuantumTarget(target, quantumBufferSize, quantumCollectPeriodMicros);
     if (asyncTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create quantum log target, out of memory");
         delete target;

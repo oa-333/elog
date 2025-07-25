@@ -977,6 +977,9 @@ int main(int argc, char* argv[]) {
         if (sTestPerfAll || sTestPerfQuantumBinaryPreCachedFile) {
             testPerfQuantumFileBinaryPreCached();
         }
+        if (sTestPerfAll || sTestPerfBinaryAcceleration) {
+            testPerfBinaryAcceleration();
+        }
 #endif
         if (sTestPerfAll || sTestSingleThread) {
             testPerfAllSingleThread();
@@ -2809,9 +2812,6 @@ void testPerfAllSingleThread() {
     }
     if (sTestSingleAll || sTestSingleThreadQuantumBinaryPreCached) {
         testPerfSTQuantumBinaryPreCached(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
-    }
-    if (sTestSingleAll || sTestPerfBinaryAcceleration) {
-        testPerfBinaryAcceleration();
     }
 #endif
 

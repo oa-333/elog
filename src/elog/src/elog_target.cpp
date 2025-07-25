@@ -151,7 +151,7 @@ bool ELogTarget::stopNoLock() {
         if (m_stats != nullptr) {
             ELogBuffer buffer;
             m_stats->toString(buffer, this, "Log target statistics during stop");
-            ELOG_REPORT_TRACE("Log target statistics during stop: %s", buffer.getRef());
+            ELOG_REPORT_TRACE("Log target statistics during stop:\n%s", buffer.getRef());
         }
     }
     return res;

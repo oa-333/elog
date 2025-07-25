@@ -10,14 +10,24 @@
 #define ELOG_FLUSH_REQUEST ((uint8_t)-1)
 #define ELOG_STOP_REQUEST ((uint8_t)-2)
 
+// TODO: add some backoff policy when queue is empty, to avoid tight loop when not needed
+// TODO: consider CPU affinity for log thread for better performance
+
+// TODO: allow quantum log target to specify in config what to do when queue is full:
+// - wait until queue is ready (or even allow to give a timeout)
+// - bail out immediately
+
+// TODO: check again CPU relax and exponential backoff where needed
+
 namespace elog {
 
 ELogQuantumTarget::ELogQuantumTarget(
-    ELogTarget* logTarget, uint32_t bufferSize,
+    ELogTarget* logTarget, uint32_t bufferSize, uint64_t collectPeriodMicros /* = 0 */,
     CongestionPolicy congestionPolicy /* = CongestionPolicy::CP_WAIT */)
     : ELogAsyncTarget(logTarget),
       m_ringBuffer(nullptr),
       m_ringBufferSize(bufferSize),
+      m_collectPeriodMicros(collectPeriodMicros),
       m_writePos(0),
       m_readPos(0),
       // m_congestionPolicy(congestionPolicy),
@@ -70,7 +80,6 @@ bool ELogQuantumTarget::stopLogTarget() {
         return false;
     }
     if (m_ringBuffer != nullptr) {
-        // TODO: check again CPU relax and exponential backoff where needed
         elogAlignedFreeObjectArray(m_bufferArray, m_ringBufferSize);
         elogAlignedFreeObjectArray(m_ringBuffer, m_ringBufferSize);
         m_ringBuffer = nullptr;
@@ -105,13 +114,8 @@ uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
     recordData.m_entryState.store(ES_READY, std::memory_order_release);
 
     // NOTE: asynchronous loggers do not report bytes written
-    // TODO: future statistics will record bytes submitted
     return 0;
 }
-
-// TODO: allow quantum log target to specify in config what to do when queue is full:
-// - wait until queue is ready (or even allow to give a timeout)
-// - bail out immediately
 
 bool ELogQuantumTarget::flushLogTarget() {
     // log empty message, which designated a flush request
@@ -142,14 +146,14 @@ void ELogQuantumTarget::logThread() {
             while (entryState != ES_READY) {
                 // cpu relax then try again
                 // NOTE: this degrades performance, not clear yet why
-                // CPU_RELAX;
+                // spin and exponential backoff
+                // for (uint32_t spin = 0; spin < localSpinCount; ++spin) {
+                //    CPU_RELAX;
+                //}
+                // localSpinCount *= 2;
                 entryState = recordData.m_entryState.load(std::memory_order_relaxed);
                 // we don't spin/back-off here since the state change is expected to happen
                 // immediately
-
-                // spin and exponential backoff
-                // for (uint32_t spin = 0; spin < localSpinCount; ++spin);
-                // localSpinCount *= 2;
             }
 
             // set record in reading state
@@ -175,17 +179,21 @@ void ELogQuantumTarget::logThread() {
             // write pos is not changing yet, so this mostly means the writers are idle, but since
             // they might start any time, we don't do any spin/backoff, but rather just relax
             // NOTE: this degrades performance, not clear yet why
-            // CPU_RELAX;
-            /*if (spinCount > SPIN_COUNT_MAX) {
-                // yield processor
-                std::this_thread::yield();
+            if (m_collectPeriodMicros == 0) {
+                // CPU_RELAX;
+                /*if (spinCount > SPIN_COUNT_MAX) {
+                    // yield processor
+                    std::this_thread::yield();
+                } else {
+                    // relax before next round
+                    CPU_RELAX;
+                    // spin and do exponential backoff
+                    for (uint32_t spin = 0; spin < spinCount; ++spin);
+                    spinCount *= 2;
+                }*/
             } else {
-                // relax before next round
-                CPU_RELAX;
-                // spin and do exponential backoff
-                for (uint32_t spin = 0; spin < spinCount; ++spin);
-                spinCount *= 2;
-            }*/
+                std::this_thread::sleep_for(std::chrono::microseconds(m_collectPeriodMicros));
+            }
         }
     }
 

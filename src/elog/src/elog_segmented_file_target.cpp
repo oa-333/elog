@@ -364,7 +364,7 @@ ELogSegmentedFileTarget::~ELogSegmentedFileTarget() {}
 
 bool ELogSegmentedFileTarget::startLogTarget() {
     m_epochSet.resizeRing(ELOG_SEGMENT_EPOCH_RING_SIZE);
-    return openSegment();
+    return (m_segmentCount > 0) ? openRotatingSegment() : openSegment();
 }
 
 bool ELogSegmentedFileTarget::stopLogTarget() {
@@ -501,14 +501,15 @@ void ELogSegmentedFileTarget::SegmentedStats::toString(ELogBuffer& buffer, ELogT
                                                        const char* msg /* = "" */) {
     ELogStats::toString(buffer, logTarget, msg);
 
-    buffer.appendArgs("\tSegment count: %" PRIu64 "\n", m_segmentCount.getSum());
+    uint64_t segmentCount = m_segmentCount.getSum();
+    buffer.appendArgs("\tSegment count: %" PRIu64 "\n", segmentCount);
     buffer.appendArgs("\tOpen segment fail count: %" PRIu64 "\n", m_openSegmentFailCount.getSum());
     buffer.appendArgs("\tClose segment fail count: %" PRIu64 "\n",
                       m_closeSegmentFailCount.getSum());
-    uint64_t avgSegmentSizeBytes = m_closedSegmentBytes.getSum() / m_segmentCount.getSum();
+    uint64_t avgSegmentSizeBytes = m_closedSegmentBytes.getSum() / segmentCount;
     buffer.appendArgs("\tAverage segment size: %" PRIu64 " bytes\n", avgSegmentSizeBytes);
     buffer.appendArgs("\tPending message count (total): %" PRIu64 "\n", m_pendingMsgCount.getSum());
-    uint64_t avgPendingMsgCount = m_pendingMsgCount.getSum() / m_segmentCount.getSum();
+    uint64_t avgPendingMsgCount = m_pendingMsgCount.getSum() / segmentCount;
     buffer.appendArgs("\tAverage pending messages per segment: %" PRIu64 "\n", avgPendingMsgCount);
 
     // print segment's buffering stats if any
@@ -582,6 +583,138 @@ bool ELogSegmentedFileTarget::openSegment() {
         m_segmentedStats->incrementSegmentCount();
     }
     m_currentSegment.store(segmentData, std::memory_order_relaxed);
+    return true;
+}
+
+bool ELogSegmentedFileTarget::openRotatingSegment() {
+    // log ic here is as follows:
+    // - find all segment files
+    // - if number of segments is less than rotation limit then use recent segment
+    //      - if last segment is full then advance to new segment
+    // - if equal then
+    //      - last segment not full then use it
+    //      - otherwise use next segment (circular, last write time is oldest)
+    // - else
+    //      - impossible (we do not collect segment info for segments with too large id)
+
+    // get segment count and last segment size
+    std::vector<SegmentInfo> segmentInfo;
+    if (!getSegmentInfo(segmentInfo)) {
+        return false;
+    }
+    uint32_t segmentCount = (uint32_t)segmentInfo.size();
+    uint32_t segmentIndex = 0;
+    bool truncateSegment = false;
+    uint64_t lastSegmentSizeBytes = (segmentCount > 0) ? segmentInfo[0].m_fileSizeBytes : 0;
+    if (segmentCount < m_segmentCount) {
+        // if last segment is too large then open a new segment (we can do that, since number of
+        // segments has not reached maximum)
+        if (lastSegmentSizeBytes > m_segmentLimitBytes) {
+            // NOTE: there is no such segment in the segment info list (there might be such one on
+            // disk and we will truncate it)
+            segmentIndex = segmentCount;
+            truncateSegment = true;
+        } else {
+            segmentIndex = segmentInfo[0].m_segmentId;
+        }
+    } else if (segmentCount == m_segmentCount) {
+        if (lastSegmentSizeBytes > m_segmentLimitBytes) {
+            // NOTE: need to select the next circular segment, which is the one with oldest write
+            // time, and truncate it
+            segmentIndex = segmentInfo.back().m_segmentId;
+            truncateSegment = true;
+        } else {
+            // last segment can be used
+            segmentIndex = segmentInfo[0].m_segmentId;
+        }
+    } else {
+        // impossible
+        ELOG_REPORT_ERROR(
+            "Internal error, invalid number of segments %u found rotating log with %u segments",
+            segmentCount, m_segmentCount);
+        return false;
+    }
+
+    if (truncateSegment) {
+        lastSegmentSizeBytes = 0;
+    }
+
+    // create segment data object
+    SegmentData* segmentData = new (std::nothrow) SegmentData(segmentCount, lastSegmentSizeBytes);
+    if (segmentData == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate segment object, out of memory");
+        return false;
+    }
+    if (!segmentData->m_pendingMsgs.initialize(m_segmentRingSize)) {
+        ELOG_REPORT_ERROR("Failed to initialize ring buffer of segment object");
+        delete segmentData;
+        return false;
+    }
+
+    // open the segment file for appending
+    std::string segmentPath;
+    formatSegmentPath(segmentPath, segmentCount);
+    bool useLock = !isExternallyThreadSafe();
+    if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment,
+                           m_enableStats)) {
+        delete segmentData;
+        if (m_enableStats) {
+            m_segmentedStats->incrementOpenSegmentFailCount();
+        }
+        return false;
+    }
+    if (m_enableStats) {
+        m_segmentedStats->incrementSegmentCount();
+    }
+    m_currentSegment.store(segmentData, std::memory_order_relaxed);
+    return true;
+}
+
+bool ELogSegmentedFileTarget::getSegmentInfo(std::vector<SegmentInfo>& segmentInfo) {
+    // scan directory for all files with matching name:
+    // <log-path>/<log-name>.<log-id>.log
+    std::vector<std::string> fileNames;
+    if (!scanDirFiles(m_logPath.c_str(), fileNames)) {
+        return false;
+    }
+
+    std::vector<std::string>::iterator itr = fileNames.begin();
+    while (itr != fileNames.end()) {
+        const std::string fileName = *itr;
+        uint32_t segmentIndex = 0;
+        // NOTE: if we failed to extract segment id from file - that is OK, since the directory
+        // might contain log segmented with different name scheme
+        if (getSegmentIndex(fileName, segmentIndex)) {
+            if (segmentIndex >= m_segmentCount) {
+                ELOG_REPORT_TRACE(
+                    "Skipping segment with index %u, too large for rotating log with %u segments",
+                    segmentIndex, m_segmentCount);
+                ++itr;
+                continue;
+            }
+            uint64_t segmentSizeBytes = 0;
+            uint64_t segmentLastWriteTime = 0;
+            std::string segmentPath = m_logPath + "/" + fileName;
+            if (!getFileSize(segmentPath.c_str(), segmentSizeBytes)) {
+                return false;
+            }
+            if (!getFileTime(segmentPath.c_str(), segmentSizeBytes)) {
+                return false;
+            }
+            segmentInfo.push_back({fileName, segmentIndex, segmentSizeBytes, segmentLastWriteTime});
+        }
+        ++itr;
+    }
+
+    std::sort(segmentInfo.begin(), segmentInfo.end(),
+              [](const SegmentInfo& lhs, const SegmentInfo& rhs) {
+                  return lhs.m_lastModifyTime >= rhs.m_lastModifyTime;
+              });
+
+    // now draw conclusions
+    if (segmentInfo.empty()) {
+        ELOG_REPORT_TRACE("No segments found, using segment index 0");
+    }
     return true;
 }
 
@@ -690,6 +823,19 @@ bool ELogSegmentedFileTarget::getFileSize(const char* filePath, uint64_t& fileSi
     } catch (std::exception& e) {
         ELOG_REPORT_SYS_ERROR(std::filesystem::file_size, "Failed to get size of segment %s: %s",
                               filePath, e.what());
+        return false;
+    }
+}
+
+bool ELogSegmentedFileTarget::getFileTime(const char* filePath, uint64_t& fileTime) {
+    try {
+        std::filesystem::path p{filePath};
+        fileTime = (uint64_t)std::filesystem::last_write_time(p).time_since_epoch().count();
+        return true;
+    } catch (std::exception& e) {
+        ELOG_REPORT_SYS_ERROR(std::filesystem::file_size,
+                              "Failed to get last write time of segment %s: %s", filePath,
+                              e.what());
         return false;
     }
 }

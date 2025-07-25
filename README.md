@@ -316,6 +316,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Flush Policy](#flush-policy)
     - [Filtering Log Messages](#filtering-log-messages)
     - [Limiting Log Rate](#limiting-log-rate)
+    - [Enabling ELog Internal Trace Messages](#enabling-elog-internal-trace-messages)
 - [Configuration](#configuring)
     - [Configuration Units](#configuration-units)
     - [Configuring Log Level](#configuring-log-level)
@@ -741,6 +742,43 @@ In configuration, the following expression syntax may be used:
 Alternatively, the normal configuration style can be used:
 
     log_target = file:///./app.log?filter=rate_limit&max_msg_per_sec=500
+
+### Enabling ELog Internal Trace Messages
+
+It is possible to enable trace messages for ELog through the environment variable ELOG_REPORT_LEVEL.  
+Basically, all internal error/trace reporting is redirected to the installed report handler, which is normally set during library initialization (see elog::initialize()). If not report handler is installed by the user, then by default ELog uses an internal logger, which emits report to the standard error stream (in faint font).
+
+Whether externally set by user, or internally used by ELog, the default log level for all internal reports redirected to the report handler is WARNING. This value can be controlled externally by the environment variable ELOG_REPORT_LEVEL, ot it can be controlled programmatically through the elog::setReportLevel() API.
+
+If report level is set to INFO, then while stopping a log target, its internal statistics report summary in printed (unless statistics was disabled for the log target). Here is a sample report:
+
+2025-07-25 09:56:21.702 INFO   [35484] elog_root Log target statistics during stop:
+    Statistics for log target async/elog_bench:
+            Log messages discarded: 0
+            Log messages submitted: 1000003
+            Log messages written: 1000003
+            Log messages failed write: 0
+            Bytes submitted: 0
+            Bytes written: 0
+            Bytes failed write: 0
+            Flush requests submitted: 0
+            Flush requests executed: 0
+            Flush requests failed execution: 0
+            Flush requests discarded: 0
+    sub-target statistics (log target: file/):
+            Log messages discarded: 0
+            Log messages submitted: 1000003
+            Log messages written: 1000003
+            Log messages failed write: 0
+            Bytes submitted: 79889111
+            Bytes written: 79889111
+            Bytes failed write: 0
+            Flush requests submitted: 0
+            Flush requests executed: 0
+            Flush requests failed execution: 0
+            Flush requests discarded: 0
+            Buffer write count: 76
+            Average buffer size: 1048559 bytes
 
 ## Configuration
 
