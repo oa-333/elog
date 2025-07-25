@@ -47,7 +47,16 @@
 
 namespace elog {
 
-inline uint32_t getCurrentThreadId() {
+/** @typedef Platform-independent thread id type. */
+#ifdef ELOG_WINDOWS
+typedef unsigned long elog_thread_id_t;
+#define ELogPRItid "lu"
+#else
+typedef long elog_thread_id_t;
+#define ELogPRItid "ld"
+#endif
+
+inline elog_thread_id_t getCurrentThreadId() {
 #ifdef ELOG_WINDOWS
     return GetCurrentThreadId();
 #else

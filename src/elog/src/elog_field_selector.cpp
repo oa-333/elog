@@ -42,9 +42,17 @@
 
 #include "elog.h"
 #include "elog_common.h"
+#include "elog_concurrent_hash_table.h"
 #include "elog_report.h"
+#include "elog_tls.h"
 
 namespace elog {
+
+typedef ELogConcurrentHashTable<const char*> ELogThreadNameMap;
+static ELogThreadNameMap sThreadNameMap;
+static ELogTlsKey sThreadNameKey = ELOG_INVALID_TLS_KEY;
+
+#define ELOG_THREAD_NAME_MAP_SIZE 4096
 
 static char sHostName[HOST_NAME_MAX];
 static char sUserName[LOGIN_NAME_MAX];
@@ -54,25 +62,10 @@ static char sAppName[APP_NAME_MAX];
 static char sProgName[PROG_NAME_MAX];
 static thread_local char sThreadName[THREAD_NAME_MAX] = {};
 
-#ifdef ELOG_ENABLE_STACK_TRACE
-typedef std::unordered_map<dbgutil::os_thread_id_t, std::string> ThreadNameMap;
-static ThreadNameMap sThreadNameMap;
-static std::mutex sLock;
-
-static void addThreadNameField(const char* threadName) {
-    std::unique_lock<std::mutex> lock(sLock);
-    sThreadNameMap.insert(ThreadNameMap::value_type(dbgutil::getCurrentThreadId(), threadName));
+static void cleanupThreadName(void* key) {
+    elog_thread_id_t threadId = (elog_thread_id_t)(uint64_t)key;
+    sThreadNameMap.setItem(threadId, nullptr);
 }
-
-const char* getThreadNameField(dbgutil::os_thread_id_t threadId) {
-    std::unique_lock<std::mutex> lock(sLock);
-    ThreadNameMap::iterator itr = sThreadNameMap.find(threadId);
-    if (itr == sThreadNameMap.end()) {
-        return "";
-    }
-    return itr->second.c_str();
-}
-#endif
 
 #ifdef ELOG_WINDOWS
 static DWORD pid = 0;
@@ -400,7 +393,23 @@ static void initProgName() {
 }
 
 extern bool initFieldSelectors() {
+    if (!elogCreateTls(sThreadNameKey, cleanupThreadName)) {
+        ELOG_REPORT_ERROR(
+            "Failed to create thread name map TLS key, during initialization of field selectors");
+        return false;
+    }
+
+    if (!sThreadNameMap.initialize(ELOG_THREAD_NAME_MAP_SIZE)) {
+        ELOG_REPORT_ERROR(
+            "Failed to initialize concurrent thread name map, during initialization of field "
+            "selectors");
+        elogDestroyTls(sThreadNameKey);
+        return false;
+    }
+
     if (!applyFieldSelectorConstructorRegistration()) {
+        sThreadNameMap.destroy();
+        elogDestroyTls(sThreadNameKey);
         return false;
     }
 
@@ -425,7 +434,11 @@ extern bool initFieldSelectors() {
     return true;
 }
 
-void termFieldSelectors() { sFieldSelectorConstructorMap.clear(); }
+void termFieldSelectors() {
+    sFieldSelectorConstructorMap.clear();
+    sThreadNameMap.destroy();
+    elogDestroyTls(sThreadNameKey);
+}
 
 const char* getHostName() { return sHostName; }
 
@@ -443,12 +456,18 @@ void setAppNameField(const char* appName) { elog_strncpy(sAppName, appName, APP_
 
 void setCurrentThreadNameField(const char* threadName) {
     elog_strncpy(sThreadName, threadName, THREAD_NAME_MAX);
-#ifdef ELOG_ENABLE_STACK_TRACE
-    addThreadNameField(threadName);
-#endif
+    elog_thread_id_t threadId = getCurrentThreadId();
+    sThreadNameMap.setItem((uint64_t)threadId, sThreadName);
+    // this is required to trigger cleanup when thread ends
+    elogSetTls(sThreadNameKey, (void*)(uint64_t)threadId);
 }
 
-const char* getCurrentThreadNameField() { return sThreadName; }
+const char* getThreadNameField(uint32_t threadId) {
+    const char* threadName = "";
+    // if failed it remain empty, so we don't need to check return value
+    (void)sThreadNameMap.getItem((uint64_t)threadId, threadName);
+    return threadName;
+}
 
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
@@ -539,10 +558,11 @@ void ELogThreadIdSelector::selectField(const ELogRecord& record, ELogFieldRecept
 }
 
 void ELogThreadNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    const char* threadName = getThreadNameField(record.m_threadId);
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveThreadName(getTypeId(), sThreadName, m_fieldSpec);
+        receptor->receiveThreadName(getTypeId(), threadName, m_fieldSpec);
     } else {
-        receptor->receiveStringField(getTypeId(), sThreadName, m_fieldSpec);
+        receptor->receiveStringField(getTypeId(), threadName, m_fieldSpec);
     }
 }
 

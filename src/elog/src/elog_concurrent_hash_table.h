@@ -81,7 +81,7 @@ public:
             uint64_t probedKey = m_entries[idx].m_key.load(std::memory_order_relaxed);
             if (probedKey == key) {
                 // key matches, return value
-                value = &m_entries[idx].m_value;
+                value = m_entries[idx].m_value;
                 return true;
             }
 

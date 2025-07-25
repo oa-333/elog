@@ -570,7 +570,7 @@ bool ELogThreadIdFilter::load(const std::string& logTargetCfg,
 }
 
 bool ELogThreadIdFilter::filterLogRecord(const ELogRecord& logRecord) {
-    const char* threadName = getCurrentThreadNameField();
+    const char* threadName = getThreadNameField(logRecord.m_threadId);
     if (threadName == nullptr || *threadName == 0) {
         return true;
     }
@@ -587,7 +587,7 @@ bool ELogThreadNameFilter::loadExpr(const ELogExpression* expr) {
 }
 
 bool ELogThreadNameFilter::filterLogRecord(const ELogRecord& logRecord) {
-    const char* threadName = getCurrentThreadNameField();
+    const char* threadName = getThreadNameField(logRecord.m_threadId);
     if (threadName == nullptr || *threadName == 0) {
         return true;
     }

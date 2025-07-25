@@ -38,11 +38,7 @@ extern void setAppNameField(const char* appName);
 extern void setCurrentThreadNameField(const char* threadName);
 
 /** @brief Retrieves the currently installed thread name (for internal use only). */
-extern const char* getCurrentThreadNameField();
-
-#ifdef ELOG_ENABLE_STACK_TRACE
-extern const char* getThreadNameField(dbgutil::os_thread_id_t threadId);
-#endif
+extern const char* getThreadNameField(uint32_t threadId);
 
 }  // namespace elog
 

@@ -64,7 +64,7 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     // m_logItemArray[index]["timestamp"] = elogTimeToUTCSeconds(logRecord.m_logTime);
     m_logItemArray[index]["logger.name"] = logRecord.m_logger->getLogSource()->getQualifiedName();
 
-    const char* threadName = getCurrentThreadNameField();
+    const char* threadName = getThreadNameField(logRecord.m_threadId);
     if (threadName != nullptr && *threadName != 0) {
         m_logItemArray[index]["logger.thread_name"] = threadName;
     }

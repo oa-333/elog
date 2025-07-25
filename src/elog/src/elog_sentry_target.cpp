@@ -381,7 +381,7 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     sentry_value_t thd = sentry_value_new_thread(getCurrentThreadId(), nullptr);
     sentry_value_set_by_key(thd, "id", sentry_value_new_int32((int32_t)getCurrentThreadId()));
     sentry_value_set_by_key(thd, "current", sentry_value_new_bool(true));
-    const char* currThreadName = getCurrentThreadNameField();
+    const char* currThreadName = getThreadNameField(logRecord.m_threadId);
     if (currThreadName != nullptr && *currThreadName != 0) {
         sentry_value_set_by_key(thd, "name", sentry_value_new_string(currThreadName));
     }

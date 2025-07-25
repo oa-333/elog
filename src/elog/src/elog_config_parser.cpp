@@ -191,7 +191,8 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
     // since we may need to specify a sub-target we use the fragment part to specify a sub-target
     std::string::size_type hashPos = logTargetUrl.find('|');
     if (hashPos != std::string::npos) {
-        if (!parseLogTargetUrl(logTargetUrl.substr(0, hashPos), logTargetUrlSpec, basePos)) {
+        std::string parentUrl = trim(logTargetUrl.substr(0, hashPos));
+        if (!parseLogTargetUrl(parentUrl, logTargetUrlSpec, basePos)) {
             ELOG_REPORT_ERROR("Failed to parse top-level log target RUL specification");
             return false;
         }
@@ -200,8 +201,8 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
             ELOG_REPORT_ERROR("Failed to allocate log target URL object, out of memory");
             return false;
         }
-        if (!parseLogTargetUrl(logTargetUrl.substr(hashPos + 1), *logTargetUrlSpec.m_subUrlSpec,
-                               basePos + hashPos + 1)) {
+        std::string childUrl = trim(logTargetUrl.substr(hashPos + 1));
+        if (!parseLogTargetUrl(childUrl, *logTargetUrlSpec.m_subUrlSpec, basePos + hashPos + 1)) {
             ELOG_REPORT_ERROR("Failed to parse sub-log target URL specification");
             delete logTargetUrlSpec.m_subUrlSpec;
             logTargetUrlSpec.m_subUrlSpec = nullptr;

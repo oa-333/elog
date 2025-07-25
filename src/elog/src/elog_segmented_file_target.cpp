@@ -640,7 +640,7 @@ bool ELogSegmentedFileTarget::openRotatingSegment() {
     }
 
     // create segment data object
-    SegmentData* segmentData = new (std::nothrow) SegmentData(segmentCount, lastSegmentSizeBytes);
+    SegmentData* segmentData = new (std::nothrow) SegmentData(segmentIndex, lastSegmentSizeBytes);
     if (segmentData == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate segment object, out of memory");
         return false;

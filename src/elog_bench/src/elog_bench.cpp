@@ -39,6 +39,28 @@ inline int64_t elog_rdtscp() {
 }
 #endif
 
+#ifdef ELOG_MINGW
+// we need windows headers for MinGW
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif !defined(ELOG_WINDOWS)
+#include <sys/syscall.h>
+#include <unistd.h>
+#ifdef SYS_gettid
+#define gettid() syscall(SYS_gettid)
+#else
+#error "SYS_gettid unavailable on this platform"
+#endif
+#endif
+
+inline uint32_t getCurrentThreadId() {
+#ifdef ELOG_WINDOWS
+    return GetCurrentThreadId();
+#else
+    return gettid();
+#endif  // ELOG_WINDOWS
+}
+
 // TODO: consider fixing measuring method as follows:
 // single thread:
 // run loop indefinitely, then:
@@ -62,6 +84,7 @@ static const char* DEFAULT_CFG = "file:///./bench_data/elog_bench.log";
 static bool sTestConns = false;
 static bool sTestException = false;
 static bool sTestEventLog = false;
+static bool sTestRegression = false;
 static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
 static int sMsgCnt = -1;
@@ -542,6 +565,7 @@ static int testConnectors() {
 static int testColors();
 static int testException();
 static int testEventLog();
+static int testRegression();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -779,6 +803,9 @@ static bool parseArgs(int argc, char* argv[]) {
             fprintf(stderr, "Invalid option, --test-eventlog supported only on Windows/MinGW\n");
             return false;
 #endif
+        } else if (strcmp(argv[1], "--test-regression") == 0) {
+            sTestRegression = true;
+            return true;
         }
     }
 
@@ -935,6 +962,8 @@ int main(int argc, char* argv[]) {
             res = testException();
         } else if (sTestEventLog) {
             res = testEventLog();
+        } else if (sTestRegression) {
+            res = testRegression();
         }
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
@@ -999,11 +1028,8 @@ void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
 }
 
 elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
-    if (sTestConns) {
-        // elog::addStdErrLogTarget();
-        elog::setCurrentThreadName("elog_bench_main");
-        elog::setAppName("elog_bench_app");
-    }
+    elog::setCurrentThreadName("elog_bench_main");
+    elog::setAppName("elog_bench_app");
     if (sTestException) {
         elog::addStdErrLogTarget();
     }
@@ -1068,6 +1094,75 @@ void termELog() {
         elog::removeLogTarget(id);
     }
     elog::clearAllLogTargets();
+}
+
+static int testAsyncThreadName() {
+    const char* cfg =
+        "async://quantum?quantum_buffer_size=2000000&name=elog_bench | "
+        "sys://stderr?log_format=${time} ${level:6} [${tid:5}] [${tname}] ${src} ${msg}";
+
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init async-thread-name test, aborting\n");
+        return 1;
+    }
+
+    ELOG_INFO("Test thread name/id, expecting elog_bench_main/%u", getCurrentThreadId());
+
+    uint64_t writeCount = 0;
+    uint64_t readCount = 0;
+    while (!logTarget->isCaughtUp(writeCount, readCount));
+
+    std::thread t = std::thread([logTarget]() {
+        elog::setCurrentThreadName("another_thread");
+        ELOG_INFO("Test thread name/id, expecting another_thread/%u", getCurrentThreadId());
+
+        uint64_t writeCount = 0;
+        uint64_t readCount = 0;
+        while (!logTarget->isCaughtUp(writeCount, readCount));
+    });
+
+    t.join();
+
+    termELog();
+    return 0;
+}
+
+#ifdef ELOG_ENABLE_STACK_TRACE
+static int testLogStackTrace() {
+    const char* cfg =
+        "sys://stderr?log_format=${time} ${level:6} [${tid:5}] [${tname}] ${src} ${msg}";
+
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init async-thread-name test, aborting\n");
+        return 1;
+    }
+
+    ELOG_INFO("Test thread name/id, expecting elog_bench_main/%u", getCurrentThreadId());
+    ELOG_STACK_TRACE(elog::ELEVEL_INFO, "some test title", 0, "Testing stack trace for thread %u",
+                     getCurrentThreadId());
+
+    ELOG_APP_STACK_TRACE(elog::ELEVEL_INFO, "some test title", 0,
+                         "Testing app stack trace for thread %u", getCurrentThreadId());
+
+    termELog();
+    return 0;
+}
+#endif
+
+static int testRegression() {
+    int res = testAsyncThreadName();
+    if (res != 0) {
+        return res;
+    }
+#ifdef ELOG_ENABLE_STACK_TRACE
+    res = testLogStackTrace();
+    if (res != 0) {
+        return res;
+    }
+#endif
+    return 0;
 }
 
 void testPerfPrivateLog() {
