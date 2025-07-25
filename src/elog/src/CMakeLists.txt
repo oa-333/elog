@@ -72,6 +72,7 @@ target_sources(elog PRIVATE
     elog_sqlite_db_target.cpp
     elog_sqlite_db_target_provider.cpp
     elog_stack_trace.cpp
+    elog_stats.cpp
     elog_string_stream_receptor.cpp
     elog_string_receptor.cpp
     elog_sys_schema_handler.cpp

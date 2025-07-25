@@ -10,9 +10,6 @@
 
 namespace elog {
 
-/** @def Hard limit on maximum number of threads using DB logging. */
-#define ELOG_DB_MAX_THREADS 4096
-
 /** @def Attempt reconnect every second. */
 #define ELOG_DB_RECONNECT_TIMEOUT_MILLIS 1000
 
@@ -39,21 +36,12 @@ public:
     };
 
 protected:
+    // if maxThreads is zero, then the number configured during elog::initialize() will be used
+    // the user is allowed here to override the value specified during elog::initialize()
     ELogDbTarget(const char* dbName, const char* rawInsertStatement,
                  ELogDbFormatter::QueryStyle queryStyle,
-                 ThreadModel threadModel = ThreadModel::TM_LOCK,
-                 uint32_t maxThreads = ELOG_DB_MAX_THREADS,
-                 uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
-        : ELogTarget("db"),
-          m_dbName(dbName),
-          m_formatter(queryStyle),
-          m_rawInsertStatement(rawInsertStatement),
-          m_insertStatementParsed(false),
-          m_threadModel(threadModel),
-          m_maxThreads(maxThreads),
-          m_reconnectTimeoutMillis(reconnectTimeoutMillis),
-          m_shouldStop(false),
-          m_shouldWakeUp(false) {}
+                 ThreadModel threadModel = ThreadModel::TM_LOCK, uint32_t maxThreads = 0,
+                 uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS);
     ELogDbTarget(const ELogDbTarget&) = delete;
     ELogDbTarget(ELogDbTarget&&) = delete;
     ELogDbTarget& operator=(const ELogDbTarget&) = delete;
@@ -76,7 +64,7 @@ protected:
     uint32_t writeLogRecord(const ELogRecord& logRecord) override;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() final {}
+    bool flushLogTarget() final { return true; }
 
     /**
      * @brief Retrieves the processed insert statement resulting from the call to @ref

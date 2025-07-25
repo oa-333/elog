@@ -579,13 +579,15 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-void ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
+bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                         ReceptorType>::flushLogTarget() {
     // for non=streaming client no further operation is required
 
+    bool res = true;
     if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM) {
         if (!flushStreamWriter()) {
             // TODO: what now?
+            res = false;
         }
         destroyStreamWriter();
         destroyStreamContext();
@@ -593,17 +595,18 @@ void ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
         // regenerate context and client writer for next messages
         if (!createStreamContext()) {
             // TODO: sub-sequent writes will crash
-            return;
+            res = false;
         }
         if (!createStreamWriter()) {
             destroyStreamContext();
             // TODO: sub-sequent writes will crash (consider bad_alloc or even marking top-level
             // ELogTarget as unusable due ot unrecoverable error)
-            return;
+            res = false;
         }
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
         if (!flushReactor()) {
             // TODO: what now, should we modify flush() interface?
+            res = false;
         }
         destroyReactor();
         destroyStreamContext();
@@ -611,14 +614,16 @@ void ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
         // regenerate context and reactor for next messages
         if (!createStreamContext()) {
             // TODO: sub-sequent writes will crash
-            return;
+            res = false;
         }
         if (!createReactor()) {
             destroyStreamContext();
             // TODO: sub-sequent writes will crash, this requires a uniform strategy (bad_alloc?)
-            return;
+            res = false;
         }
     }
+
+    return res;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,

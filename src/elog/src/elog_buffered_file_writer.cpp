@@ -7,11 +7,49 @@
 #endif
 
 #include <cassert>
+#include <cinttypes>
 #include <cstring>
 
 #include "elog_report.h"
 
 namespace elog {
+
+bool ELogBufferedStats::initialize(uint32_t maxThreads) {
+    if (!ELogStats::initialize(maxThreads)) {
+        return false;
+    }
+    if (!m_bufferWriteCount.initialize(maxThreads) || !m_bufferByteCount.initialize(maxThreads)) {
+        ELOG_REPORT_ERROR("Failed to initialize buffered file target statistics variables");
+        terminate();
+        return false;
+    }
+    return true;
+}
+
+void ELogBufferedStats::terminate() {
+    ELogStats::terminate();
+    m_bufferWriteCount.terminate();
+    m_bufferByteCount.terminate();
+}
+
+void ELogBufferedStats::toString(ELogBuffer& buffer, ELogTarget* logTarget,
+                                 const char* msg /* = "" */) {
+    ELogStats::toString(buffer, logTarget, msg);
+    uint64_t bufferWriteCount = m_bufferWriteCount.getSum();
+    buffer.appendArgs("\tBuffer write count: %" PRIu64 "\n", bufferWriteCount);
+    if (bufferWriteCount > 0) {
+        uint64_t avgBufferBytes = m_bufferByteCount.getSum() / bufferWriteCount;
+        buffer.appendArgs("\tAverage buffer size: %" PRIu64 " bytes\n", avgBufferBytes);
+    } else {
+        buffer.appendArgs("\tAverage buffer size: N/A\n");
+    }
+}
+
+void ELogBufferedStats::resetThreadCounters(uint64_t slotId) {
+    ELogStats::resetThreadCounters(slotId);
+    m_bufferWriteCount.reset(slotId);
+    m_bufferByteCount.reset(slotId);
+}
 
 void ELogBufferedFileWriter::setFileHandle(FILE* fileHandle) {
 #ifdef ELOG_WINDOWS
@@ -38,6 +76,10 @@ bool ELogBufferedFileWriter::flushLogBuffer() {
         if (!writeToFile(&m_logBuffer[0], m_bufferOffset)) {
             return false;
         }
+        if (m_stats != nullptr && m_enableStats) {
+            m_stats->incrementBufferWriteCount();
+            m_stats->addBufferBytesCount(m_bufferOffset);
+        }
         m_bufferOffset = 0;
     }
     return true;
@@ -50,12 +92,12 @@ bool ELogBufferedFileWriter::logMsgUnlocked(const char* formattedLogMsg, size_t 
         if (!flushLogBuffer()) {
             return false;
         }
+        assert(m_bufferOffset == 0);
     }
 
     // if there is still no room then write entire message directly to file
     if (m_bufferOffset + length > m_logBuffer.size()) {
         // cannot buffer, message is too large, do direct write instead
-        assert(m_bufferOffset == 0);
         if (!writeToFile(formattedLogMsg, length)) {
             return false;
         }

@@ -8,7 +8,9 @@
 
 #define ELOG_INVALID_GC_SLOT_ID ((uint64_t)-1)
 #define ELOG_WORD_SIZE sizeof(uint64_t)
-#define ELOG_MAX_THREADS 8192
+
+// TODO: this should be defined in interface header somewhere
+#define ELOG_MAX_THREADS_UPPER_BOUND 8192
 
 // TODO: this GC needs much more testing
 
@@ -20,16 +22,19 @@ namespace elog {
 static thread_local uint64_t sCurrentThreadGCSlotId = ELOG_INVALID_GC_SLOT_ID;
 
 bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency) {
-    if (maxThreads > ELOG_MAX_THREADS) {
+    if (maxThreads > ELOG_MAX_THREADS_UPPER_BOUND) {
         ELOG_REPORT_ERROR(
             "Cannot initialize %s garbage collector, maximum number of threads %u exceeds allowed "
             "limit %u",
-            name, maxThreads, (unsigned)ELOG_MAX_THREADS);
+            name, maxThreads, (unsigned)ELOG_MAX_THREADS_UPPER_BOUND);
         return false;
     }
     m_name = name;
     m_gcFrequency = gcFrequency;
+    m_maxThreads = maxThreads;
     m_retireCount = 0;
+    // TODO: this is incorrect. if one thread is slow and all other threads are fast, then the epoch
+    // set needs to be much larger than maximum number of threads
     uint32_t wordCount = (maxThreads + ELOG_WORD_SIZE - 1) / ELOG_WORD_SIZE;
     m_epochSet.resizeRing(wordCount + 1);
     m_objectLists.resize(maxThreads);
@@ -78,8 +83,10 @@ bool ELogGC::retire(ELogManagedObject* object, uint64_t epoch) {
     if (slotId == ELOG_INVALID_GC_SLOT_ID) {
         slotId = obtainSlot();
         if (slotId == ELOG_INVALID_GC_SLOT_ID) {
-            ELOG_REPORT_WARN("Could not allocate thread slot for %s garbage collection",
-                             m_name.c_str());
+            ELOG_REPORT_WARN(
+                "Could not allocate thread slot for %s garbage collection, probable cause: number "
+                "of active threads exceeds the number configured during initialization: %u",
+                m_name.c_str(), m_maxThreads);
             return false;
         }
         sCurrentThreadGCSlotId = slotId;

@@ -10,19 +10,12 @@
 #include "elog_common_def.h"
 #include "elog_flush_policy.h"
 #include "elog_record.h"
+#include "elog_stats.h"
 
 namespace elog {
 
 class ELOG_API ELogFilter;
 class ELOG_API ELogFormatter;
-
-// add statistics reporting API so the full pipeline status can be tracked in real time:
-// messages submitted
-// messages collected
-// messages written
-// bytes submitted
-// bytes collected
-// bytes written
 
 // this way when messages submitted == written we know that the log target is "caught-up" (need a
 // better name), but this logic can now be employed by the client, since we cannot tell when it is
@@ -38,11 +31,7 @@ class ELOG_API ELogFormatter;
  */
 class ELOG_API ELogTarget {
 public:
-    virtual ~ELogTarget() {
-        setLogFilter(nullptr);
-        setLogFormatter(nullptr);
-        setFlushPolicy(nullptr);
-    }
+    virtual ~ELogTarget();
 
     /** @brief Allocate thread local storage key for per-thread log buffer. */
     static bool createLogBufferKey();
@@ -70,6 +59,15 @@ public:
         onThreadSafe();
     }
 
+    /**
+     * @brief Mark the log target as system log target (for internal use only). System log targets
+     * cannot be removed when calling @ref elog::clearAllLogTargets().
+     */
+    inline void setSystemTarget() { m_isSystemTarget = true; }
+
+    /** @brief Queries whether this is a system log target. */
+    inline bool isSystemTarget() const { return m_isSystemTarget; }
+
     /** @brief Order the log target to start (required for threaded targets). */
     bool start();
 
@@ -79,8 +77,16 @@ public:
     /** @brief Sends a log record to a log target. */
     void log(const ELogRecord& logRecord);
 
-    /** @brief Orders a buffered log target to flush it log messages. */
-    void flush();
+    /**
+     * @brief Orders a buffered log target to flush it log messages.
+     * @param allowModeration Optionally specify whether the log target can moderate flush calls, in
+     * case of congested flush requests arriving at the log target. This is required for moderating
+     * policies to be able to avoid circular dependency and endless recursion.
+     */
+    bool flush(bool allowModeration = false);
+
+    /** @print statistics for this log target. */
+    void statsToString(ELogBuffer& buffer, const char* msg = "");
 
     /** @brief Sets the log target id. */
     inline void setId(ELogTargetId id) { m_id = id; }
@@ -88,9 +94,10 @@ public:
     /** @brief Retrieves the log target id. */
     inline ELogTargetId getId() { return m_id; }
 
-    /** @brief Sets a pass key to the target. */
+    /** @brief Generates a pass key to the target. */
     inline void setPassKey() { m_passKey = generatePassKey(); }
 
+    /** @brief Retrieves the pass key associated with the log target. */
     inline ELogPassKey getPassKey() const { return m_passKey; }
 
     /**
@@ -157,25 +164,38 @@ public:
         m_logFormatter = nullptr;
     }
 
-    /** @brief As log target may be chained as in a list. This retrieves the final log target.
+    /**
+     * @brief As log target may be chained as in a list. This retrieves the final log target.
      */
     virtual ELogTarget* getEndLogTarget() { return this; }
+
+    /** @brief Retrieves log statistics. */
+    inline ELogStats* getStats() { return m_stats; }
 
     /**
      * @brief Retrieves the number of bytes written to this log target. In case of a compound log
      * target, this call retrieves the number recorded in the last log target.
+     * @note If statistics were disabled (by calling @ref disableStats()), then this will always
+     * return zero.
      */
-    inline uint64_t getBytesWritten() {
-        return getEndLogTarget()->m_bytesWritten.load(std::memory_order_relaxed);
-    }
+    inline uint64_t getBytesWritten() { return getEndLogTarget()->getStats()->getBytesWritten(); }
 
-    /** @brief Queries whether the log target has written all pending messages. */
-    virtual bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) { return true; }
+    /**
+     * @brief Queries whether the log target has written all pending messages.
+     * @note If statistics were disabled (by calling @ref disableStats()), then this will always
+     * return true (since all counters are zero).
+     */
+    virtual bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) {
+        ELogStats* endTargetStats = getEndLogTarget()->getStats();
+        return m_stats->getMsgSubmitted() ==
+               (endTargetStats->getMsgWritten() + endTargetStats->getMsgFailWrite());
+    }
 
 protected:
     // NOTE: setting log level to DIAG by default has the effect of no log level limitation on the
     // target
-    ELogTarget(const char* typeName, ELogFlushPolicy* flushPolicy = nullptr)
+    ELogTarget(const char* typeName, ELogFlushPolicy* flushPolicy = nullptr,
+               bool enableStats = true)
         : m_typeName(typeName),
           m_id(ELOG_INVALID_TARGET_ID),
           m_passKey(ELOG_NO_PASSKEY),
@@ -183,12 +203,14 @@ protected:
           m_isRunning(false),
           m_isNativelyThreadSafe(false),
           m_isExternallyThreadSafe(false),
+          m_isSystemTarget(false),
           m_addNewLine(0),
           m_requiresLock(1),
           m_logFilter(nullptr),
           m_logFormatter(nullptr),
           m_flushPolicy(flushPolicy),
-          m_bytesWritten(0) {}
+          m_enableStats(enableStats),
+          m_stats(nullptr) {}
 
     ELogTarget(const ELogTarget&) = delete;
     ELogTarget(ELogTarget&&) = delete;
@@ -216,6 +238,9 @@ protected:
     /** @brief Order the log target to stop (thread-safe). */
     virtual bool stopLogTarget() = 0;
 
+    /** @brief Creates a statistics object. */
+    virtual ELogStats* createStats();
+
     /**
      * @brief Order the log target to write a log record (thread-safe).
      * @return The number of bytes written to log.
@@ -223,7 +248,7 @@ protected:
     virtual uint32_t writeLogRecord(const ELogRecord& logRecord);
 
     /** @brief Order the log target to flush. */
-    virtual void flushLogTarget() = 0;
+    virtual bool flushLogTarget() = 0;
 
     /** @brief Helper method for formatting a log message. */
     void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
@@ -246,30 +271,30 @@ private:
     std::atomic<bool> m_isRunning;
     bool m_isNativelyThreadSafe;
     bool m_isExternallyThreadSafe;
+    bool m_isSystemTarget;
     alignas(8) uint64_t m_addNewLine;
     // this member is pretty hot, so we avoid using 1 byte boolean, and use instead aligned uint64
     alignas(8) uint64_t m_requiresLock;
     ELogFilter* m_logFilter;
     ELogFormatter* m_logFormatter;
     ELogFlushPolicy* m_flushPolicy;
-    std::atomic<uint64_t> m_bytesWritten;
     std::recursive_mutex m_lock;
 
     bool startNoLock();
     bool stopNoLock();
     void logNoLock(const ELogRecord& logRecord);
+    bool flushNoLock(bool allowModeration);
 
     /** @brief Helper method for querying whether the log target should be flushed. */
     inline bool shouldFlush(uint32_t bytesWritten) {
         return m_flushPolicy != nullptr && m_flushPolicy->shouldFlush(bytesWritten);
     }
 
-    /** @brief Helper method for reporting bytes written to log target. */
-    inline void addBytesWritten(uint64_t bytes) {
-        m_bytesWritten.fetch_add(bytes, std::memory_order_relaxed);
-    }
-
     ELogPassKey generatePassKey();
+
+protected:
+    bool m_enableStats;
+    ELogStats* m_stats;
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */
@@ -294,7 +319,7 @@ protected:
     uint32_t writeLogRecord(const ELogRecord& logRecord) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() final;
+    bool flushLogTarget() final;
 
 private:
     std::vector<ELogTarget*> m_logTargets;

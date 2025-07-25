@@ -3,16 +3,16 @@
 namespace elog {
 
 ELogAsyncTarget::~ELogAsyncTarget() {
-    if (m_endTarget != nullptr) {
-        delete m_endTarget;
-        m_endTarget = nullptr;
+    if (m_subTarget != nullptr) {
+        delete m_subTarget;
+        m_subTarget = nullptr;
     }
 }
 
-ELogAsyncTarget::ELogAsyncTarget(ELogTarget* endTarget)
-    : ELogTarget("async"), m_endTarget(endTarget) {
+ELogAsyncTarget::ELogAsyncTarget(ELogTarget* subTarget)
+    : ELogTarget("async"), m_subTarget(subTarget) {
     setNativelyThreadSafe();
-    m_endTarget->setExternallyThreadSafe();
+    m_subTarget->setExternallyThreadSafe();
 
     // if no flush policy is set, then the end target is responsible for occasional flush.
     // in this case we avoid the "never" flush policy for performance reasons

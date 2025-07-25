@@ -93,6 +93,15 @@ public:
     }
 
     /** @brief Appends a formatted message to the log buffer. */
+    inline bool appendArgs(const char* fmt, ...) {
+        va_list args;
+        va_start(args, fmt);
+        bool res = appendV(fmt, args);
+        va_end(args);
+        return res;
+    }
+
+    /** @brief Appends a formatted message to the log buffer. */
     bool appendV(const char* fmt, va_list args);
 
     /**

@@ -48,8 +48,9 @@ static uint32_t getOptimalBlockSize(FILE* fileHandle) {
 }
 #endif
 
-ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy /* = nullptr */)
-    : ELogTarget("file", flushPolicy),
+ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy /* = nullptr */,
+                               bool enableStats /* = true */)
+    : ELogTarget("file", flushPolicy, enableStats),
       m_filePath(filePath),
       m_fileHandle(nullptr),
       m_shouldClose(false) {
@@ -58,8 +59,10 @@ ELogFileTarget::ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolic
 }
 
 ELogFileTarget::ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy /* = nullptr */,
-                               bool shouldClose /* = false */)
-    : ELogTarget("file", flushPolicy), m_fileHandle(fileHandle), m_shouldClose(shouldClose) {
+                               bool shouldClose /* = false */, bool enableStats /* = true */)
+    : ELogTarget("file", flushPolicy, enableStats),
+      m_fileHandle(fileHandle),
+      m_shouldClose(shouldClose) {
     if (fileHandle == stderr) {
         setName("stderr");
     } else if (fileHandle == stdout) {
@@ -149,10 +152,13 @@ void ELogFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length)
     }
 }
 
-void ELogFileTarget::flushLogTarget() {
+bool ELogFileTarget::flushLogTarget() {
     if (fflush(m_fileHandle) == EOF) {
+        // TODO: should log once
         ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
+        return false;
     }
+    return true;
 }
 
 }  // namespace elog

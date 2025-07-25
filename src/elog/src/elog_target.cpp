@@ -47,6 +47,16 @@ static ELogBuffer* getOrCreateTlsLogBuffer() {
     return logBuffer;
 }
 
+ELogTarget::~ELogTarget() {
+    setLogFilter(nullptr);
+    setLogFormatter(nullptr);
+    setFlushPolicy(nullptr);
+    if (m_stats != nullptr) {
+        delete m_stats;
+        m_stats = nullptr;
+    }
+}
+
 bool ELogTarget::createLogBufferKey() {
     if (sLogBufferKey != ELOG_INVALID_TLS_KEY) {
         ELOG_REPORT_ERROR("Cannot create log buffer TLS key, already created");
@@ -79,15 +89,40 @@ bool ELogTarget::start() {
 bool ELogTarget::startNoLock() {
     bool isRunning = m_isRunning.load(std::memory_order_relaxed);
     if (isRunning || !m_isRunning.compare_exchange_strong(isRunning, true)) {
-        ELOG_REPORT_ERROR("Cannot start log target %s/%s, already running");
+        ELOG_REPORT_ERROR("Cannot start log target %s/%s, already running", m_typeName.c_str(),
+                          m_name.c_str());
         return false;
+    }
+    if (m_enableStats && m_stats == nullptr) {
+        m_stats = createStats();
+        if (m_stats == nullptr) {
+            ELOG_REPORT_ERROR("Cannot start log target %s/%s, failed to create statistics object",
+                              m_typeName.c_str(), m_name.c_str());
+            return false;
+        }
+        m_stats->initialize(elog::getMaxThreads());
     }
     if (m_flushPolicy != nullptr) {
         if (!m_flushPolicy->start()) {
+            if (m_stats != nullptr) {
+                delete m_stats;
+                m_stats = nullptr;
+            }
             return false;
         }
     }
-    return startLogTarget();
+    bool res = startLogTarget();
+    if (!res) {
+        // TODO: is it ok to delete flush policy here? what is the contract? should it be deleted
+        // only during dtor? or it doesn't really matter? this seems out of order
+        delete m_flushPolicy;
+        m_flushPolicy = nullptr;
+        if (m_stats != nullptr) {
+            delete m_stats;
+            m_stats = nullptr;
+        }
+    }
+    return res;
 }
 
 bool ELogTarget::stop() {
@@ -111,7 +146,15 @@ bool ELogTarget::stopNoLock() {
         }
     }
     flushLogTarget();
-    return stopLogTarget();
+    bool res = stopLogTarget();
+    if (res) {
+        if (m_stats != nullptr) {
+            ELogBuffer buffer;
+            m_stats->toString(buffer, this, "Log target statistics during stop");
+            ELOG_REPORT_TRACE("Log target statistics during stop: %s", buffer.getRef());
+        }
+    }
+    return res;
 }
 
 void ELogTarget::log(const ELogRecord& logRecord) {
@@ -124,32 +167,47 @@ void ELogTarget::log(const ELogRecord& logRecord) {
 }
 
 void ELogTarget::logNoLock(const ELogRecord& logRecord) {
-    if (canLog(logRecord)) {
-        uint32_t bytesWritten = writeLogRecord(logRecord);
-        // update statistics counter
-        m_bytesWritten.fetch_add(bytesWritten, std::memory_order_relaxed);
+    uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
+    if (!canLog(logRecord)) {
+        if (m_enableStats) {
+            m_stats->incrementMsgDiscarded(slotId);
+        }
+        return;
+    }
 
-        // NOTE: asynchronous log targets return zero here, but log flushing of the end target will
-        // be triggered by the async log target anyway
-        // NOTE: we call shouldFlush() anyway, even if zero bytes were returned, since some flush
-        // policies don't care how many bytes were written, but rather how many calls were made
-        // TODO: check that async target flush policy works correctly
-        if (m_flushPolicy != nullptr) {
-            // NOTE: we pass to shouldFlush() the currently logged message size
-            if (m_flushPolicy->shouldFlush(bytesWritten)) {
-                // flush moderation should take place only when log target is natively thread-safe
-                // NOTE: Being externally thread safe means that either there is an external lock,
-                // or that only one thread accesses the log target - in either case, flush
-                // moderation is not required
-                if (m_isNativelyThreadSafe) {
-                    m_flushPolicy->moderateFlush(this);
-                } else {
-                    // don't call flush(), but rather flushLogTarget() - we already have the lock
-                    flushLogTarget();
-                }
-            }
+    if (m_enableStats) {
+        m_stats->incrementMsgSubmitted(slotId);
+    }
+
+    // write log record
+    uint32_t bytesWritten = writeLogRecord(logRecord);
+
+    // update statistics counter
+    if (m_enableStats) {
+        m_stats->incrementMsgWritten(slotId);
+        m_stats->addBytesWritten(slotId, bytesWritten);
+    }
+
+    // NOTE: asynchronous log targets return zero here, but log flushing of the end target will
+    // be triggered by the async log target anyway
+    // NOTE: we call shouldFlush() anyway, even if zero bytes were returned, since some flush
+    // policies don't care how many bytes were written, but rather how many calls were made
+    if (m_flushPolicy != nullptr) {
+        // NOTE: we pass to shouldFlush() the currently logged message size
+        if (m_flushPolicy->shouldFlush(bytesWritten)) {
+            // don't call flush(), but rather flushNoLock() - we already have the lock
+            // also allow flush moderation to take place if needed
+            flushNoLock(true);
         }
     }
+}
+
+ELogStats* ELogTarget::createStats() {
+    ELogStats* res = new (std::nothrow) ELogStats();
+    if (res == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create statistics object, out of memory");
+    }
+    return res;
 }
 
 uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
@@ -175,17 +233,49 @@ uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     logBuffer->reset();
     formatLogBuffer(logRecord, *logBuffer);
     uint32_t bufferSize = logBuffer->getOffset();
+    if (m_enableStats) {
+        m_stats->addBytesSubmitted(bufferSize);
+    }
     logFormattedMsg(logBuffer->getRef(), bufferSize);
     return bufferSize;
 }
 
-void ELogTarget::flush() {
+bool ELogTarget::flush(bool allowModeration /* = false */) {
     if (m_requiresLock) {
         std::unique_lock<std::recursive_mutex> lock(m_lock);
-        return flushLogTarget();
+        return flushNoLock(allowModeration);
     } else {
-        return flushLogTarget();
+        return flushNoLock(allowModeration);
     }
+}
+
+void ELogTarget::statsToString(ELogBuffer& buffer, const char* msg /* = "" */) {
+    m_stats->toString(buffer, this, msg);
+}
+
+bool ELogTarget::flushNoLock(bool allowModeration) {
+    // flush moderation should take place only when log target is natively thread-safe
+    // NOTE: Being externally thread safe means that either there is an external lock, or that only
+    // one thread accesses the log target - in either case, flush moderation is not required
+    uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
+    if (m_enableStats) {
+        m_stats->incrementFlushSubmitted(slotId);
+    }
+    bool res = false;
+    if (m_isNativelyThreadSafe && allowModeration) {
+        res = m_flushPolicy->moderateFlush(this);
+    } else {
+        res = flushLogTarget();
+    }
+
+    if (m_enableStats) {
+        if (res) {
+            m_stats->incrementFlushExecuted(slotId);
+        } else {
+            m_stats->incrementFlushFailed(slotId);
+        }
+    }
+    return res;
 }
 
 void ELogTarget::setLogFilter(ELogFilter* logFilter) {
@@ -277,10 +367,14 @@ uint32_t ELogCombinedTarget::writeLogRecord(const ELogRecord& logRecord) {
     return 0;
 }
 
-void ELogCombinedTarget::flushLogTarget() {
+bool ELogCombinedTarget::flushLogTarget() {
+    bool res = true;
     for (ELogTarget* target : m_logTargets) {
-        target->flush();
+        if (!target->flush()) {
+            res = false;
+        }
     }
+    return res;
 }
 
 }  // namespace elog

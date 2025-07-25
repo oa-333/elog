@@ -4,6 +4,7 @@
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
+#include "elog_internal.h"
 #include "elog_mysql_db_target_provider.h"
 #include "elog_pgsql_db_target_provider.h"
 #include "elog_report.h"
@@ -124,7 +125,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
     }
 
     // check for optional db_max_threads
-    uint32_t maxThreads = ELOG_DB_MAX_THREADS;
+    uint32_t maxThreads = elog::getMaxThreads();
     if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "database",
                                                               "db_max_threads", maxThreads)) {
         return nullptr;

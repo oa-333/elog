@@ -1,5 +1,6 @@
 #include "elog_buffered_file_target.h"
 
+#include "elog.h"
 #include "elog_common.h"
 #include "elog_report.h"
 
@@ -8,8 +9,9 @@ namespace elog {
 ELogBufferedFileTarget::ELogBufferedFileTarget(const char* filePath,
                                                uint64_t bufferSizeBytes /* = 0 */,
                                                bool useLock /* = true */,
-                                               ELogFlushPolicy* flushPolicy /* = nullptr */)
-    : ELogTarget("file", flushPolicy),
+                                               ELogFlushPolicy* flushPolicy /* = nullptr */,
+                                               bool enableStats /* = true */)
+    : ELogTarget("file", flushPolicy, enableStats),
       m_filePath(filePath),
       m_fileWriter(bufferSizeBytes, useLock),
       m_fileHandle(nullptr),
@@ -30,6 +32,8 @@ bool ELogBufferedFileTarget::startLogTarget() {
         m_shouldClose = true;
     }
     m_fileWriter.setFileHandle(m_fileHandle);
+    // NOTE this is ok even if stats are disabled
+    m_fileWriter.setStats((ELogBufferedStats*)m_stats);
     return true;
 }
 
@@ -54,11 +58,25 @@ void ELogBufferedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t
     }
 }
 
-void ELogBufferedFileTarget::flushLogTarget() {
-    if (fflush(m_fileHandle) == EOF) {
-        int errCode = errno;
-        ELOG_REPORT_ERROR("Failed to flush file: error code %d", errCode);
+bool ELogBufferedFileTarget::flushLogTarget() {
+    uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
+    if (m_enableStats) {
+        m_stats->incrementFlushSubmitted(slotId);
     }
+    if (fflush(m_fileHandle) == EOF) {
+        // TODO: should log once
+        ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush buffered file");
+        if (m_enableStats) {
+            m_stats->incrementFlushFailed(slotId);
+        }
+        return false;
+    }
+    if (m_enableStats) {
+        m_stats->incrementFlushExecuted(slotId);
+    }
+    return true;
 }
+
+ELogStats* ELogBufferedFileTarget::createStats() { return new (std::nothrow) ELogBufferedStats(); }
 
 }  // namespace elog

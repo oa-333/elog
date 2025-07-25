@@ -52,11 +52,12 @@ public:
      * better than default fopen/fwrite functions. Specify zero to disable buffering. By default
      * file buffering is not used.
      * @param flushPolicy Optional flush policy to be used in conjunction with this log target.
+     * @param enableStats Specifies whether log target statistics should be collected.
      */
     ELogSegmentedFileTarget(const char* logPath, const char* logName, uint64_t segmentLimitBytes,
                             uint32_t segmentRingSize = ELOG_DEFAULT_SEGMENT_RING_SIZE,
                             uint64_t fileBufferSizeBytes = 0, uint32_t segmentCount = 0,
-                            ELogFlushPolicy* flushPolicy = nullptr);
+                            ELogFlushPolicy* flushPolicy = nullptr, bool enableStats = true);
     ELogSegmentedFileTarget(const ELogSegmentedFileTarget&) = delete;
     ELogSegmentedFileTarget(ELogSegmentedFileTarget&&) = delete;
     ELogSegmentedFileTarget& operator=(const ELogSegmentedFileTarget&) = delete;
@@ -74,7 +75,10 @@ protected:
     bool stopLogTarget() final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() final;
+    bool flushLogTarget() final;
+
+    /** @brief Creates a statistics object. */
+    ELogStats* createStats() override;
 
 private:
     // use lock-free scalable ring buffer for saving pending messages during segment switch
@@ -87,6 +91,7 @@ private:
         FILE* m_segmentFile;
         ELogBufferedFileWriter* m_bufferedFileWriter;
         LogMsgQueue m_pendingMsgs;
+        ELogBufferedStats m_stats;
 
         SegmentData(uint32_t segmentId, uint64_t bytesLogged = 0)
             : m_segmentId(segmentId),
@@ -99,11 +104,70 @@ private:
         ~SegmentData() { m_pendingMsgs.terminate(); }
 
         bool open(const char* segmentPath, uint64_t fileBufferSizeBytes = 0, bool useLock = true,
-                  bool truncateSegment = false);
+                  bool truncateSegment = false, bool enableStats = true);
         bool log(const char* logMsg, size_t len);
         bool drain();
         bool flush();
         bool close();
+    };
+
+    struct SegmentedStats : public ELogStats {
+        SegmentedStats() {}
+        SegmentedStats(const SegmentedStats&) = delete;
+        SegmentedStats(SegmentedStats&&) = delete;
+        SegmentedStats& operator=(const SegmentedStats&) = delete;
+        ~SegmentedStats() final {}
+
+        bool initialize(uint32_t maxThreads) override;
+
+        void terminate() override;
+
+        inline void incrementSegmentCount() { m_segmentCount.add(getSlotId(), 1); }
+        inline void incrementOpenSegmentFailCount() { m_openSegmentFailCount.add(getSlotId(), 1); }
+        inline void incrementCloseSegmentFailCount() {
+            m_closeSegmentFailCount.add(getSlotId(), 1);
+        }
+        inline void addCloseSegmentBytes(uint64_t bytes) {
+            m_closedSegmentBytes.add(getSlotId(), bytes);
+        }
+        inline void addPendingMsgCount(uint64_t count) {
+            m_pendingMsgCount.add(getSlotId(), count);
+        }
+        inline void addBufferedStats(const ELogBufferedStats& stats) {
+            m_bufferedStats.addStats(stats);
+        }
+
+        /**
+         * @brief Prints statistics to string.
+         * @param logLevel Print log level.
+         * @param msg Any title message that would precede the report.
+         */
+        void toString(ELogBuffer& buffer, ELogTarget* logTarget, const char* msg = "") override;
+
+        /** @brief Releases the statistics slot for the current thread. */
+        void resetThreadCounters(uint64_t slotId) override;
+
+    private:
+        /** @brief Total number of segments used. */
+        ELogStatVar m_segmentCount;
+
+        /** @brief Total number of failures to open new segment. */
+        ELogStatVar m_openSegmentFailCount;
+
+        /** @brief Total number of failures to close a log segment file. */
+        ELogStatVar m_closeSegmentFailCount;
+
+        /** @brief Total number of bytes used in full segments. */
+        ELogStatVar m_closedSegmentBytes;
+
+        /** @brief Total number of messages queued for logging during segment switch. */
+        ELogStatVar m_pendingMsgCount;
+
+        /**
+         * @brief Optional accumulated bufferring statistics from each segment, in case buffer is
+         * used.
+         */
+        ELogBufferedStats m_bufferedStats;
     };
 
     uint64_t m_segmentLimitBytes;
@@ -115,6 +179,7 @@ private:
     ELogRollingBitset m_epochSet;
     std::string m_logPath;
     std::string m_logName;
+    SegmentedStats* m_segmentedStats;
 
     bool openSegment();
     bool getSegmentCount(uint32_t& segmentCount, uint64_t& lastSegmentSizeBytes);

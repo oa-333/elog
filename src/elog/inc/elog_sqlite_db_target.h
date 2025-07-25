@@ -13,9 +13,10 @@ namespace elog {
 
 class ELOG_API ELogSQLiteDbTarget : public ELogDbTarget {
 public:
+    // if maxThreads is zero, then the number configured during elog::initialize() will be used
+    // the user is allowed here to override the value specified during elog::initialize()
     ELogSQLiteDbTarget(const std::string& filePath, const std::string& insertStmt,
-                       ELogDbTarget::ThreadModel threadModel,
-                       uint32_t maxThreads = ELOG_DB_MAX_THREADS,
+                       ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads = 0,
                        uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
         : ELogDbTarget("SQLite", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_QMARK,
                        threadModel, maxThreads, reconnectTimeoutMillis),

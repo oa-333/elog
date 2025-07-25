@@ -646,7 +646,7 @@ static bool getPerfParam(const char* param) {
     } else if (strcmp(param, "single-thread") == 0) {
         sTestSingleThread = true;
 #ifdef ELOG_ENABLE_FMT_LIB
-        sTestPerfBinaryAcceleration = true;
+        // sTestPerfBinaryAcceleration = true;
 #endif
     } else {
         return false;
@@ -1010,7 +1010,6 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     std::string::size_type nonSpacePos = namedCfg.find_first_not_of(" \t\r\n");
     if (nonSpacePos == std::string::npos) {
         fprintf(stderr, "Invalid log target configuration, all white space\n");
-        elog::terminate();
         return nullptr;
     }
     bool res = false;
@@ -1040,7 +1039,6 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     }
     if (!res) {
         fprintf(stderr, "Failed to initialize elog system with log target config: %s\n", cfg);
-        elog::terminate();
         return nullptr;
     }
     fprintf(stderr, "Configure from props OK\n");
@@ -1048,7 +1046,7 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     elog::ELogTarget* logTarget = elog::getLogTarget("elog_bench");
     if (logTarget == nullptr) {
         fprintf(stderr, "Failed to find logger by name elog_bench, aborting\n");
-        elog::terminate();
+        return nullptr;
     }
     elog::ELogSource* logSource = elog::defineLogSource("elog_bench_logger");
     elog::ELogTargetAffinityMask mask = 0;
@@ -1057,7 +1055,17 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     return logTarget;
 }
 
-void termELog() { elog::clearAllLogTargets(); }
+void termELog() {
+    elog::ELogTarget* logTarget = elog::getLogTarget("elog_bench");
+    if (logTarget != nullptr) {
+        elog::ELogTargetId id = elog::addStdErrLogTarget();
+        elog::ELogBuffer buffer;
+        logTarget->statsToString(buffer);
+        fputs(buffer.getRef(), stderr);
+        elog::removeLogTarget(id);
+    }
+    elog::clearAllLogTargets();
+}
 
 void testPerfPrivateLog() {
     // Private logger test
@@ -1599,6 +1607,8 @@ int testEventLog() {
                 matchingRecords);
         return 3;
     }
+    return 0;
+#else
     return 0;
 #endif
 }
@@ -2800,7 +2810,7 @@ void testPerfAllSingleThread() {
     if (sTestSingleAll || sTestSingleThreadQuantumBinaryPreCached) {
         testPerfSTQuantumBinaryPreCached(msgThroughput, ioThroughput, msgp50, msgp95, msgp99);
     }
-    if (sTestPerfAll || sTestPerfBinaryAcceleration) {
+    if (sTestSingleAll || sTestPerfBinaryAcceleration) {
         testPerfBinaryAcceleration();
     }
 #endif

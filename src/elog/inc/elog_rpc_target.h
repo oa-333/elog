@@ -25,7 +25,7 @@ protected:
     ~ELogRpcTarget() override {}
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() override {}
+    bool flushLogTarget() override { return true; }
 
     /**
      * @brief Parses the parameters loaded from configuration and builds all log record field

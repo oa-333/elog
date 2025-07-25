@@ -5,6 +5,7 @@
 #include "elog.h"
 #include "elog_common.h"
 #include "elog_config_loader.h"
+#include "elog_internal.h"
 #include "elog_report.h"
 #include "elog_target.h"
 
@@ -23,10 +24,6 @@ ELOG_IMPLEMENT_FLUSH_POLICY(ELogGroupFlushPolicy)
 
 /** @def The maximum number of flush policies types that can be defined in the system. */
 #define ELOG_MAX_FLUSH_POLICY_COUNT 100
-
-// TODO: have this configurable in the flush policy
-/** @def The default maximum number of threads used for group flush policy resource allocation. */
-#define ELOG_MAX_THREAD_COUNT 4096
 
 // TODO: have this configurable in the flush policy
 /** @def The default group flush GC recycling frequency (once every X retire calls). */
@@ -111,7 +108,11 @@ ELogFlushPolicy* constructFlushPolicy(const char* name) {
     return flushPolicy;
 }
 
-void ELogFlushPolicy::moderateFlush(ELogTarget* logTarget) { logTarget->flush(); }
+bool ELogFlushPolicy::moderateFlush(ELogTarget* logTarget) {
+    // NOTE: we must order log target to avoid further flush moderation since that would cause
+    // endless recurrence
+    return logTarget->flush(false);
+}
 
 bool ELogFlushPolicy::loadIntFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
                                          const char* flushPolicyName, const char* propName,
@@ -717,7 +718,8 @@ bool ELogGroupFlushPolicy::loadExpr(const ELogExpression* expr) {
 
 bool ELogGroupFlushPolicy::start() {
     // initialize the private garbage collector
-    if (!m_gc.initialize("Group-flush-policy GC", ELOG_MAX_THREAD_COUNT, ELOG_FLUSH_GC_FREQ)) {
+    // TODO: have this configurable in the flush policy (max threads, flush frequency)
+    if (!m_gc.initialize("Group-flush-policy GC", elog::getMaxThreads(), ELOG_FLUSH_GC_FREQ)) {
         ELOG_REPORT_ERROR("Failed to initialize private garbage collector for group flush policy");
         return false;
     }
@@ -745,7 +747,7 @@ bool ELogGroupFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     return true;
 }
 
-void ELogGroupFlushPolicy::moderateFlush(ELogTarget* logTarget) {
+bool ELogGroupFlushPolicy::moderateFlush(ELogTarget* logTarget) {
     // NOTE: we may arrive here concurrently from many threads
     // so we need to do one of the following:
     // (1) if no group is present, then open new group as leader
@@ -810,7 +812,7 @@ void ELogGroupFlushPolicy::moderateFlush(ELogTarget* logTarget) {
                 if (newGroup == nullptr) {
                     ELOG_REPORT_ERROR("Failed to allocate new group, out of memory");
                     m_gc.endEpoch(epoch);
-                    return;
+                    return false;
                 }
             }
 
@@ -829,9 +831,10 @@ void ELogGroupFlushPolicy::moderateFlush(ELogTarget* logTarget) {
         }
     }
 
+    bool res = true;
     if (isLeader) {
         // execute leader code
-        newGroup->execLeader();
+        res = newGroup->execLeader();
 #ifdef ELOG_ENABLE_GROUP_FLUSH_GC_TRACE
         ELOG_INFO_EX(sGCLogger, "Finished executing leader code on group %p, epoch %" PRIu64,
                      newGroup, epoch);
@@ -861,8 +864,10 @@ void ELogGroupFlushPolicy::moderateFlush(ELogTarget* logTarget) {
                      currentGroup, epoch);
 #endif
         currentGroup = nullptr;
+        logTarget->getStats()->incrementFlushDiscarded();
     }
     m_gc.endEpoch(epoch);
+    return res;
 }
 
 ELogGroupFlushPolicy::Group::Group(ELogTarget* logTarget, uint64_t groupSize,
@@ -887,7 +892,7 @@ bool ELogGroupFlushPolicy::Group::join() {
     return true;
 }
 
-void ELogGroupFlushPolicy::Group::execLeader() {
+bool ELogGroupFlushPolicy::Group::execLeader() {
     assert(getCurrentThreadId() == m_leaderThreadId);
     std::unique_lock<std::mutex> lock(m_lock);
     m_cv.wait_for(lock, m_groupTimeoutMicros, [this]() { return m_state == State::FULL; });
@@ -897,7 +902,9 @@ void ELogGroupFlushPolicy::Group::execLeader() {
     // execute flush
     // NOTE: flush moderation takes place only when the log target is natively thread safe, so the
     // call to flush here is ok, because that would not cause the lock to be taken again
-    m_logTarget->flush();
+    // NOTE: we must order log target to avoid further flush moderation since that would cause
+    // endless recurrence
+    bool res = m_logTarget->flush(false);
 
     // notify flush done, and wait for all-left event, but only if there is at least one follower
     if (m_memberCount > 1) {
@@ -905,6 +912,8 @@ void ELogGroupFlushPolicy::Group::execLeader() {
         m_cv.notify_all();
         m_cv.wait(lock, [this]() { return m_state == State::ALL_LEFT; });
     }
+
+    return res;
 }
 
 void ELogGroupFlushPolicy::Group::execFollower() {

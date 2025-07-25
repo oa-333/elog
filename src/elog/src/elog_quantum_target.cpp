@@ -46,7 +46,7 @@ bool ELogQuantumTarget::startLogTarget() {
             m_ringBuffer[i].setLogBuffer(&m_bufferArray[i]);
         }
     }
-    if (!m_endTarget->start()) {
+    if (!m_subTarget->start()) {
         elogAlignedFreeObjectArray(m_bufferArray, m_ringBufferSize);
         elogAlignedFreeObjectArray(m_ringBuffer, m_ringBufferSize);
         m_ringBuffer = nullptr;
@@ -65,7 +65,7 @@ bool ELogQuantumTarget::stopLogTarget() {
 
     // now wait for log thread to finish
     m_logThread.join();
-    if (!m_endTarget->stop()) {
+    if (!m_subTarget->stop()) {
         ELOG_REPORT_ERROR("Quantum log target failed to stop underlying log target");
         return false;
     }
@@ -109,13 +109,18 @@ uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
     return 0;
 }
 
-void ELogQuantumTarget::flushLogTarget() {
+// TODO: allow quantum log target to specify in config what to do when queue is full:
+// - wait until queue is ready (or even allow to give a timeout)
+// - bail out immediately
+
+bool ELogQuantumTarget::flushLogTarget() {
     // log empty message, which designated a flush request
     // NOTE: there is no waiting for flush to complete
     ELOG_CACHE_ALIGN ELogRecord flushRecord;
     flushRecord.m_logMsg = "";
     flushRecord.m_reserved = ELOG_FLUSH_REQUEST;
     writeLogRecord(flushRecord);
+    return true;
 }
 
 void ELogQuantumTarget::logThread() {
@@ -158,9 +163,9 @@ void ELogQuantumTarget::logThread() {
             if (recordData.m_logRecord.m_reserved == ELOG_STOP_REQUEST) {
                 done = true;
             } else if (recordData.m_logRecord.m_reserved == ELOG_FLUSH_REQUEST) {
-                m_endTarget->flush();
+                m_subTarget->flush();
             } else {
-                m_endTarget->log(recordData.m_logRecord);
+                m_subTarget->log(recordData.m_logRecord);
             }
 
             // change state back to vacant and update read pos
@@ -185,7 +190,7 @@ void ELogQuantumTarget::logThread() {
     }
 
     // do a final flush and terminate
-    m_endTarget->flush();
+    m_subTarget->flush();
 }
 
 }  // namespace elog

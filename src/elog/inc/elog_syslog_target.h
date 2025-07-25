@@ -12,7 +12,7 @@ namespace elog {
 
 class ELogSysLogTarget : public ELogTarget {
 public:
-    ELogSysLogTarget() : ELogTarget("syslog") { setName("syslog"); }
+    ELogSysLogTarget() : ELogTarget("syslog", nullptr, false) { setName("syslog"); }
     ELogSysLogTarget(const ELogSysLogTarget&) = delete;
     ELogSysLogTarget(ELogSysLogTarget&&) = delete;
 
@@ -29,7 +29,7 @@ protected:
     uint32_t writeLogRecord(const ELogRecord& logRecord) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget();
+    bool flushLogTarget() final;
 
 private:
     bool logLevelToSysLevel(ELogLevel logLevel, int& sysLevel);

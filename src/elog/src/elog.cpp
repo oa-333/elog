@@ -30,6 +30,7 @@
 #include "elog_segmented_file_target.h"
 #include "elog_shared_logger.h"
 #include "elog_stack_trace.h"
+#include "elog_stats_internal.h"
 #include "elog_syslog_target.h"
 #include "elog_target_spec.h"
 #include "elog_time_internal.h"
@@ -46,6 +47,8 @@ static bool sDbgUtilInitialized = false;
 #endif
 
 static bool sInitialized = false;
+static bool sIsTerminating = false;
+static uint32_t sMaxThreads = ELOG_DEFAULT_MAX_THREADS;
 static ELogPreInitLogger sPreInitLogger;
 static ELogFilter* sGlobalFilter = nullptr;
 static std::vector<ELogTarget*> sLogTargets;
@@ -90,6 +93,14 @@ bool initGlobals() {
         return false;
     }
     ELOG_REPORT_TRACE("Date table initialized");
+
+    // initialize log target statistics
+    if (!initializeStats(sMaxThreads)) {
+        ELOG_REPORT_ERROR("Failed to initialize log target statistics");
+        termGlobals();
+        return false;
+    }
+    ELOG_REPORT_TRACE("Log target statistics initialized");
 
     // create thread local storage key for log buffers
     if (!ELogTarget::createLogBufferKey()) {
@@ -174,9 +185,18 @@ bool initGlobals() {
     }
     ELOG_REPORT_TRACE("Default logger initialized");
 
-    sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr);
+    // NOTE: statistics disabled
+    sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr, nullptr, false);
     if (sDefaultLogTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create default log target, out of memory");
+        termGlobals();
+        return false;
+    }
+    sDefaultLogTarget->setName("elog_default");
+    if (!sDefaultLogTarget->start()) {
+        ELOG_REPORT_ERROR("Failed to create default log target, out of memory");
+        delete sDefaultLogTarget;
+        sDefaultLogTarget = nullptr;
         termGlobals();
         return false;
     }
@@ -223,7 +243,9 @@ bool initGlobals() {
 }
 
 void termGlobals() {
+    sIsTerminating = true;
     clearAllLogTargets();
+    ELogReport::termReport();
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     if (sDbgUtilInitialized) {
@@ -240,6 +262,7 @@ void termGlobals() {
     setLogFormatter(nullptr);
     setLogFilter(nullptr);
     if (sDefaultLogTarget != nullptr) {
+        sDefaultLogTarget->stop();
         delete sDefaultLogTarget;
         sDefaultLogTarget = nullptr;
     }
@@ -257,6 +280,7 @@ void termGlobals() {
     if (!ELogSharedLogger::destroyRecordBuilderKey()) {
         ELOG_REPORT_ERROR("Failed to destroy record builder thread-local storage");
     }
+    terminateStats();
     if (!ELogTarget::destroyLogBufferKey()) {
         ELOG_REPORT_ERROR("Failed to destroy log buffer thread-local storage");
     }
@@ -266,7 +290,8 @@ void termGlobals() {
 
 bool initialize(const char* configFile /* = nullptr */, uint32_t reloadPeriodMillis /* = 0 */,
                 ELogReportHandler* elogReportHandler /* = nullptr */,
-                ELogLevel elogReportLevel /* = ELEVEL_WARN */) {
+                ELogLevel elogReportLevel /* = ELEVEL_WARN */,
+                uint32_t maxThreads /* = ELOG_DEFAULT_MAX_THREADS */) {
     if (sInitialized) {
         ELOG_REPORT_ERROR("Duplicate attempt to initialize rejected");
         return false;
@@ -280,6 +305,7 @@ bool initialize(const char* configFile /* = nullptr */, uint32_t reloadPeriodMil
         termGlobals();
         return false;
     }
+    sMaxThreads = maxThreads;
     sInitialized = true;
     return true;
 }
@@ -877,6 +903,17 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
     // affinity mask building) - this might require API change (returning at least bool)
     ELOG_REPORT_TRACE("Adding log target: %s", logTarget->getName());
 
+    // we must start the log target early because of statistics dependency (if started after adding
+    // to array, then any ELOG_REPORT_XXX in between would trigger logging for the new target before
+    // the statistics object was created)
+    // TODO: this is too sensitive, it is better to check whether the statistics object exists and
+    // get rid of m_enableStats altogether
+    if (!logTarget->start()) {
+        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
+        logTarget->setId(ELOG_INVALID_TARGET_ID);
+        return ELOG_INVALID_TARGET_ID;
+    }
+
     // find vacant slot ro add a new one
     ELogTargetId logTargetId = ELOG_INVALID_TARGET_ID;
     for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
@@ -893,6 +930,7 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
         if (sLogTargets.size() == ELOG_MAX_TARGET_COUNT) {
             ELOG_REPORT_ERROR("Cannot add log target, reached hard limit of log targets %u",
                               ELOG_MAX_TARGET_COUNT);
+            logTarget->stop();
             return ELOG_INVALID_TARGET_ID;
         }
         logTargetId = (ELogTargetId)sLogTargets.size();
@@ -902,12 +940,6 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
 
     // set target id and start it
     logTarget->setId(logTargetId);
-    if (!logTarget->start()) {
-        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
-        sLogTargets[logTargetId] = nullptr;
-        logTarget->setId(ELOG_INVALID_TARGET_ID);
-        return ELOG_INVALID_TARGET_ID;
-    }
 
     // write accumulated log messages if there are such
     sPreInitLogger.writeAccumulatedLogMessages(logTarget);
@@ -924,14 +956,14 @@ ELogTargetId configureLogTarget(const char* logTargetCfg) {
 
 ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 0 */,
                               bool useLock /* = false */, uint32_t segmentLimitMB /* = 0 */,
-                              uint32_t segmentCount /* = 0 */,
+                              uint32_t segmentCount /* = 0 */, bool enableStats /* = true */,
                               ELogLevel logLevel /* = ELEVEL_INFO */,
                               ELogFlushPolicy* flushPolicy /* = nullptr */,
                               ELogFilter* logFilter /* = nullptr */,
                               ELogFormatter* logFormatter /* = nullptr */) {
     // we delegate to the schema handler
-    ELogTarget* logTarget = ELogFileSchemaHandler::createLogTarget(logFilePath, bufferSize, useLock,
-                                                                   segmentLimitMB, 0, segmentCount);
+    ELogTarget* logTarget = ELogFileSchemaHandler::createLogTarget(
+        logFilePath, bufferSize, useLock, segmentLimitMB, 0, segmentCount, enableStats);
     if (logTarget == nullptr) {
         return ELOG_INVALID_TARGET_ID;
     }
@@ -960,16 +992,18 @@ ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 
 
 ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone /* = false */,
                                  uint32_t bufferSize /* = 0 */, bool useLock /* = false */,
+                                 bool enableStats /* = true */,
                                  ELogLevel logLevel /* = ELEVEL_INFO */,
                                  ELogFlushPolicy* flushPolicy /* = nullptr */,
                                  ELogFilter* logFilter /* = nullptr */,
                                  ELogFormatter* logFormatter /* = nullptr */) {
     ELogTarget* logTarget = nullptr;
     if (bufferSize > 0) {
-        logTarget = new (std::nothrow) ELogBufferedFileTarget(fileHandle, bufferSize, useLock,
-                                                              flushPolicy, closeHandleWhenDone);
+        logTarget = new (std::nothrow) ELogBufferedFileTarget(
+            fileHandle, bufferSize, useLock, flushPolicy, closeHandleWhenDone, enableStats);
     } else {
-        logTarget = new (std::nothrow) ELogFileTarget(fileHandle, flushPolicy, closeHandleWhenDone);
+        logTarget = new (std::nothrow)
+            ELogFileTarget(fileHandle, flushPolicy, closeHandleWhenDone, enableStats);
     }
     if (logTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create log target, out of memory");
@@ -1001,13 +1035,15 @@ ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone /* =
 ELogTargetId addStdErrLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
                                 ELogFilter* logFilter /* = nullptr */,
                                 ELogFormatter* logFormatter /* = nullptr */) {
-    return attachLogFileTarget(stderr, false, 0, false, logLevel, nullptr, logFilter, logFormatter);
+    return attachLogFileTarget(stderr, false, 0, false, false, logLevel, nullptr, logFilter,
+                               logFormatter);
 }
 
 ELogTargetId addStdOutLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
                                 ELogFilter* logFilter /* = nullptr */,
                                 ELogFormatter* logFormatter /* = nullptr */) {
-    return attachLogFileTarget(stdout, false, 0, false, logLevel, nullptr, logFilter, logFormatter);
+    return attachLogFileTarget(stdout, false, 0, false, false, logLevel, nullptr, logFilter,
+                               logFormatter);
 }
 
 ELogTargetId addSysLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
@@ -1146,6 +1182,26 @@ ELogTargetId getLogTargetId(const char* logTargetName) {
     return ELOG_INVALID_TARGET_ID;
 }
 
+static void compactLogTargets() {
+    // find largest suffix of removed log targets
+    size_t maxLogTargetId = sLogTargets.size() - 1;
+    bool done = false;
+    while (!done) {
+        if (sLogTargets[maxLogTargetId] != nullptr) {
+            sLogTargets.resize(maxLogTargetId + 1);
+            ELOG_REPORT_TRACE("Log target array compacted to %zu entries", sLogTargets.size());
+            done = true;
+        } else if (maxLogTargetId == 0) {
+            // last one is also null
+            sLogTargets.clear();
+            ELOG_REPORT_TRACE("Log target array fully truncated");
+            done = true;
+        } else {
+            --maxLogTargetId;
+        }
+    }
+}
+
 void removeLogTarget(ELogTargetId targetId) {
     // be careful, if this is the last log target, we must put back stderr
     if (targetId >= sLogTargets.size()) {
@@ -1164,21 +1220,8 @@ void removeLogTarget(ELogTargetId targetId) {
     delete sLogTargets[targetId];
     sLogTargets[targetId] = nullptr;
 
-    // find largest suffix of removed log targets
-    size_t maxLogTargetId = sLogTargets.size() - 1;
-    bool done = false;
-    while (!done) {
-        if (sLogTargets[maxLogTargetId] != nullptr) {
-            sLogTargets.resize(maxLogTargetId + 1);
-            done = true;
-        } else if (maxLogTargetId == 0) {
-            // last one is also null
-            sLogTargets.clear();
-            done = true;
-        } else {
-            --maxLogTargetId;
-        }
-    }
+    // if suffix entries contain nulls we can reduce array size
+    compactLogTargets();
 }
 
 void clearAllLogTargets() {
@@ -1187,16 +1230,18 @@ void clearAllLogTargets() {
     // first stop all targets and then delete them, but this requires log target to be able to
     // reject log messages after stop() was called.
     for (ELogTarget* logTarget : sLogTargets) {
-        if (logTarget != nullptr) {
+        if (sIsTerminating || (logTarget != nullptr && !logTarget->isSystemTarget())) {
             logTarget->stop();
         }
     }
-    for (ELogTarget* logTarget : sLogTargets) {
-        if (logTarget != nullptr) {
+    for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
+        ELogTarget* logTarget = sLogTargets[i];
+        if (sIsTerminating || (logTarget != nullptr && !logTarget->isSystemTarget())) {
             delete logTarget;
+            sLogTargets[i] = nullptr;
         }
     }
-    sLogTargets.clear();
+    compactLogTargets();
 }
 
 void removeLogTarget(ELogTarget* target) {
@@ -1256,6 +1301,9 @@ ELogSource* addChildSource(ELogSource* parent, const char* sourceName) {
 
 // log sources
 ELogSource* defineLogSource(const char* qualifiedName, bool defineMissingPath /* = true */) {
+    if (qualifiedName == nullptr || *qualifiedName == 0) {
+        return sRootLogSource;
+    }
     std::unique_lock<std::mutex> lock(sSourceTreeLock);
     // parse name to components and start traveling up to last component
     std::vector<std::string> namePath;
@@ -1420,6 +1468,15 @@ void setLogFormatter(ELogFormatter* logFormatter) {
         delete sGlobalFormatter;
     }
     sGlobalFormatter = logFormatter;
+}
+
+uint32_t getMaxThreads() { return sMaxThreads; }
+
+void resetThreadStatCounters(uint64_t slotId) {
+    for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
+        ELogTarget* logTarget = sLogTargets[logTargetId];
+        logTarget->getStats()->resetThreadCounters(slotId);
+    }
 }
 
 void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {

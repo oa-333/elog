@@ -71,6 +71,7 @@ target_sources(
             elog_shared_logger.h
             elog_source.h
             elog_sqlite_db_target.h
+            elog_stats.h
             elog_string_stream_receptor.h
             elog_string_receptor.h
             elog_syslog_target.h

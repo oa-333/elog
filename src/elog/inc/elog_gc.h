@@ -123,7 +123,7 @@ private:
     // the private garbage collector's name
     std::string m_name;
     uint32_t m_gcFrequency;
-    uint32_t m_padding;
+    uint32_t m_maxThreads;
     std::atomic<uint64_t> m_retireCount;
 
     // manage minimum active epoch

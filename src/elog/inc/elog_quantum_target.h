@@ -79,7 +79,7 @@ private:
     uint32_t writeLogRecord(const ELogRecord& logRecord) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() final;
+    bool flushLogTarget() final;
 
 private:
     enum EntryState : uint64_t { ES_VACANT, ES_WRITING, ES_READY, ES_READING };

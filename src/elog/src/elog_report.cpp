@@ -1,3 +1,5 @@
+#include "elog_report.h"
+
 #include <atomic>
 #include <cerrno>
 #include <cstdint>
@@ -8,7 +10,6 @@
 #include "elog.h"
 #include "elog_common.h"
 #include "elog_common_def.h"
-#include "elog_report.h"
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
@@ -16,6 +17,8 @@
 #endif
 
 namespace elog {
+
+static thread_local bool sIsReporting = false;
 
 class ELogDefaultReportHandler : public ELogReportHandler {
 public:
@@ -55,11 +58,13 @@ public:
     ELogSelfReportHandler& operator=(const ELogSelfReportHandler&) = delete;
     ~ELogSelfReportHandler() final {}
 
-    void init() {
+    void initialize() {
         // at this point we can create a logger and restrict to stderr
         m_logger = elog::getSharedLogger("elog");
         restrictToStdErr();
     }
+
+    inline ELogLogger* getLogger() { return m_logger; }
 
     void onReportV(ELogLevel logLevel, const char* file, int line, const char* function,
                    const char* fmt, va_list args) override {
@@ -76,6 +81,9 @@ private:
 
     inline bool restrictToStdErr() {
         // we create a dedicated stderr target with colored formatting
+        // NOTE: we disable statistics collection for this target, because it generates circular
+        // reporting during statistics slot allocation (due to trace reports in elog_stats.cpp)
+        // anyway we don't need statistics here
         const char* cfg =
             "sys://stderr?name=elog_internal&"
             "log_format=${fmt:begin-font=faint}"
@@ -89,7 +97,8 @@ private:
             "[${tid}] ${src:font=underline} "
             "${fmt:begin-font=faint}"
             "${msg}"
-            "${fmt:default}";
+            "${fmt:default}&"
+            "enable_stats=no";
         ELogTargetId logTargetId = elog::configureLogTarget(cfg);
         if (logTargetId == ELOG_INVALID_TARGET_ID) {
             ELOG_REPORT_ERROR("Failed to configure log target for ELog reports");
@@ -111,6 +120,9 @@ private:
         // make sure no one else sends to this target
         logTarget->setPassKey();
         m_logger->getLogSource()->addPassKey(logTarget->getPassKey());
+
+        // make sure no one pulls the rug under our feet (e.g. through clearAllLogTargets())
+        logTarget->setSystemTarget();
         return true;
     }
 };
@@ -140,8 +152,17 @@ void ELogReport::report(ELogLevel logLevel, const char* file, int line, const ch
     if (logLevel <= sReportLevel) {
         va_list args;
         va_start(args, fmt);
-        ELogReportHandler* reportHandler = sReportHandler ? sReportHandler : &sDefaultReportHandler;
-        reportHandler->onReportV(logLevel, file, line, function, fmt, args);
+
+        if (sIsReporting) {
+            sDefaultReportHandler.onReportV(logLevel, file, line, function, fmt, args);
+        } else {
+            sIsReporting = true;
+            ELogReportHandler* reportHandler =
+                sReportHandler ? sReportHandler : &sDefaultReportHandler;
+            reportHandler->onReportV(logLevel, file, line, function, fmt, args);
+            sIsReporting = false;
+        }
+
         va_end(args);
     }
 }
@@ -176,8 +197,10 @@ void ELogReport::win32FreeErrorStr(char* errStr) { LocalFree(errStr); }
 #endif
 
 void ELogReport::initReport() {
-    sSelfReportHandler.init();
+    sSelfReportHandler.initialize();
     setReportHandler(&sSelfReportHandler);
 }
+
+void ELogReport::termReport() { setReportHandler(&sDefaultReportHandler); }
 
 }  // namespace elog

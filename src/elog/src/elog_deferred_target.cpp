@@ -9,7 +9,7 @@
 namespace elog {
 
 bool ELogDeferredTarget::startLogTarget() {
-    if (!m_endTarget->start()) {
+    if (!m_subTarget->start()) {
         return false;
     }
     m_logThread = std::thread(&ELogDeferredTarget::logThread, this);
@@ -18,7 +18,7 @@ bool ELogDeferredTarget::startLogTarget() {
 
 bool ELogDeferredTarget::stopLogTarget() {
     stopLogThread();
-    return m_endTarget->stop();
+    return m_subTarget->stop();
 }
 
 uint32_t ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord) {
@@ -36,7 +36,7 @@ uint32_t ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord) {
     return 0;
 }
 
-void ELogDeferredTarget::flushLogTarget() {
+bool ELogDeferredTarget::flushLogTarget() {
     // log empty message, which designated a flush request
     // NOTE: there is no waiting for flush to complete
     ELOG_CACHE_ALIGN ELogRecord flushRecord;
@@ -45,6 +45,7 @@ void ELogDeferredTarget::flushLogTarget() {
     std::unique_lock<std::mutex> lock(m_lock);
     m_logQueue.emplace_back(flushRecord, flushRecord.m_logMsg);
     m_cv.notify_one();
+    return true;
 }
 
 void ELogDeferredTarget::logThread() {
@@ -78,7 +79,7 @@ void ELogDeferredTarget::logThread() {
     logQueueMsgs(m_logQueue, false);
 
     // finally flush
-    m_endTarget->flush();
+    m_subTarget->flush();
 }
 
 bool ELogDeferredTarget::shouldStop() {
@@ -97,11 +98,11 @@ void ELogDeferredTarget::logQueueMsgs(LogQueue& logQueue, bool disregardFlushReq
         if (logRecord.m_reserved == ELOG_FLUSH_REQUEST) {
             // empty log message signifies flush request (ignored during last time)
             if (!disregardFlushRequests) {
-                m_endTarget->flush();
+                m_subTarget->flush();
             }
         } else {
             logRecord.m_logMsg = itr->second.c_str();
-            m_endTarget->log(logRecord);
+            m_subTarget->log(logRecord);
             m_readCount.fetch_add(1, std::memory_order_relaxed);
         }
         ++itr;

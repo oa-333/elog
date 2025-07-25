@@ -40,11 +40,13 @@ public:
 #endif
 
 private:
-    // initialize reporting mechanism
+    // initialize/terminate reporting mechanism
     static void initReport();
+    static void termReport();
 
     // allow initialization function special access
     friend bool initGlobals();
+    friend void termGlobals();
 };
 
 #define ELOG_REPORT(level, fmt, ...) \

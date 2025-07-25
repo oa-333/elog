@@ -13,7 +13,9 @@
 #include <filesystem>
 #include <thread>
 
+#include "elog.h"
 #include "elog_common.h"
+#include "elog_internal.h"
 #include "elog_report.h"
 
 // TODO: need hard coded limits for all configuration values, and from there we can derive required
@@ -195,7 +197,8 @@ static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileN
 bool ELogSegmentedFileTarget::SegmentData::open(const char* segmentPath,
                                                 uint64_t fileBufferSizeBytes /* = 0 */,
                                                 bool useLock /* = true */,
-                                                bool truncateSegment /* = false */) {
+                                                bool truncateSegment /* = false */,
+                                                bool enableStats /* = true */) {
     m_segmentFile = elog_fopen(segmentPath, truncateSegment ? "w" : "a");
     if (m_segmentFile == nullptr) {
         int errCode = errno;
@@ -214,8 +217,21 @@ bool ELogSegmentedFileTarget::SegmentData::open(const char* segmentPath,
             fclose(m_segmentFile);
             m_segmentFile = nullptr;
             return false;
-        } else {
-            m_bufferedFileWriter->setFileHandle(m_segmentFile);
+        }
+        if (!m_stats.initialize(elog::getMaxThreads())) {
+            ELOG_REPORT_ERROR("Failed to initialize segmented file target statistics");
+            delete m_bufferedFileWriter;
+            m_bufferedFileWriter = nullptr;
+            fclose(m_segmentFile);
+            m_segmentFile = nullptr;
+            return false;
+        }
+        m_bufferedFileWriter->setFileHandle(m_segmentFile);
+        m_bufferedFileWriter->setStats(&m_stats);
+        if (!enableStats) {
+            // TODO: this mya require rethinking, can we get rid of m_enableStats and just agree
+            // that when stats object is null then stats are disabled?
+            m_bufferedFileWriter->disableStats();
         }
     }
     return true;
@@ -256,11 +272,13 @@ bool ELogSegmentedFileTarget::SegmentData::drain() {
 bool ELogSegmentedFileTarget::SegmentData::flush() {
     if (m_bufferedFileWriter != nullptr) {
         if (!m_bufferedFileWriter->flushLogBuffer()) {
+            // TODO: log once
             ELOG_REPORT_ERROR("Failed to flush buffered writer");
             return false;
         }
     }
     if (fflush(m_segmentFile) == EOF) {
+        // TODO: log once
         ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
         return false;
     }
@@ -296,8 +314,8 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(
     const char* logPath, const char* logName, uint64_t segmentLimitBytes,
     uint32_t segmentRingSize /* = ELOG_DEFAULT_SEGMENT_RING_SIZE */,
     uint64_t fileBufferSizeBytes /* = 0 */, uint32_t segmentCount /* = 0 */,
-    ELogFlushPolicy* flushPolicy /* = nullptr */)
-    : ELogTarget("segmented-file", flushPolicy),
+    ELogFlushPolicy* flushPolicy /* = nullptr */, bool enableStats /* = true */)
+    : ELogTarget("segmented-file", flushPolicy, enableStats),
       m_segmentLimitBytes(segmentLimitBytes),
       m_fileBufferSizeBytes(fileBufferSizeBytes),
       m_segmentRingSize(segmentRingSize),
@@ -305,7 +323,8 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(
       m_currentSegment(nullptr),
       m_epoch(0),
       m_logPath(logPath),
-      m_logName(logName) {
+      m_logName(logName),
+      m_segmentedStats(nullptr) {
     // check for limits
     if (segmentLimitBytes > ELOG_MAX_SEGMENT_LIMIT_BYTES) {
         ELOG_REPORT_WARN("Truncating segment size limit from %" PRIu64 " bytes to %" PRIu64
@@ -356,7 +375,17 @@ bool ELogSegmentedFileTarget::stopLogTarget() {
         // switch will drain all pending messages before returning - but this is just for safety
         if (!segmentData->close()) {
             ELOG_REPORT_ERROR("Failed to close log segment");
+            if (m_enableStats) {
+                m_segmentedStats->incrementCloseSegmentFailCount();
+            }
             return false;
+        }
+        if (m_enableStats) {
+            m_segmentedStats->addCloseSegmentBytes(
+                segmentData->m_bytesLogged.load(std::memory_order_relaxed));
+            if (segmentData->m_bufferedFileWriter != nullptr) {
+                m_segmentedStats->addBufferedStats(segmentData->m_stats);
+            }
         }
 
         // NOTE: it is expected that at this point no thread is trying to log messages anymore
@@ -406,12 +435,13 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
     m_epochSet.insert(epoch);
 }
 
-void ELogSegmentedFileTarget::flushLogTarget() {
+bool ELogSegmentedFileTarget::flushLogTarget() {
     // first thing, increment the epoch count
     uint64_t epoch = m_epoch.fetch_add(1, std::memory_order_acquire);
 
     // we make sure segment is not just being replaced
     // we use the same logic as if logging a zero sized message
+    bool res = true;
     SegmentData* segmentData = m_currentSegment.load(std::memory_order_relaxed);
     uint64_t bytesLogged = segmentData->m_bytesLogged.load(std::memory_order_relaxed);
     if (bytesLogged < m_segmentLimitBytes) {
@@ -419,14 +449,86 @@ void ELogSegmentedFileTarget::flushLogTarget() {
         // now being replaced
         // NOTE: no pending message draining takes place here, since this is external periodic flush
         if (!segmentData->flush()) {
+            // TODO: log once
             ELOG_REPORT_ERROR("Failed to flush segment log file");
+            res = false;
         }
     } else {
-        // a segment is right now being replaced, so the request can be discarded
+        // a segment is right now being replaced, so the request can be discarded (because during
+        // file close all file buffers are being flushed anyway, so there is no need for an addition
+        // flush call)
+        if (m_enableStats) {
+            m_stats->incrementFlushDiscarded();
+        }
     }
 
     // last thing, mark transaction end
     m_epochSet.insert(epoch);
+    return res;
+}
+
+ELogStats* ELogSegmentedFileTarget::createStats() {
+    m_segmentedStats = new (std::nothrow) SegmentedStats();
+    return m_segmentedStats;
+}
+
+bool ELogSegmentedFileTarget::SegmentedStats::initialize(uint32_t maxThreads) {
+    if (!ELogStats::initialize(maxThreads)) {
+        return false;
+    }
+    if (!m_segmentCount.initialize(maxThreads) || !m_openSegmentFailCount.initialize(maxThreads) ||
+        !m_closeSegmentFailCount.initialize(maxThreads) ||
+        !m_closedSegmentBytes.initialize(maxThreads) || !m_pendingMsgCount.initialize(maxThreads) ||
+        !m_bufferedStats.initialize(maxThreads)) {
+        ELOG_REPORT_ERROR("Failed to initialize segmented file target statistics variables");
+        terminate();
+        return false;
+    }
+    return true;
+}
+
+void ELogSegmentedFileTarget::SegmentedStats::terminate() {
+    ELogStats::terminate();
+    m_segmentCount.terminate();
+    m_openSegmentFailCount.terminate();
+    m_closeSegmentFailCount.terminate();
+    m_closedSegmentBytes.terminate();
+    m_pendingMsgCount.terminate();
+    m_bufferedStats.terminate();
+}
+
+void ELogSegmentedFileTarget::SegmentedStats::toString(ELogBuffer& buffer, ELogTarget* logTarget,
+                                                       const char* msg /* = "" */) {
+    ELogStats::toString(buffer, logTarget, msg);
+
+    buffer.appendArgs("\tSegment count: %" PRIu64 "\n", m_segmentCount.getSum());
+    buffer.appendArgs("\tOpen segment fail count: %" PRIu64 "\n", m_openSegmentFailCount.getSum());
+    buffer.appendArgs("\tClose segment fail count: %" PRIu64 "\n",
+                      m_closeSegmentFailCount.getSum());
+    uint64_t avgSegmentSizeBytes = m_closedSegmentBytes.getSum() / m_segmentCount.getSum();
+    buffer.appendArgs("\tAverage segment size: %" PRIu64 " bytes\n", avgSegmentSizeBytes);
+    buffer.appendArgs("\tPending message count (total): %" PRIu64 "\n", m_pendingMsgCount.getSum());
+    uint64_t avgPendingMsgCount = m_pendingMsgCount.getSum() / m_segmentCount.getSum();
+    buffer.appendArgs("\tAverage pending messages per segment: %" PRIu64 "\n", avgPendingMsgCount);
+
+    // print segment's buffering stats if any
+    uint64_t bufferWriteCount = m_bufferedStats.getBufferWriteCount().getSum();
+    if (bufferWriteCount > 0) {
+        uint64_t bufferByteCount = m_bufferedStats.getBufferByteCount().getSum();
+        uint64_t avgBufferSize = bufferWriteCount / bufferByteCount;
+        buffer.appendArgs("\tTotal buffers used in all segments: %" PRIu64 "\n", bufferWriteCount);
+        buffer.appendArgs("\tAverage buffer size in all segments: %" PRIu64 "\n", avgBufferSize);
+    }
+}
+
+void ELogSegmentedFileTarget::SegmentedStats::resetThreadCounters(uint64_t slotId) {
+    ELogStats::resetThreadCounters(slotId);
+    m_segmentCount.reset(slotId);
+    m_openSegmentFailCount.reset(slotId);
+    m_closeSegmentFailCount.reset(slotId);
+    m_closedSegmentBytes.reset(slotId);
+    m_pendingMsgCount.reset(slotId);
+    m_bufferedStats.resetThreadCounters(slotId);
 }
 
 bool ELogSegmentedFileTarget::openSegment() {
@@ -468,9 +570,16 @@ bool ELogSegmentedFileTarget::openSegment() {
     formatSegmentPath(segmentPath, segmentCount);
     bool useLock = !isExternallyThreadSafe();
     bool truncateSegment = (m_segmentCount > 0);
-    if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment)) {
+    if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment,
+                           m_enableStats)) {
         delete segmentData;
+        if (m_enableStats) {
+            m_segmentedStats->incrementOpenSegmentFailCount();
+        }
         return false;
+    }
+    if (m_enableStats) {
+        m_segmentedStats->incrementSegmentCount();
     }
     m_currentSegment.store(segmentData, std::memory_order_relaxed);
     return true;
@@ -498,6 +607,9 @@ bool ELogSegmentedFileTarget::getSegmentCount(uint32_t& segmentCount,
             segmentFound = true;
             if (maxSegmentIndex < segmentIndex) {
                 maxSegmentIndex = segmentIndex;
+                lastSegmentName = fileName;
+            }
+            if (lastSegmentName.empty()) {
                 lastSegmentName = fileName;
             }
         }
@@ -648,9 +760,16 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     formatSegmentPath(segmentPath, segmentId);
     bool useLock = !isExternallyThreadSafe();
     bool truncateSegment = (m_segmentCount > 0);
-    if (!nextSegment->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment)) {
+    if (!nextSegment->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment,
+                           m_enableStats)) {
         delete nextSegment;
+        if (m_enableStats) {
+            m_segmentedStats->incrementOpenSegmentFailCount();
+        }
         return false;
+    }
+    if (m_enableStats) {
+        m_segmentedStats->incrementSegmentCount();
     }
 
     // switch segments
@@ -716,6 +835,9 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
             // NOTE: we are logging to the previous segment, so that we keep order of messages. this
             // may cause slight bloating of the segment, but that is probably acceptable in a
             // lock-free solution
+            if (m_enableStats) {
+                m_segmentedStats->addPendingMsgCount(logMsg.size());
+            }
             logMsgQueue(logMsgs, prevSegment->m_segmentFile);
         }
     }
@@ -725,9 +847,23 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
 
     // NOTE: only now we can close the segment (and this should also auto-drain/flush)
     ELOG_REPORT_TRACE("Logging %u final pending messages", prevSegment->m_pendingMsgs.size());
+    if (m_enableStats) {
+        m_segmentedStats->addPendingMsgCount(prevSegment->m_pendingMsgs.size());
+    }
     if (!prevSegment->close()) {
-        ELOG_REPORT_ERROR("Failed to close segment log file");
+        ELOG_REPORT_ERROR("Failed to close segment %u log file", prevSegment->m_segmentId);
+        if (m_enableStats) {
+            m_segmentedStats->incrementCloseSegmentFailCount();
+        }
         // nevertheless continue
+    } else {
+        if (m_enableStats) {
+            m_segmentedStats->addCloseSegmentBytes(
+                prevSegment->m_bytesLogged.load(std::memory_order_relaxed));
+            if (prevSegment->m_bufferedFileWriter != nullptr) {
+                m_segmentedStats->addBufferedStats(prevSegment->m_stats);
+            }
+        }
     }
 
     delete prevSegment;

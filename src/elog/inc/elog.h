@@ -51,11 +51,15 @@ namespace elog {
  * then all internal log messages of teh ELog library are sent to the standard output stream,
  * through a dedicated logger under the log source name 'elog'.
  * @param elogReportLevel Sets the log level or log messages issued by ELog.
+ * @param maxThreads Maximum number of threads that are able to concurrently access ELog. If this
+ * number is exceeded then some statistics may not be collected, and the garbage collector used in
+ * the experimental group flush policy would fail to recycle object at some point.
  * @return true If succeeded, otherwise false.
  */
 extern ELOG_API bool initialize(const char* configFile = nullptr, uint32_t reloadPeriodMillis = 0,
                                 ELogReportHandler* elogReportHandler = nullptr,
-                                ELogLevel elogReportLevel = ELEVEL_WARN);
+                                ELogLevel elogReportLevel = ELEVEL_WARN,
+                                uint32_t maxThreads = ELOG_DEFAULT_MAX_THREADS);
 
 /** @brief Releases all resources allocated for the ELogSystem. */
 extern ELOG_API void terminate();
@@ -294,6 +298,7 @@ extern ELOG_API ELogTargetId configureLogTarget(const char* logTargetCfg);
  * limit is specified). The effect of this would be a rotating log file, such that when the
  * amount of log segments has been used up, the first log segment is begin reused (thus
  * discarding old segments' log data).
+ * @param enableStats Specifies whether log target statistics should be collected.
  * @param logLevel Optional log level restriction. All messages with lower log level will not be
  * passed to the lgo target.
  * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
@@ -311,7 +316,7 @@ extern ELOG_API ELogTargetId configureLogTarget(const char* logTargetCfg);
  */
 extern ELOG_API ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize = 0,
                                               bool useLock = false, uint32_t segmentLimitMB = 0,
-                                              uint32_t segmentCount = 0,
+                                              uint32_t segmentCount = 0, bool enableStats = true,
                                               ELogLevel logLevel = ELEVEL_INFO,
                                               ELogFlushPolicy* flushPolicy = nullptr,
                                               ELogFilter* logFilter = nullptr,
@@ -329,6 +334,7 @@ extern ELOG_API ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t 
  * (e.g. behind a global lock), then there is no need for the file target to make use of its own
  * lock. Pay attention that when buffering is used in a multi-threaded scenario, using a lock is
  * mandatory, and without a lock behavior is undefined.
+ * @param enableStats Specifies whether log target statistics should be collected.
  * @param logLevel Optional log level restriction. All messages with lower log level will not be
  * passed to the lgo target.
  * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
@@ -346,6 +352,7 @@ extern ELOG_API ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t 
  */
 extern ELOG_API ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone = false,
                                                  uint32_t bufferSize = 0, bool useLock = false,
+                                                 bool enableStats = true,
                                                  ELogLevel logLevel = ELEVEL_INFO,
                                                  ELogFlushPolicy* flushPolicy = nullptr,
                                                  ELogFilter* logFilter = nullptr,

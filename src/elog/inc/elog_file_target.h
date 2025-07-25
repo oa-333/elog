@@ -13,10 +13,12 @@ public:
      * @brief Construct a new ELogFileTarget object.
      * @param filePath The path to the log file.
      * @param flushPolicy Optional flush policy to use.
+     * @param enableStats Specifies whether log target statistics should be collected.
      * @note On Windows/MinGW platforms there is no support stdio unlocked API, so it is advised to
      * use buffered file target instead on those platforms.
      */
-    ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy = nullptr);
+    ELogFileTarget(const char* filePath, ELogFlushPolicy* flushPolicy = nullptr,
+                   bool enableStats = true);
 
     /**
      * @brief Construct a new ELogFileTarget object using an existing file handle.
@@ -24,10 +26,11 @@ public:
      * @param fileHandle The open file handle to use.
      * @param flushPolicy Optional flush policy to use.
      * @param shouldClose Optionally specify whether the file handle should be closed when done.
+     * @param enableStats Specifies whether log target statistics should be collected.
      * @see @ref ELofBufferedFileWriter.
      */
     ELogFileTarget(FILE* fileHandle, ELogFlushPolicy* flushPolicy = nullptr,
-                   bool shouldClose = false);
+                   bool shouldClose = false, bool enableStats = true);
 
     ELogFileTarget(const ELogFileTarget&) = delete;
     ELogFileTarget(ELogFileTarget&&) = delete;
@@ -49,7 +52,7 @@ protected:
     bool stopLogTarget() final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() final;
+    bool flushLogTarget() final;
 
 private:
     std::string m_filePath;

@@ -226,7 +226,7 @@ uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
     return bytesWritten;
 }
 
-void ELogKafkaMsgQTarget::flushLogTarget() {
+bool ELogKafkaMsgQTarget::flushLogTarget() {
     uint64_t flushTimeoutMillis = m_flushTimeoutMillis;
     if (flushTimeoutMillis == 0) {
         flushTimeoutMillis = ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS;
@@ -234,7 +234,9 @@ void ELogKafkaMsgQTarget::flushLogTarget() {
     rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, (int)flushTimeoutMillis);
     if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
         ELOG_REPORT_ERROR("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
+        return false;
     }
+    return true;
 }
 
 void ELogKafkaMsgQTarget::formatClientId() {

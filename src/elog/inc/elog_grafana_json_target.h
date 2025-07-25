@@ -49,7 +49,7 @@ protected:
     uint32_t writeLogRecord(const ELogRecord& logRecord) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() final;
+    bool flushLogTarget() final;
 
 private:
     std::string m_labels;

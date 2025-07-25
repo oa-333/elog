@@ -57,7 +57,7 @@ protected:
     uint32_t writeLogRecord(const ELogRecord& logRecord) override;
 
     /** @brief Order the log target to flush. */
-    void flushLogTarget() override;
+    bool flushLogTarget() override;
 
 private:
     std::string m_apiKey;

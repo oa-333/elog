@@ -31,7 +31,7 @@ public:
      */
     ELogWin32EventLogTarget(const char* eventSourceName = "",
                             uint32_t eventId = ELOG_DEFAULT_WIN32_EVENT_LOG_ID)
-        : ELogTarget("win32eventlog"),
+        : ELogTarget("win32eventlog", nullptr, false),
           m_eventSourceName(eventSourceName),
           m_eventLogHandle(nullptr),
           m_eventId(eventId) {
@@ -54,7 +54,7 @@ protected:
     uint32_t writeLogRecord(const ELogRecord& logRecord) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget();
+    bool flushLogTarget() final;
 
 private:
     bool logLevelToEventType(ELogLevel logLevel, WORD& eventType);

@@ -115,6 +115,9 @@ enum class ELogSizeUnits : uint32_t {
     SU_GIGA_BYTES
 };
 
+/** @def Default maximum number of threads used by ELog. */
+#define ELOG_DEFAULT_MAX_THREADS 256
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

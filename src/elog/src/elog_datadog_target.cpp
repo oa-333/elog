@@ -102,15 +102,18 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     return (uint32_t)logMsg.size();
 }
 
-void ELogDatadogTarget::flushLogTarget() {
+bool ELogDatadogTarget::flushLogTarget() {
     std::string body =
         m_logItemArray.size() == 1 ? m_logItemArray[0].dump() : m_logItemArray.dump();
     ELOG_REPORT_TRACE("POST log message for Datadog: %s", body.c_str());
-    m_client.post("/api/v2/logs", body.data(), body.size(), "application/json", m_compress);
+    bool res =
+        m_client.post("/api/v2/logs", body.data(), body.size(), "application/json", m_compress)
+            .first;
 
     // clear the log entry for next round
     // NOTE: if resend needs to take place, then the body has already been copied tp the backlog)
     m_logItemArray = nlohmann::json::array();
+    return res;
 }
 
 bool ELogDatadogTarget::prepareTagsString(const std::vector<std::string>& propNames,

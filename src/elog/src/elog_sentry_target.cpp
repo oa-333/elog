@@ -409,11 +409,13 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     // send it as well
 }
 
-void ELogSentryTarget::flushLogTarget() {
+bool ELogSentryTarget::flushLogTarget() {
     int res = sentry_flush(m_params.m_flushTimeoutMillis);
     if (res != 0) {
         ELOG_REPORT_TRACE("Failed to flush Sentry transport (timeout?)");
+        return false;
     }
+    return true;
 }
 
 void sentryLoggerFunc(sentry_level_t level, const char* message, va_list args, void* userdata) {

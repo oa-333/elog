@@ -70,7 +70,7 @@ uint32_t ELogWin32EventLogTarget::writeLogRecord(const ELogRecord& logRecord) {
     return 0;
 }
 
-void ELogWin32EventLogTarget::flushLogTarget() {}
+bool ELogWin32EventLogTarget::flushLogTarget() { return true; }
 
 bool ELogWin32EventLogTarget::logLevelToEventType(ELogLevel logLevel, WORD& eventType) {
     switch (logLevel) {

@@ -19,11 +19,13 @@ public:
      * disabled, then lock is not required, unless it is desired to avoid log messages from
      * different threads getting occasionally intermixed.
      * @param flushPolicy Optional flush policy to use.
+     * @param enableStats Specifies whether log target statistics should be collected.
      * @see @ref ELofBufferedFileWriter.
      */
     ELogBufferedFileTarget(const char* filePath,
                            uint64_t bufferSizeBytes = ELOG_DEFAULT_FILE_BUFFER_SIZE_BYTES,
-                           bool useLock = true, ELogFlushPolicy* flushPolicy = nullptr);
+                           bool useLock = true, ELogFlushPolicy* flushPolicy = nullptr,
+                           bool enableStats = true);
 
     /**
      * @brief Construct a new ELogBufferedFileTarget object using an existing file handle.
@@ -34,13 +36,14 @@ public:
      * scenario, the a lock is required, and without a lock behavior is undefined.
      * @param flushPolicy Optional flush policy to use.
      * @param shouldClose Optionally specify whether the file handle should be closed when done.
+     * @param enableStats Specifies whether log target statistics should be collected.
      * @see @ref ELofBufferedFileWriter.
      */
     ELogBufferedFileTarget(FILE* fileHandle,
                            uint32_t bufferSizeBytes = ELOG_DEFAULT_FILE_BUFFER_SIZE_BYTES,
                            bool useLock = true, ELogFlushPolicy* flushPolicy = nullptr,
-                           bool shouldClose = false)
-        : ELogTarget("buffered-file", flushPolicy),
+                           bool shouldClose = false, bool enableStats = true)
+        : ELogTarget("buffered-file", flushPolicy, enableStats),
           m_fileWriter(bufferSizeBytes, useLock),
           m_fileHandle(fileHandle),
           m_shouldClose(shouldClose) {
@@ -66,7 +69,10 @@ protected:
     bool stopLogTarget() final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() final;
+    bool flushLogTarget() final;
+
+    /** @brief Creates a statistics object. */
+    ELogStats* createStats() final;
 
 private:
     std::string m_filePath;

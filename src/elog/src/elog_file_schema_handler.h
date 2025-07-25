@@ -40,11 +40,13 @@ public:
      * target when switching segments.
      * @param segmentCount Segment count limitation, in effect turning the segmented file target
      * into a rotating file target.
+     * @param enableStats Specifies whether log target statistics should be collected.
      * @return ELogTarget* The resulting log target or null if failed.
      */
     static ELogTarget* createLogTarget(const std::string& path, uint64_t bufferSizeBytes,
                                        bool useFileLock, uint64_t segmentSizeBytes,
-                                       uint32_t segmentRingSize, uint32_t segmentCount);
+                                       uint32_t segmentRingSize, uint32_t segmentCount,
+                                       bool enableStats);
 };
 
 }  // namespace elog

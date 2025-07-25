@@ -106,6 +106,7 @@ std::pair<bool, int> ELogHttpClient::post(const char* endpoint, const char* body
     ELOG_REPORT_TRACE("%s server returned HTTP status: %d", m_logTargetName.c_str(), res->status);
     if (m_assistant != nullptr && !m_assistant->handleResult(res)) {
         addBacklog(endpoint, headers, body, len, contentType);
+        return {false, res->status};
     }
     return {true, res->status};
 }

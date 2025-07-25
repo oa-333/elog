@@ -3,7 +3,7 @@
 reset
 set terminal png
 set output "./bin_accel_param_count.png"
-set key top left
+# set key top left
 
 set xlabel "Parameter Count"
 set ylabel "Throughput (Msg/Sec)"

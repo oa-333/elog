@@ -3,7 +3,7 @@
 reset
 set terminal png
 set output "./bin_accel_msg_len.png"
-set key top left
+set key bottom left
 
 set xlabel "Message Length"
 set ylabel "Throughput (Msg/Sec)"

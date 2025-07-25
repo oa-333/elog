@@ -20,7 +20,7 @@ protected:
     ~ELogMsgQTarget() override {}
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    void flushLogTarget() override {}
+    bool flushLogTarget() override { return true; }
 
     /**
      * @brief Parses the headers loaded from configuration, builds all log record field selectors,

@@ -32,7 +32,7 @@ uint32_t ELogSysLogTarget::writeLogRecord(const ELogRecord& logRecord) {
     return 0;
 }
 
-void ELogSysLogTarget::flushLogTarget() {}
+bool ELogSysLogTarget::flushLogTarget() { return true; }
 
 bool ELogSysLogTarget::logLevelToSysLevel(ELogLevel logLevel, int& sysLevel) {
     switch (logLevel) {

@@ -72,8 +72,9 @@ public:
     /**
      * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group
      * flush). By default no moderation takes place.
+     * @return The operation result.
      */
-    virtual void moderateFlush(ELogTarget* logTarget);
+    virtual bool moderateFlush(ELogTarget* logTarget);
 
 protected:
     ELogFlushPolicy(bool isActive = false) : m_isActive(isActive), m_logTarget(nullptr) {}
@@ -453,7 +454,9 @@ public:
      * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group
      * flush). By default no moderation takes place.
      */
-    void moderateFlush(ELogTarget* logTarget) final { m_moderatePolicy->moderateFlush(logTarget); }
+    bool moderateFlush(ELogTarget* logTarget) final {
+        return m_moderatePolicy->moderateFlush(logTarget);
+    }
 
 protected:
     // helper for combined flush policy
@@ -507,7 +510,7 @@ public:
      * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group
      * flush). By default no moderation takes place.
      */
-    void moderateFlush(ELogTarget* logTarget) final;
+    bool moderateFlush(ELogTarget* logTarget) final;
 
 private:
     typedef std::chrono::microseconds Micros;
@@ -525,7 +528,7 @@ private:
         ~Group() override {}
 
         bool join();
-        void execLeader();
+        bool execLeader();
         void execFollower();
 
     private:

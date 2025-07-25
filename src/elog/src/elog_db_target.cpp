@@ -1,5 +1,6 @@
 #include "elog_db_target.h"
 
+#include "elog_internal.h"
 #include "elog_report.h"
 
 // Threading model design
@@ -69,6 +70,26 @@ namespace elog {
 static const uint32_t ELOG_DB_INVALID_SLOT_ID = 0xFFFFFFFF;
 
 static thread_local uint32_t sThreadSlotId = ELOG_DB_INVALID_SLOT_ID;
+
+ELogDbTarget::ELogDbTarget(const char* dbName, const char* rawInsertStatement,
+                           ELogDbFormatter::QueryStyle queryStyle,
+                           ThreadModel threadModel /* = ThreadModel::TM_LOCK */,
+                           uint32_t maxThreads /* = 0 */,
+                           uint64_t reconnectTimeoutMillis /* = ELOG_DB_RECONNECT_TIMEOUT_MILLIS */)
+    : ELogTarget("db"),
+      m_dbName(dbName),
+      m_formatter(queryStyle),
+      m_rawInsertStatement(rawInsertStatement),
+      m_insertStatementParsed(false),
+      m_threadModel(threadModel),
+      m_maxThreads(maxThreads),
+      m_reconnectTimeoutMillis(reconnectTimeoutMillis),
+      m_shouldStop(false),
+      m_shouldWakeUp(false) {
+    if (m_maxThreads == 0) {
+        m_maxThreads = elog::getMaxThreads();
+    }
+}
 
 bool ELogDbTarget::startLogTarget() {
     if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
