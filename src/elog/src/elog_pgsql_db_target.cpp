@@ -5,7 +5,6 @@
 #include <cstring>
 #include <sstream>
 
-#include "elog.h"
 #include "elog_report.h"
 
 namespace elog {

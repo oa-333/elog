@@ -4,7 +4,6 @@
 #include <regex>
 #include <unordered_map>
 
-#include "elog.h"
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_field_selector_internal.h"

@@ -4,7 +4,6 @@
 
 #include <syslog.h>
 
-#include "elog.h"
 #include "elog_field_selector.h"
 #include "elog_field_selector_internal.h"
 

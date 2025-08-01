@@ -1,5 +1,8 @@
 #include "elog_rolling_bitset.h"
 
+#include <cassert>
+#include <cinttypes>
+
 #include "elog.h"
 #include "elog_spin_ebo.h"
 

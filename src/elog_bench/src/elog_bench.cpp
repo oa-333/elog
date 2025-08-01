@@ -921,6 +921,54 @@ static void printPreInitMessages() {
     // elog::discardAccumulatedLogMessages();
 }
 
+#ifdef ELOG_ENABLE_FMT_LIB
+struct Coord {
+    int x;
+    int y;
+};
+
+template <>
+struct fmt::formatter<Coord> : formatter<std::string_view> {
+    // parse is inherited from formatter<string_view>.
+
+    auto format(Coord c, format_context& ctx) const -> format_context::iterator {
+        std::string s = "{";
+        s += std::to_string(c.x);
+        s += ",";
+        s += std::to_string(c.y);
+        s += "}";
+        return formatter<string_view>::format(s, ctx);
+    }
+};
+
+#define COORD_CODE_ID ELOG_UDT_CODE_BASE
+
+ELOG_DECLARE_TYPE_ENCODE_DECODE_EX(Coord, COORD_CODE_ID)
+
+ELOG_BEGIN_IMPLEMENT_TYPE_ENCODE_EX(Coord) {
+    if (!buffer.appendData(value.x)) {
+        return false;
+    }
+    if (!buffer.appendData(value.y)) {
+        return false;
+    }
+    return true;
+}
+ELOG_END_IMPLEMENT_TYPE_ENCODE_EX()
+
+ELOG_IMPLEMENT_TYPE_DECODE_EX(Coord) {
+    Coord c = {};
+    if (!readBuffer.read(c.x)) {
+        return false;
+    }
+    if (!readBuffer.read(c.y)) {
+        return false;
+    }
+    store.push_back(c);
+    return true;
+}
+#endif
+
 static void testFmtLibSanity() {
 #ifdef ELOG_ENABLE_FMT_LIB
     // all will be printed to default log target (stderr)
@@ -933,6 +981,10 @@ static void testFmtLibSanity() {
     elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg(
         "This is a test binary pre-cached message, with int {}, bool {} and string {}");
     ELOG_ID_INFO(msgId, (int)5, true, "test string param");
+
+    Coord c = {5, 7};
+    ELOG_BIN_INFO("This is a test binary message, with UDT coord {}", c);
+    // UDT test
 #endif
 }
 

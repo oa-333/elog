@@ -34,17 +34,23 @@
 #define WIN32_VERSION_BUILD_NUM_OFFSET 0x260
 #endif
 
+#include <cassert>
 #include <climits>
 #include <cstring>
 #include <format>
 #include <iomanip>
+#include <sstream>
 #include <unordered_map>
 
-#include "elog.h"
 #include "elog_common.h"
 #include "elog_concurrent_hash_table.h"
+#include "elog_filter.h"
 #include "elog_report.h"
 #include "elog_tls.h"
+
+#ifdef ELOG_ENABLE_FMT_LIB
+#include "elog_logger.h"
+#endif
 
 namespace elog {
 

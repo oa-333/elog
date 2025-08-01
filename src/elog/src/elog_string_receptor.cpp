@@ -3,7 +3,6 @@
 #include <charconv>
 #include <cstring>
 
-#include "elog.h"
 #include "elog_report.h"
 
 namespace elog {

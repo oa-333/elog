@@ -1,7 +1,5 @@
 #include "elog_queued_target.h"
 
-#include "elog.h"
-
 namespace elog {
 
 ELogQueuedTarget::ELogQueuedTarget(ELogTarget* logTarget, uint32_t batchSize,

@@ -130,6 +130,7 @@ The ELog library provides the following notable features:
 - Binary logging macros
     - Allow performing entire formatting on logging end (fmtlib-style only)
     - Significant impact when complex formatting is used
+    - Extendible for supporting user-defined types
 - Format message caching macros
     - Allow further optimizing, by avoiding copying format message to binary log buffer
     - Huge impact with long format messages
@@ -339,6 +340,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Terminal Text Formatting Syntax](#terminal-formatting-formal-syntax-specification)
 - [Extending The Library](#extending-the-library)
     - [Extending The Formatting Scheme](#extending-the-formatting-scheme)
+    - [Supporting User-Defined Types in Binary Logging](#supporting-user-defined-types-in-binary-logging)
     - [Adding New Log Filter Types](#adding-new-log-filter-types)
     - [Adding New Flush Policy Types](#adding-new-flush-policy-types)
     - [Adding New Log Target Types](#adding-new-log-target-types)
@@ -1601,6 +1603,99 @@ With this in place, the log line configuration string may now look like this:
 So each log line will include the system state within <<>> parenthesis.
 
 For more examples refer to elog_field_selector.h and elog_field_selector.cpp source files.
+
+### Supporting User-Defined Types in Binary Logging
+
+In order to support user-defined type in conjunction with binary logging, the following template functions must be specialized:
+
+    elog::getTypeCode()
+    elog::encodeType()
+
+Next the ELogTypeDecoder must be derived, implemented for the UDT, and then registered with:
+
+    registerTypeDecoder()
+
+There are utility macros for these tasks:
+
+    ELOG_DECLARE_TYPE_ENCODE_DECODE_EX()
+    ELOG_BEGIN_IMPLEMENT_TYPE_ENCODE_EX()
+    ELOG_END_IMPLEMENT_TYPE_ENCODE_EX()
+    ELOG_IMPLEMENT_TYPE_DECODE_EX()
+
+All but the last one must be placed in header file (global scope).  
+We will take a simple example, to explain how to use these macros.
+
+Suppose we have a simple struct as follows:
+
+    struct Coord {
+        int x;
+        int y;
+    };
+
+So the first step is to allocate a unique (compile-time) code for the type:
+
+    #define COORD_CODE_ID (ELOG_UDT_CODE_BASE + 1)
+
+All UDTs must have code id in the range [ELOG_UDT_CODE_BASE, 255].  
+Next, encoding/decoding template function specializations should be declared:
+
+    ELOG_DECLARE_TYPE_ENCODE_DECODE_EX(Coord, COORD_CODE_ID)
+
+Finally, each specialization must be implemented:
+
+    // the encoding macro must declared in header global scope
+    // it allows using two parameters: value to encode, and a destination buffer
+    ELOG_BEGIN_IMPLEMENT_TYPE_ENCODE_EX(Coord) {
+        if (!buffer.appendData(value.x)) {
+            return false;
+        }
+        if (!buffer.appendData(value.y)) {
+            return false;
+        }
+        return true;
+    }
+    ELOG_END_IMPLEMENT_TYPE_ENCODE_EX()
+
+    // the decoding macro can be declared in source file (global-scope)
+    // it allows using two parameters: read buffer to encode from, and fmtlib arguments store
+    // where the decoded type is to be put
+    ELOG_IMPLEMENT_TYPE_DECODE_EX(Coord) {
+        Coord c = {};
+        if (!readBuffer.read(c.x)) {
+            return false;
+        }
+        if (!readBuffer.read(c.y)) {
+            return false;
+        }
+        store.push_back(c);
+        return true;
+    }
+
+After this is done, the type is ready for binary logging, except for any fmtlib required definitions for UDTs.  
+In our case, the following additional definition may be used:
+
+    template <>
+    struct fmt::formatter<Coord> : formatter<std::string_view> {
+        // parse is inherited from formatter<string_view>.
+
+        auto format(Coord c, format_context& ctx) const -> format_context::iterator {
+            std::string s = "{";
+            s += std::to_string(c.x);
+            s += ",";
+            s += std::to_string(c.y);
+            s += "}";
+            return formatter<string_view>::format(s, ctx);
+        }
+    };
+
+Now in code, we can use the binary logging macro with Coord type as follows:
+
+    Coord c = {5, 7};
+    ELOG_BIN_INFO("This is a test binary message, with UDT coord {}", c);
+
+Here is a sample output of the above example:
+
+    2025-07-29 11:19:32.397 INFO   [22876] elog_root This is a test binary message, with UDT coord {5,7}
 
 ### Adding New Log Filter Types
 

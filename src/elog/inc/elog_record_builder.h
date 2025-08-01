@@ -21,6 +21,7 @@ public:
     inline ELogRecord& getLogRecord() { return m_logRecord; }
     inline uint32_t getOffset() const { return m_buffer.getOffset(); }
     inline ELogRecordBuilder* getNext() { return m_next; }
+    inline ELogBuffer& getBuffer() { return m_buffer; }
 
     /** @brief Finalizes the log record. */
     inline void finalize() {

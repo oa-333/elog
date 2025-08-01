@@ -13,7 +13,6 @@
 #include <filesystem>
 #include <thread>
 
-#include "elog.h"
 #include "elog_common.h"
 #include "elog_internal.h"
 #include "elog_report.h"

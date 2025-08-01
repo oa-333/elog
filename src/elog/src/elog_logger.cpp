@@ -12,6 +12,7 @@
 #include "elog.h"
 #include "elog_common.h"
 #include "elog_internal.h"
+#include "elog_read_buffer.h"
 #include "elog_report.h"
 
 #ifndef ELOG_WINDOWS
@@ -138,6 +139,16 @@ void ELogLogger::finishLog(ELogRecordBuilder* recordBuilder) {
     }
 }
 
+void ELogLogger::discardLog(ELogRecordBuilder* recordBuilder) {
+    if (isLogging(recordBuilder)) {
+        // reset log record data
+        recordBuilder->reset();
+        popRecordBuilder();
+    } else {
+        ELOG_REPORT_ERROR("attempt to discard log message without start-log being issued first\n");
+    }
+}
+
 void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const char* file,
                                 int line, const char* function,
                                 uint8_t flags /* = ELOG_RECORD_FORMATTED */) {
@@ -154,84 +165,84 @@ void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const
     logRecord.m_flags = flags;
 }
 
+ELogRecordBuilder* ELogLogger::startBinaryLogRecord(ELogLevel logLevel, const char* file, int line,
+                                                    const char* function,
+                                                    uint8_t flags /* = ELOG_RECORD_FORMATTED */) {
+    ELogRecordBuilder* recordBuilder = getRecordBuilder();
+    if (isLogging(recordBuilder)) {
+        recordBuilder = pushRecordBuilder();
+    }
+    startLogRecord(recordBuilder->getLogRecord(), logLevel, file, line, function, flags);
+
+    // reserve 1 byte for parameter count
+    uint8_t paramCountReserve = 0;
+    if (!recordBuilder->appendData(paramCountReserve)) {
+        ELOG_REPORT_ERROR("Failed to reserve parameter counter place holder in binary log buffer");
+        discardLog(recordBuilder);
+        return nullptr;
+    }
+    return recordBuilder;
+}
+
 #ifdef ELOG_ENABLE_FMT_LIB
 bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
     // prepare parameter array (use implicit alloca by compiler)
-    const char* bufPtr = logRecord.m_logMsg;
-    uint8_t paramCount = *(uint8_t*)bufPtr;
-    size_t offset = 1;
+    // TODO: this must be made a safe read buffer with length restrictions
+    ELogReadBuffer readBuffer(logRecord.m_logMsg, logRecord.m_logMsgLen);
+    uint8_t paramCount = 0;
+    if (!readBuffer.read(paramCount)) {
+        ELOG_REPORT_ERROR("Failed to read parameter count from binary log buffer, end of stream");
+        return false;
+    }
 
     // extract format string
     const char* fmtStr = nullptr;
     if (logRecord.m_flags & ELOG_RECORD_FMT_CACHED) {
-        ELogCacheEntryId cacheEntryId = *(ELogCacheEntryId*)(bufPtr + offset);
+        ELogCacheEntryId cacheEntryId = ELOG_INVALID_CACHE_ENTRY_ID;
+        if (!readBuffer.read(cacheEntryId)) {
+            ELOG_REPORT_ERROR(
+                "Failed to read cache entry id from binary log buffer, end of stream");
+            return false;
+        }
         fmtStr = ELogCache::getCachedFormatMsg(cacheEntryId);
-        offset += sizeof(ELogCacheEntryId);
     } else {
-        fmtStr = bufPtr + offset;
-        offset += strlen(fmtStr) + 1;
+        fmtStr = readBuffer.getPtr();
+        // skip over format string, including terminating null
+        if (!readBuffer.advanceOffset(strlen(fmtStr) + 1)) {
+            ELOG_REPORT_ERROR("Failed to skip format string in binary log buffer, end of stream");
+            return false;
+        }
     }
 
     // prepare argument list for fmtlib
     fmt::dynamic_format_arg_store<fmt::format_context> store;
 
-#define ELOG_COLLECT_ARG(argType)                        \
-    {                                                    \
-        argType argValue = *(argType*)(bufPtr + offset); \
-        store.push_back(argValue);                       \
-        offset += sizeof(argType);                       \
-        break;                                           \
+#define ELOG_COLLECT_ARG(argType)                                          \
+    {                                                                      \
+        argType argValue = (argType)0;                                     \
+        if (!readBuffer.read(argValue)) {                                  \
+            ELOG_REPORT_ERROR("Failed to read parameter of type " #argType \
+                              " in binary log buffer, end of stream");     \
+        }                                                                  \
+        store.push_back(argValue);                                         \
+        break;                                                             \
     }
 
     for (uint8_t i = 0; i < paramCount; ++i) {
-        uint8_t code = *(uint8_t*)(bufPtr + offset);
-        ++offset;
-        switch (code) {
-            case ELOG_UINT8_CODE:
-                ELOG_COLLECT_ARG(uint8_t);
-
-            case ELOG_UINT16_CODE:
-                ELOG_COLLECT_ARG(uint16_t);
-
-            case ELOG_UINT32_CODE:
-                ELOG_COLLECT_ARG(uint32_t);
-
-            case ELOG_UINT64_CODE:
-                ELOG_COLLECT_ARG(uint64_t);
-
-            case ELOG_INT8_CODE:
-                ELOG_COLLECT_ARG(int8_t);
-
-            case ELOG_INT16_CODE:
-                ELOG_COLLECT_ARG(int16_t);
-
-            case ELOG_INT32_CODE:
-                ELOG_COLLECT_ARG(int32_t);
-
-            case ELOG_INT64_CODE:
-                ELOG_COLLECT_ARG(int64_t);
-
-            case ELOG_FLOAT_CODE:
-                ELOG_COLLECT_ARG(float);
-
-            case ELOG_DOUBLE_CODE:
-                ELOG_COLLECT_ARG(double);
-
-            case ELOG_BOOL_CODE:
-                ELOG_COLLECT_ARG(bool);
-
-            case ELOG_STRING_CODE: {
-                const char* arg = (const char*)(bufPtr + offset);
-                store.push_back(arg);
-                offset += (strlen(arg) + 1);  // skip over terminating null
-                break;
-            }
-
-            default:
-                ELOG_REPORT_ERROR("Invalid argument type code %u while resolving binary log record",
-                                  (unsigned)code);
-                return false;
+        uint8_t code = 0;
+        if (!readBuffer.read(code)) {
+            ELOG_REPORT_ERROR(
+                "Failed to read parameter code from binary log buffer, end of stream");
+            return false;
         }
+        if (!decodeType(code, readBuffer, store)) {
+            return false;
+        }
+    }
+
+    // we must have used entire read buffer at this point
+    if (!readBuffer.isEndOfBuffer()) {
+        ELOG_REPORT_WARN("Excess data at binary log read buffer ignored");
     }
 
     // now we can format

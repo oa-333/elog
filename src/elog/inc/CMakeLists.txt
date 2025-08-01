@@ -58,6 +58,7 @@ target_sources(
             elog_quantum_target.h
             elog_queued_target.h
             elog_rate_limiter.h
+            elog_read_buffer.h
             elog_record.h
             elog_rolling_bitset.h
             elog_record_builder.h
@@ -79,5 +80,6 @@ target_sources(
             elog_target.h
             elog_time.h
             elog_tls.h
+            elog_type_codec.h
             elog_win32_event_log_target.h
             elog.h)

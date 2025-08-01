@@ -2,8 +2,6 @@
 
 #include <iomanip>
 
-#include "elog.h"
-
 namespace elog {
 
 void ELogStringStreamReceptor::receiveStringField(uint32_t typeId, const char* field,
