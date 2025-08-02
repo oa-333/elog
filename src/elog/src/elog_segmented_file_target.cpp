@@ -613,7 +613,7 @@ bool ELogSegmentedFileTarget::openRotatingSegment() {
             // disk and we will truncate it)
             segmentIndex = segmentCount;
             truncateSegment = true;
-        } else {
+        } else if (segmentCount > 0) {
             segmentIndex = segmentInfo[0].m_segmentId;
         }
     } else if (segmentCount == m_segmentCount) {
