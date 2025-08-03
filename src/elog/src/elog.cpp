@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cinttypes>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -1596,7 +1597,9 @@ public:
         }
     }
     void onEndStackTrace() override { ELOG_END_EX(m_logger); }
-    void onStackEntry(const char* stackEntry) { ELOG_APPEND_EX(m_logger, "%s\n", stackEntry); }
+    void onStackEntry(const char* stackEntry) {
+        ELOG_APPEND_EX(m_logger, m_logLevel, "%s\n", stackEntry);
+    }
 
 private:
     ELogLogger* m_logger;
@@ -1659,5 +1662,44 @@ char* win32SysErrorToStr(unsigned long sysErrorCode) {
 
 void win32FreeErrorStr(char* errStr) { ELogReport::win32FreeErrorStr(errStr); }
 #endif
+
+ELogRecord ELogModerate::m_dummy;
+
+bool ELogModerate::moderate() {
+    if (m_rateLimiter.filterLogRecord(m_dummy)) {
+        // first to pass since last time started discarding, should print aggregation stats
+        bool isDiscarding = m_isDiscarding.load(std::memory_order_acquire);
+        if (isDiscarding) {
+            if (m_isDiscarding.compare_exchange_strong(isDiscarding, false,
+                                                       std::memory_order_release)) {
+                uint64_t endDiscardCount = m_discardCount.load(std::memory_order_relaxed);
+                uint64_t discardCount = endDiscardCount - m_startDiscardCount;
+                std::chrono::steady_clock::time_point endDiscardTime =
+                    std::chrono::steady_clock::now();
+                std::chrono::milliseconds discardTimeMillis =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(endDiscardTime -
+                                                                          m_startDiscardTime);
+                ELOG_REPORT_INFO("The message '%s' has been discarded for %" PRIu64
+                                 " times in the last %" PRId64 " milliseconds",
+                                 m_fmt, discardCount, discardTimeMillis.count());
+            }
+        }
+        return true;
+    }
+
+    // raise is-discarding flag if needed
+    bool isDiscarding = m_isDiscarding.load(std::memory_order_acquire);
+    if (!isDiscarding) {
+        // let the first one that makes the switch to save discard period counter values
+        if (m_isDiscarding.compare_exchange_strong(isDiscarding, true, std::memory_order_release)) {
+            m_startDiscardCount = m_discardCount.load(std::memory_order_relaxed);
+            m_startDiscardTime = std::chrono::steady_clock::now();
+        }
+    }
+
+    // increment discard count and return
+    m_discardCount.fetch_add(1, std::memory_order_relaxed);
+    return false;
+}
 
 }  // namespace elog

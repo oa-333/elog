@@ -8,6 +8,7 @@
 #include "elog_level.h"
 #include "elog_logger.h"
 #include "elog_props.h"
+#include "elog_rate_limiter.h"
 #include "elog_schema_handler.h"
 #include "elog_source.h"
 #include "elog_target.h"
@@ -771,6 +772,51 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
     }
 }
 
+/** @brief Helper class for implementing "once" macros. */
+class ELOG_API ELogOnce {
+public:
+    ELogOnce() : m_once(false) {}
+    ELogOnce(const ELogOnce&) = delete;
+    ELogOnce(ELogOnce&&) = delete;
+    ELogOnce& operator=(ELogOnce&) = delete;
+    ~ELogOnce() {}
+
+    inline operator bool() {
+        bool onceValue = m_once.load(std::memory_order_acquire);
+        return (onceValue == false &&
+                m_once.compare_exchange_strong(onceValue, true, std::memory_order_seq_cst));
+    }
+
+private:
+    std::atomic<bool> m_once;
+};
+
+/** @brief Helper class for implementing "moderate" macros. */
+class ELOG_API ELogModerate {
+public:
+    ELogModerate(const char* fmt, uint64_t maxMsgsPerSecond)
+        : m_fmt(fmt),
+          m_rateLimiter(maxMsgsPerSecond),
+          m_discardCount(0),
+          m_isDiscarding(false),
+          m_startDiscardCount(0) {}
+    ELogModerate(const ELogModerate&) = delete;
+    ELogModerate(ELogModerate&&) = delete;
+    ELogModerate& operator=(ELogModerate&) = delete;
+    ~ELogModerate() {}
+
+    bool moderate();
+
+private:
+    const char* m_fmt;
+    ELogRateLimiter m_rateLimiter;
+    static ELogRecord m_dummy;
+    std::atomic<uint64_t> m_discardCount;
+    std::atomic<bool> m_isDiscarding;
+    std::chrono::steady_clock::time_point m_startDiscardTime;
+    uint64_t m_startDiscardCount;
+};
+
 }  // namespace elog
 
 /**************************************************************************************
@@ -794,8 +840,24 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
         }                                                                                         \
     }
 
+// per-level macros
+#define ELOG_FATAL_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_ERROR_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_WARN_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_NOTICE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_INFO_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_TRACE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_DEBUG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_DIAG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
 #ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a formatted message to the server log (fmtlib style). */
+/**
+ * @brief Logs a formatted message to the server log (fmtlib style).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
 #define ELOG_FMT_EX(logger, level, fmtStr, ...)                                                 \
     {                                                                                           \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                           \
@@ -805,7 +867,33 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
         }                                                                                       \
     }
 
-/** @brief Logs a formatted message to the server log (fmtlib style, binary form). */
+// per-level macros
+#define ELOG_FMT_FATAL_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ERROR_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_WARN_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_NOTICE_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_INFO_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_TRACE_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_DEBUG_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_DIAG_EX(logger, fmt, ...) \
+    ELOG_FMT_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log (fmtlib style, binary form).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
 #define ELOG_BIN_EX(logger, level, fmt, ...)                                                      \
     {                                                                                             \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                             \
@@ -814,7 +902,33 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
         }                                                                                         \
     }
 
-/** @brief Logs a formatted message to the server log (fmtlib style, binary form, auto-cached). */
+// per-level macros
+#define ELOG_BIN_FATAL_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ERROR_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_WARN_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_NOTICE_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_INFO_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_TRACE_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_DEBUG_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_DIAG_EX(logger, fmt, ...) \
+    ELOG_BIN_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log (fmtlib style, binary form, auto-cached).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
 #define ELOG_CACHE_EX(logger, level, fmt, ...)                                                   \
     {                                                                                            \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
@@ -826,7 +940,33 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
         }                                                                                        \
     }
 
-/** @brief Logs a formatted message to the server log (fmtlib style, binary form, pre-cached). */
+// per-level macros
+#define ELOG_CACHE_FATAL_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_ERROR_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_WARN_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_NOTICE_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_INFO_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_TRACE_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_DEBUG_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_DIAG_EX(logger, fmt, ...) \
+    ELOG_CACHE_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log (fmtlib style, binary form, pre-cached).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param cacheEntryId The cached log message format string id.
+ * @param ... Log message format string parameters.
+ */
 #define ELOG_ID_EX(logger, level, cacheEntryId, ...)                                             \
     {                                                                                            \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
@@ -835,215 +975,22 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
                                          ##__VA_ARGS__);                                         \
         }                                                                                        \
     }
-#endif
 
-/**
- * @brief Logs a fatal message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_FATAL_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a fatal message to the server log (fmtlib style). */
-#define ELOG_FMT_FATAL_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a fatal message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_FATAL_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a fatal message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_FATAL_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a fatal message to the server log (fmtlib style, binary form, pre-cached). */
+// per-level macros
 #define ELOG_ID_FATAL_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_FATAL, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs an error message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_ERROR_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a error message to the server log (fmtlib style). */
-#define ELOG_FMT_ERROR_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a error message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_ERROR_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a error message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_ERROR_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a error message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_ERROR_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_ERROR, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a warning message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_WARN_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a warning message to the server log (fmtlib style). */
-#define ELOG_FMT_WARN_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a warning message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_WARN_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a warning message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_WARN_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a warning message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_WARN_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_WARN, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a notice message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_NOTICE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a notice message to the server log (fmtlib style). */
-#define ELOG_FMT_NOTICE_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a notice message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_NOTICE_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a notice message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_NOTICE_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a notice message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_NOTICE_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_NOTICE, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs an informational message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_INFO_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs an informational message to the server log (fmtlib style). */
-#define ELOG_FMT_INFO_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-/** @brief Logs an informational message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_INFO_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-/** @brief Logs an informational message to the server log (fmtlib style, binary form, auto-cached).
- */
-#define ELOG_CACHE_INFO_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-/**
- * @brief Logs a informational message to the server log (fmtlib style, binary form, pre-cached).
- */
 #define ELOG_ID_INFO_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_INFO, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a trace message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_TRACE_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a trace message to the server log (fmtlib style). */
-#define ELOG_FMT_TRACE_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a trace message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_TRACE_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a trace message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_TRACE_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a trace message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_TRACE_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_TRACE, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a debug message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_DEBUG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a debug message to the server log (fmtlib style). */
-#define ELOG_FMT_DEBUG_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a debug message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_DEBUG_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a debug message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_DEBUG_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a debug message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_DEBUG_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_DEBUG, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a diagnostic message to the server log.
- * @param logger The logger used for message formatting.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_DIAG_EX(logger, fmt, ...) ELOG_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a diagnostic message to the server log (fmtlib style). */
-#define ELOG_FMT_DIAG_EX(logger, fmt, ...) \
-    ELOG_FMT_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_DIAG_EX(logger, fmt, ...) \
-    ELOG_BIN_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_DIAG_EX(logger, fmt, ...) \
-    ELOG_CACHE_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_DIAG_EX(logger, cacheEntryId, ...) \
     ELOG_ID_EX(logger, elog::ELEVEL_DIAG, cacheEntryId, ##__VA_ARGS__)
 #endif
@@ -1079,26 +1026,43 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
 /**
  * @brief Appends formatted message to a multi-part log message.
  * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
  * @param fmt The message format.
  * @param ... The message arguments.
  */
-#define ELOG_APPEND_EX(logger, fmt, ...) elog::getValidLogger(logger)->appendLog(fmt, ##__VA_ARGS__)
+#define ELOG_APPEND_EX(logger, level, fmt, ...)                       \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            validLogger->appendLog(fmt, ##__VA_ARGS__);               \
+        }                                                             \
+    }
 
 /** @brief Appends formatted message to a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_APPEND_EX(logger, fmtStr, ...)                          \
-    {                                                                    \
-        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);         \
-        elog::getValidLogger(logger)->appendLogNoFormat(logMsg.c_str()); \
+#define ELOG_FMT_APPEND_EX(logger, level, fmtStr, ...)                \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);  \
+            validLogger->appendLogNoFormat(logMsg.c_str());           \
+        }                                                             \
     }
 #endif
 
 /**
  * @brief Appends unformatted message to a multi-part log message.
  * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
  * @param msg The log message.
  */
-#define ELOG_APPEND_NF_EX(logger, msg) elog::getValidLogger(logger)->appendLogNoFormat(msg)
+#define ELOG_APPEND_NF_EX(logger, level, msg)                         \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            validLogger->appendLogNoFormat(msg);                      \
+        }                                                             \
+    }
 
 /**
  * @brief Terminates a multi-part log message and writes it to the server log.
@@ -1221,220 +1185,84 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG(level, fmt, ...)                                \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_EX(logger, level, fmt, ##__VA_ARGS__);          \
-    }
+#define ELOG(level, fmt, ...) ELOG_EX(nullptr, level, fmt, ##__VA_ARGS__)
+
+// per-level macros
+#define ELOG_FATAL(fmt, ...) ELOG(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_ERROR(fmt, ...) ELOG(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_WARN(fmt, ...) ELOG(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_NOTICE(fmt, ...) ELOG(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_INFO(fmt, ...) ELOG(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_TRACE(fmt, ...) ELOG(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_DEBUG(fmt, ...) ELOG(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_DIAG(fmt, ...) ELOG(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
 
 #ifdef ELOG_ENABLE_FMT_LIB
 /** @brief Logs a formatted message to the server log, using default logger (fmtlib-style). */
-#define ELOG_FMT(level, fmt, ...)                            \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);      \
-    }
+#define ELOG_FMT(level, fmt, ...) ELOG_FMT_EX(nullptr, level, fmt, ##__VA_ARGS__)
 
+// per-level macros
+#define ELOG_FMT_FATAL(fmt, ...) ELOG_FMT(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ERROR(fmt, ...) ELOG_FMT(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_WARN(fmt, ...) ELOG_FMT(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_NOTICE(fmt, ...) ELOG_FMT(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_INFO(fmt, ...) ELOG_FMT(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_TRACE(fmt, ...) ELOG_FMT(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_DEBUG(fmt, ...) ELOG_FMT(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_DIAG(fmt, ...) ELOG_FMT(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
 /**
  * @brief Logs a formatted message to the server log, using default logger (fmtlib-style, binary
  * form).
  */
-#define ELOG_BIN(level, fmt, ...)                            \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_BIN_EX(logger, level, fmt, ##__VA_ARGS__);      \
-    }
+#define ELOG_BIN(level, fmt, ...) ELOG_BIN_EX(nullptr, level, fmt, ##__VA_ARGS__);
 
+// per-level macros
+#define ELOG_BIN_FATAL(fmt, ...) ELOG_BIN(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ERROR(fmt, ...) ELOG_BIN(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_WARN(fmt, ...) ELOG_BIN(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_NOTICE(fmt, ...) ELOG_BIN(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_INFO(fmt, ...) ELOG_BIN(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_TRACE(fmt, ...) ELOG_BIN(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_DEBUG(fmt, ...) ELOG_BIN(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_DIAG(fmt, ...) ELOG_BIN(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
 /**
  * @brief Logs a formatted message to the server log, using default logger (fmtlib-style, binary
  * form, auto-cached).
  */
-#define ELOG_CACHE(level, fmt, ...)                          \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_CACHE_EX(logger, level, fmt, ##__VA_ARGS__);    \
-    }
+#define ELOG_CACHE(level, fmt, ...) ELOG_CACHE_EX(nullptr, level, fmt, ##__VA_ARGS__);
 
+// per-level macros
+#define ELOG_CACHE_FATAL(fmt, ...) ELOG_CACHE(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_ERROR(fmt, ...) ELOG_CACHE(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_WARN(fmt, ...) ELOG_CACHE(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_NOTICE(fmt, ...) ELOG_CACHE(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_INFO(fmt, ...) ELOG_CACHE(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_TRACE(fmt, ...) ELOG_CACHE(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_DEBUG(fmt, ...) ELOG_CACHE(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_DIAG(fmt, ...) ELOG_CACHE(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
 /**
  * @brief Logs a formatted message to the server log, using default logger (fmtlib-style, binary
  * form, pre-cached).
  */
-#define ELOG_ID(level, cacheEntryId, ...)                       \
-    {                                                           \
-        elog::ELogLogger* logger = elog::getDefaultLogger();    \
-        ELOG_ID_EX(logger, level, cacheEntryId, ##__VA_ARGS__); \
-    }
-#endif
+#define ELOG_ID(level, cacheEntryId, ...) ELOG_ID_EX(nullptr, level, cacheEntryId, ##__VA_ARGS__);
 
-/**
- * @brief Logs a fatal message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_FATAL(fmt, ...) ELOG(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a fatal message to the server log (fmtlib style). */
-#define ELOG_FMT_FATAL(fmt, ...) ELOG_FMT(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a fatal message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_FATAL(fmt, ...) ELOG_BIN(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a fatal message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_FATAL(fmt, ...) ELOG_CACHE(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a fatal message to the server log (fmtlib style, binary form, pre-cached). */
+// per-level macros
 #define ELOG_ID_FATAL(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_FATAL, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs an error message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_ERROR(fmt, ...) ELOG(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a error message to the server log (fmtlib style). */
-#define ELOG_FMT_ERROR(fmt, ...) ELOG_FMT(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a error message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_ERROR(fmt, ...) ELOG_BIN(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a error message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_ERROR(fmt, ...) ELOG_CACHE(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a error message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_ERROR(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_ERROR, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a warning message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_WARN(fmt, ...) ELOG(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a warning message to the server log (fmtlib style). */
-#define ELOG_FMT_WARN(fmt, ...) ELOG_FMT(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a warning message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_WARN(fmt, ...) ELOG_BIN(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a warning message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_WARN(fmt, ...) ELOG_CACHE(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a warning message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_WARN(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_WARN, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a notice message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_NOTICE(fmt, ...) ELOG(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a notice message to the server log (fmtlib style). */
-#define ELOG_FMT_NOTICE(fmt, ...) ELOG_FMT(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a notice message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_NOTICE(fmt, ...) ELOG_BIN(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a notice message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_NOTICE(fmt, ...) ELOG_CACHE(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a notice message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_NOTICE(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_NOTICE, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs an informational message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_INFO(fmt, ...) ELOG(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs an informational message to the server log (fmtlib style). */
-#define ELOG_FMT_INFO(fmt, ...) ELOG_FMT(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-/** @brief Logs an informational message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_INFO(fmt, ...) ELOG_BIN(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-/**
- * @brief Logs an informational message to the server log (fmtlib style, binary form, auto-cached).
- */
-#define ELOG_CACHE_INFO(fmt, ...) ELOG_CACHE(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
-
-/**
- * @brief Logs a informational message to the server log (fmtlib style, binary form, pre-cached).
- */
 #define ELOG_ID_INFO(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_INFO, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a trace message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_TRACE(fmt, ...) ELOG(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a trace message to the server log (fmtlib style). */
-#define ELOG_FMT_TRACE(fmt, ...) ELOG_FMT(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a trace message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_TRACE(fmt, ...) ELOG_BIN(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a trace message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_TRACE(fmt, ...) ELOG_CACHE(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a trace message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_TRACE(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_TRACE, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a debug message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_DEBUG(fmt, ...) ELOG(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a debug message to the server log (fmtlib style). */
-#define ELOG_FMT_DEBUG(fmt, ...) ELOG_FMT(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a debug message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_DEBUG(fmt, ...) ELOG_BIN(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a debug message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_DEBUG(fmt, ...) ELOG_CACHE(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a debug message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_DEBUG(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_DEBUG, cacheEntryId, ##__VA_ARGS__)
-#endif
-
-/**
- * @brief Logs a diagnostic message to the server log.
- * @param fmt The log message format string.
- * @param ... Log message format string parameters.
- */
-#define ELOG_DIAG(fmt, ...) ELOG(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-#ifdef ELOG_ENABLE_FMT_LIB
-/** @brief Logs a diagnostic message to the server log (fmtlib style). */
-#define ELOG_FMT_DIAG(fmt, ...) ELOG_FMT(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form). */
-#define ELOG_BIN_DIAG(fmt, ...) ELOG_BIN(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, auto-cached). */
-#define ELOG_CACHE_DIAG(fmt, ...) ELOG_CACHE(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
-
-/** @brief Logs a diagnostic message to the server log (fmtlib style, binary form, pre-cached). */
 #define ELOG_ID_DIAG(cacheEntryId, ...) ELOG_ID(elog::ELEVEL_DIAG, cacheEntryId, ##__VA_ARGS__)
 #endif
 
@@ -1444,59 +1272,37 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BEGIN(level, fmt, ...)                          \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_BEGIN_EX(logger, level, fmt, ##__VA_ARGS__);    \
-    }
+#define ELOG_BEGIN(level, fmt, ...) ELOG_BEGIN_EX(nullptr, level, fmt, ##__VA_ARGS__)
 
 /** @brief Begins a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_BEGIN(level, fmt, ...)                       \
-    {                                                         \
-        elog::ELogLogger* logger = elog::getDefaultLogger();  \
-        ELOG_FMT_BEGIN_EX(logger, level, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_FMT_BEGIN(level, fmt, ...) ELOG_FMT_BEGIN_EX(nullptr, level, fmt, ##__VA_ARGS__);
 #endif
 
 /**
  * @brief Appends formatted message to a multi-part log message.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
  * @param fmt The message format.
  * @param ... The message arguments.
  */
-#define ELOG_APPEND(fmt, ...)                                \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_APPEND_EX(logger, fmt, ##__VA_ARGS__);          \
-    }
+#define ELOG_APPEND(level, fmt, ...) ELOG_APPEND_EX(nullptr, level, fmt, ##__VA_ARGS__);
 
 /** @brief Appends formatted message to a multi-part log message (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_APPEND(fmt, ...)                            \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_FMT_APPEND_EX(logger, fmt, ##__VA_ARGS__);      \
-    }
+#define ELOG_FMT_APPEND(level, fmt, ...) ELOG_FMT_APPEND_EX(nullptr, level, fmt, ##__VA_ARGS__);
 #endif
 
 /**
  * @brief Appends unformatted message to a multi-part log message.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
  * @param msg The log message.
  */
-#define ELOG_APPEND_NF(msg)                                  \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_APPEND_NF_EX(logger, msg);                      \
-    }
+#define ELOG_APPEND_NF(level, msg) ELOG_APPEND_NF_EX(nullptr, level, msg);
 
 /**
  * @brief Terminates a multi-part log message and writes it to the server log.
  */
-#define ELOG_END()                                           \
-    {                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger(); \
-        ELOG_END_EX(logger);                                 \
-    }
+#define ELOG_END() ELOG_END_EX(nullptr)
 
 /**
  * @brief Logs a system error message to the server log.
@@ -1505,19 +1311,13 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_SYS_ERROR_NUM(syscall, sysErr, fmt, ...)                       \
-    {                                                                       \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                \
-        ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_SYS_ERROR_NUM(syscall, sysErr, fmt, ...) \
+    ELOG_SYS_ERROR_NUM_EX(nullptr, syscall, sysErr, fmt, ##__VA_ARGS__)
 
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_SYS_ERROR_NUM(syscall, sysErr, fmt, ...)                       \
-    {                                                                           \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                    \
-        ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_FMT_SYS_ERROR_NUM(syscall, sysErr, fmt, ...) \
+    ELOG_FMT_SYS_ERROR_NUM_EX(nullptr, syscall, sysErr, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1551,19 +1351,13 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_WIN32_ERROR_NUM(syscall, sysErr, fmt, ...)                       \
-    {                                                                         \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                  \
-        ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_WIN32_ERROR_NUM(syscall, sysErr, fmt, ...) \
+    ELOG_WIN32_ERROR_NUM_EX(nullptr, syscall, sysErr, fmt, ##__VA_ARGS__)
 
 /** @brief Logs a system error message to the server log (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_WIN32_ERROR_NUM(syscall, sysErr, fmt, ...)                       \
-    {                                                                             \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                      \
-        ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_FMT_WIN32_ERROR_NUM(syscall, sysErr, fmt, ...) \
+    ELOG_FMT_WIN32_ERROR_NUM_EX(nullptr, syscall, sysErr, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1602,24 +1396,24 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)     \
-    {                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
-        if (logger->canLog(level)) {                                  \
-            ELOG_EX(logger, level, fmt, ##__VA_ARGS__);               \
-            elog::logStackTrace(logger, level, title, skip);          \
-        }                                                             \
+#define ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)      \
+    {                                                                  \
+        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger); \
+        if (validLogger0->canLog(level)) {                             \
+            ELOG_EX(validLogger0, level, fmt, ##__VA_ARGS__);          \
+            elog::logStackTrace(validLogger0, level, title, skip);     \
+        }                                                              \
     }
 
 /** @brief Logs the stack trace of the current thread (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
-    {                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
-        if (logger->canLog(level)) {                                  \
-            ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);           \
-            elog::logStackTrace(logger, level, title, skip);          \
-        }                                                             \
+#define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)  \
+    {                                                                  \
+        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger); \
+        if (validLogger0->canLog(level)) {                             \
+            ELOG_FMT_EX(validLogger0, level, fmt, ##__VA_ARGS__);      \
+            elog::logStackTrace(validLogger0, level, title, skip);     \
+        }                                                              \
     }
 #endif
 
@@ -1633,23 +1427,23 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
-    {                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
-        if (logger->canLog(level)) {                                  \
-            ELOG_EX(logger, level, fmt, ##__VA_ARGS__);               \
-            elog::logAppStackTrace(logger, level, title, skip);       \
-        }                                                             \
+#define ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)  \
+    {                                                                  \
+        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger); \
+        if (validLogger0->canLog(level)) {                             \
+            ELOG_EX(validLogger0, level, fmt, ##__VA_ARGS__);          \
+            elog::logAppStackTrace(validLogger0, level, title, skip);  \
+        }                                                              \
     }
 
 /** @brief Logs the stack trace of all running threads in the application (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
 #define ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
     {                                                                     \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
-        if (logger->canLog(level)) {                                      \
-            ELOG_FMT_EX(logger, level, fmt, ##__VA_ARGS__);               \
-            elog::logAppStackTrace(logger, level, title, skip);           \
+        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger);    \
+        if (validLogger0->canLog(level)) {                                \
+            ELOG_FMT_EX(validLogger0, level, fmt, ##__VA_ARGS__);         \
+            elog::logAppStackTrace(validLogger0, level, title, skip);     \
         }                                                                 \
     }
 #endif
@@ -1663,19 +1457,13 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_STACK_TRACE(level, title, skip, fmt, ...)                       \
-    {                                                                        \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                 \
-        ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_STACK_TRACE(level, title, skip, fmt, ...) \
+    ELOG_STACK_TRACE_EX(nullptr, level, title, skip, fmt, ##__VA_ARGS__)
 
 /** @brief Logs the stack trace of the current thread, using default logger (fmtlib style). */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_STACK_TRACE(level, title, skip, fmt, ...)                       \
-    {                                                                            \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                     \
-        ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_FMT_STACK_TRACE(level, title, skip, fmt, ...) \
+    ELOG_FMT_STACK_TRACE_EX(nullptr, level, title, skip, fmt, ##__VA_ARGS__)
 #endif
 
 /**
@@ -1687,25 +1475,663 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_APP_STACK_TRACE(level, title, skip, fmt, ...)                       \
-    {                                                                            \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                     \
-        ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_APP_STACK_TRACE(level, title, skip, fmt, ...) \
+    ELOG_APP_STACK_TRACE_EX(nullptr, level, title, skip, fmt, ##__VA_ARGS__)
 
 /**
  * @brief Logs the stack trace of all running threads in the application, using default logger
  * (fmtlib style).
  */
 #ifdef ELOG_ENABLE_FMT_LIB
-#define ELOG_FMT_APP_STACK_TRACE(level, title, skip, fmt, ...)                       \
-    {                                                                                \
-        elog::ELogLogger* logger = elog::getDefaultLogger();                         \
-        ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ##__VA_ARGS__); \
-    }
+#define ELOG_FMT_APP_STACK_TRACE(level, title, skip, fmt, ...) \
+    ELOG_FMT_APP_STACK_TRACE_EX(nullptr, level, title, skip, fmt, ##__VA_ARGS__)
 #endif
 
 #endif  // ELOG_ENABLE_STACK_TRACE
+
+/**
+ * @brief Logs a formatted message to the server log, only once in the entire life-time of the
+ * application.
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_ONCE_EX(logger, level, fmt, ...)                                         \
+    {                                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
+        if (validLogger->canLog(level)) {                                             \
+            static elog::ELogOnce once;                                               \
+            if (once) {                                                               \
+                validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
+                                       ##__VA_ARGS__);                                \
+            }                                                                         \
+        }                                                                             \
+    }
+
+// per-level once logging macros
+#define ELOG_ONCE_FATAL_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_ERROR_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_WARN_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_NOTICE_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_INFO_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_TRACE_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_DEBUG_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_DIAG_EX(logger, fmt, ...) \
+    ELOG_ONCE_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+// per-level once logging macros (no logger specified)
+#define ELOG_ONCE(level, fmt, ...) ELOG_ONCE_EX(nullptr, level, fmt, ##__VA_ARGS__)
+
+#define ELOG_ONCE_FATAL(fmt, ...) ELOG_ONCE(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_ERROR(fmt, ...) ELOG_ONCE(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_WARN(fmt, ...) ELOG_ONCE(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_NOTICE(fmt, ...) ELOG_ONCE(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_INFO(fmt, ...) ELOG_ONCE(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_TRACE(fmt, ...) ELOG_ONCE(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_DEBUG(fmt, ...) ELOG_ONCE(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_DIAG(fmt, ...) ELOG_ONCE(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log, only once in the entire life-time of the
+ * application (fmtlib style).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_FMT_ONCE_EX(logger, level, fmtStr, ...)                               \
+    {                                                                              \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
+        if (validLogger->canLog(level)) {                                          \
+            static elog::ELogOnce once;                                            \
+            if (once) {                                                            \
+                std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
+                validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
+                                         logMsg.c_str());                          \
+            }                                                                      \
+        }                                                                          \
+    }
+
+// per-level once logging macros (fmtlib style)
+#define ELOG_FMT_ONCE_FATAL_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_ERROR_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_WARN_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_NOTICE_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_INFO_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_TRACE_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_DEBUG_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_DIAG_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+// per-level once logging macros (fmtlib style, no logger specified)
+#define ELOG_FMT_ONCE(level, fmt, ...) ELOG_FMT_ONCE_EX(nullptr, level, fmt, ##__VA_ARGS__)
+
+#define ELOG_FMT_ONCE_FATAL(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_ERROR(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_WARN(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_NOTICE(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_INFO(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_TRACE(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_DEBUG(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_DIAG(fmt, ...) ELOG_FMT_ONCE(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log (fmtlib style, binary form).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_BIN_ONCE_EX(logger, level, fmt, ...)                                     \
+    {                                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
+        if (validLogger->canLog(level)) {                                             \
+            static elog::ELogOnce once;                                               \
+            if (once) {                                                               \
+                validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
+                                       ##__VA_ARGS__);                                \
+            }                                                                         \
+            \                                                                         \
+        }                                                                             \
+    }
+
+// per-level once logging macros (fmtlib style, binary logging)
+#define ELOG_BIN_ONCE_FATAL_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_ERROR_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_WARN_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_NOTICE_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_INFO_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_TRACE_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_DEBUG_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_DIAG_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+// per-level once logging macros (fmtlib style, binary logging, no logger specified)
+#define ELOG_BIN_ONCE(level, fmt, ...) ELOG_BIN_ONCE_EX(nullptr, level, fmt, ##__VA_ARGS__)
+
+#define ELOG_BIN_ONCE_FATAL(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_ERROR(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_WARN(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_NOTICE(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_INFO(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_TRACE(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_DEBUG(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_DIAG(fmt, ...) ELOG_BIN_ONCE(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+// NOTE: no pre/auto-caching for elog-once
+
+/**
+ * @brief Logs a formatted message to the server log, only once in the entire life-time of each
+ * application thread.
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_ONCE_THREAD_EX(logger, level, fmt, ...)                                  \
+    {                                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
+        if (validLogger->canLog(level)) {                                             \
+            static thread_local bool once = false;                                    \
+            if (!once) {                                                              \
+                once = true;                                                          \
+                validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
+                                       ##__VA_ARGS__);                                \
+            }                                                                         \
+        }                                                                             \
+    }
+
+// per-level once-thread logging macros (fmtlib style, binary logging, no logger specified)
+#define ELOG_ONCE_THREAD_FATAL_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_ERROR_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_WARN_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_NOTICE_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_INFO_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_TRACE_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_DEBUG_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_DIAG_EX(logger, fmt, ...) \
+    ELOG_ONCE_THREAD_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+// per-level once-thread logging macros (fmtlib style, binary logging, no logger specified)
+#define ELOG_ONCE_THREAD(level, fmt, ...) ELOG_ONCE_THREAD_EX(nullptr, level, fmt, ##__VA_ARGS__)
+
+#define ELOG_ONCE_THREAD_FATAL(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_ERROR(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_WARN(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_NOTICE(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_INFO(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_TRACE(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_DEBUG(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_ONCE_THREAD_DIAG(fmt, ...) ELOG_ONCE_THREAD(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log, only once in the entire life-time of the
+ * application (fmtlib style).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_FMT_ONCE_THREAD_EX(logger, level, fmtStr, ...)                        \
+    {                                                                              \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
+        if (validLogger->canLog(level)) {                                          \
+            static thread_local bool once = false;                                 \
+            if (!once) {                                                           \
+                once = true;                                                       \
+                std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
+                validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
+                                         logMsg.c_str());                          \
+            }                                                                      \
+        }                                                                          \
+    }
+
+// per-level once-thread logging macros (fmtlib style)
+#define ELOG_FMT_ONCE_THREAD_FATAL_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_ERROR_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_WARN_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_NOTICE_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_INFO_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_TRACE_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_DEBUG_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_DIAG_EX(logger, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+// per-level once-thread logging macros (fmtlib style, no logger specified)
+#define ELOG_FMT_ONCE_THREAD(level, fmt, ...) \
+    ELOG_FMT_ONCE_THREAD_EX(nullptr, level, fmt, ##__VA_ARGS__)
+
+#define ELOG_FMT_ONCE_THREAD_FATAL(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_ERROR(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_WARN(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_NOTICE(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_INFO(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_TRACE(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_DEBUG(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_ONCE_THREAD_DIAG(fmt, ...) \
+    ELOG_FMT_ONCE_THREAD(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log (fmtlib style, binary form).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_BIN_ONCE_THREAD_EX(logger, level, fmt, ...)                              \
+    {                                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
+        if (validLogger->canLog(level)) {                                             \
+            static thread_local bool once = false;                                    \
+            if (!once) {                                                              \
+                once = true;                                                          \
+                validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
+                                       ##__VA_ARGS__);                                \
+            }                                                                         \
+        }                                                                             \
+    }
+
+// per-level once-thread logging macros (fmtlib style, binary logging)
+#define ELOG_BIN_ONCE_THREAD_FATAL_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_ERROR_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_WARN_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_NOTICE_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_INFO_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_TRACE_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_DEBUG_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_DIAG_EX(logger, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(logger, elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+
+// per-level once-thread logging macros (fmtlib style, binary logging, no logger specified)
+#define ELOG_BIN_ONCE_THREAD(level, fmt, ...) \
+    ELOG_BIN_ONCE_THREAD_EX(nullptr, level, fmt, ##__VA_ARGS__)
+
+#define ELOG_BIN_ONCE_THREAD_FATAL(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_FATAL, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_ERROR(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_ERROR, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_WARN(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_WARN, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_NOTICE(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_NOTICE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_INFO(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_INFO, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_TRACE(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_TRACE, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_DEBUG(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_ONCE_THREAD_DIAG(fmt, ...) \
+    ELOG_BIN_ONCE_THREAD(elog::ELEVEL_DIAG, fmt, ##__VA_ARGS__)
+#endif
+
+/**
+ * @brief Logs a formatted message to the server log, while moderating its occurrence.
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_MODERATE_EX(logger, level, msgPerSec, fmt, ...)                          \
+    {                                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
+        if (validLogger->canLog(level)) {                                             \
+            static elog::ELogModerate mod(fmt, msgPerSec);                            \
+            if (mod.moderate()) {                                                     \
+                validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
+                                       ##__VA_ARGS__);                                \
+            }                                                                         \
+        }                                                                             \
+    }
+
+// per-level moderate logging macros
+#define ELOG_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+
+// per-level moderate logging macros (no logger specified)
+#define ELOG_MODERATE(level, msgPerSec, fmt, ...) \
+    ELOG_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+
+#define ELOG_MODERATE_FATAL(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_ERROR(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_WARN(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_NOTICE(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_INFO(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_TRACE(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DEBUG(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DIAG(msgPerSec, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log, while moderating its occurrence (fmtlib
+ * style).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param fmtStr The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_FMT_MODERATE_EX(logger, level, msgPerSec, fmtStr, ...)                \
+    {                                                                              \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
+        if (validLogger->canLog(level)) {                                          \
+            static elog::ELogModerate mod(fmtStr, msgPerSec);                      \
+            if (mod.moderate()) {                                                  \
+                std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
+                validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
+                                         logMsg.c_str());                          \
+            }                                                                      \
+        }                                                                          \
+    }
+
+// per-level moderate logging macros (fmtlib style)
+#define ELOG_FMT_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+
+// per-level moderate logging macros (fmtlib style, no logger specified)
+#define ELOG_FMT_MODERATE(level, msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+
+#define ELOG_FMT_MODERATE_FATAL(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_ERROR(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_WARN(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_NOTICE(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_INFO(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_TRACE(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DEBUG(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DIAG(msgPerSec, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log, while moderating its occurrence (fmtlib style,
+ * binary form).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_BIN_MODERATE_EX(logger, level, msgPerSec, fmt, ...)                      \
+    {                                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
+        if (validLogger->canLog(level)) {                                             \
+            static elog::ELogModerate mod(fmt, msgPerSec);                            \
+            if (mod.moderate()) {                                                     \
+                validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
+                                       ##__VA_ARGS__);                                \
+            }                                                                         \
+        }                                                                             \
+    }
+
+// per-level moderate logging macros (fmtlib style, binary logging)
+#define ELOG_BIN_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+
+// per-level moderate logging macros (fmtlib style, binary logging, no logger specified)
+#define ELOG_BIN_MODERATE(level, msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+
+#define ELOG_BIN_MODERATE_FATAL(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_ERROR(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_WARN(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_NOTICE(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_INFO(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_TRACE(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DEBUG(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DIAG(msgPerSec, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log, while moderating its occurrence (fmtlib style,
+ * binary form, auto-cached).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param fmt The log message format string.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_CACHE_MODERATE_EX(logger, level, msgPerSec, fmt, ...)                     \
+    {                                                                                  \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                  \
+        if (validLogger->canLog(level)) {                                              \
+            static thread_local elog::ELogCacheEntryId cacheEntryId =                  \
+                elog::getOrCacheFormatMsg(fmt);                                        \
+            static elog::ELogModerate mod(fmt, msgPerSec);                             \
+            if (mod.moderate()) {                                                      \
+                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, \
+                                             cacheEntryId, ##__VA_ARGS__);             \
+            }                                                                          \
+        }                                                                              \
+    }
+
+// per-level moderate logging macros (fmtlib style, binary logging, auto-cached)
+#define ELOG_CACHE_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+
+// per-level moderate logging macros (fmtlib style, binary logging, auto-cached, no logger
+// specified)
+#define ELOG_CACHE_MODERATE(level, msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+
+#define ELOG_CACHE_MODERATE_FATAL(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_ERROR(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_WARN(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_NOTICE(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_INFO(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_TRACE(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DEBUG(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DIAG(msgPerSec, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#endif
+
+#ifdef ELOG_ENABLE_FMT_LIB
+/**
+ * @brief Logs a formatted message to the server log, while moderating its occurrence (fmtlib style,
+ * binary form, pre-cached).
+ * @param logger The logger used for message formatting.
+ * @param level The log level. If the log level is insufficient, then the message is dropped.
+ * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param cacheEntryId The cached log message format string id.
+ * @param ... Log message format string parameters.
+ */
+#define ELOG_ID_MODERATE_EX(logger, level, msgPerSec, cacheEntryId, ...)                      \
+    {                                                                                         \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                         \
+        if (validLogger->canLog(level)) {                                                     \
+            static elog::ELogModerate mod(elog::getCachedFormatMsg(cacheEntryId), msgPerSec); \
+            if (mod.moderate()) {                                                             \
+                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION,        \
+                                             cacheEntryId, ##__VA_ARGS__);                    \
+            }                                                                                 \
+        }                                                                                     \
+    }
+
+// per-level moderate logging macros (fmtlib style, binary logging, pre-cached)
+#define ELOG_ID_MODERATE_FATAL_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_ERROR_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_WARN_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_NOTICE_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_INFO_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_TRACE_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DEBUG_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DIAG_EX(logger, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+
+// per-level moderate logging macros (fmtlib style, binary logging, pre-cached, no logger specified)
+#define ELOG_ID_MODERATE(level, msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(nullptr, level, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+
+#define ELOG_ID_MODERATE_FATAL(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_FATAL, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_ERROR(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_ERROR, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_WARN(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_WARN, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_NOTICE(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_INFO(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_INFO, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_TRACE(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_TRACE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DEBUG(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DIAG(msgPerSec, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_DIAG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#endif
 
 /** @brief Utility macro for importing frequent names. */
 #define ELOG_USING()           \

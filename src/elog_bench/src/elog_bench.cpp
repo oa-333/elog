@@ -696,6 +696,7 @@ static bool getFileParam(const char* param) {
         return false;
     }
     sTestFileAll = false;
+    // sTestPerfAll = false;
     return true;
 }
 
@@ -971,7 +972,8 @@ ELOG_IMPLEMENT_TYPE_DECODE_EX(Coord) {
 
 static void testFmtLibSanity() {
 #ifdef ELOG_ENABLE_FMT_LIB
-    // all will be printed to default log target (stderr)
+    // TODO: use string log target with format line containing only ${msg} so we can inspect output
+    // and compare all will be printed to default log target (stderr)
     int someInt = 5;
     ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
     ELOG_BIN_INFO("This is a test binary message, with int {}, bool {} and string {}", (int)5, true,
@@ -982,9 +984,25 @@ static void testFmtLibSanity() {
         "This is a test binary pre-cached message, with int {}, bool {} and string {}");
     ELOG_ID_INFO(msgId, (int)5, true, "test string param");
 
+    // UDT test
     Coord c = {5, 7};
     ELOG_BIN_INFO("This is a test binary message, with UDT coord {}", c);
-    // UDT test
+
+    // test once macro
+    for (uint32_t i = 0; i < 10; ++i) {
+        ELOG_ONCE_INFO("This is a test once message");
+    }
+
+    // test once thread macro
+    for (uint32_t i = 0; i < 10; ++i) {
+        ELOG_ONCE_THREAD_INFO("This is a test once thread message");
+    }
+
+    // test moderate macro
+    for (uint32_t i = 0; i < 30; ++i) {
+        ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 #endif
 }
 
@@ -1002,7 +1020,6 @@ int main(int argc, char* argv[]) {
     }
     ELOG_INFO("ELog system initialized");
     printPreInitMessages();
-    testFmtLibSanity();
 
     int res = 0;
     if (argc == 2) {
@@ -1212,6 +1229,9 @@ static int testRegression() {
     if (res != 0) {
         return res;
     }
+#endif
+#ifdef ELOG_ENABLE_FMT_LIB
+    testFmtLibSanity();
 #endif
     return 0;
 }
