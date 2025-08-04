@@ -1,9 +1,8 @@
 # ELog Logging Library
 
 ELog (Error Log) is a comprehensive, high-performant and feature-rich C++ logging framework.  
-Much attention was given to usability, so that developers can easily achieve much with just very few lines of code.  
-The library has predefined connectors for various widely-used external systems, and was designed such that it can be extended  
-for a broad range of use cases. In addition, it is fully configurable from file or string input (see examples below).
+Special attention was given to usability, so that developers can easily achieve much with just very few lines of code.  
+The library has predefined connectors for various widely-used external systems, and was designed such that it can be extended for a broad range of use cases. In addition, it is fully configurable from file or string input (see examples below).
 
 The project is still in pre-Beta phase, and more is expected to come.
 
@@ -135,17 +134,20 @@ The ELog library provides the following notable features:
     - Allow further optimizing, by avoiding copying format message to binary log buffer
     - Huge impact with long format messages
     - Combined with lock-free asynchronous logging, **scalable** top performance can be achieved
+- Log once and moderate logging macros
+    - Enable logging once (per process or per thread) a single logging instance
+    - Enable moderate logging (rate limiting) a single logging instance
 - Logging macros flexibility
     - It is possible to choose at each logging instance whether to use normal, binary or cached logging
     - No special configuration required
     - No predefined message file required
 - Full Call Stack Dumping (**with function, file and line information**)
-    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
+    - Out of the box, depends on [dbgutil](https://github.com/oa-333/dbgutil)
     - Supported platforms: Windows, Linux, MinGW
     - Voluntary current thread call stack dumping (i.e. not in signal handler, so no thread context pointer required)
     - Voluntary full application call stack dumping (i.e. stack trace of all active threads)
 - Exception/Crash Handling
-    - Out of the box, depends on [dbgutil](#https://github.com/oa-333/dbgutil)
+    - Out of the box, depends on [dbgutil](https://github.com/oa-333/dbgutil)
     - Writes to log full exception information, including call stack with function, file and line information
     - Generates core dump (mini-dump file on Windows)
 - Wide range of predefined log targets (i.e. "log sinks/appenders"):
@@ -254,7 +256,7 @@ In particular the following compile/runtime dependencies exist in each case:
 - Grafana/Loki and Datadog connectors requires json/nlohmann and httplib
 - Sentry connector requires the Sentry native library
 - Stack trace logging and exception/crash handling requires [dbgutil](https://github.com/oa-333/dbgutil)
-- fmtlib formatting style requires [fmtlib](#https://github.com/fmtlib/fmt)
+- fmtlib formatting style requires [fmtlib](https://github.com/fmtlib/fmt)
 
 ### Installing
 
@@ -306,8 +308,9 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
 ## Contents
 - [Basic Usage](#basic-usage)
     - [Initialization and Termination](#initialization-and-termination)
-    - [Logging Macros](#logging-macros)
     - [Log Levels](#log-levels)
+    - [Log Formatting Styles](#log-formatting-styles)
+    - [Logging Macros](#logging-macros)
     - [Log Sources and Loggers](#log-sources-and-loggers)
     - [Log Level Propagation](#log-level-propagation)
     - [Log Line Format](#log-line-format)
@@ -318,6 +321,10 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Filtering Log Messages](#filtering-log-messages)
     - [Limiting Log Rate](#limiting-log-rate)
     - [Enabling ELog Internal Trace Messages](#enabling-elog-internal-trace-messages)
+    - [Binary Logging](#binary-logging)
+    - [Cached Logging](#cached-logging)
+    - [Once Logging](#once-logging)
+    - [Moderated Logging](#moderated-logging)
 - [Configuration](#configuring)
     - [Configuration Units](#configuration-units)
     - [Configuring Log Level](#configuring-log-level)
@@ -414,28 +421,6 @@ In this example a synchronous segmented log file is used, with 4MB segment size:
         return 0;
     }
 
-### Logging Macros
-
-The ELog system defines 5 groups of utility macros for logging:
-
-- Normal logging macros
-- fmtlib-style logging macros
-- binary logging macros
-- binary auto-cached logging macros
-- binary pre-cached logging macros
-
-Each group of macros can be used with or without a logger.  
-
-The easiest form of logging is without any logger defined:
-
-    ELOG_INFO("Sample message with string parameter: %s", someStr);
-
-In order to specify a logger, use the _EX() suffix, as follows:
-
-    ELOG_WARN_EX(logger, "Sample message with string parameter: %s", someStr);
-
-See [log sources and loggers](#log-sources-and-loggers) for more information on how a logger can be obtained.
-
 ### Log Levels
 
 The following table summarizes the supported log levels in their intended meaning:
@@ -450,6 +435,50 @@ The following table summarizes the supported log levels in their intended meanin
 | TRACE | Used for debugging purposes, low frequency printing |
 | DEBUG | Used for debugging purposes, high frequency printing |
 | DIAG | Used for debugging purposes, expected log flooding |
+
+### Log Formatting Styles
+
+Currently ELog supports two main log formatting styles:
+
+- printf style
+- fmtlib style (requires building ELog with ELOG_ENABLE_FMT_LIB=ON)
+
+According to need, C++ stream style may be supported as well, with insertion operator overloading, and that is solely for the purpose of smooth migration from old logging systems, as performance is known to be slow with this style of log message formatting. 
+
+### Logging Macros
+
+ELog utilizes logging macros for efficient logging, such that when the logged message is not to be issued (e.g. due to insufficient log level or some global filter), then no macro argument evaluation, nor any message formatting takes place at all.
+
+All Elog logging macros start with the prefix "ELOG_", followed by logging method designator (see below), followed by log level, and an optional "_EX" suffix when a logger is used.
+
+The ELog framework defines 5 groups of utility macros, each for a different method of logging:
+
+- Normal logging macros (starts with "ELOG_")
+    - Initial formatting takes place on caller's context (even when using asynchronous logging)
+- fmtlib-style logging macros (starts with "ELOG_FMT_")
+- [binary logging macros](#binary-logging) (starts with "ELOG_BIN_")
+- [binary auto-cached logging macros](#cached-logging) (starts with "ELOG_CACHE_")
+- [binary pre-cached logging macros](#cached-logging) (start with "ELOG_ID_")
+
+The easiest form of logging is without any logger defined (no "_EX" suffix):
+
+    ELOG_INFO("Sample message with string parameter: %s", someStr);
+
+In order to specify a logger, use the _EX() suffix, as follows:
+
+    ELOG_WARN_EX(logger, "Sample message with string parameter: %s", someStr);
+
+Or:
+
+    ELOG_FMT_WARN_EX(logger, "Sample message with string parameter: {}", someStr);
+
+See [log sources and loggers](#log-sources-and-loggers) for more information on how a logger can be obtained.
+
+Note that in case that the log message is to be issued, then normally, only partial logging takes place at the caller's context (just the log message, without formatting any time, logger name, module, thread id, etc.), and the rest of the formatting takes place at a later phase. This means that in case of asynchronous logging, part of the formatting takes place on another context. This can be further optimized with [binary logging](#binary-logging) and [cached logging](#cached-logging).
+
+### Configuring Log Levels
+
+TBD: this needs to be edited
 
 There is no global log level configuration, for two main reasons:
 
@@ -781,6 +810,76 @@ If report level is set to INFO, then while stopping a log target, its internal s
             Flush requests discarded: 0
             Buffer write count: 76
             Average buffer size: 1048559 bytes
+
+### Binary Logging
+
+Normally, when a log message is issued, only partial log formatting takes place at the caller's context (just the log message, without formatting any time, logger name, module, thread id, etc.), and the rest of the formatting takes place at a later phase, according to the log line format of each target. This means that in case of asynchronous logging, part of the formatting takes place on another context. This can be optimized with binary logging.
+
+Binary logging means that format string parameters are serialized into a buffer, such that no formatting takes place at all on the caller's context. Instead when the user's message is formatted at a later phase, all parameters are deserialized and then string formatting takes place. This is possible only with fmtlib formatting style.
+
+In order to use binary logging, no special configuration is needed, except for building ELog with fmtlib support (pass to cmake build ELOG_ENABLE_FMT_LIB=ON, or use build script with parameter --fmt-lib). After that, binary logging macros can be used as follows:
+
+    ELOG_BIN_INFO("This is a test binary message, with int {}, bool {} and string {}", (int)5, true, "test string param");
+
+The format string and the parameters are serialized into a buffer, to be later deserialized and used for formatting the log message. If asynchronous logging is used, then no formatting takes place at all on the caller's context.
+
+Check out the [benchmarks](#binary-logging-and-format-message-caching) below that demonstrates the acceleration of binary logging depending on the number of parameters being used in the format string. Binary logging is a good choice when the number of parameters is rather high, in which case normal formatting is not scalable.
+
+### Cached Logging
+
+Cached logging adds another layer of optimization to binary logging, and saves the step of copying the format string to a binary buffer, and instead caches it in a global cache (lock free hash table). So instead of serializing a format string, only a cache entry id (4 bytes integer) is serialized. Cached logging can be used as follows:
+
+    ELOG_CACHE_INFO("This is a test binary auto-cached message, with int {}, bool {} and string {}", 
+        (int)5, true, "test string param");
+
+What happens behind the scenes is that the format string is cached during the first invocation of the logging macro, and any subsequent access to the log macro will use the cached id of the format message.
+
+Cached logging can take place either automatically, using the ELOG_CACHE_XXX() macro set, or alternatively, the format messages can be cached in advance (which is slightly faster), in which case, a different macro should be used:
+
+    // cache format message in advance
+    elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg(
+        "This is a test binary pre-cached message, with int {}, bool {} and string {}");
+
+    // log with cached message id
+    ELOG_ID_INFO(msgId, (int)5, true, "test string param");
+
+Check out the [benchmarks](#binary-logging-and-format-message-caching) below that demonstrates the acceleration of cached logging depending on the number of parameters being used in the format string, and the length of the format string. When format string length is rather long, cached logging is scalable, and demonstrates high performance.
+
+### Once Logging
+
+In cases of possible log flooding (i.e. repeated error), it is possible to avoid such conditions with once-logging:
+
+    if (failed) {
+        ELOG_ONCE_ERROR_EX(logger, "Failed to write to file: %s", fileName);
+    }
+
+This can be applied also at the thread level:
+
+    if (failed) {
+        ELOG_ONCE_THREAD_ERROR_EX(logger, "Failed to write to file: %s", fileName);
+    }
+
+### Moderated Logging
+
+It may be desired to limit the rate of some log message. This can be done as follows:
+
+    ELOG_MODERATE_INFO_EX(logger, 2, "Passing through here many times, but logging is restricted to only twice per each second");
+
+If [internal ELOg reporting](#enabling-elog-internal-trace-messages) is enabled, and set to level INFO, then some discarding/aggregation statistics are printed. For instance, consider this example:
+
+    for (uint32_t i = 0; i < 30; ++i) {
+        ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+Here is a partial sample output:
+
+    2025-08-04 23:15:46.024 INFO   [45968] <elog_root> This is a test moderate message (twice per second)
+    2025-08-04 23:15:46.131 INFO   [45968] <elog_root> This is a test moderate message (twice per second)
+    2025-08-04 23:15:47.006 INFO   [45968] <elog> The message 'This is a test moderate message (twice per second)' has been discarded for 7 times in the last 766 milliseconds
+    2025-08-04 23:15:47.006 INFO   [45968] <elog_root> This is a test moderate message (twice per second)
+    2025-08-04 23:15:47.114 INFO   [45968] <elog_root> This is a test moderate message (twice per second)
+    2025-08-04 23:15:48.098 INFO   [45968] <elog> The message 'This is a test moderate message (twice per second)' has been discarded for 8 times in the last 869 milliseconds
 
 ## Configuration
 
