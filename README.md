@@ -73,6 +73,8 @@ It is also possible to dump stack trace of all running threads, as in pstack (ex
 
     ELOG_APP_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing application stack trace");
 
+See [below](#appendix-a-sample-full-application-stack-trace) for sample output.
+
 In this example, the [log line format](#configuring-log-line-format) can be configured:
 
     elog::configureLogFormat("${time} ${level:6} [${tid}] ${src} ${msg}");
@@ -92,7 +94,7 @@ This final examples adds an asynchronous log target to send log lines to Grafana
         "labels={app: ${app}}&"
         "log_line_metadata={log_source: ${src}, thread_name: ${tname}}&"
         "stack_trace=yes&"
-        "flush_policy=((count == 100) OR (time == 5000))");
+        "flush_policy=((count == 100) OR (time == 5000ms))");
 
 The log target is configured with the following properties:
 
@@ -119,7 +121,7 @@ The ELog library provides the following notable features:
     - Minimal formatting on logging application side, possibly combined with lock-free asynchronous logging
     - Full formatting takes place on background thread
     - **130 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, **scalable** in multi-threaded scenarios), coupled with binary, pre-cached logging
-    - Check out the [benchmarks](#Benchmarks) below
+    - Check out the [benchmarks](#benchmarks) below
 - Synchronous and asynchronous logging schemes
     - Synchronous logging to file, allowing for efficient buffering and log rotation/segmentation
     - **Lock-free** synchronous log file rotation/segmentation (no performance "hiccups" during segment switch)
@@ -154,14 +156,14 @@ The ELog library provides the following notable features:
     - stdout, stderr
     - syslog, Windows event log
     - log file (including rotation/segmentation)
-    - databases (PostgreSQL, SQLite, MySQL)
-    - message queues (Kafka)
-    - RPC endpoints (gRPC)
-    - monitoring tools (Grafana Loki, Datadog, Sentry)
+    - databases ([PostgreSQL](#connecting-to-postgresql), [SQLite](#connecting-to-sqlite), [MySQL](#connecting-to-mysql-experimental))
+    - message queues ([Kafka](#connecting-to-kafka-topic))
+    - RPC endpoints ([gRPC](#connecting-to-grpc-endpoint))
+    - monitoring tools ([Grafana Loki](#connecting-to-grafana-loki), [Datadog](#connecting-to-datadog), [Sentry](#connecting-to-sentry))
 - Flexible and rich in features
     - User can define multiple log targets
-    - combine with complex filtering schemes and flush policies
-    - possibly employing rate limiting
+    - Combine with complex filtering schemes and flush policies
+    - Possibly employing rate limiting
     - Can group several log targets under one framework and apply common restrictions and properties
 - Pre-initialization Logging
     - Accumulates log messages issued during static initialization (or any message before the ELog library is initialized) and issues the accumulated log messages in each added log target.
@@ -200,11 +202,14 @@ The ELog library provides the following notable features:
 
 ### Planned/considered future features:
 
-- Support on MacOS
+- Structured logging (json, with support for extendibility to proprietary formats)
+- Automated periodic configuration reloading and updating log levels
+- Automated life-sign logs (i.e. for post-mortem analysis)
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
 - Logging hub framework for log pre-processing before shipping to server analysis (offload to edge compute)
+- Support on MacOS
 
 
 ## Common Use Cases
@@ -361,6 +366,8 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Synchronous File Log Target with Time Flush Policy](#synchronous-file-log-target-with-time-flush-policy)
     - [Single-threaded Synchronous File Log Target Comparison](#single-threaded-synchronous-file-log-target-comparison)
     - [Multi-threaded Asynchronous File Log Target Comparison](#multi-threaded-asynchronous-file-log-target-comparison)
+- [Appendices](#appendices)
+    - [Appendix A: Sample Full Application Stack Trace](#appendix-a-sample-full-application-stack-trace)
 
 ## Basic Usage
 
@@ -1274,7 +1281,7 @@ The following optional parameters are also recognized:
 - grpc_client_key_path
 
 In order to use a different proprietary protocol, more work needs to be done.  
-Please refer to [this]() guide for more details.
+TODO: Please refer to [this]() section for more details.
 
 ### Connecting to Grafana Loki
 
@@ -2297,3 +2304,50 @@ The results are rather dramatic:
 2. The binary logging scheme, without any caching, does not scale, and starting from 200 bytes format message size, it begins to degrade, starting from 8M msg/sec, until it reaches 1M msg/sec when format message size is 1000 bytes long
 3. Both Binary logging with automated caching and with pre-caching scale well and preserve steady performance as would be expected
 4. Pre-cached binary logging performs slightly better probably, as explained in the previous section, due to the fact it has optimized access to the cache entry id, not requiring access to thread-local variable, but rather local variable, which is more cache-friendly.
+
+## Appendices
+
+### Appendix A: Sample Full Application Stack Trace
+
+Following is a sample output of full application stack trace on Linux (like pstack):
+
+    2025-08-05 10:24:45.506 INFO   [6613 ] [elog_bench_main] elog_root Testing app stack trace for thread 6613
+    2025-08-05 10:24:45.507 INFO   [6613 ] [elog_bench_main] elog_root some test title:
+    [Thread 6613 (0x19d5) <elog_bench_main> stack trace]
+     0# 0x7de6ab9d6210 dbgutil::OsStackTraceProvider::getStackTrace() +94 at os_stack_trace.cpp:23 (libdbgutil.so)
+     1# 0x7de6ab9c9aa3 dbgutil::LinuxStackTraceProvider::getThreadStackTrace() +77 at linux_stack_trace.cpp:67 (libdbgutil.so)
+     2# 0x7de6ab9a0586 dbgutil::getAppRawStackTrace() +80       at dbg_stack_trace.cpp:209 (libdbgutil.so)
+     3# 0x7de6ab9d0134 dbgutil::ThreadIdVisitor::onDirEntry() +120 at linux_thread_manager.cpp:242 (libdbgutil.so)
+     4# 0x7de6ab9a713d dbgutil::visitDirEntriesGcc() +491       at dir_scanner.cpp:127 (libdbgutil.so)
+     5# 0x7de6ab9a739f dbgutil::DirScanner::visitDirEntries() +39 at dir_scanner.cpp:152 (libdbgutil.so)
+     6# 0x7de6ab9cf65f dbgutil::LinuxThreadManager::visitThreadIds() +77 at linux_thread_manager.cpp:275 (libdbgutil.so)
+     7# 0x7de6ab9a06af dbgutil::getAppRawStackTrace() +78       at dbg_stack_trace.cpp:225 (libdbgutil.so)
+     8# 0x7de6ab9a0956 dbgutil::printAppStackTrace() +75        at dbg_stack_trace.cpp:245 (libdbgutil.so)
+     9# 0x7de6abc36c2b elog::logAppStackTrace() +106            at elog.cpp:1626 (libelog.so)
+    10# 0x5e7627de8999 testLogStackTrace() +459                 at elog_bench.cpp:1219 (elog_bench)
+    11# 0x5e7627de8a07 testRegression() +36                     at elog_bench.cpp:1231 (elog_bench)
+    12# 0x5e7627de7c60 main() +519                              at elog_bench.cpp:1035 (elog_bench)
+    13# 0x7de6ab22a1ca N/A                                      at <N/A>  (libc.so.6)
+    14# 0x7de6ab22a28b __libc_start_main()                      at <N/A>  (libc.so.6)
+    15# 0x5e7627de68e5 _start() +37                             at <N/A>  (elog_bench)
+
+    2025-08-05 10:24:45.520 INFO   [6613 ] [elog_bench_main] elog_root some test title:
+    [Thread 6634 (0x19ea) stack trace]
+     0# 0x7de6ab9d6210 dbgutil::OsStackTraceProvider::getStackTrace() +94 at os_stack_trace.cpp:23 (libdbgutil.so)
+     1# 0x7de6ab9c9a54 dbgutil::LinuxStackTraceProvider::getThreadStackTrace() +48 at linux_stack_trace.cpp:81 (libdbgutil.so)
+     2# 0x7de6ab9d000d dbgutil::ExternRequest::execImpl() +47   at linux_thread_manager.cpp:99 (libdbgutil.so)
+     3# 0x7de6ab9cff6d dbgutil::SignalRequest::exec() +35       at linux_thread_manager.cpp:84 (libdbgutil.so)
+     4# 0x7de6ab9cf13a dbgutil::signalHandler() +125            at linux_thread_manager.cpp:163 (libdbgutil.so)
+     5# 0x7de6ab245330 N/A                                      at <N/A>  (libc.so.6)
+     6# 0x7de6ab2ecadf clock_nanosleep()                        at <N/A>  (libc.so.6)
+     7# 0x7de6ab2f9a27 nanosleep()                              at <N/A>  (libc.so.6)
+     8# 0x7de6abc128bc void std::this_thread::sleep_for<long, std::ratio<1l, 1000000l> >() +181 at this_thread_sleep.h:80 (libelog.so)
+     9# 0x7de6abc1209d elog::ELogQuantumTarget::logThread() +719 at elog_quantum_target.cpp:134 (libelog.so)
+    10# 0x7de6abc130e6 void std::__invoke_impl<void, void () +106 at invoke.h:75 (libelog.so)
+    11# 0x7de6abc13039 std::__invoke_result<void () +59         at invoke.h:98 (libelog.so)
+    12# 0x7de6abc12f99 void std::thread::_Invoker<std::tuple<void () +71 at std_thread.h:292 (libelog.so)
+    13# 0x7de6abc12f4e std::thread::_Invoker<std::tuple<void () +28 at std_thread.h:300 (libelog.so)
+    14# 0x7de6abc12f2e std::thread::_State_impl<std::thread::_Invoker<std::tuple<void () +32 at std_thread.h:244 (libelog.so)
+    15# 0x7de6ab6ecdb4 N/A                                      at <N/A>  (libstdc++.so.6.0.33)
+    16# 0x7de6ab29caa4 N/A                                      at <N/A>  (libc.so.6)
+    17# 0x7de6ab329c3c N/A                                      at <N/A>  (libc.so.6)

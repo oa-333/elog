@@ -1200,7 +1200,9 @@ static int testAsyncThreadName() {
 #ifdef ELOG_ENABLE_STACK_TRACE
 static int testLogStackTrace() {
     const char* cfg =
-        "sys://stderr?log_format=${time} ${level:6} [${tid:5}] [${tname}] ${src} ${msg}";
+        "async://quantum?quantum_buffer_size=1000&name=elog_bench | "
+        "sys://stderr?log_format=${time} ${level:6} [${tid:5}] [${tname}] ${src} ${msg}&"
+        "flush_policy=immediate";
 
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
@@ -1214,6 +1216,7 @@ static int testLogStackTrace() {
     ELOG_APP_STACK_TRACE(elog::ELEVEL_INFO, "some test title", 0,
                          "Testing app stack trace for thread %u", getCurrentThreadId());
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     termELog();
     return 0;
 }
@@ -1573,9 +1576,16 @@ void testSentry() {
 
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
 void testDatadog() {
-    const char* cfg =
+    char* api_key = getenv("ELOG_DATADOG_API_KEY");
+    if (api_key == nullptr) {
+        fprintf(stderr, "Missing datadog API Key\n");
+        return;
+    }
+    std::string cfg =
         "mon://datadog?address=https://http-intake.logs.datadoghq.eu&"
-        "api_key=670d32934fa0d393561050a42c6ef7db&"
+        "api_key=";
+    cfg += std::string(api_key) + "&";
+    cfg +=
         "source=elog&"
         "service=elog_bench&"
         "flush_policy=count&"
@@ -1586,7 +1596,7 @@ void testDatadog() {
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
-    runSingleThreadedTest("Datadog", cfg, msgPerf, ioPerf, statData, 10);
+    runSingleThreadedTest("Datadog", cfg.c_str(), msgPerf, ioPerf, statData, 10);
 }
 #endif
 

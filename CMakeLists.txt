@@ -209,7 +209,7 @@ if (ELOG_ENABLE_STACK_TRACE)
         message(STATUS "Fetching dbgutil from github")
         FetchContent_Declare(dbgutil
             GIT_REPOSITORY https://github.com/oa-333/dbgutil.git
-            GIT_TAG v0.1.2
+            GIT_TAG v0.1.3
         )
     endif()
     FetchContent_MakeAvailable(dbgutil)

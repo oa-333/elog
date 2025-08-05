@@ -170,14 +170,7 @@ bool initGlobals() {
     }
     ELOG_REPORT_TRACE("Root log source added to global log source map");
 
-    // TODO: support also bin logger that does NOT format on client side, but rather using template
-    // variadic args, encodes each parameter type with 1 byte, followed by parameter flat data, then
-    // finally by 0xFF byte denoting start of format string, then followed by 4 bytes string len and
-    // then followed by format string. Entire buffer may have some small header (total len, etc.).
-    // actual formatting will take place later, either by async thread, or by external process.
-    // need to define log target binary/text mode, so that if a text mode log target receives a
-    // binary buffer, it must format it first. for a binary log target, the log record must also be
-    // written in binary form.
+    // create default logger
     sDefaultLogger = sRootLogSource->createSharedLogger();
     if (sDefaultLogger == nullptr) {
         ELOG_REPORT_ERROR("Failed to create default logger, out of memory");
@@ -186,6 +179,7 @@ bool initGlobals() {
     }
     ELOG_REPORT_TRACE("Default logger initialized");
 
+    // create default target
     // NOTE: statistics disabled
     sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr, nullptr, false);
     if (sDefaultLogTarget == nullptr) {
@@ -1609,20 +1603,23 @@ private:
 
 void logStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title, int skip,
                    dbgutil::StackEntryFormatter* formatter) {
+    // ELogStackEntryFilter filter;
     LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
-    dbgutil::printStackTrace(skip, &printer, formatter);
+    dbgutil::printStackTrace(skip, nullptr /* &filter */, formatter, &printer);
 }
 
 void logStackTraceContext(ELogLogger* logger, void* context, ELogLevel logLevel, const char* title,
                           int skip, dbgutil::StackEntryFormatter* formatter) {
+    // ELogStackEntryFilter filter;
     LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
-    dbgutil::printStackTraceContext(context, skip, &printer, formatter);
+    dbgutil::printStackTraceContext(context, skip, nullptr /* &filter */, formatter, &printer);
 }
 
 void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title, int skip,
                       dbgutil::StackEntryFormatter* formatter) {
+    // ELogStackEntryFilter filter;
     LogStackEntryPrinter printer(logger, logLevel, title == nullptr ? "" : title);
-    dbgutil::printAppStackTrace(skip, &printer, formatter);
+    dbgutil::printAppStackTrace(skip, nullptr /* &filter */, formatter, &printer);
 }
 #endif
 

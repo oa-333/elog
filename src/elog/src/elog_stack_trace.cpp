@@ -13,12 +13,15 @@ static void* sDbgUtilBaseAddress = nullptr;
 
 void initStackTrace() {
     dbgutil::OsModuleInfo modInfo;
-#ifdef ELOG_WINDOWS
+#ifdef ELOG_MSVC
     const char* elogModName = "elog.dll";
     const char* dbgutilModName = "dbgutil.dll";
+#elif defined(ELOG_MINGW)
+    const char* elogModName = "libelog.dll";
+    const char* dbgutilModName = "libdbgutil.dll";
 #else
-    const char* elogModName = "elog.so";
-    const char* dbgutilModName = "dbgutil.so";
+    const char* elogModName = "libelog.so";
+    const char* dbgutilModName = "libdbgutil.so";
 #endif
     dbgutil::DbgUtilErr rc =
         dbgutil::getModuleManager()->getModuleByName(elogModName, modInfo, true);
@@ -39,6 +42,9 @@ bool getStackTraceVector(dbgutil::StackTrace& stackTrace) {
 
     // remove all frames from dbgutil or elog
     std::erase_if(stackTrace, [](dbgutil::StackEntry& stackEntry) {
+        // erase dbgutil and elog frames
+        // NOTE: if initialization failed then the searched addresses are null and so no frame will
+        // be erased
         return (stackEntry.m_entryInfo.m_moduleBaseAddress == sELogBaseAddress ||
                 stackEntry.m_entryInfo.m_moduleBaseAddress == sDbgUtilBaseAddress);
     });
@@ -57,6 +63,14 @@ bool getStackTraceString(std::string& stackTraceString) {
     }
     stackTraceString = dbgutil::stackTraceToString(stackTrace);
     return true;
+}
+
+bool ELogStackEntryFilter::filterStackEntry(const dbgutil::StackEntry& stackEntry) {
+    // discard dbgutil and elog frames
+    // NOTE: if initialization failed then the searched addresses are null and so no frame will
+    // be discarded
+    return (stackEntry.m_entryInfo.m_moduleBaseAddress != sELogBaseAddress &&
+            stackEntry.m_entryInfo.m_moduleBaseAddress != sDbgUtilBaseAddress);
 }
 
 }  // namespace elog
