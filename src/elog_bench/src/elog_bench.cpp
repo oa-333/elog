@@ -1552,10 +1552,9 @@ void testGrafana() {
 
 #ifdef ELOG_ENABLE_SENTRY_CONNECTOR
 void testSentry() {
+    // dsn comes from env
     const char* cfg =
-        "mon://sentry?dsn=https://"
-        "68a375c6d69b9b1af1ec19d91f98d0c5@o4509530146537472.ingest.de.sentry.io/"
-        "4509530351992912&"
+        "mon://sentry?"
         "db_path=.sentry-native&"
         "release=native@1.0&"
         "env=staging&"
