@@ -3,13 +3,14 @@
 
 #include "elog_config.h"
 #include "elog_expression.h"
+#include "elog_managed_object.h"
 #include "elog_record.h"
 #include "elog_target_spec.h"
 
 namespace elog {
 
 /** @brief Parent interface for all log filters. */
-class ELOG_API ELogFilter {
+class ELOG_API ELogFilter : public ELogManagedObject {
 public:
     virtual ~ELogFilter() {}
 
@@ -676,6 +677,36 @@ private:
     std::string m_logMsg;
 
     ELOG_DECLARE_FILTER(ELogMsgFilter, log_msg);
+};
+
+class ELOG_API ELogCountFilter : public ELogCmpFilter {
+public:
+    ELogCountFilter(uint64_t count = 0)
+        : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ), m_runningCounter(0), m_count(count) {}
+    ELogCountFilter(const ELogCountFilter&) = delete;
+    ELogCountFilter(ELogCountFilter&&) = delete;
+    ELogCountFilter& operator=(const ELogCountFilter&) = delete;
+    ~ELogCountFilter() final {}
+
+    /** @brief Loads filter from configuration. */
+    bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool loadExpr(const ELogExpression* expr) final;
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const ELogRecord& logRecord) final;
+
+private:
+    std::atomic<uint64_t> m_runningCounter;
+    uint64_t m_count;
+
+    ELOG_DECLARE_FILTER(ELogCountFilter, count);
 };
 
 }  // namespace elog

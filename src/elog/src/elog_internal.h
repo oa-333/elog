@@ -4,6 +4,7 @@
 #include <string>
 
 #include "elog_buffer.h"
+#include "elog_common.h"
 #include "elog_common_def.h"
 #include "elog_def.h"
 #include "elog_record.h"
@@ -38,6 +39,14 @@ extern void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
  */
 extern void logMsg(const ELogRecord& logRecord,
                    ELogTargetAffinityMask logTargetAffinityMask = ELOG_ALL_TARGET_AFFINITY_MASK);
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+/** @brief Writes a life-sign context record for the application's name. */
+extern void reportAppNameLifeSign(const char* appName);
+
+/** @brief Writes a life-sign context record for the current thread's name. */
+extern void reportCurrentThreadNameLifeSign(elog_thread_id_t threadId, const char* threadName);
+#endif
 
 }  // namespace elog
 

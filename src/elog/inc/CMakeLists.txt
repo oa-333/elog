@@ -43,7 +43,9 @@ target_sources(
             elog_json_receptor.h
             elog_kafka_msgq_target.h
             elog_level.h
+            elog_life_sign_filter.h
             elog_logger.h
+            elog_managed_object.h
             elog_mon_schema_handler.h
             elog_mon_target_provider.h
             elog_mon_target.h

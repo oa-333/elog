@@ -17,7 +17,7 @@ void ELogBufferReceptor::receiveStringField(uint32_t typeId, const char* field,
 
 void ELogBufferReceptor::receiveIntField(uint32_t typeId, uint64_t field,
                                          const ELogFieldSpec& fieldSpec) {
-#if __cpp_lib_to_chars >= 201611L
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
     const int FIELD_SIZE = 64;
     alignas(64) char strField[FIELD_SIZE];
     std::to_chars_result res = std::to_chars(strField, strField + FIELD_SIZE, field);

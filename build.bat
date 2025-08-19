@@ -7,8 +7,10 @@ REM -d|--debug
 REM -r|--release
 REM -w|--rel-with-debug-info
 REM -e|--secure
+REM -x|--cxx-ver
 REM -s|--stack-trace
 REM -b|--fmt-lib
+REM -n|--life-sign
 REM -f|--full
 REM -c|--conn sqlite|mysql|postgresql|kafka
 REM -i|--install-dir <INSTALL_DIR>
@@ -23,8 +25,10 @@ SET PLATFORM=WINDOWS
 SET BUILD_TYPE=Debug
 SET INSTALL_DIR=C:\install\elog
 SET SECURE=0
+SET CXX_VER=20
 SET STACK_TRACE=0
 SET FMT_LIB=0
+SET LIFE_SIGN=0
 SET VERBOSE=0
 SET FULL=0
 SET CLEAN=0
@@ -54,10 +58,14 @@ IF /I "%ARG1%" == "-w" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--rel-with-debug-info" SET BUILD_TYPE=RelWithDebInfo & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-e" SET SECURE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--secure" SET SECURE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-x" SET CXX_VER=%ARG2% & shift & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--cxx-ver" SET CXX_VER=%ARG2% & shift & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-s" SET STACK_TRACE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--stack-trace" SET STACK_TRACE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-b" SET FMT_LIB=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--fmt-lib" SET FMT_LIB=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-n" SET LIFE_SIGN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--life-sign" SET LIFE_SIGN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-f" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--full" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-c" SET CONNS[!CONN_INDEX!]=%ARG2% & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
@@ -96,8 +104,10 @@ echo [DEBUG] Parsed args:
 echo [DEBUG] BUILD_TYPE=%BUILD_TYPE%
 echo [DEBUG] INSTALL_DIR=%INSTALL_DIR%
 echo [DEBUG] SECURE=%SECURE%
+echo [DEBUG] CXX_VER=%CXX_VER%
 echo [DEBUG] STACK_TRACE=%STACK_TRACE%
 echo [DEBUG] FMT_LIB=%FMT_LIB%
+echo [DEBUG] LIFE_SIGN=%LIFE_SIGN%
 echo [DEBUG] VERBOSE=%VERBOSE%
 echo [DEBUG] FULL=%FULL%
 echo [DEBUG] CLEAN=%CLEAN%
@@ -110,21 +120,23 @@ echo [DEBUG] Args parsed, options left: %*
 IF %FULL% EQU 1 (
     echo [INFO]  Configuring FULL options
     SET STACK_TRACE=1
+    SET FMT_LIB=1
+    SET LIFE_SIGN=1
     SET CONNS[0]=all
     SET CONN_INDEX=1
 )
 
-REM set normal options
-echo [INFO]  Build type: %BUILD_TYPE%
-echo [INFO]  Install dir: %INSTALL_DIR%
+REM set options
 SET OPTS=-DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR%
 IF %VERBOSE% EQU 1 SET OPTS=%OPTS% -DCMAKE_VERBOSE_MAKEFILE=ON
 IF %SECURE% EQU 1 SET OPTS=%OPTS% -DELOG_SECURE=ON
+SET OPTS=%OPTS% -DCMAKE_CXX_STANDARD=%CXX_VER%
 IF %STACK_TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_STACK_TRACE=ON
 IF %FMT_LIB% EQU 1 (
     SET OPTS=%OPTS% -DELOG_ENABLE_FMT_LIB=ON
     vcpkg add port fmt
 )
+IF %LIFE_SIGN% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_LIFE_SIGN=ON
 IF %MEM_CHECK% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_MEM_CHECK=ON
 IF %TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_GROUP_FLUSH_GC_TRACE=ON
 echo [DEBUG] Current options: %OPTS%
@@ -292,6 +304,7 @@ echo       -r^|--release                Build in release mode.
 echo       -d^|--debug                  Build in debug mode.
 echo       -w^|--rel-with-debug-info    Build in release mode with debug symbols.
 echo       -e^|--secure                 Uses secure C runtime functions.
+echo       -x^|--cxx-ver VERSION        C++ version (11, 14, 17 or 20, default is 20)."
 echo.
 echo If none is specified, then the default is debug build mode.
 echo.
@@ -299,9 +312,10 @@ echo.
 echo EXTENSIONS OPTIONS
 echo.
 echo       -c^|--conn CONNECTOR_NAME    Enables connector.
-echo       -s^|--stack-trace            Enable stack trace logging API.
-echo       -b^|--fmt-lib                Enable fmtlib formatting style support.
-echo       -f^|--full                   Enable all connectors and stack trace logging API.
+echo       -s^|--stack-trace            Enables stack trace logging API.
+echo       -b^|--fmt-lib                Enables fmtlib formatting style support.
+echo       -n^|--life-sign              Enables periodic life-sign reports.
+echo       -f^|--full                   Enables all connectors and stack trace logging API.
 echo.
 echo By default no connector is enabled, and stack trace logging is disabled.
 echo The following connectors are currently supported:

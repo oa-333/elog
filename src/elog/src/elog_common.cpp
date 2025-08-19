@@ -110,6 +110,7 @@ bool parseBoolProp(const char* propName, const std::string& logTargetCfg, const 
     return true;
 }
 
+// TODO: should be parseTimeValueProp
 bool parseTimeoutProp(const char* propName, const std::string& logTargetCfg,
                       const std::string& prop, uint64_t& timeout, ELogTimeoutUnits targetUnits,
                       bool issueError /* = true */) {
@@ -133,7 +134,19 @@ bool parseTimeoutProp(const char* propName, const std::string& logTargetCfg,
 
     // first comput nanos, then move to target units
     std::string units = toLower(trim(prop.substr(pos)));
-    if (units.compare("s") == 0 || units.compare("second") == 0 || units.compare("seconds") == 0) {
+    if (units.compare("d") == 0 || units.compare("day") == 0 || units.compare("days") == 0) {
+        // days
+        timeout *= (24 * 60 * 60 * 1000000000ull);
+    } else if (units.compare("h") == 0 || units.compare("hour") == 0 ||
+               units.compare("hours") == 0) {
+        // hours
+        timeout *= (60 * 60 * 1000000000ull);
+    } else if (units.compare("m") == 0 || units.compare("minute") == 0 ||
+               units.compare("minutes") == 0) {
+        // minutes
+        timeout *= (60 * 1000000000ull);
+    } else if (units.compare("s") == 0 || units.compare("second") == 0 ||
+               units.compare("seconds") == 0) {
         // seconds
         timeout *= 1000000000ull;
     } else if (units.compare("ms") == 0 || units.compare("milli") == 0 ||

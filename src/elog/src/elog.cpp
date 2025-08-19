@@ -37,6 +37,13 @@
 #include "elog_time_internal.h"
 #include "elog_win32_event_log_target.h"
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
+#include "elog_gc.h"
+#include "elog_life_sign_filter.h"
+#include "elog_tls.h"
+#include "life_sign_manager.h"
+#endif
+
 // #include "elog_props_formatter.h"
 namespace elog {
 
@@ -49,6 +56,7 @@ static bool sDbgUtilInitialized = false;
 
 static bool sInitialized = false;
 static bool sIsTerminating = false;
+static ELogParams sParams;
 static uint32_t sMaxThreads = ELOG_DEFAULT_MAX_THREADS;
 static ELogPreInitLogger sPreInitLogger;
 static ELogFilter* sGlobalFilter = nullptr;
@@ -66,6 +74,25 @@ static ELogSourceMap sLogSourceMap;
 static ELogLogger* sDefaultLogger = nullptr;
 static ELogTarget* sDefaultLogTarget = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+#define ELOG_LIFE_SIGN_APP_NAME_RECORD_ID 0
+#define ELOG_LIFE_SIGN_THREAD_NAME_RECORD_ID 1
+static ELogLifeSignFilter* sAppLifeSignFilter = nullptr;
+static thread_local ELogLifeSignFilter* sThreadLifeSignFilter = nullptr;
+static ELogTlsKey sThreadLifeSignKey = ELOG_INVALID_TLS_KEY;
+static ELogGC* sLifeSignGC = nullptr;
+static std::atomic<uint64_t> sLifeSignEpoch = 0;
+static std::atomic<ELogFormatter*> sLifeSignFormatter = nullptr;
+static uint64_t sLifeSignSyncPeriodMillis;
+static std::thread sLifeSignSyncThread;
+static std::mutex sLifeSignLock;
+static std::condition_variable sLifeSignCV;
+static bool initLifeSignReport();
+static bool termLifeSignReport();
+static void cleanupThreadLifeSignFilter(void* key);
+static void sendLifeSignReport(const ELogRecord& logRecord);
+#endif
 
 // these functions are defined as external because they are friends of some classes
 extern bool initGlobals();
@@ -228,6 +255,17 @@ bool initGlobals() {
     sDbgUtilInitialized = true;
 #endif
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    // initialize life-sign report
+    if (sParams.m_enableLifeSignReport) {
+        if (!initLifeSignReport()) {
+            termGlobals();
+            return false;
+        }
+        ELOG_REPORT_TRACE("Life-sign report initialized");
+    }
+#endif
+
     // now we can enable elog's self logger
     // any error up until now will be printed into stderr with no special formatting
     ELOG_REPORT_TRACE("Setting up ELog internal logger");
@@ -241,6 +279,15 @@ void termGlobals() {
     sIsTerminating = true;
     clearAllLogTargets();
     ELogReport::termReport();
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    if (sParams.m_enableLifeSignReport) {
+        if (!termLifeSignReport()) {
+            ELOG_REPORT_ERROR("Failed to terminate life-sign reports");
+            // continue anyway
+        }
+    }
+#endif
 
 #ifdef ELOG_ENABLE_STACK_TRACE
     if (sDbgUtilInitialized) {
@@ -283,24 +330,22 @@ void termGlobals() {
     sPreInitLogger.discardAccumulatedLogMessages();
 }
 
-bool initialize(const char* configFile /* = nullptr */, uint32_t reloadPeriodMillis /* = 0 */,
-                ELogReportHandler* elogReportHandler /* = nullptr */,
-                ELogLevel elogReportLevel /* = ELEVEL_WARN */,
-                uint32_t maxThreads /* = ELOG_DEFAULT_MAX_THREADS */) {
+bool initialize(const ELogParams& params /* = ELogParams() */) {
     if (sInitialized) {
         ELOG_REPORT_ERROR("Duplicate attempt to initialize rejected");
         return false;
     }
-    setReportHandler(elogReportHandler);
-    setReportLevel(elogReportLevel);  // env setting can override this
+    sParams = params;
+    setReportHandler(params.m_reportHandler);
+    setReportLevel(params.m_reportLevel);  // env setting can override this
     if (!initGlobals()) {
         return false;
     }
-    if (configFile != nullptr && !configureByFile(configFile)) {
+    if (params.m_configFile != nullptr && !configureByFile(params.m_configFile)) {
         termGlobals();
         return false;
     }
-    sMaxThreads = maxThreads;
+    sMaxThreads = params.m_maxThreads;
     sInitialized = true;
     return true;
 }
@@ -345,6 +390,388 @@ ELogLevel getReportLevel() { return ELogReport::getReportLevel(); }
 bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler) {
     return ELogSchemaManager::registerSchemaHandler(schemeName, schemaHandler);
 }
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+bool initLifeSignReport() {
+    dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->createLifeSignShmSegment(
+        DBGUTIL_MAX_CONTEXT_AREA_SIZE_BYTES, DBGUTIL_MAX_LIFE_SIGN_AREA_SIZE_BYTES, sMaxThreads,
+        true);
+    if (rc != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR("Failed to create life-sign segment for current process (error code: %u)",
+                          (unsigned)rc);
+        termLifeSignReport();
+        return false;
+    }
+
+    // create application-scope filter
+    sAppLifeSignFilter = new (std::nothrow) ELogLifeSignFilter();
+    if (sAppLifeSignFilter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate application-scope life sign filter, out of memory");
+        return false;
+    }
+
+    // create garbage collector
+    sLifeSignEpoch.store(0, std::memory_order_relaxed);
+    sLifeSignGC = new (std::nothrow) ELogGC();
+    if (sLifeSignGC == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate life sign report garbage collector, out of memory");
+        termLifeSignReport();
+        return false;
+    }
+
+    // initialize garbage collector
+    if (!sLifeSignGC->initialize("elog_life_sign_gc", sMaxThreads, 0,
+                                 sParams.m_lifeSignGCPeriodMillis, sParams.m_lifeSignGCTaskCount)) {
+        ELOG_REPORT_ERROR("Failed to initialize life-sign report garbage collector");
+        termLifeSignReport();
+        return false;
+    }
+
+    // create TLS for thread-scope filter
+    if (!elogCreateTls(sThreadLifeSignKey, cleanupThreadLifeSignFilter)) {
+        ELOG_REPORT_ERROR("Failed to create thread local storage for life-sign filter");
+        termLifeSignReport();
+        return false;
+    }
+
+    return true;
+}
+
+bool termLifeSignReport() {
+    ELogFormatter* formatter = sLifeSignFormatter.load(std::memory_order_acquire);
+    if (formatter != nullptr) {
+        sLifeSignFormatter.store(nullptr, std::memory_order_release);
+        delete formatter;
+    }
+
+    // destroy TLS for thread-scope life-sign reports
+    if (sThreadLifeSignKey != ELOG_INVALID_TLS_KEY) {
+        if (!elogDestroyTls(sThreadLifeSignKey)) {
+            ELOG_REPORT_ERROR("Failed to destroy thread local storage for life-sign filter");
+            return false;
+        }
+        sThreadLifeSignKey = ELOG_INVALID_TLS_KEY;
+    }
+
+    // terminate GC
+    if (sLifeSignGC != nullptr) {
+        if (!sLifeSignGC->destroy()) {
+            ELOG_REPORT_ERROR("Failed to destroy life-sign reports garbage collector");
+            return false;
+        }
+        delete sLifeSignGC;
+        sLifeSignGC = nullptr;
+    }
+
+    // terminate application-scope filter
+    if (sAppLifeSignFilter != nullptr) {
+        delete sAppLifeSignFilter;
+        sAppLifeSignFilter = nullptr;
+    }
+
+    // close shared memory segment and destroy it
+    // (might consider external utility crond/service job to cleanup)
+    dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->closeLifeSignShmSegment(true);
+    if (rc != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR("Failed to destroy life-sign manager: %s", dbgutil::errorToString(rc));
+        termLifeSignReport();
+        return false;
+    }
+
+    return true;
+}
+
+void cleanupThreadLifeSignFilter(void* key) {
+    ELogLifeSignFilter* filter = (ELogLifeSignFilter*)key;
+    if (filter != nullptr) {
+        delete filter;
+    }
+}
+
+static ELogLifeSignFilter* initThreadLifeSignFilter() {
+    ELogLifeSignFilter* filter = new (std::nothrow) ELogLifeSignFilter();
+    if (filter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate life-sign filter for current thread, out of memory");
+        return nullptr;
+    }
+    if (!elogSetTls(sThreadLifeSignKey, filter)) {
+        ELOG_REPORT_ERROR(
+            "Failed to store life-sign filter for current thread in thread local storage");
+        delete filter;
+        filter = nullptr;
+    }
+    return filter;
+}
+
+static ELogLifeSignFilter* getThreadLifeSignFilter() {
+    if (sThreadLifeSignFilter == nullptr) {
+        sThreadLifeSignFilter = initThreadLifeSignFilter();
+        if (sThreadLifeSignFilter == nullptr) {
+            // put some invalid value different than null, signifying that the we should not try
+            // to anymore to create a thread-local life-sign filter
+            sThreadLifeSignFilter = (ELogLifeSignFilter*)-1;
+        }
+    }
+    if (sThreadLifeSignFilter == (ELogLifeSignFilter*)-1) {
+        return nullptr;
+    }
+    return sThreadLifeSignFilter;
+}
+
+static ELogLifeSignFilter* getLifeSignFilter(ELogLifeSignScope scope, ELogSource* logSource) {
+    if (scope == ELogLifeSignScope::LS_APP) {
+        assert(sAppLifeSignFilter != nullptr);
+        return sAppLifeSignFilter;
+    } else if (scope == ELogLifeSignScope::LS_THREAD) {
+        return getThreadLifeSignFilter();
+    } else if (scope == ELogLifeSignScope::LS_LOG_SOURCE) {
+        if (logSource == nullptr) {
+            ELOG_REPORT_ERROR("Cannot retrieve log source life-sign report, missing log source");
+            return nullptr;
+        }
+        return logSource->getLifeSignFilter();
+    }
+    ELOG_REPORT_ERROR("Cannot retrieve life-sign filter, invalid scope %u", (unsigned)scope);
+    return nullptr;
+}
+
+bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
+                       const ELogFrequencySpec& frequencySpec,
+                       ELogSource* logSource /* = nullptr */) {
+    // increment epoch
+    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
+    sLifeSignGC->beginEpoch(epoch);
+
+    // get filter by scope
+    ELogLifeSignFilter* filter = getLifeSignFilter(scope, logSource);
+    if (filter == nullptr) {
+        return false;
+    }
+
+    // set filter
+    ELogFilter* prevFilter = nullptr;
+    if (!filter->setLevelFilter(level, frequencySpec, prevFilter)) {
+        ELOG_REPORT_ERROR("Failed to set life-sign report");
+        return false;
+    }
+
+    // retire previous filter if any and finish
+    if (prevFilter != nullptr) {
+        sLifeSignGC->retire(prevFilter, epoch);
+    }
+    sLifeSignGC->endEpoch(epoch);
+    return true;
+}
+
+bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
+                          ELogSource* logSource /* = nullptr */) {
+    // increment epoch
+    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
+    sLifeSignGC->beginEpoch(epoch);
+
+    // get filter by scope
+    ELogLifeSignFilter* filter = getLifeSignFilter(scope, logSource);
+    if (filter == nullptr) {
+        return false;
+    }
+
+    // remove filter
+    ELogFilter* prevFilter = filter->removeLevelFilter(level);
+
+    // retire previous filter if any and finish
+    if (prevFilter != nullptr) {
+        sLifeSignGC->retire(prevFilter, epoch);
+    }
+    sLifeSignGC->endEpoch(epoch);
+    return true;
+}
+
+bool setLifeSignLogFormat(const char* logFormat) {
+    ELogFormatter* newFormatter = new (std::nothrow) ELogFormatter();
+    if (newFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate life-sign log line formatter, out of memory");
+        return false;
+    }
+
+    if (!newFormatter->initialize(logFormat)) {
+        ELOG_REPORT_ERROR(
+            "Failed to initialize life-sign log line formatter, invalid log line format: %s",
+            logFormat);
+        delete newFormatter;
+        newFormatter = nullptr;
+        return false;
+    }
+
+    // exchange pointers with much caution (not deleting, but retiring to GC)
+
+    // first increment epoch
+    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
+    sLifeSignGC->beginEpoch(epoch);
+
+    // next, exchange pointers
+    ELogFormatter* oldFormatter = sLifeSignFormatter.load(std::memory_order_acquire);
+    sLifeSignFormatter.store(newFormatter, std::memory_order_release);
+
+    // finally, retire the old formatter to GC and finish
+    if (oldFormatter != nullptr) {
+        sLifeSignGC->retire(oldFormatter, epoch);
+    }
+    sLifeSignGC->endEpoch(epoch);
+    return true;
+}
+
+void setLifeSignSyncPeriod(uint32_t syncPeriodMillis) {
+    // check if the timer thread is running, and if so update it's period, otherwise launch a new
+    // timer thread
+    std::unique_lock<std::mutex> lock(sLifeSignLock);
+    sLifeSignSyncPeriodMillis = syncPeriodMillis;
+    if (syncPeriodMillis > 0) {
+        // create timer thread on-demand (no race, we have the lock)
+        if (!sLifeSignSyncThread.joinable()) {
+            sLifeSignSyncThread = std::thread([]() {
+                std::unique_lock<std::mutex> lock(sLifeSignLock);
+                while (sLifeSignSyncPeriodMillis > 0) {
+                    sLifeSignCV.wait_for(lock, std::chrono::milliseconds(sLifeSignSyncPeriodMillis),
+                                         []() { return true; });
+                    syncLifeSignReport();
+                }
+            });
+        } else {
+            // otherwise just notify the thread about the change
+            sLifeSignCV.notify_one();
+        }
+    } else {
+        // notify thread about zero period, and wait for it to terminate
+        if (sLifeSignSyncThread.joinable()) {
+            sLifeSignCV.notify_one();
+            lock.unlock();  // otherwise we dead-lock...
+            sLifeSignSyncThread.join();
+        }
+    }
+}
+
+bool syncLifeSignReport() {
+    dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->syncLifeSignShmSegment();
+    if (rc != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR("Failed to synchronize life-sign report to disk (error code: %d)", rc);
+        return false;
+    }
+    return true;
+}
+
+void reportLifeSign(const char* msg) {
+    // reserve space for terminating null
+    size_t len = strlen(msg) + 1;
+    if (len > DBGUTIL_MAX_LIFE_SIGN_RECORD_SIZE_BYTES) {
+        len = DBGUTIL_MAX_LIFE_SIGN_RECORD_SIZE_BYTES;
+    }
+    dbgutil::getLifeSignManager()->writeLifeSignRecord(msg, (uint32_t)len);
+}
+
+void sendLifeSignReport(const ELogRecord& logRecord) {
+    // increment epoch, so pointers are still valid
+    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
+    sLifeSignGC->beginEpoch(epoch);
+
+    // first check life sign filter in log source
+    bool sendReport = false;
+    ELogLifeSignFilter* filter = logRecord.m_logger->getLogSource()->getLifeSignFilter();
+    if (filter->hasLevelFilter(logRecord.m_logLevel)) {
+        sendReport = filter->filterLogRecord(logRecord);
+    }
+
+    // check thread local filter
+    if (!sendReport) {
+        filter = getThreadLifeSignFilter();
+        if (filter != nullptr) {
+            if (filter->hasLevelFilter(logRecord.m_logLevel)) {
+                sendReport = filter->filterLogRecord(logRecord);
+            }
+        }
+    }
+
+    // check application-scope filter
+    if (!sendReport) {
+        if (sAppLifeSignFilter->hasLevelFilter(logRecord.m_logLevel)) {
+            sendReport = sAppLifeSignFilter->filterLogRecord(logRecord);
+        }
+    }
+
+    if (sendReport) {
+        // format log line
+        ELogFormatter* formatter = sLifeSignFormatter.load(std::memory_order_relaxed);
+        if (formatter == nullptr) {
+            formatter = sGlobalFormatter;
+        }
+        ELogBuffer logBuffer;
+        formatter->formatLogBuffer(logRecord, logBuffer);
+        logBuffer.finalize();
+        // NOTE: offset points to terminating null
+        dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->writeLifeSignRecord(
+            logBuffer.getRef(), logBuffer.getOffset());
+        if (rc != DBGUTIL_ERR_OK) {
+            ELOG_REPORT_ERROR("Failed to write life sign record: %s", dbgutil::errorToString(rc));
+        }
+    }
+
+    // finish
+    sLifeSignGC->endEpoch(epoch);
+}
+
+void reportAppNameLifeSign(const char* appName) {
+    // reserve space for terminating null
+    size_t nameLen = strlen(appName) + 1;
+    size_t totalLen = nameLen + sizeof(uint32_t);
+    if (totalLen > DBGUTIL_MAX_CONTEXT_RECORD_SIZE_BYTES) {
+        // save 4 bytes for record type, 1 byte for terminating null
+        totalLen = DBGUTIL_MAX_CONTEXT_RECORD_SIZE_BYTES;
+        nameLen = totalLen - sizeof(uint32_t) - 1;
+    }
+    char* buf = new (std::nothrow) char[totalLen];
+    if (buf == nullptr) {
+        ELOG_REPORT_ERROR(
+            "Failed to allocate %u bytes for life-sign application name context record", totalLen);
+        return;
+    }
+    *(uint32_t*)(buf) = ELOG_LIFE_SIGN_APP_NAME_RECORD_ID;
+    uint32_t offset = sizeof(uint32_t);
+    memcpy(buf + offset, appName, nameLen);
+    // NOTE: cast is safe after verifying totalLen above
+    dbgutil::DbgUtilErr rc =
+        dbgutil::getLifeSignManager()->writeContextRecord(buf, (uint32_t)totalLen);
+    if (rc != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR("Failed to write life-sign application name context record: %s",
+                          dbgutil::errorToString(rc));
+    }
+    delete[] buf;
+}
+
+void reportCurrentThreadNameLifeSign(elog_thread_id_t threadId, const char* threadName) {
+    size_t nameLen = strlen(threadName) + 1;
+    uint32_t totalLen = (uint32_t)(nameLen + sizeof(uint32_t) + sizeof(uint64_t));
+    if (nameLen > DBGUTIL_MAX_LIFE_SIGN_RECORD_SIZE_BYTES) {
+        // save 4 bytes for record type, 8 bytes for thread id, 1 byte for terminating null
+        nameLen = DBGUTIL_MAX_LIFE_SIGN_RECORD_SIZE_BYTES - sizeof(uint32_t) + sizeof(uint64_t) - 1;
+    }
+    char* buf = new (std::nothrow) char[totalLen];
+    if (buf == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate %u bytes for life-sign thread name context record",
+                          totalLen);
+        return;
+    }
+    *(uint32_t*)(buf) = ELOG_LIFE_SIGN_THREAD_NAME_RECORD_ID;
+    uint32_t offset = sizeof(uint32_t);
+    *(uint64_t*)(buf + offset) = (uint64_t)threadId;
+    offset += sizeof(uint64_t);
+    memcpy(buf + offset, threadName, nameLen);
+    dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->writeContextRecord(buf, totalLen);
+    if (rc != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR("Failed to write life-sign current thread name context record: %s",
+                          dbgutil::errorToString(rc));
+    }
+    delete[] buf;
+}
+#endif
 
 bool configureRateLimit(const std::string& rateLimitCfg) {
     uint32_t maxMsgPerSec = 0;
@@ -1625,6 +2052,11 @@ void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title,
 
 void logMsg(const ELogRecord& logRecord,
             ELogTargetAffinityMask logTargetAffinityMask /* = ELOG_ALL_TARGET_AFFINITY_MASK */) {
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    if (sParams.m_enableLifeSignReport) {
+        sendLifeSignReport(logRecord);
+    }
+#endif
     bool logged = false;
     for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];

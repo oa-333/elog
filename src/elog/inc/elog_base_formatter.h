@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "elog_field_selector.h"
+#include "elog_managed_object.h"
 #include "elog_record.h"
 
 namespace elog {
@@ -13,9 +14,9 @@ namespace elog {
 // ${rid} ${time} ${host} ${user} ${prog} ${pid} ${tid} ${src} ${msg}
 
 /** @class Utility class for formatting log messages. */
-class ELOG_API ELogBaseFormatter {
+class ELOG_API ELogBaseFormatter : public ELogManagedObject {
 public:
-    virtual ~ELogBaseFormatter();
+    ~ELogBaseFormatter() override;
 
     /**
      * @brief Initializes the log formatter.

@@ -21,7 +21,8 @@ namespace elog {
 // slot id. Currently we don't have use for GC except for group flush, so this is not fixed for now
 static thread_local uint64_t sCurrentThreadGCSlotId = ELOG_INVALID_GC_SLOT_ID;
 
-bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency) {
+bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency,
+                        uint32_t gcPeriodMillis, uint32_t gcThreadCount) {
     if (maxThreads > ELOG_MAX_THREADS_UPPER_BOUND) {
         ELOG_REPORT_ERROR(
             "Cannot initialize %s garbage collector, maximum number of threads %u exceeds allowed "
@@ -29,8 +30,16 @@ bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFreque
             name, maxThreads, (unsigned)ELOG_MAX_THREADS_UPPER_BOUND);
         return false;
     }
+    if (gcFrequency == 0 && gcPeriodMillis == 0) {
+        ELOG_REPORT_ERROR(
+            "Cannot initialize %s garbage collector, when GC frequency is zero, the background GC "
+            "task period cannot be zero as well");
+        return false;
+    }
+
     m_name = name;
     m_gcFrequency = gcFrequency;
+    m_gcPeriodMillis = gcPeriodMillis;
     m_maxThreads = maxThreads;
     m_retireCount = 0;
     // TODO: this is incorrect. if one thread is slow and all other threads are fast, then the epoch
@@ -43,10 +52,40 @@ bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFreque
         ELOG_REPORT_ERROR("Failed to create TLS key used for GC thread exit notification");
         return false;
     }
+
+    // background GC tasks
+    if (gcPeriodMillis > 0) {
+        for (uint32_t i = 0; i < gcThreadCount; ++i) {
+            m_gcThreads.emplace_back(std::thread([this]() {
+                bool done = false;
+                while (!done) {
+                    // recycle objects
+                    recycleRetiredObjects();
+
+                    // wait for next cycle (interruptible)
+                    std::unique_lock<std::mutex> lock(m_lock);
+                    bool& isDone = m_done;  // cannot pass ref to member... (lambda within lambda)
+                    m_cv.wait_for(lock, std::chrono::milliseconds(m_gcPeriodMillis),
+                                  [&isDone]() { return isDone; });
+                    done = m_done;
+                }
+            }));
+        }
+    }
     return true;
 }
 
 bool ELogGC::destroy() {
+    // stop all GC threads
+    {
+        std::unique_lock<std::mutex> lock(m_lock);
+        m_done = true;
+        m_cv.notify_all();
+    }
+    for (uint32_t i = 0; i < m_gcThreads.size(); ++i) {
+        m_gcThreads[i].join();
+    }
+
     // destroy TLS key
     if (!elogDestroyTls(m_tlsKey)) {
         ELOG_REPORT_ERROR("Failed to destroy TLS key used for GC thread exit notification");
@@ -69,7 +108,7 @@ void ELogGC::endEpoch(uint64_t epoch) {
     m_epochSet.insert(epoch);
 
     uint64_t retireCount = m_retireCount.fetch_add(1, std::memory_order_relaxed) + 1;
-    if ((retireCount % m_gcFrequency) == 0) {
+    if ((m_gcFrequency > 0) && (retireCount % m_gcFrequency) == 0) {
         recycleRetiredObjects();
     }
 }

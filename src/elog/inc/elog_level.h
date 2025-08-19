@@ -45,6 +45,9 @@ enum ELogLevel : uint32_t {
     ELEVEL_DIAG
 };
 
+/** @def The number of defined log levels. */
+#define ELEVEL_COUNT ((uint32_t)ELEVEL_DIAG)
+
 /** @brief Converts log level constant to string. */
 extern ELOG_API const char* elogLevelToStr(ELogLevel logLevel);
 

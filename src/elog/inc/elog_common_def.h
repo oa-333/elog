@@ -118,6 +118,55 @@ enum class ELogSizeUnits : uint32_t {
 /** @def Default maximum number of threads used by ELog. */
 #define ELOG_DEFAULT_MAX_THREADS 256
 
+/** @def Default value of life-sign usage. */
+#define ELOG_DEFAULT_ENABLE_LIFE_SIGN true
+
+/** @def Default period in milliseconds of each life-sign GC task. */
+#define ELOG_DEFAULT_LIFE_SIGN_GC_PERIOD_MILLIS 500
+
+/** @def Default number of life-sign GC tasks. */
+#define ELOG_DEFAULT_LIFE_SIGN_GC_TASK_COUNT 1
+
+/** @brief Life-sign report scope constnats. */
+enum class ELogLifeSignScope : uint32_t {
+    /** @brief Designates reporting life-sign for the entire application. */
+    LS_APP,
+
+    /** @brief Designates reporting life-sign for the current thread. */
+    LS_THREAD,
+
+    /** @brief Designates reporting life-sign for the specified log-source. */
+    LS_LOG_SOURCE
+};
+
+/** @brief Constants for frequency specification methods. */
+enum class ELogFrequencySpecMethod : uint32_t {
+    /** @var Frequency is specified in "once in every N messages". */
+    FS_EVERY_N_MESSAGES,
+
+    /** @var Frequency is specified in rate limit terms, "messages per seconds". */
+    FS_MESSAGES_PER_SECONDS
+};
+
+struct ELogFrequencySpec {
+    ELogFrequencySpec() = delete;
+    ELogFrequencySpec(ELogFrequencySpecMethod method, uint32_t value)
+        : m_method(method), m_msgCount(value), m_msgPerSecond(value) {}
+    ELogFrequencySpec(const ELogFrequencySpec&) = default;
+    ELogFrequencySpec(ELogFrequencySpec&&) = delete;
+    ELogFrequencySpec& operator=(ELogFrequencySpec&) = default;
+    ~ELogFrequencySpec() {}
+
+    /** @var Frequency specification method. */
+    ELogFrequencySpecMethod m_method;
+
+    /** @var Once in every N messages. */
+    uint32_t m_msgCount;
+
+    /** @var Rate limit to the specified number of messages per second. */
+    uint32_t m_msgPerSecond;
+};
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

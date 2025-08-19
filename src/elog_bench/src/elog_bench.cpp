@@ -85,6 +85,7 @@ static bool sTestConns = false;
 static bool sTestException = false;
 static bool sTestEventLog = false;
 static bool sTestRegression = false;
+static bool sTestLifeSign = false;
 static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
 static int sMsgCnt = -1;
@@ -566,6 +567,7 @@ static int testColors();
 static int testException();
 static int testEventLog();
 static int testRegression();
+static int testLifeSign();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -807,6 +809,14 @@ static bool parseArgs(int argc, char* argv[]) {
         } else if (strcmp(argv[1], "--test-regression") == 0) {
             sTestRegression = true;
             return true;
+        } else if (strcmp(argv[1], "--test-life-sign") == 0) {
+#ifdef ELOG_ENABLE_LIFE_SIGN
+            sTestLifeSign = true;
+            return true;
+#else
+            fprintf(stderr, "Cannot test life-sign, must compile with ELOG_ENABLE_LIFE_SIGN\n");
+            return false;
+#endif
         }
     }
 
@@ -1003,7 +1013,35 @@ static void testFmtLibSanity() {
         ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+
+    // test every-N macro
+    for (uint32_t i = 0; i < 30; ++i) {
+        ELOG_EVERY_N_INFO(10, "This is a test every-N message (one in 10 messages, total 30)");
+    }
 #endif
+}
+
+static void testLogMacros() {
+    // test once macro
+    for (uint32_t i = 0; i < 10; ++i) {
+        ELOG_ONCE_INFO("This is a test once message");
+    }
+
+    // test once thread macro
+    for (uint32_t i = 0; i < 10; ++i) {
+        ELOG_ONCE_THREAD_INFO("This is a test once thread message");
+    }
+
+    // test moderate macro
+    for (uint32_t i = 0; i < 30; ++i) {
+        ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // test every-N macro
+    for (uint32_t i = 0; i < 30; ++i) {
+        ELOG_EVERY_N_INFO(10, "This is a test every-N message (one in 10 messages, total 30)");
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -1033,6 +1071,8 @@ int main(int argc, char* argv[]) {
             res = testEventLog();
         } else if (sTestRegression) {
             res = testRegression();
+        } else if (sTestLifeSign) {
+            res = testLifeSign();
         }
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
@@ -1236,7 +1276,125 @@ static int testRegression() {
 #ifdef ELOG_ENABLE_FMT_LIB
     testFmtLibSanity();
 #endif
+    testLogMacros();
     return 0;
+}
+
+static int testLifeSign() {
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    // baseline test - no filter used, direct life sign report
+    fprintf(stderr, "Running basic life-sign test\n");
+    elog::ELogTarget* logTarget = initElog();
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init life-sign test, aborting\n");
+        return 1;
+    }
+    fprintf(stderr, "initElog() OK\n");
+
+    // run simple test - write one record
+    elog::reportLifeSign("Test life sign");
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    // multi-threaded test
+    fprintf(stderr, "Multi-threaded life-sign test\n");
+
+    // test application level filter
+    elog::setLifeSignReport(
+        elog::ELogLifeSignScope::LS_APP, elog::ELEVEL_INFO,
+        elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES, 1));
+    std::vector<std::thread> threads;
+    volatile bool done = false;
+    fprintf(stderr, "Launching test threads\n");
+    for (uint32_t i = 0; i < 5; ++i) {
+        threads.emplace_back(std::thread([i, &done]() {
+            std::string tname = "test-thread-app-";
+            tname += std::to_string(i);
+            elog::setCurrentThreadName(tname.c_str());
+            uint32_t count = 0;
+            while (!done) {
+                ELOG_INFO(
+                    "This is a life sign log (count %u) from thread %u, with APP filter freq 1",
+                    ++count, i);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }));
+        std::this_thread::sleep_for(std::chrono::milliseconds(77));
+    }
+    fprintf(stderr, "Launched all threads\n");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    fprintf(stderr, "Wait ended, joining threads\n");
+    done = true;
+    for (auto& t : threads) {
+        t.join();
+    }
+    fprintf(stderr, "Application-level filter test finished\n");
+
+    // remove application level filter, and set thread-level filter
+    fprintf(stderr, "Thread-level filter test starting\n");
+    elog::removeLifeSignReport(elog::ELogLifeSignScope::LS_APP, elog::ELEVEL_INFO);
+    threads.clear();
+    done = false;
+    for (uint32_t i = 0; i < 5; ++i) {
+        threads.emplace_back(std::thread([i, &done]() {
+            elog::setLifeSignReport(
+                elog::ELogLifeSignScope::LS_THREAD, elog::ELEVEL_INFO,
+                elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES, 2));
+            std::string tname = "test-thread-";
+            tname += std::to_string(i);
+            elog::setCurrentThreadName(tname.c_str());
+            uint32_t count = 0;
+            while (!done) {
+                ELOG_INFO(
+                    "This is a life sign log (count %u) from thread %u, with THREAD filter freq 2",
+                    ++count, i);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }));
+        std::this_thread::sleep_for(std::chrono::milliseconds(77));
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    done = true;
+    for (auto& t : threads) {
+        t.join();
+    }
+    fprintf(stderr, "Thread-level filter test ended, aborting\n");
+
+    // set log-source filter
+    fprintf(stderr, "log-source filter test starting\n");
+    elog::setLifeSignReport(
+        elog::ELogLifeSignScope::LS_LOG_SOURCE, elog::ELEVEL_INFO,
+        elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_MESSAGES_PER_SECONDS, 5),
+        elog::getDefaultLogger()->getLogSource());
+    threads.clear();
+    done = false;
+    for (uint32_t i = 0; i < 5; ++i) {
+        threads.emplace_back(std::thread([i, &done]() {
+            std::string tname = "test-log-source-thread-";
+            tname += std::to_string(i);
+            elog::setCurrentThreadName(tname.c_str());
+            uint32_t count = 0;
+            while (!done) {
+                ELOG_INFO(
+                    "This is a life sign log (count %u) from thread %u, with LOG-SOURCE rate limit "
+                    "of 5 msg/sec",
+                    ++count, i);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+        }));
+        std::this_thread::sleep_for(std::chrono::milliseconds(77));
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    done = true;
+    for (auto& t : threads) {
+        t.join();
+    }
+    fprintf(stderr, "Log-source filter test ended, aborting\n");
+
+    abort();
+    return 0;
+#else
+    return -1;
+#endif
 }
 
 void testPerfPrivateLog() {
@@ -1787,7 +1945,7 @@ int testEventLog() {
     }
     return 0;
 #else
-    return 0;
+    return -1;
 #endif
 }
 

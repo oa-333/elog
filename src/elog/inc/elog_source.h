@@ -10,6 +10,10 @@
 #include "elog_common_def.h"
 #include "elog_level.h"
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
+#include "elog_life_sign_filter.h"
+#endif
+
 namespace elog {
 
 // forward declaration
@@ -150,6 +154,11 @@ public:
      */
     ELogLogger* createPrivateLogger();
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    /** @brief Retrieves the life sign filter associated with the log source.  */
+    ELogLifeSignFilter* getLifeSignFilter() { return &m_lifeSignFilter; }
+#endif
+
 private:
     ELogSourceId m_sourceId;
     std::string m_name;
@@ -162,6 +171,9 @@ private:
     std::unordered_set<ELogLogger*> m_loggers;
     ELogTargetAffinityMask m_logTargetAffinityMask;
     std::vector<ELogPassKey> m_passKeys;
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    ELogLifeSignFilter m_lifeSignFilter;
+#endif
 
     ELogSource(ELogSourceId sourceId, const char* name, ELogSource* parent = nullptr,
                ELogLevel logLevel = ELEVEL_INFO);

@@ -35,7 +35,7 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     // first check for env var SENTRY_DSN
     if (elog_getenv("SENTRY_DSN", params.m_dsn)) {
         // do not print key and cause security breach
-        ELOG_REPORT_TRACE("Using ENTRY_DSN environment variable");
+        ELOG_REPORT_INFO("Using ENTRY_DSN environment variable");
     } else if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "Sentry", "dsn",
                                                              params.m_dsn)) {
         return nullptr;

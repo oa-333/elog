@@ -6,8 +6,10 @@
 # -r|--release
 # -w|--rel-with-debug-info
 # -e|--secure
+# -x|--cxx-ver
 # -s|--stack-trace
 # -b|--fmt-lib
+# -n|--life-sign
 # -f|--full
 # -c|--conn sqlite|mysql|postgresql|kafka
 # -i|--install-dir <INSTALL_DIR>
@@ -27,8 +29,10 @@ else
     INSTALL_DIR=~/install/elog
 fi
 SECURE=0
+CXX_VER=23
 STACK_TRACE=0
 FMT_LIB=0
+LIFE_SIGN=0
 VERBOSE=0
 FULL=0
 CLEAN=0
@@ -40,7 +44,7 @@ TRACE=0
 HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwesbfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,stack-trace,fmt-lib,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
+TEMP=$(getopt -o vdrwexsbnfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -51,8 +55,10 @@ while true; do
     -r | --release ) BUILD_TYPE=Release; shift ;;
     -w | --rel-with-debug-info ) BUILD_TYPE=RelWithDebInfo; shift ;;
     -e | --secure) SECURE=1; shift ;;
+    -x | --cxx-ver) CXX_VER=$2; shift 2 ;;
     -s | --stack-trace ) STACK_TRACE=1; shift ;;
     -b | --fmt-lib ) FMT_LIB=1; shift ;;
+    -n | --life-sign ) LIFE_SIGN=1; shift ;;
     -f | --full ) FULL=1; shift;;
     -c | --conn ) CONNS+=($2); shift 2 ;;
     -i | --install-dir) INSTALL_DIR="$2"; shift 2 ;;
@@ -79,6 +85,7 @@ if [ "$HELP" -eq "1" ]; then
     echo "      -d|--debug                  Build in debug mode."
     echo "      -w|--rel-with-debug-info    Build in release mode with debug symbols."
     echo "      -e|--secure                 Uses secure C runtime functions."
+    echo "      -x|--cxx-ver VERSION        C++ version (11, 14, 17, 20 or 23, default is 23)."
     echo ""
     echo "If none is specified, then the default is debug build mode."
     echo ""
@@ -86,9 +93,10 @@ if [ "$HELP" -eq "1" ]; then
     echo "EXTENSIONS OPTIONS"
     echo ""
     echo "      -c|--conn CONNECTOR_NAME    Enables connector."
-    echo "      -s|--stack-trace            Enable stack trace logging API."
-    echo "      -b|--fmt-lib                Enable fmtlib formatting style support."
-    echo "      -f|--full                   Enable all connectors and stack trace logging API."
+    echo "      -s|--stack-trace            Enables stack trace logging API."
+    echo "      -b|--fmt-lib                Enables fmtlib formatting style support."
+    echo "      -n|--life-sign              Enables periodic life-sign reports."
+    echo "      -f|--full                   Enables all connectors and stack trace logging API."
     echo ""
     echo "By default no connector is enabled, and stack trace logging is disabled."
     echo "The following connectors are currently supported:"
@@ -126,18 +134,14 @@ if [ "$HELP" -eq "1" ]; then
     exit 0
 fi
 
-if [ "$FULL" -eq "1" ]; then
-    echo "[INFO] Configuring FULL options"
-    STACK_TRACE=1
-    CONNS=(all)
-fi
-
 # set normal options
 echo "[INFO] Build type: $BUILD_TYPE"
 echo "[INFO] Install dir: $INSTALL_DIR"
 echo "[INFO] Secure: $SECURE"
+echo "[INFO] CXX Version: $CXX_VER"
 echo "[INFO] Stack trace: $STACK_TRACE"
 echo "[INFO] fmtlib: $FMT_LIB"
+echo "[INFO] Life sign: $LIFE_SIGN"
 echo "[INFO] Verbose: $VERBOSE"
 echo "[INFO] Full: $FULL"
 echo "[INFO] Clean: $CLEAN"
@@ -145,6 +149,16 @@ echo "[INFO] Rebuild: $REBUILD"
 echo "[INFO] Reconfigure: $RE_CONFIG"
 echo "[INFO] Mem-check: $MEM_CHECK"
 echo "[INFO] Clang: $CLANG"
+
+if [ "$FULL" -eq "1" ]; then
+    echo "[INFO] Configuring FULL options"
+    STACK_TRACE=1
+    FMT_LIB=1
+    LIFE_SIGN=1
+    CONNS=(all)
+fi
+
+# set options
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
 if [ "$VERBOSE" == "1" ]; then
     OPTS+=" -DCMAKE_VERBOSE_MAKEFILE=ON"
@@ -152,11 +166,15 @@ fi
 if [ "$SECURE" == "1" ]; then
     OPTS+=" -DELOG_SECURE=ON"
 fi
+OPTS+=" -DCMAKE_CXX_STANDARD=$CXX_VER"
 if [ "$STACK_TRACE" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_STACK_TRACE=ON"
 fi
 if [ "$FMT_LIB" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_FMT_LIB=ON"
+fi
+if [ "$LIFE_SIGN" == "1" ]; then
+    OPTS+=" -DELOG_ENABLE_LIFE_SIGN=ON"
 fi
 if [ "$MEM_CHECK" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_MEM_CHECK=ON"

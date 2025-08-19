@@ -26,6 +26,13 @@ if (ELOG_BUILD_BENCH)
     endif()
 endif()
 
+# ELog post-mortem cli (and Windows shared memory guardian)
+add_executable(elog_pm)
+if (MINGW)
+    # since output may go to the same install dir, we need to use a different exe name
+    set_target_properties(elog_pm PROPERTIES OUTPUT_NAME "elog_pm_mingw")
+endif()
+
 # some things are platform dependent so we need a well-defined system name
 if (MINGW)
     set(SYSTEM_NAME "${CMAKE_SYSTEM_NAME}_mingw")
@@ -46,6 +53,7 @@ endif()
 option(ELOG_SECURE "Use secure C runtime functions" OFF)
 option(ELOG_ENABLE_STACK_TRACE "ELog stack trace" OFF)
 option(ELOG_ENABLE_FMT_LIB "ELog fmtlib formatting style support" OFF)
+option(ELOG_ENABLE_LIFE_SIGN "ELog periodic life-sign report support" OFF)
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
 option(ELOG_ENABLE_PGSQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
@@ -195,11 +203,9 @@ if (ELOG_ENABLE_JSON)
 endif()
 
 #############################################################
-# stack trace requires dbgutil
+# stack trace and life-sign require dbgutil
 #############################################################
-if (ELOG_ENABLE_STACK_TRACE)
-    target_compile_definitions(elog PRIVATE ELOG_ENABLE_STACK_TRACE)
-    
+if (ELOG_ENABLE_STACK_TRACE OR ELOG_ENABLE_LIFE_SIGN)
     # for local builds we use local dbgutil
     if (ELOG_BUILD_BENCH)
         message(STATUS "Fetching dbgutil from local path: ${CMAKE_SOURCE_DIR}/../dbgutil")
@@ -213,19 +219,29 @@ if (ELOG_ENABLE_STACK_TRACE)
         )
     endif()
     FetchContent_MakeAvailable(dbgutil)
-    target_include_directories(
-        elog
-        PRIVATE ${dbgutil_SOURCE_DIR}/inc
-    )
+    target_include_directories(elog PRIVATE ${dbgutil_SOURCE_DIR}/inc)
     target_link_libraries(elog dbgutil)
     
     if (ELOG_BUILD_BENCH)
-        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_STACK_TRACE)
-        target_include_directories(
-            elog_bench
-            PRIVATE ${dbgutil_SOURCE_DIR}/inc
-        )
+        target_include_directories(elog_bench PRIVATE ${dbgutil_SOURCE_DIR}/inc)
         target_link_libraries(elog_bench dbgutil)
+    endif()
+
+    target_include_directories(elog_pm PRIVATE ${dbgutil_SOURCE_DIR}/inc)
+    target_link_libraries(elog_pm dbgutil)
+endif()
+
+if (ELOG_ENABLE_STACK_TRACE)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_STACK_TRACE)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_STACK_TRACE)
+    endif()
+endif()
+
+if (ELOG_ENABLE_LIFE_SIGN)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_LIFE_SIGN)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_LIFE_SIGN)
     endif()
 endif()
 
@@ -493,25 +509,39 @@ endif()
 # Otherwise defaults to C++ 20 standard on Windows, and C++ 23 on other platforms
 #############################################################
 
+function(set_cxx_standard proj_name cxx_ver)
+    if(cxx_var EQUAL 11)
+        target_compile_features(${proj_name} PRIVATE cxx_std_11)
+    elseif(cxx_var EQUAL 14)
+        target_compile_features(${proj_name} PRIVATE cxx_std_14)
+    elseif(cxx_var EQUAL 17)
+        target_compile_features(${proj_name} PRIVATE cxx_std_17)
+    elseif(cxx_var EQUAL 20)
+        target_compile_features(${proj_name} PRIVATE cxx_std_20)
+    elseif(cxx_var EQUAL 23)
+        target_compile_features(${proj_name} PRIVATE cxx_std_23)
+    else()
+        message(FATAL_ERROR "Invalid CXX STANDARD ${cxx_ver}")
+    endif()
+endfunction()
+
 if (DEFINED CMAKE_CXX_STANDARD)
     message(STATUS "elog Using externally defined CXX standard: ${CMAKE_CXX_STANDARD}")
-    target_compile_features(elog PRIVATE ${CMAKE_CXX_STANDARD})
-    if (ELOG_BUILD_BENCH)
-        target_compile_features(elog_bench PRIVATE ${CMAKE_CXX_STANDARD})
-    endif()
 else()
     if (MSVC)
-        message(STATUS "CXX standard not defined, eog defaulting to cxx_std_20")
-        target_compile_features(elog PRIVATE cxx_std_20)
+        message(STATUS "CXX standard not defined, elog defaulting to cxx_std_20")
+        target_compile_features(elog PUBLIC cxx_std_20)
         if (ELOG_BUILD_BENCH)
             target_compile_features(elog_bench PRIVATE cxx_std_20)
         endif()
+        target_compile_features(elog_pm PRIVATE cxx_std_20)
     else()
         message(STATUS "CXX standard not defined, elog defaulting to cxx_std_23")
-        target_compile_features(elog PRIVATE cxx_std_23)
+        target_compile_features(elog PUBLIC cxx_std_23)
         if (ELOG_BUILD_BENCH)
             target_compile_features(elog_bench PRIVATE cxx_std_23)
         endif()
+        target_compile_features(elog_pm PRIVATE cxx_std_23)
     endif()
 endif()
 
@@ -617,6 +647,7 @@ target_include_directories(elog PRIVATE src/elog/inc)
 if (ELOG_BUILD_BENCH)
     target_include_directories(elog_bench PRIVATE src/elog/inc)
 endif()
+target_include_directories(elog_pm PRIVATE src/elog/inc)
 
 # special include directories for MinGW
 # TODO: check this again, since we are building from UCRT64 console
@@ -635,6 +666,12 @@ endif()
 if (ELOG_BUILD_BENCH)
     target_link_libraries(elog_bench elog)
 endif()
+target_link_libraries(elog_pm elog)
+if (NOT MSVC AND ELOG_BUILD_BENCH)
+    message(STATUS "Adding link to readline")
+    target_link_libraries(elog_pm readline)
+    target_link_libraries(elog_pm history)
+endif()
 
 # source folders
 add_subdirectory(src/elog/src)
@@ -642,6 +679,7 @@ add_subdirectory(src/elog/proto)
 if (ELOG_BUILD_BENCH)
     add_subdirectory(src/elog_bench/src)
 endif()
+add_subdirectory(src/elog_pm/src)
 
 # public headers
 add_subdirectory(src/elog/inc)
@@ -655,6 +693,7 @@ if (ELOG_BUILD_BENCH)
     # install header in install dir
     install(TARGETS elog FILE_SET publicheaders)
     install(TARGETS elog_bench)
+    install(TARGETS elog_pm)
 
     # common install dir
     set(ELOG_INSTALL_REL_PATH ${CMAKE_INSTALL_PREFIX}/../bin/${SYSTEM_NAME}-${CMAKE_BUILD_TYPE})
@@ -664,6 +703,7 @@ if (ELOG_BUILD_BENCH)
     install(TARGETS elog LIBRARY DESTINATION ${ELOG_INSTALL_PATH})
     install(TARGETS elog RUNTIME DESTINATION ${ELOG_INSTALL_PATH})
     install(TARGETS elog_bench RUNTIME DESTINATION ${ELOG_INSTALL_PATH})
+    install(TARGETS elog_pm RUNTIME DESTINATION ${ELOG_INSTALL_PATH})
     if (MSVC)
         install(FILES run_bench.bat DESTINATION ${ELOG_INSTALL_PATH})
     else()

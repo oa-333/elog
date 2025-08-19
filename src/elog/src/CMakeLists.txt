@@ -41,6 +41,7 @@ target_sources(elog PRIVATE
     elog_kafka_msgq_target.cpp
     elog_kafka_msgq_target_provider.cpp
     elog_level.cpp
+    elog_life_sign_filter.cpp
     elog_logger.cpp
     elog_mon_schema_handler.cpp
     elog_msgq_schema_handler.cpp

@@ -31,6 +31,7 @@ ELOG_IMPLEMENT_FILTER(ELogLineNumberFilter)
 ELOG_IMPLEMENT_FILTER(ELogFunctionNameFilter)
 ELOG_IMPLEMENT_FILTER(ELogLevelFilter)
 ELOG_IMPLEMENT_FILTER(ELogMsgFilter)
+ELOG_IMPLEMENT_FILTER(ELogCountFilter)
 
 #define ELOG_MAX_FILTER_COUNT 100
 
@@ -712,6 +713,19 @@ bool ELogMsgFilter::loadExpr(const ELogExpression* expr) {
 
 bool ELogMsgFilter::filterLogRecord(const ELogRecord& logRecord) {
     return compareString(m_cmpOp, logRecord.m_logMsg, m_logMsg.c_str());
+}
+
+bool ELogCountFilter::load(const ELogConfigMapNode* filterCfg) {
+    return loadIntFilter(filterCfg, "count", "count", m_count);
+}
+
+bool ELogCountFilter::loadExpr(const ELogExpression* expr) {
+    return loadIntFilter(expr, "count", m_count);
+}
+
+bool ELogCountFilter::filterLogRecord(const ELogRecord& logRecord) {
+    uint64_t count = m_runningCounter.fetch_add(1, std::memory_order_relaxed);
+    return (count % m_count) == 0;
 }
 
 }  // namespace elog

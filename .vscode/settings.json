@@ -148,6 +148,7 @@
         "PGSQL",
         "pqxx",
         "protoc",
+        "pstack",
         "publicheaders",
         "rdkafka",
         "RELWITHDEBINFO",

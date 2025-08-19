@@ -131,8 +131,10 @@ bool ELogBuffer::append(const char* msg, size_t len /* = 0 */) {
         return false;
     }
     // NOTE: at this point it is guaranteed that the added len will not exceed maximum buffer size,
-    // otherwise ensureBufferLength() would have failed
+    // otherwise ensureBufferLength() would have failed, so we can also copy terminating null
     memcpy(getRef() + m_offset, msg, len + 1);
+
+    // NOTE: offset points to the terminating null
     m_offset += (uint32_t)len;
 
     // NOTE: we continue appending at the same position of the terminating null

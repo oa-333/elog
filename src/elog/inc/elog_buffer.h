@@ -56,7 +56,10 @@ public:
     /** @brief Retrieves the current capacity of the buffer. */
     inline uint32_t size() const { return m_bufferSize; }
 
-    /** @brief Retrieves the current offset of data stored in the buffer. */
+    /**
+     * @brief Retrieves the current offset of data stored in the buffer. When adding only strings
+     * (or formatted strings), the offset always points to the terminating null.
+     */
     inline uint32_t getOffset() const { return m_offset; }
 
     /**

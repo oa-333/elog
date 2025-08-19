@@ -52,6 +52,10 @@
 #include "elog_logger.h"
 #endif
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
+#include "elog_internal.h"
+#endif
+
 namespace elog {
 
 typedef ELogConcurrentHashTable<const char*> ELogThreadNameMap;
@@ -458,7 +462,12 @@ extern const char* getAppName() { return sAppName; }
 
 const char* getProgramName() { return sProgName; }
 
-void setAppNameField(const char* appName) { elog_strncpy(sAppName, appName, APP_NAME_MAX); }
+void setAppNameField(const char* appName) {
+    elog_strncpy(sAppName, appName, APP_NAME_MAX);
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    reportAppNameLifeSign(appName);
+#endif
+}
 
 void setCurrentThreadNameField(const char* threadName) {
     elog_strncpy(sThreadName, threadName, THREAD_NAME_MAX);
@@ -466,6 +475,9 @@ void setCurrentThreadNameField(const char* threadName) {
     sThreadNameMap.setItem((uint64_t)threadId, sThreadName);
     // this is required to trigger cleanup when thread ends
     elogSetTls(sThreadNameKey, (void*)(uint64_t)threadId);
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    reportCurrentThreadNameLifeSign(threadId, threadName);
+#endif
 }
 
 const char* getThreadNameField(uint32_t threadId) {

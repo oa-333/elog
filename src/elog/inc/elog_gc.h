@@ -2,12 +2,16 @@
 #define __ELOG_GC_H__
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "elog_atomic.h"
 #include "elog_def.h"
+#include "elog_managed_object.h"
 #include "elog_rolling_bitset.h"
 #include "elog_tls.h"
 
@@ -15,57 +19,16 @@ namespace elog {
 
 class ELOG_API ELogLogger;
 
-/** @class A GC managed parent class. */
-class ELOG_API ELogManagedObject {
-public:
-    /** @brief Virtual destructor. */
-    virtual ~ELogManagedObject() {}
-
-    /** @brief Sets the retire epoch of this managed object. */
-    inline void setRetireEpoch(uint64_t epoch) { m_retireEpoch = epoch; }
-
-    /** @brief Retrieves the retire epoch. */
-    inline uint64_t getRetireEpoch() { return m_retireEpoch; }
-
-    /** @brief Sets the next managed object in a linked list. */
-    inline void setNext(ELogManagedObject* next) { m_next.store(next, std::memory_order_relaxed); }
-
-    /** @brief Retrieves the next managed object in a linked list. */
-    inline ELogManagedObject* getNext() { return m_next.load(std::memory_order_relaxed); }
-
-    /**
-     * @brief Detach list suffix.
-     * @param next The next list item, previously obtained by a call to @ref getNext().
-     * @return true If the CAS operation for detaching the suffix succeeded, otherwise false.
-     */
-    inline bool detachSuffix(ELogManagedObject* next) {
-        return m_next.compare_exchange_strong(next, nullptr, std::memory_order_seq_cst);
-    }
-
-protected:
-    /** @brief Disallow copy constructor. */
-    ELogManagedObject(const ELogManagedObject&) = delete;
-
-    /** @brief Disallow move constructor.*/
-    ELogManagedObject(ELogManagedObject&&) = delete;
-
-    /** @brief Disallow assignment operator.*/
-    ELogManagedObject& operator=(const ELogManagedObject&) = delete;
-
-    ELogManagedObject(uint64_t retireEpoch = 0, ELogManagedObject* next = nullptr)
-        : m_retireEpoch(retireEpoch), m_next(next) {}
-
-private:
-    uint64_t m_retireEpoch;
-    std::atomic<ELogManagedObject*> m_next;
-};
-
 /** @class A private garbage collector. */
 class ELOG_API ELogGC {
 public:
     ELogGC()
-        : m_gcFrequency(0),
+        : m_name("elog-gc"),
+          m_gcFrequency(0),
+          m_gcPeriodMillis(0),
+          m_maxThreads(0),
           m_retireCount(0),
+          m_done(false),
           m_traceLogger(nullptr),
           m_tlsKey(ELOG_INVALID_TLS_KEY) {}
     ELogGC(const ELogGC&) = delete;
@@ -83,9 +46,17 @@ public:
      * @brief Initializes the garbage collector.
      * @param name The garbage collector name (user may define several).
      * @param maxThreads The maximum number of threads supported by the garbage collector.
-     * @param gcFrequency The frequency of running GC (once per each gcFrequency calls to retire()).
+     * @param gcFrequency The frequency of running cooperative GC on caller's side when calling @ref
+     * endEpoch() (once per each gcFrequency calls to endEpoch()). Zero disables cooperative garbage
+     * collection. Instead a positive garbage collection period must be specified.
+     * @param gcPeriodMillis Optionally specify the period in milliseconds of each background
+     * garbage collection task, which wakes up and recycles all retired objects that are ready for
+     * recycling. This can be specified in addition to cooperative garbage collection frequency.
+     * @param gcThreadCount Optionally specify the number of background garbage collection tasks.
+     * This parameter is ignored when @ref gcPeriodMillis is zero.
      */
-    bool initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency);
+    bool initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency,
+                    uint32_t gcPeriodMillis = 0, uint32_t gcThreadCount = 0);
 
     /** @brief Destroys the garbage collector. */
     bool destroy();
@@ -123,8 +94,13 @@ private:
     // the private garbage collector's name
     std::string m_name;
     uint32_t m_gcFrequency;
+    uint32_t m_gcPeriodMillis;
     uint32_t m_maxThreads;
     std::atomic<uint64_t> m_retireCount;
+    std::vector<std::thread> m_gcThreads;
+    std::mutex m_lock;
+    std::condition_variable m_cv;
+    bool m_done;
 
     // manage minimum active epoch
     ELogRollingBitset m_epochSet;
