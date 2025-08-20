@@ -44,7 +44,8 @@ ELogFilter* ELogLifeSignFilter::makeLifeSignFilter(const ELogFrequencySpec& freq
     if (frequencySpec.m_method == ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES) {
         filter = new (std::nothrow) ELogCountFilter(frequencySpec.m_msgCount);
     } else {
-        filter = new (std::nothrow) ELogRateLimiter(frequencySpec.m_msgPerSecond);
+        filter = new (std::nothrow) ELogRateLimiter(
+            frequencySpec.m_msgCount, frequencySpec.m_timeout, frequencySpec.m_timeoutUnits);
     }
     if (filter == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate life-sign filter, out of memory");

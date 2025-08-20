@@ -85,18 +85,30 @@ typedef uint32_t ELogCacheEntryId;
 /** @def Invalid cache entry id value. */
 #define ELOG_INVALID_CACHE_ENTRY_ID ((ELogCacheEntryId)0xFFFFFFFF)
 
-/** @enum Timeout units (used in flush policy protected helper parsing methods). */
-enum class ELogTimeoutUnits : uint32_t {
-    /** @brief Seconds */
+/** @enum Time units (used in flush policy protected helper parsing methods). */
+enum class ELogTimeUnits : uint32_t {
+    /** @brief No time-unit specified. */
+    TU_NONE,
+
+    /** @brief Days. */
+    TU_DAYS,
+
+    /** @brief Hours. */
+    TU_HOURS,
+
+    /** @brief Minutes. */
+    TU_MINUTES,
+
+    /** @brief Seconds. */
     TU_SECONDS,
 
-    /** @brief Milli-seconds */
+    /** @brief Milli-seconds. */
     TU_MILLI_SECONDS,
 
-    /** @brief Micro-seconds */
+    /** @brief Micro-seconds. */
     TU_MICRO_SECONDS,
 
-    /** @brief Nano-seconds */
+    /** @brief Nano-seconds. */
     TU_NANO_SECONDS
 };
 
@@ -144,14 +156,18 @@ enum class ELogFrequencySpecMethod : uint32_t {
     /** @var Frequency is specified in "once in every N messages". */
     FS_EVERY_N_MESSAGES,
 
-    /** @var Frequency is specified in rate limit terms, "messages per seconds". */
-    FS_MESSAGES_PER_SECONDS
+    /** @var Frequency is specified in rate limit terms, "messages per timeout". */
+    FS_RATE_LIMIT
 };
 
 struct ELogFrequencySpec {
     ELogFrequencySpec() = delete;
-    ELogFrequencySpec(ELogFrequencySpecMethod method, uint32_t value)
-        : m_method(method), m_msgCount(value), m_msgPerSecond(value) {}
+    ELogFrequencySpec(ELogFrequencySpecMethod method, uint64_t msgCount, uint64_t timeout = 0,
+                      ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE)
+        : m_method(method),
+          m_msgCount(msgCount),
+          m_timeout(timeout),
+          m_timeoutUnits(timeoutUnits) {}
     ELogFrequencySpec(const ELogFrequencySpec&) = default;
     ELogFrequencySpec(ELogFrequencySpec&&) = delete;
     ELogFrequencySpec& operator=(ELogFrequencySpec&) = default;
@@ -161,10 +177,13 @@ struct ELogFrequencySpec {
     ELogFrequencySpecMethod m_method;
 
     /** @var Once in every N messages. */
-    uint32_t m_msgCount;
+    uint64_t m_msgCount;
 
-    /** @var Rate limit to the specified number of messages per second. */
-    uint32_t m_msgPerSecond;
+    /** @var Number of messages per timeout interval (rate limit). */
+    uint64_t m_timeout;
+
+    /** @var Timeout interval units (rate limit). */
+    ELogTimeUnits m_timeoutUnits;
 };
 
 }  // namespace elog

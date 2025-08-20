@@ -35,6 +35,20 @@
 #define CPU_RELAX
 #endif
 
+// define missing __cplusplus on MSVC
+#if defined(ELOG_WINDOWS) && defined(_MSVC_LANG)
+#define ELOG_CPP_VER _MSVC_LANG
+#else
+#define ELOG_CPP_VER __cplusplus
+#endif
+
+// define fallthrough attribute
+#if (ELOG_CPP_VER >= 201703L)
+#define ELOG_FALLTHROUGH [[fallthrough]]
+#else
+#define ELOG_FALLTHROUGH
+#endif
+
 // define strcasecmp for MSVC
 #ifdef ELOG_MSVC
 #ifdef strncasecmp

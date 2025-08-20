@@ -94,14 +94,14 @@ protected:
                             const char* propName, uint64_t& value);
     bool loadTimeoutFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
                                 const char* flushPolicyName, const char* propName, uint64_t& value,
-                                ELogTimeoutUnits targetUnits);
+                                ELogTimeUnits targetUnits);
     bool loadSizeFlushPolicy(const ELogConfigMapNode* flushPolicyCfg, const char* flushPolicyName,
                              const char* propName, uint64_t& value, ELogSizeUnits targetUnits);
 
     bool loadIntFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
                             uint64_t& value, const char* propName = nullptr);
     bool loadTimeoutFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
-                                uint64_t& value, ELogTimeoutUnits targetUnits,
+                                uint64_t& value, ELogTimeUnits targetUnits,
                                 const char* propName = nullptr);
     bool loadSizeFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
                              uint64_t& value, ELogSizeUnits targetUnits,

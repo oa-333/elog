@@ -546,7 +546,7 @@ int listAllSegments(bool printList /* = true */, const char* prefix /* = nullptr
         }
         printf("Shared memory segment list:\n");
         // we subtract 2, because Name takes 4 characters, but there is also two spaces in between
-        printf("Name%*sSize\n", maxNameSize - 2, "");
+        printf("Name%*sSize\n", (int)(maxNameSize - 2), "");
         for (const auto& entry : sSegmentList) {
             printf("%s  %u bytes\n", entry.first.c_str(), entry.second);
         }
@@ -774,7 +774,7 @@ int printLifeSignRecords(const dbgutil::LifeSignHeader* hdr, const AppData& appD
 }
 
 void printTime(const char* title, int64_t epochTimeMilliSeconds, uint32_t padding /* = 0 */) {
-#if __cplusplus >= 202002L
+#if ELOG_CPP_VER >= 202002L
     std::chrono::sys_time<std::chrono::milliseconds> tp{
         std::chrono::milliseconds(epochTimeMilliSeconds)};
     std::chrono::zoned_time<std::chrono::milliseconds> zt(std::chrono::current_zone(), tp);

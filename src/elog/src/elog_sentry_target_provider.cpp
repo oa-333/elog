@@ -150,7 +150,7 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     params.m_flushTimeoutMillis = ELOG_SENTRY_DEFAULT_FLUSH_TIMEOUT_MILLIS;
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, "Sentry", "flush_timeout", params.m_flushTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 
@@ -158,7 +158,7 @@ ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* log
     params.m_shutdownTimeoutMillis = ELOG_SENTRY_DEFAULT_SHUTDOWN_TIMEOUT_MILLIS;
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, "Sentry", "shutdown_timeout", params.m_shutdownTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 

@@ -115,7 +115,7 @@ ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(const ELogConfigMapNode* logTa
     uint64_t deadlineTimeoutMillis = ELOG_GRPC_DEFAULT_DEADLINE_MILLIS;
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, "gRPC", "grpc_deadline_timeout", deadlineTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 

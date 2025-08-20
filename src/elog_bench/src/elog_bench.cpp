@@ -1010,7 +1010,8 @@ static void testFmtLibSanity() {
 
     // test moderate macro
     for (uint32_t i = 0; i < 30; ++i) {
-        ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
+        ELOG_MODERATE_INFO(2, 1, elog::ELogTimeUnits::TU_SECONDS,
+                           "This is a test moderate message (twice per second)");
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -1034,7 +1035,8 @@ static void testLogMacros() {
 
     // test moderate macro
     for (uint32_t i = 0; i < 30; ++i) {
-        ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
+        ELOG_MODERATE_INFO(2, 1, elog::ELogTimeUnits::TU_SECONDS,
+                           "This is a test moderate message (twice per second)");
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -1361,10 +1363,10 @@ static int testLifeSign() {
 
     // set log-source filter
     fprintf(stderr, "log-source filter test starting\n");
-    elog::setLifeSignReport(
-        elog::ELogLifeSignScope::LS_LOG_SOURCE, elog::ELEVEL_INFO,
-        elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_MESSAGES_PER_SECONDS, 5),
-        elog::getDefaultLogger()->getLogSource());
+    elog::setLifeSignReport(elog::ELogLifeSignScope::LS_LOG_SOURCE, elog::ELEVEL_INFO,
+                            elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_RATE_LIMIT, 5,
+                                                    1, elog::ELogTimeUnits::TU_SECONDS),
+                            elog::getDefaultLogger()->getLogSource());
     threads.clear();
     done = false;
     for (uint32_t i = 0; i < 5; ++i) {

@@ -74,7 +74,7 @@ public:
 
     static bool getLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
                                             const char* scheme, const char* propName,
-                                            uint64_t& propValue, ELogTimeoutUnits targetUnits);
+                                            uint64_t& propValue, ELogTimeUnits targetUnits);
 
     static bool getLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg, const char* scheme,
                                          const char* propName, uint64_t& propValue,
@@ -106,8 +106,7 @@ public:
 
     static bool getOptionalLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
                                                     const char* scheme, const char* propName,
-                                                    uint64_t& propValue,
-                                                    ELogTimeoutUnits targetUnits,
+                                                    uint64_t& propValue, ELogTimeUnits targetUnits,
                                                     bool* found = nullptr);
 
     static bool getOptionalLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg,

@@ -19,12 +19,8 @@ namespace elog {
 /** @brief Log rate limiter. */
 class ELOG_API ELogRateLimiter : public ELogCmpFilter {
 public:
-    ELogRateLimiter(uint64_t maxMsgPerSecond = 0)
-        : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ),
-          m_maxMsgPerSecond(maxMsgPerSecond),
-          m_currSecond(0),
-          m_currSecondCount(0),
-          m_prevSecondCount(0) {}
+    ELogRateLimiter(uint64_t maxMsg = 0, uint64_t timeout = 0,
+                    ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE);
     ELogRateLimiter(const ELogRateLimiter&) = delete;
     ELogRateLimiter(ELogRateLimiter&&) = delete;
     ELogRateLimiter& operator=(const ELogRateLimiter&) = delete;
@@ -45,10 +41,13 @@ public:
     bool filterLogRecord(const ELogRecord& logRecord) final;
 
 protected:
-    uint64_t m_maxMsgPerSecond;
-    std::atomic<uint64_t> m_currSecond;
-    std::atomic<uint64_t> m_currSecondCount;
-    std::atomic<uint64_t> m_prevSecondCount;
+    uint64_t m_maxMsg;
+    uint64_t m_timeout;
+    ELogTimeUnits m_timeoutUnits;
+    uint64_t m_intervalMillis;
+    std::atomic<uint64_t> m_currInterval;
+    std::atomic<uint64_t> m_currIntervalCount;
+    std::atomic<uint64_t> m_prevIntervalCount;
 
     // milliseconds precision is enough
     typedef std::chrono::milliseconds tstamp_t;
@@ -56,6 +55,9 @@ protected:
     tstamp_t getTstamp();
 
     ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limit);
+
+private:
+    bool prepareInterval();
 };
 
 }  // namespace elog

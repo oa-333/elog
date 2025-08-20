@@ -110,91 +110,197 @@ bool parseBoolProp(const char* propName, const std::string& logTargetCfg, const 
     return true;
 }
 
-// TODO: should be parseTimeValueProp
-bool parseTimeoutProp(const char* propName, const std::string& logTargetCfg,
-                      const std::string& prop, uint64_t& timeout, ELogTimeoutUnits targetUnits,
-                      bool issueError /* = true */) {
+static bool toNanos(uint64_t value, ELogTimeUnits sourceUnits, uint64_t& res,
+                    bool issueError = true) {
+    res = value;
+    switch (sourceUnits) {
+        case ELogTimeUnits::TU_DAYS:
+            res *= 24;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_HOURS:
+            res *= 60;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_MINUTES:
+            res *= 60;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_SECONDS:
+            res *= 1000;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_MILLI_SECONDS:
+            res *= 1000;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_MICRO_SECONDS:
+            res *= 1000;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_NANO_SECONDS:
+            break;
+
+        case ELogTimeUnits::TU_NONE:
+        default:
+            if (issueError) {
+                ELOG_REPORT_ERROR("Invalid time units for conversion to nano-seconds");
+            }
+            return false;
+    }
+
+    return true;
+}
+
+static bool fromNanos(uint64_t valueNanos, ELogTimeUnits targetUnits, uint64_t& res,
+                      bool issueError = true) {
+    res = valueNanos;
+    switch (targetUnits) {
+        case ELogTimeUnits::TU_DAYS:
+            res /= 24;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_HOURS:
+            res /= 60;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_MINUTES:
+            res /= 60;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_SECONDS:
+            res /= 1000;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_MILLI_SECONDS:
+            res /= 1000;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_MICRO_SECONDS:
+            res /= 1000;
+            ELOG_FALLTHROUGH;
+
+        case ELogTimeUnits::TU_NANO_SECONDS:
+            break;
+
+        case ELogTimeUnits::TU_NONE:
+        default:
+            if (issueError) {
+                ELOG_REPORT_ERROR("Invalid time units for conversion from nano-seconds");
+            }
+            return false;
+    }
+
+    return true;
+}
+
+bool parseTimeUnits(const char* timeUnitsStr, ELogTimeUnits& timeUnits,
+                    bool issueError /* = true */) {
+    std::string units = timeUnitsStr;
+    if (units.compare("d") == 0 || units.compare("day") == 0 || units.compare("days") == 0) {
+        // days
+        timeUnits = ELogTimeUnits::TU_DAYS;
+    } else if (units.compare("h") == 0 || units.compare("hour") == 0 ||
+               units.compare("hours") == 0) {
+        // hours
+        timeUnits = ELogTimeUnits::TU_HOURS;
+    } else if (units.compare("m") == 0 || units.compare("minute") == 0 ||
+               units.compare("minutes") == 0) {
+        // minutes
+        timeUnits = ELogTimeUnits::TU_MINUTES;
+    } else if (units.compare("s") == 0 || units.compare("second") == 0 ||
+               units.compare("seconds") == 0) {
+        // seconds
+        timeUnits = ELogTimeUnits::TU_SECONDS;
+    } else if (units.compare("ms") == 0 || units.compare("milli") == 0 ||
+               units.compare("millis") == 0 || units.compare("milliseconds") == 0) {
+        // milliseconds
+        timeUnits = ELogTimeUnits::TU_MILLI_SECONDS;
+    } else if (units.compare("us") == 0 || units.compare("micro") == 0 ||
+               units.compare("micros") == 0 || units.compare("microseconds") == 0) {
+        // microseconds
+        timeUnits = ELogTimeUnits::TU_MICRO_SECONDS;
+    } else if (units.compare("ns") == 0 || units.compare("nano") == 0 ||
+               units.compare("nanos") == 0 || units.compare("nanoseconds") == 0) {
+        // nanoseconds
+        timeUnits = ELogTimeUnits::TU_NANO_SECONDS;
+    } else {
+        if (issueError) {
+            ELOG_REPORT_ERROR("Invalid time units specification '%s'", units.c_str());
+        }
+        return false;
+    }
+    return true;
+}
+
+const char* timeUnitToString(ELogTimeUnits timeUnits) {
+    switch (timeUnits) {
+        case ELogTimeUnits::TU_DAYS:
+            return "days";
+
+        case ELogTimeUnits::TU_HOURS:
+            return "hours";
+
+        case ELogTimeUnits::TU_MINUTES:
+            return "minutes";
+
+        case ELogTimeUnits::TU_SECONDS:
+            return "seconds";
+
+        case ELogTimeUnits::TU_MILLI_SECONDS:
+            return "milliseconds";
+
+        case ELogTimeUnits::TU_MICRO_SECONDS:
+            return "microseconds";
+
+        case ELogTimeUnits::TU_NANO_SECONDS:
+            return "nanoseconds";
+
+        case ELogTimeUnits::TU_NONE:
+        default:
+            return "N/A";
+    }
+}
+
+bool parseTimeValueProp(const char* propName, const std::string& logTargetCfg,
+                        const std::string& prop, uint64_t& timeValue, ELogTimeUnits& origUnits,
+                        ELogTimeUnits targetUnits, bool issueError /* = true */) {
     std::size_t pos = 0;
     try {
-        timeout = std::stoull(prop, &pos);
+        timeValue = std::stoull(prop, &pos);
     } catch (std::exception& e) {
         if (issueError) {
-            ELOG_REPORT_ERROR("Invalid %s timeout value %s: %s (%s)", propName, prop.c_str(),
+            ELOG_REPORT_ERROR("Invalid %s time value %s: %s (%s)", propName, prop.c_str(),
                               logTargetCfg.c_str(), e.what());
         }
         return false;
     }
     if (pos == prop.length()) {
         if (issueError) {
-            ELOG_REPORT_ERROR("Missing timeout unit specification at %s value %s: %s", propName,
+            ELOG_REPORT_ERROR("Missing time unit specification at %s value %s: %s", propName,
                               prop.c_str(), logTargetCfg.c_str());
         }
         return false;
     }
 
-    // first comput nanos, then move to target units
+    // extract the units and parse
     std::string units = toLower(trim(prop.substr(pos)));
-    if (units.compare("d") == 0 || units.compare("day") == 0 || units.compare("days") == 0) {
-        // days
-        timeout *= (24 * 60 * 60 * 1000000000ull);
-    } else if (units.compare("h") == 0 || units.compare("hour") == 0 ||
-               units.compare("hours") == 0) {
-        // hours
-        timeout *= (60 * 60 * 1000000000ull);
-    } else if (units.compare("m") == 0 || units.compare("minute") == 0 ||
-               units.compare("minutes") == 0) {
-        // minutes
-        timeout *= (60 * 1000000000ull);
-    } else if (units.compare("s") == 0 || units.compare("second") == 0 ||
-               units.compare("seconds") == 0) {
-        // seconds
-        timeout *= 1000000000ull;
-    } else if (units.compare("ms") == 0 || units.compare("milli") == 0 ||
-               units.compare("millis") == 0 || units.compare("milliseconds") == 0) {
-        // milliseconds
-        timeout *= 1000000ull;
-    } else if (units.compare("us") == 0 || units.compare("micro") == 0 ||
-               units.compare("micros") == 0 || units.compare("microseconds") == 0) {
-        // microseconds
-        timeout *= 1000ull;
-    } else if (units.compare("ns") == 0 || units.compare("nano") == 0 ||
-               units.compare("nanos") == 0 || units.compare("nanoseconds") == 0) {
-        // nanoseconds
-    } else {
+    if (!parseTimeUnits(units.c_str(), origUnits, issueError)) {
         if (issueError) {
             ELOG_REPORT_ERROR(
-                "Invalid timeout units specification '%s', at %s value %s: %s, expecting ms, us or "
+                "Invalid time units specification '%s', at %s value %s: %s, expecting ms, us or "
                 "ns",
                 units.c_str(), propName, prop.c_str(), logTargetCfg.c_str());
         }
         return false;
     }
 
-    // now convert to target units
-    switch (targetUnits) {
-        case ELogTimeoutUnits::TU_SECONDS:
-            timeout /= 1000000000ull;
-            break;
-
-        case ELogTimeoutUnits::TU_MILLI_SECONDS:
-            timeout /= 1000000ull;
-            break;
-
-        case ELogTimeoutUnits::TU_MICRO_SECONDS:
-            timeout /= 1000ull;
-            break;
-
-        case ELogTimeoutUnits::TU_NANO_SECONDS:
-            break;
-
-        default:
-            if (issueError) {
-                ELOG_REPORT_ERROR("Invalid target timeout unit %u at %s value %s: %s",
-                                  (uint32_t)targetUnits, propName, prop.c_str(),
-                                  logTargetCfg.c_str());
-            }
-            break;
+    // first convert to nanos, then move to target units
+    if (!convertTimeUnit(timeValue, origUnits, targetUnits, timeValue, issueError)) {
+        ELOG_REPORT_ERROR("Internal error, failed to convert time value (unexpected)");
+        return false;
     }
+
     return true;
 }
 
@@ -270,6 +376,17 @@ bool parseSizeProp(const char* propName, const std::string& logTargetCfg, const 
             break;
     }
     return true;
+}
+
+bool convertTimeUnit(uint64_t value, ELogTimeUnits sourceUnits, ELogTimeUnits targetUnits,
+                     uint64_t& res, bool issueError /* = true */) {
+    // first convert to nanos, then convert to target
+    if (!toNanos(value, sourceUnits, res, issueError)) {
+        return false;
+    }
+
+    // now convert to target units
+    return fromNanos(res, targetUnits, res, issueError);
 }
 
 size_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen /* = 0 */) {

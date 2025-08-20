@@ -21,7 +21,7 @@ ELogAsyncTarget* ELogQueuedTargetProvider::loadTarget(const ELogConfigMapNode* l
     uint64_t queueTimeoutMillis = 0;
     if (!ELogConfigLoader::getLogTargetTimeoutProperty(logTargetCfg, "asynchronous",
                                                        "queue_timeout", queueTimeoutMillis,
-                                                       ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+                                                       ELogTimeUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 

@@ -914,9 +914,9 @@ private:
 /** @brief Helper class for implementing "moderate" macros. */
 class ELOG_API ELogModerate {
 public:
-    ELogModerate(const char* fmt, uint64_t maxMsgsPerSecond)
+    ELogModerate(const char* fmt, uint64_t maxMsgs, uint64_t timeout, ELogTimeUnits units)
         : m_fmt(fmt),
-          m_rateLimiter(maxMsgsPerSecond),
+          m_rateLimiter(maxMsgs, timeout, units),
           m_discardCount(0),
           m_isDiscarding(false),
           m_startDiscardCount(0) {}
@@ -1929,15 +1929,17 @@ private:
  * @brief Logs a formatted message, while moderating its occurrence.
  * @param logger The logger used for message formatting.
  * @param level The log level. If the log level is insufficient, then the message is dropped.
- * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param maxMsg The maximum number of messages that can be printed in a time interval.
+ * @param timeout The rate limit timeout interval.
+ * @param units The rate limit timeout units.
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_MODERATE_EX(logger, level, msgPerSec, fmt, ...)                          \
+#define ELOG_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...)             \
     {                                                                                 \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
         if (validLogger->canLog(level)) {                                             \
-            static elog::ELogModerate mod(fmt, msgPerSec);                            \
+            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);               \
             if (mod.moderate()) {                                                     \
                 validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
                                        ##__VA_ARGS__);                                \
@@ -1946,43 +1948,43 @@ private:
     }
 
 // per-level moderate logging macros
-#define ELOG_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_FATAL_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_ERROR_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_WARN_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_NOTICE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_INFO_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_TRACE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DEBUG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DIAG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(logger, elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
 // per-level moderate logging macros (no logger)
-#define ELOG_MODERATE(level, msgPerSec, fmt, ...) \
-    ELOG_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE(level, maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE_EX(nullptr, level, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
-#define ELOG_MODERATE_FATAL(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_ERROR(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_WARN(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_NOTICE(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_INFO(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_TRACE(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_DEBUG(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_MODERATE_DIAG(msgPerSec, fmt, ...) \
-    ELOG_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_FATAL(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_ERROR(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_WARN(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_NOTICE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_INFO(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_TRACE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DEBUG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_MODERATE_DIAG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_MODERATE(elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
 /**************************************************************************************
  *                          fmtlib Moderate Logging Macros
@@ -1993,15 +1995,16 @@ private:
  * @brief Logs a formatted message, while moderating its occurrence (fmtlib style).
  * @param logger The logger used for message formatting.
  * @param level The log level. If the log level is insufficient, then the message is dropped.
- * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param maxMsg The maximum number of messages that can be printed in a time interval.
+ * @param intervalMillis The time interval in milliseconds.
  * @param fmtStr The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_FMT_MODERATE_EX(logger, level, msgPerSec, fmtStr, ...)                \
+#define ELOG_FMT_MODERATE_EX(logger, level, maxMsg, timeout, units, fmtStr, ...)   \
     {                                                                              \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
         if (validLogger->canLog(level)) {                                          \
-            static elog::ELogModerate mod(fmtStr, msgPerSec);                      \
+            static elog::ELogModerate mod(fmtStr, maxMsg, timeout, units);         \
             if (mod.moderate()) {                                                  \
                 std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
                 validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
@@ -2011,43 +2014,43 @@ private:
     }
 
 // per-level moderate logging macros (fmtlib style)
-#define ELOG_FMT_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_FATAL_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_ERROR_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_WARN_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_NOTICE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_INFO_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_TRACE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DEBUG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DIAG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(logger, elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
 // per-level moderate logging macros (fmtlib style, no logger)
-#define ELOG_FMT_MODERATE(level, msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE(level, maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE_EX(nullptr, level, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
-#define ELOG_FMT_MODERATE_FATAL(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_ERROR(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_WARN(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_NOTICE(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_INFO(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_TRACE(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_DEBUG(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_FMT_MODERATE_DIAG(msgPerSec, fmt, ...) \
-    ELOG_FMT_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_FATAL(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_ERROR(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_WARN(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_NOTICE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_INFO(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_TRACE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DEBUG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_FMT_MODERATE_DIAG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_FMT_MODERATE(elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 #endif
 
 /**************************************************************************************
@@ -2059,15 +2062,16 @@ private:
  * @brief Logs a formatted message, while moderating its occurrence (fmtlib style, binary form).
  * @param logger The logger used for message formatting.
  * @param level The log level. If the log level is insufficient, then the message is dropped.
- * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param maxMsg The maximum number of messages that can be printed in a time interval.
+ * @param intervalMillis The time interval in milliseconds.
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BIN_MODERATE_EX(logger, level, msgPerSec, fmt, ...)                      \
+#define ELOG_BIN_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...)         \
     {                                                                                 \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
         if (validLogger->canLog(level)) {                                             \
-            static elog::ELogModerate mod(fmt, msgPerSec);                            \
+            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);               \
             if (mod.moderate()) {                                                     \
                 validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
                                        ##__VA_ARGS__);                                \
@@ -2076,43 +2080,43 @@ private:
     }
 
 // per-level moderate logging macros (fmtlib style, binary logging)
-#define ELOG_BIN_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_FATAL_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_ERROR_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_WARN_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_NOTICE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_INFO_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_TRACE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DEBUG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DIAG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(logger, elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
 // per-level moderate logging macros (fmtlib style, binary logging, no logger)
-#define ELOG_BIN_MODERATE(level, msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE(level, maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE_EX(nullptr, level, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
-#define ELOG_BIN_MODERATE_FATAL(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_ERROR(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_WARN(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_NOTICE(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_INFO(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_TRACE(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_DEBUG(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_BIN_MODERATE_DIAG(msgPerSec, fmt, ...) \
-    ELOG_BIN_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_FATAL(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_ERROR(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_WARN(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_NOTICE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_INFO(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_TRACE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DEBUG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_BIN_MODERATE_DIAG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_BIN_MODERATE(elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 #endif
 
 /**************************************************************************************
@@ -2125,17 +2129,18 @@ private:
  * auto-cached).
  * @param logger The logger used for message formatting.
  * @param level The log level. If the log level is insufficient, then the message is dropped.
- * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param maxMsg The maximum number of messages that can be printed in a time interval.
+ * @param intervalMillis The time interval in milliseconds.
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_CACHE_MODERATE_EX(logger, level, msgPerSec, fmt, ...)                     \
+#define ELOG_CACHE_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...)        \
     {                                                                                  \
         elog::ELogLogger* validLogger = elog::getValidLogger(logger);                  \
         if (validLogger->canLog(level)) {                                              \
             static thread_local elog::ELogCacheEntryId cacheEntryId =                  \
                 elog::getOrCacheFormatMsg(fmt);                                        \
-            static elog::ELogModerate mod(fmt, msgPerSec);                             \
+            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);                \
             if (mod.moderate()) {                                                      \
                 validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, \
                                              cacheEntryId, ##__VA_ARGS__);             \
@@ -2144,43 +2149,43 @@ private:
     }
 
 // per-level moderate logging macros (fmtlib style, binary logging, auto-cached)
-#define ELOG_CACHE_MODERATE_FATAL_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_ERROR_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_WARN_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_NOTICE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_INFO_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_TRACE_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_DEBUG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_DIAG_EX(logger, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_FATAL_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_ERROR_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_WARN_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_NOTICE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_INFO_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_TRACE_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DEBUG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DIAG_EX(logger, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(logger, elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
 // per-level moderate logging macros (fmtlib style, binary logging, auto-cached, no logger)
-#define ELOG_CACHE_MODERATE(level, msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE_EX(nullptr, level, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE(level, maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE_EX(nullptr, level, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 
-#define ELOG_CACHE_MODERATE_FATAL(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_FATAL, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_ERROR(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_ERROR, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_WARN(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_WARN, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_NOTICE(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_INFO(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_INFO, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_TRACE(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_TRACE, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_DEBUG(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, fmt, ##__VA_ARGS__)
-#define ELOG_CACHE_MODERATE_DIAG(msgPerSec, fmt, ...) \
-    ELOG_CACHE_MODERATE(elog::ELEVEL_DIAG, msgPerSec, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_FATAL(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_FATAL, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_ERROR(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_ERROR, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_WARN(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_WARN, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_NOTICE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_NOTICE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_INFO(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_INFO, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_TRACE(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_TRACE, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DEBUG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_DEBUG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
+#define ELOG_CACHE_MODERATE_DIAG(maxMsg, timeout, units, fmt, ...) \
+    ELOG_CACHE_MODERATE(elog::ELEVEL_DIAG, maxMsg, timeout, units, fmt, ##__VA_ARGS__)
 #endif
 
 /**************************************************************************************
@@ -2193,60 +2198,70 @@ private:
  * pre-cached).
  * @param logger The logger used for message formatting.
  * @param level The log level. If the log level is insufficient, then the message is dropped.
- * @param msgPerSec The maximum number of times oer second that the message can be printed.
+ * @param maxMsg The maximum number of messages that can be printed in a time interval.
+ * @param intervalMillis The time interval in milliseconds.
  * @param cacheEntryId The cached log message format string id.
  * @param ... Log message format string parameters.
  */
-#define ELOG_ID_MODERATE_EX(logger, level, msgPerSec, cacheEntryId, ...)                      \
-    {                                                                                         \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                         \
-        if (validLogger->canLog(level)) {                                                     \
-            static elog::ELogModerate mod(elog::getCachedFormatMsg(cacheEntryId), msgPerSec); \
-            if (mod.moderate()) {                                                             \
-                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION,        \
-                                             cacheEntryId, ##__VA_ARGS__);                    \
-            }                                                                                 \
-        }                                                                                     \
+#define ELOG_ID_MODERATE_EX(logger, level, maxMsg, timeout, units, cacheEntryId, ...)              \
+    {                                                                                              \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                              \
+        if (validLogger->canLog(level)) {                                                          \
+            static elog::ELogModerate mod(elog::getCachedFormatMsg(cacheEntryId), maxMsg, timeout, \
+                                          units);                                                  \
+            if (mod.moderate()) {                                                                  \
+                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION,             \
+                                             cacheEntryId, ##__VA_ARGS__);                         \
+            }                                                                                      \
+        }                                                                                          \
     }
 
 // per-level moderate logging macros (fmtlib style, binary logging, pre-cached)
-#define ELOG_ID_MODERATE_FATAL_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_FATAL, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_ERROR_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_ERROR, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_WARN_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_WARN, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_NOTICE_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_NOTICE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_INFO_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_INFO, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_TRACE_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_TRACE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_DEBUG_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_DEBUG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_DIAG_EX(logger, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_DIAG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_FATAL_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_FATAL, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_ERROR_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_ERROR, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_WARN_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_WARN, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_NOTICE_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_NOTICE, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_INFO_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_INFO, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_TRACE_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_TRACE, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DEBUG_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_DEBUG, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DIAG_EX(logger, maxMsg, timeout, units, cacheEntryId, ...)      \
+    ELOG_ID_MODERATE_EX(logger, elog::ELEVEL_DIAG, maxMsg, timeout, units, cacheEntryId, \
+                        ##__VA_ARGS__)
 
 // per-level moderate logging macros (fmtlib style, binary logging, pre-cached, no logger)
-#define ELOG_ID_MODERATE(level, msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE_EX(nullptr, level, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE(level, maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE_EX(nullptr, level, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
 
-#define ELOG_ID_MODERATE_FATAL(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_FATAL, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_ERROR(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_ERROR, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_WARN(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_WARN, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_NOTICE(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_NOTICE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_INFO(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_INFO, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_TRACE(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_TRACE, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_DEBUG(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_DEBUG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
-#define ELOG_ID_MODERATE_DIAG(msgPerSec, cacheEntryId, ...) \
-    ELOG_ID_MODERATE(elog::ELEVEL_DIAG, msgPerSec, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_FATAL(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_FATAL, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_ERROR(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_ERROR, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_WARN(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_WARN, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_NOTICE(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_NOTICE, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_INFO(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_INFO, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_TRACE(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_TRACE, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DEBUG(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_DEBUG, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
+#define ELOG_ID_MODERATE_DIAG(maxMsg, timeout, units, cacheEntryId, ...) \
+    ELOG_ID_MODERATE(elog::ELEVEL_DIAG, maxMsg, timeout, units, cacheEntryId, ##__VA_ARGS__)
 #endif
 
 /**************************************************************************************

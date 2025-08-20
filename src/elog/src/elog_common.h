@@ -97,15 +97,27 @@ extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
 extern bool parseBoolProp(const char* propName, const std::string& logTargetCfg,
                           const std::string& prop, bool& value, bool issueError = true);
 
+/** @brief Parses time units string. */
+extern bool parseTimeUnits(const char* timeUnitsStr, ELogTimeUnits& timeUnits,
+                           bool issueError = true);
+
+/** @brief Converts time units to string. */
+extern const char* timeUnitToString(ELogTimeUnits timeUnits);
+
 /** @brief Helper function for parsing a timeout property, with suffix ms, us, ns. */
-extern bool parseTimeoutProp(const char* propName, const std::string& logTargetCfg,
-                             const std::string& prop, uint64_t& timeout,
-                             ELogTimeoutUnits targetUnits, bool issueError = true);
+extern bool parseTimeValueProp(const char* propName, const std::string& logTargetCfg,
+                               const std::string& prop, uint64_t& timeValue,
+                               ELogTimeUnits& origUnits, ELogTimeUnits targetUnits,
+                               bool issueError = true);
 
 /** @brief Helper function for parsing a timeout property, with suffix ms, us, ns. */
 extern bool parseSizeProp(const char* propName, const std::string& logTargetCfg,
                           const std::string& prop, uint64_t& size, ELogSizeUnits targetUnits,
                           bool issueError = true);
+
+/** @brief Converts time value from one unit to another. */
+extern bool convertTimeUnit(uint64_t value, ELogTimeUnits sourceUnits, ELogTimeUnits targetUnits,
+                            uint64_t& res, bool issueError = true);
 
 /** @brief Trims a string's prefix from the left side (in-place). */
 inline void ltrim(std::string& s) { s.erase(0, s.find_first_not_of(" \n\r\t")); }

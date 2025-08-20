@@ -23,14 +23,14 @@ ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const ELogConfigMapNode*
     uint64_t flushTimeoutMillis = 0;
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, "Kafka", "kafka_flush_timeout", flushTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 
     uint64_t shutdownFlushTimeoutMillis = 0;
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, "Kafka", "kafka_shutdown_flush_timeout", shutdownFlushTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 

@@ -76,6 +76,7 @@ static bool applyFilterConstructorRegistration() {
 
 static void initCmpOpMap() {
     sCmpOpMap["=="] = ELogCmpOp::CMP_OP_EQ;
+    sCmpOpMap[":"] = ELogCmpOp::CMP_OP_EQ;
     sCmpOpMap["!="] = ELogCmpOp::CMP_OP_NE;
     sCmpOpMap["<"] = ELogCmpOp::CMP_OP_LT;
     sCmpOpMap["<="] = ELogCmpOp::CMP_OP_LE;
@@ -434,6 +435,24 @@ bool ELogCmpFilter::loadIntFilter(const ELogConfigMapNode* filterCfg, const char
     return true;
 }
 
+bool ELogCmpFilter::loadTimeoutFilter(const ELogConfigMapNode* filterCfg, const char* filterName,
+                                      const char* propName, uint64_t& value,
+                                      ELogTimeUnits& origUnits, ELogTimeUnits targetUnits) {
+    bool found = false;
+    std::string strValue;
+    if (!filterCfg->getStringValue(propName, found, strValue)) {
+        ELOG_REPORT_ERROR("Failed to configure %s filter (context: %s)", filterName,
+                          filterCfg->getFullContext());
+        return false;
+    }
+    if (!found) {
+        ELOG_REPORT_ERROR("Invalid filter configuration, missing %s property (context: %s)",
+                          propName, filterCfg->getFullContext());
+        return false;
+    }
+    return parseTimeValueProp(propName, "", strValue, value, origUnits, targetUnits);
+}
+
 bool ELogCmpFilter::loadStringFilter(const ELogExpression* expr, const char* filterName,
                                      std::string& value) {
     if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
@@ -453,22 +472,57 @@ bool ELogCmpFilter::loadStringFilter(const ELogExpression* expr, const char* fil
 }
 
 bool ELogCmpFilter::loadIntFilter(const ELogExpression* expr, const char* filterName,
-                                  uint64_t& value) {
+                                  uint64_t& value, const char* propName /* = nullptr */) {
+    if (propName == nullptr) {
+        propName = filterName;
+    }
     if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
         ELOG_REPORT_ERROR(
-            "Invalid expression type, operator expression required for loading %s filter",
-            filterName);
+            "Invalid expression type, operator expression required for loading %s filter "
+            "(property: %s)",
+            filterName, propName);
         return false;
     }
     const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
     if (!elogCmpOpFromString(opExpr->m_op.c_str(), m_cmpOp)) {
-        ELOG_REPORT_ERROR("Invalid comparison operator '%s' for %s filter", opExpr->m_op.c_str(),
-                          filterName);
+        ELOG_REPORT_ERROR("Invalid comparison operator '%s' for %s filter (property: %s)",
+                          opExpr->m_op.c_str(), filterName, propName);
         return false;
     }
     if (!parseIntProp("", "", opExpr->m_rhs, value, false)) {
-        ELOG_REPORT_ERROR("Invalid expression operand '%s' for %s filter, required integer type",
-                          opExpr->m_rhs.c_str(), filterName);
+        ELOG_REPORT_ERROR(
+            "Invalid expression operand '%s' for %s filter, required integer type (property: %s)",
+            opExpr->m_rhs.c_str(), filterName, propName);
+        return false;
+    }
+    return true;
+}
+
+bool ELogCmpFilter::loadTimeoutFilter(const ELogExpression* expr, const char* filterName,
+                                      uint64_t& value, ELogTimeUnits& origUnits,
+                                      ELogTimeUnits targetUnits,
+                                      const char* propName /* = nullptr */) {
+    if (propName == nullptr) {
+        propName = filterName;
+    }
+    if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression type, operator expression required for loading %s filter "
+            "(property: %s)",
+            filterName, propName);
+        return false;
+    }
+    const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
+    if (!elogCmpOpFromString(opExpr->m_op.c_str(), m_cmpOp)) {
+        ELOG_REPORT_ERROR("Invalid comparison operator '%s' for %s filter (property: %s)",
+                          opExpr->m_op.c_str(), filterName, propName);
+        return false;
+    }
+    if (!parseTimeValueProp(propName, "", opExpr->m_rhs, value, origUnits, targetUnits, false)) {
+        ELOG_REPORT_ERROR(
+            "Invalid expression operand '%s' for %s flush policy, required timeout type (property: "
+            "%s)",
+            opExpr->m_rhs.c_str(), filterName, propName);
         return false;
     }
     return true;
@@ -716,10 +770,12 @@ bool ELogMsgFilter::filterLogRecord(const ELogRecord& logRecord) {
 }
 
 bool ELogCountFilter::load(const ELogConfigMapNode* filterCfg) {
+    // TODO: ignoring comparison operator
     return loadIntFilter(filterCfg, "count", "count", m_count);
 }
 
 bool ELogCountFilter::loadExpr(const ELogExpression* expr) {
+    // TODO: ignoring comparison operator
     return loadIntFilter(expr, "count", m_count);
 }
 

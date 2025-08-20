@@ -1,6 +1,7 @@
 #ifndef __ELOG_FILTER_H__
 #define __ELOG_FILTER_H__
 
+#include "elog_common_def.h"
 #include "elog_config.h"
 #include "elog_expression.h"
 #include "elog_managed_object.h"
@@ -228,9 +229,16 @@ protected:
                           const char* filterName, std::string& propertyValue);
     bool loadIntFilter(const ELogConfigMapNode* filterCfg, const char* propertyName,
                        const char* filterName, uint64_t& propertyValue);
+    bool loadTimeoutFilter(const ELogConfigMapNode* filterCfg, const char* filterName,
+                           const char* propName, uint64_t& value, ELogTimeUnits& origUnits,
+                           ELogTimeUnits targetUnits);
 
     bool loadStringFilter(const ELogExpression* expr, const char* filterName, std::string& value);
-    bool loadIntFilter(const ELogExpression* expr, const char* filterName, uint64_t& value);
+    bool loadIntFilter(const ELogExpression* expr, const char* filterName, uint64_t& value,
+                       const char* propName = nullptr);
+    bool loadTimeoutFilter(const ELogExpression* expr, const char* filterName, uint64_t& value,
+                           ELogTimeUnits& origUnits, ELogTimeUnits targetUnits,
+                           const char* propName = nullptr);
 };
 
 class ELOG_API ELogRecordIdFilter : public ELogCmpFilter {

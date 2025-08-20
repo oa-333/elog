@@ -21,7 +21,7 @@ ELogAsyncTarget* ELogQuantumTargetProvider::loadTarget(const ELogConfigMapNode* 
     uint64_t quantumCollectPeriodMicros = ELOG_DEFAULT_COLLECT_PERIOD_MICROS;
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, "asynchronous", "quantum_collect_period", quantumCollectPeriodMicros,
-            ELogTimeoutUnits::TU_MICRO_SECONDS)) {
+            ELogTimeUnits::TU_MICRO_SECONDS)) {
         return nullptr;
     }
 

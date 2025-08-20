@@ -13,22 +13,22 @@ bool ELogHttpConfigLoader::loadHttpConfig(const ELogConfigMapNode* logTargetCfg,
                                           const char* targetName, ELogHttpConfig& httpConfig) {
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, targetName, "connect_timeout", httpConfig.m_connectTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return false;
     }
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, targetName, "write_timeout", httpConfig.m_writeTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return false;
     }
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, targetName, "read_timeout", httpConfig.m_readTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return false;
     }
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, targetName, "resend_timeout", httpConfig.m_resendPeriodMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return false;
     }
     if (!ELogConfigLoader::getOptionalLogTargetSizeProperty(
@@ -38,7 +38,7 @@ bool ELogHttpConfigLoader::loadHttpConfig(const ELogConfigMapNode* logTargetCfg,
     }
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, targetName, "shutdown_timeout", httpConfig.m_shutdownTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return false;
     }
     return true;

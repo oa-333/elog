@@ -134,7 +134,7 @@ bool ELogFlushPolicy::loadIntFlushPolicy(const ELogConfigMapNode* flushPolicyCfg
 
 bool ELogFlushPolicy::loadTimeoutFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
                                              const char* flushPolicyName, const char* propName,
-                                             uint64_t& value, ELogTimeoutUnits targetUnits) {
+                                             uint64_t& value, ELogTimeUnits targetUnits) {
     bool found = false;
     std::string strValue;
     if (!flushPolicyCfg->getStringValue(propName, found, strValue)) {
@@ -147,7 +147,8 @@ bool ELogFlushPolicy::loadTimeoutFlushPolicy(const ELogConfigMapNode* flushPolic
                           propName, flushPolicyCfg->getFullContext());
         return false;
     }
-    return parseTimeoutProp(propName, "", strValue, value, targetUnits);
+    ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
+    return parseTimeValueProp(propName, "", strValue, value, origUnits, targetUnits);
 }
 
 bool ELogFlushPolicy::loadSizeFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
@@ -170,11 +171,14 @@ bool ELogFlushPolicy::loadSizeFlushPolicy(const ELogConfigMapNode* flushPolicyCf
 
 bool ELogFlushPolicy::loadIntFlushPolicy(const ELogExpression* expr, const char* flushPolicyName,
                                          uint64_t& value, const char* propName /* = nullptr */) {
+    if (propName == nullptr) {
+        propName = flushPolicyName;
+    }
     if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
         ELOG_REPORT_ERROR(
             "Invalid expression type, operator expression required for loading %s flush policy "
             "(property: %s)",
-            flushPolicyName, propName ? propName : flushPolicyName);
+            flushPolicyName, propName);
         return false;
     }
     const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
@@ -182,14 +186,14 @@ bool ELogFlushPolicy::loadIntFlushPolicy(const ELogExpression* expr, const char*
         ELOG_REPORT_ERROR(
             "Invalid comparison operator '%s' for %s flush policy, only '==' or ':' is allowed in "
             "this context (property: %s)",
-            opExpr->m_op.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
+            opExpr->m_op.c_str(), flushPolicyName, propName);
         return false;
     }
     if (!parseIntProp("", "", opExpr->m_rhs, value, false)) {
         ELOG_REPORT_ERROR(
             "Invalid expression operand '%s' for %s flush policy, required integer type (property: "
             "%s)",
-            opExpr->m_rhs.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
+            opExpr->m_rhs.c_str(), flushPolicyName, propName);
         return false;
     }
     return true;
@@ -197,7 +201,7 @@ bool ELogFlushPolicy::loadIntFlushPolicy(const ELogExpression* expr, const char*
 
 bool ELogFlushPolicy::loadTimeoutFlushPolicy(const ELogExpression* expr,
                                              const char* flushPolicyName, uint64_t& value,
-                                             ELogTimeoutUnits targetUnits,
+                                             ELogTimeUnits targetUnits,
                                              const char* propName /* = nullptr */) {
     if (expr->m_type != ELogExpressionType::ET_OP_EXPR) {
         ELOG_REPORT_ERROR(
@@ -214,7 +218,8 @@ bool ELogFlushPolicy::loadTimeoutFlushPolicy(const ELogExpression* expr,
             opExpr->m_op.c_str(), flushPolicyName, propName ? propName : flushPolicyName);
         return false;
     }
-    if (!parseTimeoutProp(propName, "", opExpr->m_rhs, value, targetUnits, false)) {
+    ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
+    if (!parseTimeValueProp(propName, "", opExpr->m_rhs, value, origUnits, targetUnits, false)) {
         ELOG_REPORT_ERROR(
             "Invalid expression operand '%s' for %s flush policy, required timeout type (property: "
             "%s)",
@@ -488,12 +493,12 @@ ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
 
 bool ELogTimedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return loadTimeoutFlushPolicy(flushPolicyCfg, "time", "flush_timeout", m_logTimeLimitMillis,
-                                  ELogTimeoutUnits::TU_MILLI_SECONDS);
+                                  ELogTimeUnits::TU_MILLI_SECONDS);
 }
 
 bool ELogTimedFlushPolicy::loadExpr(const ELogExpression* expr) {
     return loadTimeoutFlushPolicy(expr, "time", m_logTimeLimitMillis,
-                                  ELogTimeoutUnits::TU_MILLI_SECONDS);
+                                  ELogTimeUnits::TU_MILLI_SECONDS);
 }
 
 bool ELogTimedFlushPolicy::start() {
@@ -682,7 +687,7 @@ bool ELogGroupFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
 
     uint64_t groupTimeoutMicros = 0;
     if (!loadTimeoutFlushPolicy(flushPolicyCfg, "group", "timeout", groupTimeoutMicros,
-                                ELogTimeoutUnits::TU_MICRO_SECONDS)) {
+                                ELogTimeUnits::TU_MICRO_SECONDS)) {
         return false;
     }
     m_groupTimeoutMicros = (Micros)groupTimeoutMicros;
@@ -708,7 +713,7 @@ bool ELogGroupFlushPolicy::loadExpr(const ELogExpression* expr) {
     }
     uint64_t groupTimeoutMicros = 0;
     if (!loadTimeoutFlushPolicy(funcExpr->m_expressions[1], "group", groupTimeoutMicros,
-                                ELogTimeoutUnits::TU_MICRO_SECONDS, "timeout")) {
+                                ELogTimeUnits::TU_MICRO_SECONDS, "timeout")) {
         return false;
     }
     m_groupTimeoutMicros = Micros(groupTimeoutMicros);

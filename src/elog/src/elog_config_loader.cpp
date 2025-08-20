@@ -380,8 +380,7 @@ bool ELogConfigLoader::getLogTargetBoolProperty(const ELogConfigMapNode* logTarg
 
 bool ELogConfigLoader::getLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
                                                    const char* scheme, const char* propName,
-                                                   uint64_t& propValue,
-                                                   ELogTimeoutUnits targetUnits) {
+                                                   uint64_t& propValue, ELogTimeUnits targetUnits) {
     bool found = false;
     std::string value;
     if (!logTargetCfg->getStringValue(propName, found, value)) {
@@ -395,7 +394,8 @@ bool ELogConfigLoader::getLogTargetTimeoutProperty(const ELogConfigMapNode* logT
             scheme, propName, logTargetCfg->getFullContext());
         return false;
     }
-    return parseTimeoutProp(propName, "", value, propValue, targetUnits);
+    ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
+    return parseTimeValueProp(propName, "", value, propValue, origUnits, targetUnits);
 }
 
 bool ELogConfigLoader::getLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg,
@@ -548,7 +548,7 @@ bool ELogConfigLoader::getOptionalLogTargetBoolProperty(const ELogConfigMapNode*
 bool ELogConfigLoader::getOptionalLogTargetTimeoutProperty(const ELogConfigMapNode* logTargetCfg,
                                                            const char* scheme, const char* propName,
                                                            uint64_t& propValue,
-                                                           ELogTimeoutUnits targetUnits,
+                                                           ELogTimeUnits targetUnits,
                                                            bool* found /* = nullptr */) {
     bool foundLocal = false;
     std::string value;
@@ -563,7 +563,8 @@ bool ELogConfigLoader::getOptionalLogTargetTimeoutProperty(const ELogConfigMapNo
     if (!foundLocal) {
         return true;
     }
-    return parseTimeoutProp(propName, "", value, propValue, targetUnits);
+    ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
+    return parseTimeValueProp(propName, "", value, propValue, origUnits, targetUnits);
 }
 
 bool ELogConfigLoader::getOptionalLogTargetSizeProperty(const ELogConfigMapNode* logTargetCfg,

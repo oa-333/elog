@@ -135,7 +135,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
     uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS;
     if (!ELogConfigLoader::getOptionalLogTargetTimeoutProperty(
             logTargetCfg, "database", "db_reconnect_timeout", reconnectTimeoutMillis,
-            ELogTimeoutUnits::TU_MILLI_SECONDS)) {
+            ELogTimeUnits::TU_MILLI_SECONDS)) {
         return nullptr;
     }
 
