@@ -438,6 +438,10 @@ bool initLifeSignReport() {
 }
 
 bool termLifeSignReport() {
+    // stop periodic syncing if any
+    setLifeSignSyncPeriod(0);
+
+    // delete formatter
     ELogFormatter* formatter = sLifeSignFormatter.load(std::memory_order_acquire);
     if (formatter != nullptr) {
         sLifeSignFormatter.store(nullptr, std::memory_order_release);

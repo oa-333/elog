@@ -92,7 +92,7 @@ static int execDelShm(const std::string& shmName);
 static int execDumpShm(const std::string& shmName);
 static int displayShm(const char* shmName, uint32_t size);
 static int processShm();
-static void printLifeSignHeader(const dbgutil::LifeSignHeader* hdr);
+static void printLifeSignHeader(const dbgutil::LifeSignHeader* hdr, const AppData& appData);
 static int getAppData(AppData& appData);
 static int printThreadData(uint32_t threadSlotId, const AppData& appData, bool& entryUsed);
 static int printLifeSignRecords(const dbgutil::LifeSignHeader* hdr, const AppData& appData);
@@ -398,6 +398,7 @@ static bool execCommand(const std::string& cmd) {
     if (cmd.compare(CMD_EXIT) == 0 || cmd.compare(CMD_EXIT) == 0 || cmd.compare("q") == 0) {
         return false;
     }
+    printf("\n");
     if (cmd.compare(CMD_HELP) == 0) {
         printHelp();
     } else if (cmd.compare(CMD_LS_SHM) == 0) {
@@ -413,6 +414,7 @@ static bool execCommand(const std::string& cmd) {
     } else {
         fprintf(stderr, "ERROR: Unrecognized command\n");
     }
+    printf("\n");
     return true;
 }
 
@@ -421,6 +423,7 @@ void runCliLoop() {
     rl_attempted_completion_function = elog_pm_complete_func;
     rl_completion_entry_function = elog_pm_shm_generator_func;
     char* line = nullptr;
+    printf("\n");
     while ((line = readline("<elog_pm> $ ")) != nullptr) {
         if (line && *line) {
             add_history(line);
@@ -437,6 +440,7 @@ void runCliLoop() {
 void runCliLoop() {
     char* input = nullptr;
     printLogo();
+    printf("\n");
     while (true) {
         printf(ELOG_PM_PROMPT);
         std::string strCmd;
@@ -536,10 +540,15 @@ int listAllSegments(bool printList /* = true */, const char* prefix /* = nullptr
 
     // display segments
     if (printList) {
-        printf("Shared memory segment list:\n");
-        printf("Name\tSize\n");
+        size_t maxNameSize = 0;
         for (const auto& entry : sSegmentList) {
-            printf("%s\t%u bytes\n", entry.first.c_str(), entry.second);
+            maxNameSize = std::max(maxNameSize, entry.first.length());
+        }
+        printf("Shared memory segment list:\n");
+        // we subtract 2, because Name takes 4 characters, but there is also two spaces in between
+        printf("Name%*sSize\n", maxNameSize - 2, "");
+        for (const auto& entry : sSegmentList) {
+            printf("%s  %u bytes\n", entry.first.c_str(), entry.second);
         }
         flushAllStream();
     }
@@ -588,21 +597,21 @@ int displayShm(const char* shmName, uint32_t size) {
 }
 
 int processShm() {
+    // process context records and extract process name and thread names
+    AppData appData;
+    int res = getAppData(appData);
+    if (res != 0) {
+        return res;
+    }
+
+    // now we can print header
     dbgutil::LifeSignHeader* hdr = nullptr;
     dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->readLifeSignHeader(hdr);
     if (rc != DBGUTIL_ERR_OK) {
         ELOG_ERROR_EX(sLogger, "Failed to read life-sign header: %s", dbgutil::errorToString(rc));
         return ERR_READ_SHM;
     }
-    printLifeSignHeader(hdr);
-
-    // now process context records and extract process name and thread names
-    // read context area
-    AppData appData;
-    int res = getAppData(appData);
-    if (res != 0) {
-        return res;
-    }
+    printLifeSignHeader(hdr, appData);
 
     // print life sign records of all threads
     res = printLifeSignRecords(hdr, appData);
@@ -613,8 +622,9 @@ int processShm() {
     return 0;
 }
 
-void printLifeSignHeader(const dbgutil::LifeSignHeader* hdr) {
+void printLifeSignHeader(const dbgutil::LifeSignHeader* hdr, const AppData& appData) {
     const char* headers[] = {"Image path",
+                             "Application name",
                              "Start of run",
                              "Process id",
                              "Context area size",
@@ -639,14 +649,15 @@ void printLifeSignHeader(const dbgutil::LifeSignHeader* hdr) {
     printf("Shared memory segment details:\n");
     printf("--------------------------------------------\n");
     printf("Image path: %*s%s\n", headerPad[0], "", hdr->m_imagePath);
-    printTime("Start of run", hdr->m_startTimeEpochMilliSeconds, headerPad[1]);
-    printf("Process id: %*s%u\n", headerPad[2], "", hdr->m_pid);
-    printf("Context area size: %*s%u bytes\n", headerPad[3], "", hdr->m_contextAreaSize);
-    printf("Life-sign area size: %*s%u bytes\n", headerPad[4], "", hdr->m_contextAreaSize);
+    printf("Application name: %*s%s\n", headerPad[1], "", appData.m_appName.c_str());
+    printTime("Start of run", hdr->m_startTimeEpochMilliSeconds, headerPad[2]);
+    printf("Process id: %*s%u\n", headerPad[3], "", hdr->m_pid);
+    printf("Context area size: %*s%u bytes\n", headerPad[4], "", hdr->m_contextAreaSize);
+    printf("Life-sign area size: %*s%u bytes\n", headerPad[5], "", hdr->m_contextAreaSize);
 #ifdef ELOG_WINDOWS
-    printTime("Last process seen time", hdr->m_lastProcessTimeEpochMillis, headerPad[5]);
-    printTime("Last segment sync time", hdr->m_lastSyncTimeEpochMillis, headerPad[6]);
-    printf("Is fully synced: %*s%s\n", headerPad[7], "", hdr->m_isFullySynced ? "yes" : "no");
+    printTime("Last process seen time", hdr->m_lastProcessTimeEpochMillis, headerPad[6]);
+    printTime("Last segment sync time", hdr->m_lastSyncTimeEpochMillis, headerPad[7]);
+    printf("Is fully synced: %*s%s\n", headerPad[8], "", hdr->m_isFullySynced ? "yes" : "no");
 #endif
     printf("--------------------------------------------\n");
     flushAllStream();
@@ -866,9 +877,16 @@ int runShmGuardian(int argc, char* argv[]) {
     // create named mutex so that we can have only one such process
     HANDLE hMutex = CreateMutexA(NULL, TRUE, "elog_windows_shm_guardian");
     if (hMutex == NULL) {
-        ELOG_ERROR_EX(sLogger,
-                      "Cannot run ELog Windows Shared Memory Guardian, there is already another "
-                      "instance running");
+        ELOG_WIN32_ERROR_EX(sLogger, CreateMutexA,
+                            "Failed to create ELog Life-Sign Guardian shared mutex");
+        return ERR_INIT;
+    }
+    DWORD res = GetLastError();
+    if (res == ERROR_ALREADY_EXISTS) {
+        ELOG_ERROR_EX(
+            sLogger,
+            "Cannot run ELog Life-Sign Guardian, there is already another instance running");
+        CloseHandle(hMutex);
         return ERR_INIT;
     }
 
@@ -880,7 +898,6 @@ int runShmGuardian(int argc, char* argv[]) {
     }
 
     CloseHandle(hMutex);
-    return 0;
     return 0;
 }
 
@@ -955,6 +972,7 @@ void initSegmentData(const std::string& segName, ShmSegmentData& segData,
                      const std::unordered_set<DWORD>& pids, bool pidListFullyValid) {
     // the most urgent task is to open a file mapping to the shared memory segment before the
     // creating process might crash, and the segment is lost forever
+    bool backingFileMapped = false;
     if (segData.m_shm == nullptr) {
         segData.m_shm = dbgutil::createOsShm();
     }
@@ -963,7 +981,7 @@ void initSegmentData(const std::string& segName, ShmSegmentData& segData,
         // remain at init state
     } else {
         dbgutil::DbgUtilErr rc =
-            segData.m_shm->openShm(segName.c_str(), segData.m_size, true, false);
+            segData.m_shm->openShm(segName.c_str(), segData.m_size, true, true, &backingFileMapped);
         if (rc != DBGUTIL_ERR_OK) {
             ELOG_ERROR_EX(sLogger,
                           "Failed to open shared memory segment by name %s, with total size %u: %s",
@@ -992,10 +1010,33 @@ void initSegmentData(const std::string& segName, ShmSegmentData& segData,
                              segName.c_str());
             } else {
                 if (pidListFullyValid) {
-                    segData.m_state = SEG_DEAD;
-                    ELOG_INFO_EX(sLogger,
-                                 "Owning process of shared memory segment %s is already dead",
-                                 segName.c_str());
+                    if (segData.m_hdr->m_isFullySynced) {
+                        segData.m_state = SEG_FULLY_SYNCED;
+                        ELOG_INFO_EX(sLogger,
+                                     "Owning process of shared memory segment %s is already dead, "
+                                     "and the segment was fully synchronized",
+                                     segName.c_str());
+                        delete segData.m_shm;
+                        segData.m_shm = nullptr;
+                    } else {
+                        if (backingFileMapped) {
+                            segData.m_state = SEG_UNKNOWN;
+                            ELOG_INFO_EX(
+                                sLogger,
+                                "Owning process of shared memory segment %s is already dead, "
+                                "segment state is unknown",
+                                segName.c_str());
+                            delete segData.m_shm;
+                            segData.m_shm = nullptr;
+                        } else {
+                            // we were able to open the shm just before the process died
+                            segData.m_state = SEG_DEAD;
+                            ELOG_INFO_EX(
+                                sLogger,
+                                "Owning process of shared memory segment %s is already dead",
+                                segName.c_str());
+                        }
+                    }
                 } else {
                     // otherwise remain at init
                     ELOG_WARN_EX(
