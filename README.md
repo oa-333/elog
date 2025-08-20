@@ -128,6 +128,8 @@ The ELog library provides the following notable features:
 - Optimized logging macros
     - If log level does not enable, then no argument evaluation takes place
     - With normal logging macros, only partial message formatting takes place on caller's side
+- Structured Logging
+    - With configurable log line format, structured logging is supported (e.g. JSON or any user-defined format)
 - Binary logging macros
     - Allow performing entire formatting on logging end (fmtlib-style only)
     - Significant impact when complex formatting is used
@@ -152,6 +154,9 @@ The ELog library provides the following notable features:
     - Out of the box, depends on [dbgutil](https://github.com/oa-333/dbgutil)
     - Writes to log full exception information, including call stack with function, file and line information
     - Generates core dump (mini-dump file on Windows)
+- Life-Sign and Post-Mortem Support
+    - Redirect occasional log messages to shared memory segment
+    - Inspect shared memory of crashed processes
 - Wide range of predefined log targets (i.e. "log sinks/appenders"):
     - stdout, stderr
     - syslog, Windows event log
@@ -202,9 +207,7 @@ The ELog library provides the following notable features:
 
 ### Planned/considered future features:
 
-- Structured logging (json, with support for extendibility to proprietary formats)
 - Automated periodic configuration reloading and updating log levels
-- Automated life-sign logs (i.e. for post-mortem analysis)
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
@@ -330,6 +333,8 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Cached Logging](#cached-logging)
     - [Once Logging](#once-logging)
     - [Moderated Logging](#moderated-logging)
+    - [Every-N Logging](#every-n-logging)
+    - [Life Sign Management](#life-sign-management)
 - [Configuration](#configuring)
     - [Configuration Units](#configuration-units)
     - [Configuring Log Level](#configuring-log-level)
@@ -872,7 +877,7 @@ It may be desired to limit the rate of some log message. This can be done as fol
 
     ELOG_MODERATE_INFO_EX(logger, 2, "Passing through here many times, but logging is restricted to only twice per each second");
 
-If [internal ELOg reporting](#enabling-elog-internal-trace-messages) is enabled, and set to level INFO, then some discarding/aggregation statistics are printed. For instance, consider this example:
+If [internal ELog reporting](#enabling-elog-internal-trace-messages) is enabled, and set to level INFO, then some discarding/aggregation statistics are printed. For instance, consider this example:
 
     for (uint32_t i = 0; i < 30; ++i) {
         ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
@@ -887,6 +892,160 @@ Here is a partial sample output:
     2025-08-04 23:15:47.006 INFO   [45968] <elog_root> This is a test moderate message (twice per second)
     2025-08-04 23:15:47.114 INFO   [45968] <elog_root> This is a test moderate message (twice per second)
     2025-08-04 23:15:48.098 INFO   [45968] <elog> The message 'This is a test moderate message (twice per second)' has been discarded for 8 times in the last 869 milliseconds
+
+### Every-N Logging
+
+As in other common logging frameworks, another way of limiting the rate of log messages, is by issuing a log message once in every-N messages. This can be done as follows:
+
+    ELOG_EVERY_N_INFO_EX(logger, 20, "Passing through here many times, but logging is restricted to only once per 20 messages");
+
+### Life-Sign Management
+
+ELog supports out of the box life-sign reporting and post-mortem analysis tools. For this ELog needs to be compiled with ELOG_ENABLE_LIFE_SIGN=ON. The main philosophy of life-sign reporting is to be automated as much as possible. The user only needs to configure when and how log records are sent to the life-sign shared memory segment.
+
+Life-sign reporting can be configured for the entire application (such that each log message is checked for life-sign reporting), for the current thread (such that each message in the current thread is checked), or for a specific log source (such that each message originating from the log source is checked, for all threads). In addition, the frequency of life-sign reporting can be configured, such that once in every N messages, the log record is sent to the shared memory segment, or that rate limiting is imposed (only N messages per second are allowed to pass through). Finally, life-sign reports are configured on a per-level basis, so that, for instance, FATAL/ERROR log messages can be always sent to life-sign reporting, and WARN/NOTICE only once in a while.
+
+This is the API for configuring how life sign reports are sent:
+
+    bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
+                            const ELogFrequencySpec& frequencySpec,
+                            ELogSource* logSource = nullptr);
+
+A previous configuration can be reconfigured, or removed altogether with the following API:
+
+    removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level, ELogSource* logSource = nullptr);
+
+The user is free to voluntarily send any text to the life-sign shared memory segment:
+
+    void reportLifeSign(const char* msg);
+
+The format of the log message sent to the life-sign shared memory segment is taken from the global (default) log formatter. This can be changed with the following API:
+
+    bool setLifeSignLogFormat(const char* logFormat);
+
+NOTE: All life-sign configuration APIs are thread-safe and designed for usage during normal operation of ELog, through the usage of a lock-free (atomic RCU pointers) epoch-based garbage collector.
+
+Since on Windows the shared memory object may be out-of-sync with its backing file, it may be required to flush the contents of the sahred memory segment to disk. This can be done manually with:
+
+    bool syncLifeSignReport();
+
+Periodic syncing can be configured with:
+
+    void setLifeSignSyncPeriod(uint32_t syncPeriodMillis);
+
+#### Initializing Life-Sign Reporting
+
+When initializing ELog, the life-sign reporting can be configured via the ELogParams structure. In particular the following members can be used to control how the life-sign reporting is configured:
+
+- m_maxThreads
+- m_enableLifeSignReport
+- m_lifeSignGCPeriodMillis
+- m_lifeSignGCTaskCount
+
+As life-sign reporting is designed for thread-safe configuration during normal operation of ELog, a garbage collector is used for various filters. For this reason the maximum number of threads configuration is crucial. If the number of threads accessing ELog surpasses the configured number of maximum threads, then memory leaks are expected.
+
+Unless configuring life-sign reporting frequently during ongoing ELog operation, there is no need to set m_lifeSignGCPeriodMillis and m_lifeSignGCTaskCount, as they are tuned for infrequent life-sign reporting configuration changes.
+
+It is possible to disable life-sign reporting altogether (even though compiled with ELOG_ENABLE_LIFE_SIGN=ON) by setting m_enableLifeSignReport to false before calling elog::initialize();
+
+#### Inspecting Shared Memory Segments
+
+ELog provides a small utility CLI, called elog_pm for inspecting life-sign shared memory segments of active, terminated and crashed processes that run with life-sign reporting enabled. The CLI can be also operated as a command program (non-interactive).
+
+The elog_pm CLI supports the following commands:
+
+- ls-shm
+- dump-shm [shm-name]
+- del-shm [shm-name]
+- del-all-shm
+
+Following is a sample output of elog_pm console:
+
+    C:\install\bin\Windows-Debug>elog_pm
+    ELog Post-mortem CLI, version 0.1
+
+    <elog-pm> $ ls-shm
+
+    Shared memory segment list:
+    Name                                                            Size
+    dbgutil.life-sign.elog_bench.exe.2025-08-20_10-55-46.12312.shm  71303488 bytes
+    dbgutil.life-sign.elog_bench.exe.2025-08-20_10-34-57.21656.shm  71303488 bytes
+    dbgutil.life-sign.elog_bench.exe.2025-08-20_10-34-50.24556.shm  71303488 bytes
+
+    <elog-pm> $ dump-shm dbgutil.life-sign.elog_bench.exe.2025-08-20_10-55-46.12312.shm
+
+    Shared memory segment details:
+    --------------------------------------------
+    Image path:             C:\install\bin\Windows-Debug\elog_bench.exe
+    Application name:       elog_bench_app
+    Start of run:           2025-08-20 10:55:46
+    Process id:             12312
+    Context area size:      4194304 bytes
+    Life-sign area size:    4194304 bytes
+    Last process seen time: 2025-08-20 10:56:09
+    Last segment sync time: 2025-08-20 10:56:11
+    Is fully synced:        yes
+    --------------------------------------------
+    Thread id:         6208
+    Thread name:       elog_bench_main
+    Thread state:      running
+    Thread start time: 2025-08-20 10:55:46
+    Thread life-sign records:
+    1. Test life sign
+    --------------------------------------------
+    Thread id:         2460
+    Thread name:       test-thread-app-0
+    Thread state:      terminated
+    Thread start time: 2025-08-20 10:55:49
+    Thread end time:   2025-08-20 10:55:55
+    Thread life-sign records:
+    1. 2025-08-20 10:55:49.476 INFO   [2460 ] elog_root This is a life sign log (count 1) from thread 0, with APP filter freq 1
+    2. 2025-08-20 10:55:50.476 INFO   [2460 ] elog_root This is a life sign log (count 2) from thread 0, with APP filter freq 1
+    --------------------------------------------
+    Thread id:         14424
+    Thread name:       test-thread-4
+    Thread state:      terminated
+    Thread start time: 2025-08-20 10:55:56
+    Thread end time:   2025-08-20 10:56:02
+    Thread life-sign records:
+    1. 2025-08-20 10:55:56.239 INFO   [14424] elog_root This is a life sign log (count 1) from thread 4, with THREAD filter freq 2
+    2. 2025-08-20 10:55:58.244 INFO   [14424] elog_root This is a life sign log (count 3) from thread 4, with THREAD filter freq 2
+    3. 2025-08-20 10:56:00.254 INFO   [14424] elog_root This is a life sign log (count 5) from thread 4, with THREAD filter freq 2
+    --------------------------------------------
+    Thread id:         10368
+    Thread name:       test-log-source-thread-0
+    Thread state:      terminated
+    Thread start time: 2025-08-20 10:56:02
+    Thread end time:   2025-08-20 10:56:07
+    Thread life-sign records:
+    1. 2025-08-20 10:56:02.280 INFO   [10368] elog_root This is a life sign log (count 1) from thread 0, with LOG-SOURCE rate limit of 5 msg/sec
+    2. 2025-08-20 10:56:02.340 INFO   [10368] elog_root This is a life sign log (count 2) from thread 0, with LOG-SOURCE rate limit of 5 msg/sec
+    3. 2025-08-20 10:56:02.399 INFO   [10368] elog_root This is a life sign log (count 3) from thread 0, with LOG-SOURCE rate limit of 5 msg/sec
+
+Some points to note:
+
+- When calling elog::setAppName() the application name will be reported in the summary section
+- When calling elog::setCurrentThreadName() the name of the thread appears in the thread summary section
+- "Last process seen time" (Windows only) can be used to estimate the time of crash
+- "Last segment sync time" (Windows only) can be used to understand how up-to-date the segment contents are
+- "Is fully synced" (Windows only) can be used to determine whether the ELog Guardian was able to synchronize most recent segment contents to disk
+- At the time of crash, the main thread (elog_bench_main, id 6208) was still running
+- At the time of crash, the main thread (elog_bench_main, id 6208) was still running, while all other threads already terminated
+- Application-scope life-sign reports were configured for every message
+- Thread-scope life-sign reports were configured for once in every two log messages
+- Log-source-scope life-sign reports were configured for at most 5 messages per second
+
+#### Running The Life Sign Guardian
+
+As mentioned above, on Windows platforms it is crucial to have an external process open another handle to the life-sign shared memory segment, otherwise, if the owning processes crashes, the kernel object of the shared memory segment is closed, and the shared memory segment is lost forever. For this reason a guardian utility was added to ELog.
+
+The Life-Sign Guardian Process can be launched with the following command line:
+
+    elog_pm --shm-guard
+
+The Guardian is available only on Windows, and can have only one instance. Attempting to launch another instance will fail:
+
+    2025-08-20 12:13:13.709 ERROR  [24688] elog_pm Cannot run ELog Life-Sign Guardian, there is already another instance running
 
 ## Configuration
 
