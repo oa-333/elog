@@ -35,7 +35,7 @@
 #define CPU_RELAX
 #endif
 
-// define missing __cplusplus on MSVC
+// define incorrect __cplusplus on MSVC
 #if defined(ELOG_WINDOWS) && defined(_MSVC_LANG)
 #define ELOG_CPP_VER _MSVC_LANG
 #else

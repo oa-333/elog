@@ -780,11 +780,13 @@ A special instance of a log filter is the rate limiter, which may be applied glo
 
 In configuration, the following expression syntax may be used:
 
-    log_target = file:///./app.log?filter=(rate_limit == 500)
+    log_target = file:///./app.log?filter=(rate_limit(max_msg: 500, timeout: 1 second))
+
+The timeout cannot be less than 1 millisecond.
 
 Alternatively, the normal configuration style can be used:
 
-    log_target = file:///./app.log?filter=rate_limit&max_msg_per_sec=500
+    log_target = file:///./app.log?filter=rate_limit&max_msg=500&timeout=1second
 
 ### Enabling ELog Internal Trace Messages
 
@@ -875,13 +877,14 @@ This can be applied also at the thread level:
 
 It may be desired to limit the rate of some log message. This can be done as follows:
 
-    ELOG_MODERATE_INFO_EX(logger, 2, "Passing through here many times, but logging is restricted to only twice per each second");
+    ELOG_MODERATE_INFO_EX(logger, 2, 1, ELogTimeUnits::TU_SECONDS, 
+        "Passing through here many times, but logging is restricted to only twice per each second");
 
 If [internal ELog reporting](#enabling-elog-internal-trace-messages) is enabled, and set to level INFO, then some discarding/aggregation statistics are printed. For instance, consider this example:
 
     for (uint32_t i = 0; i < 30; ++i) {
-        ELOG_MODERATE_INFO(2, "This is a test moderate message (twice per second)");
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        ELOG_MODERATE_INFO(3, 50, ELogTimeUnits::TU_MILLI_SECONDS, "This is a test moderate message (3 times per 50 milliseconds)");
+        std::this_thread::sleep_for(std::chrono::milliseconds(8));
     }
 
 Here is a partial sample output:
@@ -1662,7 +1665,8 @@ For instance, suppose we have a syslog target configured with log level ERROR, b
             },
             {
                 filter = rate_limit,
-                max_msg_per_sec = 10
+                max_msg = 10
+                timeout = 1 second
             }
         ]
     }
@@ -1672,7 +1676,7 @@ This example is a bit complex, but it illustrates the flexibility nested configu
 
 Due to these complexities, the expression free-style flush policy specification was devised, and the same goal can be achieved as follows:
 
-    log_target = sys://syslog?log_level=ERROR&filter=((log_source != core.files) OR (max_msg_per_sec == 10))
+    log_target = sys://syslog?log_level=ERROR&filter=((log_source != core.files) OR (rate_limit(max_msg: 10, timeout: 1 second)))
 
 The same syntax may be used with the nested specification:
 
@@ -1680,7 +1684,7 @@ The same syntax may be used with the nested specification:
         scheme = sys,
         path = syslog,
         log_level = ERROR,
-        filter = ((log_source != core.files) OR (max_msg_per_sec == 10))
+        filter = ((log_source != core.files) OR (rate_limit(max_msg: 10, timeout: 1 second)))
     }
 
 In case of simply limiting the rate for all incoming messages, the configuration becomes much simpler:
@@ -1690,7 +1694,8 @@ In case of simply limiting the rate for all incoming messages, the configuration
         path = syslog,
         log_level = ERROR,
         filter = rate_limit,
-        max_msg_per_sec = 10
+        max_msg = 10
+        timeout = 1 second
     }
 
 Or in case of filter expression:
@@ -1699,7 +1704,7 @@ Or in case of filter expression:
         scheme = sys,
         path = syslog,
         log_level = ERROR,
-        filter = (max_msg_per_sec == 10)
+        filter = (rate_limit(max_msg: 10, timeout: 1 second))
     }
 
 ### Terminal Text Formatting
