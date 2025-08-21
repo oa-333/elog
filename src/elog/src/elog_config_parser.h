@@ -19,6 +19,9 @@ public:
 
     static bool parseHostPort(const std::string& server, std::string& host, int& port);
 
+    static bool parseRateLimit(const std::string& rateLimitCfg, uint64_t& maxMsg, uint64_t& timeout,
+                               ELogTimeUnits& units);
+
 private:
     static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                    const std::string& value);

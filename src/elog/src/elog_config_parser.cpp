@@ -174,6 +174,34 @@ bool ELogConfigParser::parseHostPort(const std::string& server, std::string& hos
     return true;
 }
 
+bool ELogConfigParser::parseRateLimit(const std::string& rateLimitCfg, uint64_t& maxMsg,
+                                      uint64_t& timeout, ELogTimeUnits& units) {
+    std::string::size_type colonPos = rateLimitCfg.find(':');
+    if (colonPos == std::string::npos) {
+        ELOG_REPORT_ERROR("Rate limit specification missing colon: %s", rateLimitCfg.c_str());
+        return false;
+    }
+    if (!parseIntProp("max_msg", "", rateLimitCfg.substr(0, colonPos), maxMsg, false)) {
+        return false;
+    }
+    std::string timeSpec = rateLimitCfg.substr(colonPos + 1);
+    colonPos = timeSpec.find(':');
+    if (colonPos == std::string::npos) {
+        ELOG_REPORT_ERROR("Rate limit specification missing colon: %s", rateLimitCfg.c_str());
+        return false;
+    }
+    if (!parseIntProp("timeout", "", timeSpec.substr(0, colonPos), timeout, false)) {
+        return false;
+    }
+    std::string timeUnits = timeSpec.substr(colonPos + 1);
+    if (!parseTimeUnits(timeUnits.c_str(), units)) {
+        ELOG_REPORT_ERROR("Invalid time units specification in rate limiter: %s",
+                          rateLimitCfg.c_str());
+        return false;
+    }
+    return true;
+}
+
 void ELogConfigParser::insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                           const std::string& value) {
     std::pair<ELogPropertyMap::iterator, bool> itrRes =

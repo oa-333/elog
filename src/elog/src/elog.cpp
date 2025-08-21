@@ -104,7 +104,6 @@ extern void deleteLogSource(ELogSource* logSource);
 
 // local helpers
 static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
-static bool configureRateLimit(const std::string& rateLimitCfg);
 static bool configureLogTargetImpl(const std::string& logTargetCfg, ELogTargetId* id = nullptr);
 static bool configureLogTargetNode(const ELogConfigMapNode* logTargetCfg,
                                    ELogTargetId* id = nullptr);
@@ -777,13 +776,16 @@ void reportCurrentThreadNameLifeSign(elog_thread_id_t threadId, const char* thre
 }
 #endif
 
-bool configureRateLimit(const std::string& rateLimitCfg) {
-    uint32_t maxMsgPerSec = 0;
-    if (!parseIntProp(ELOG_RATE_LIMIT_CONFIG_NAME, "", rateLimitCfg, maxMsgPerSec)) {
-        ELOG_REPORT_ERROR("Failed to parse rate limit configuration: ", rateLimitCfg.c_str());
+bool configureRateLimit(const char* rateLimitCfg, bool replaceGlobalFilter /* = true */) {
+    uint64_t maxMsg = 0;
+    uint64_t timeout = 0;
+    ELogTimeUnits units = ELogTimeUnits::TU_NONE;
+    // parse <max-msg>:<timeout>:<units>
+    if (!ELogConfigParser::parseRateLimit(rateLimitCfg, maxMsg, timeout, units)) {
+        ELOG_REPORT_ERROR("Failed to parse rate limit configuration: ", rateLimitCfg);
         return false;
     }
-    return setRateLimit(maxMsgPerSec);
+    return setRateLimit(maxMsg, timeout, units, replaceGlobalFilter);
 }
 
 bool configureLogTargetImpl(const std::string& logTargetCfg, ELogTargetId* id /* = nullptr */) {
@@ -892,7 +894,7 @@ bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /
     // configure global rate limit (overrides global filter)
     std::string rateLimitCfg;
     if (getProp(props, ELOG_RATE_LIMIT_CONFIG_NAME, rateLimitCfg)) {
-        if (!configureRateLimit(rateLimitCfg)) {
+        if (!configureRateLimit(rateLimitCfg.c_str())) {
             return false;
         }
     }
@@ -1190,11 +1192,11 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
 
     // configure global rate limit (overrides global filter)
     // TODO: what about valid values? should be defined and checked
-    int64_t rateLimit = 0;
-    if (!cfgMap->getIntValue(ELOG_RATE_LIMIT_CONFIG_NAME, found, rateLimit)) {
+    std::string rateLimitCfg;
+    if (!cfgMap->getStringValue(ELOG_RATE_LIMIT_CONFIG_NAME, found, rateLimitCfg)) {
         // configuration error
         return false;
-    } else if (found && !setRateLimit((uint32_t)rateLimit)) {
+    } else if (found && !configureRateLimit(rateLimitCfg.c_str())) {
         return false;
     }
 
@@ -1952,8 +1954,10 @@ void setLogFilter(ELogFilter* logFilter) {
     sGlobalFilter = logFilter;
 }
 
-bool setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter /* = true */) {
-    ELogRateLimiter* rateLimiter = new (std::nothrow) ELogRateLimiter(maxMsgPerSecond);
+bool setRateLimit(uint64_t maxMsg, uint64_t timeout, ELogTimeUnits timeoutUnits,
+                  bool replaceGlobalFilter /* = true */) {
+    ELogRateLimiter* rateLimiter =
+        new (std::nothrow) ELogRateLimiter(maxMsg, timeout, timeoutUnits);
     if (rateLimiter == nullptr) {
         ELOG_REPORT_ERROR("Failed to set rate limit, out of memory");
         return false;
@@ -1962,16 +1966,18 @@ bool setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter /* = true *
         setLogFilter(rateLimiter);
     }
 
-    // if a global log filter already exists, then the rate limiter ORed with the existing filter
-    ELogOrLogFilter* logFilter = new (std::nothrow) ELogOrLogFilter();
+    // if a global log filter already exists, then the rate limiter should be added using AND filter
+    // before the existing filter
+    ELogAndLogFilter* logFilter = new (std::nothrow) ELogAndLogFilter();
     if (logFilter == nullptr) {
         ELOG_REPORT_ERROR(
-            "Failed to allocate OR log filter for global rate limiter, out of memory");
+            "Failed to allocate AND log filter for global rate limiter, out of memory");
         delete rateLimiter;
         return false;
     }
-    logFilter->addFilter(sGlobalFilter);
+    // put rate limiter first, and if ok, then apply next filter
     logFilter->addFilter(rateLimiter);
+    logFilter->addFilter(sGlobalFilter);
     setLogFilter(logFilter);
     return true;
 }

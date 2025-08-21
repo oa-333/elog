@@ -794,10 +794,14 @@ extern ELOG_API bool configureLogFilter(const char* logFilterCfg);
 /** @brief Installs a custom log filter. */
 extern ELOG_API void setLogFilter(ELogFilter* logFilter);
 
+/** @brief Configures top-level rate limiter form configuration string. */
+extern ELOG_API bool configureRateLimit(const char* rateLimitCfg, bool replaceGlobalFilter = true);
+
 /**
  * @brief Sets a global rate limit on message logging.
- * @param maxMsgPerSecond The maximum allowed number of message logging within a 1 second
- * window of time.
+ * @param maxMsg The maximum number of messages that can be logged in a time interval.
+ * @param timeout The rate limit timeout interval value.
+ * @param units The rate limit timeout units.
  * @param replaceGlobalFilter Specified what to do in case of an existing global log filter. If
  * set to true, then the rate limiter will replace any configured global log filter. If set to
  * false then the rate limiter will be combined with the currently configured global log filter
@@ -807,7 +811,8 @@ extern ELOG_API void setLogFilter(ELogFilter* logFilter);
  * @note Setting the global rate limit will replace the current global log filter. If the
  * intention is to add a rate limiting to the current log filter
  */
-extern ELOG_API bool setRateLimit(uint32_t maxMsgPerSecond, bool replaceGlobalFilter = true);
+extern ELOG_API bool setRateLimit(uint64_t maxMsg, uint64_t timeout, ELogTimeUnits timeoutUnits,
+                                  bool replaceGlobalFilter = true);
 
 /**
  * @brief Filters a log record.

@@ -774,19 +774,26 @@ For more details on how to configure log filter, refer to [this](#configuring-lo
 
 A special instance of a log filter is the rate limiter, which may be applied globally or per log-target:
 
-    // no more than 500 messages per second
-    elog::ELogRateLimiter* rateLimiter = new elog::ELogRateLimiter(500);
-    elog::setLogFilter(rateLimiter);
+    // no more than 500 messages per second, do not replace global filter
+    elog::setRateLimit(500, 1, elog::ELogTimeUnits::TU_SECONDS, false);
 
 In configuration, the following expression syntax may be used:
 
     log_target = file:///./app.log?filter=(rate_limit(max_msg: 500, timeout: 1 second))
 
-The timeout cannot be less than 1 millisecond.
-
 Alternatively, the normal configuration style can be used:
 
     log_target = file:///./app.log?filter=rate_limit&max_msg=500&timeout=1second
+
+The syntax in properties file is:
+
+    log_rate_limit = 500:1:second
+
+Pay attention that when configuring the rate limit in a property file, it overrides any configured global filter, so if it is desired to incorporate rate limiting with some other filter, it should be done as follows:
+
+    log_filter = (AND(rate_limit(max_msg: 500, timeout: 1 second), (other filter goes here)))
+
+Pay attention also that the timeout value cannot be less than 1 millisecond. In case it is less than 1 millisecond, then the rate limiter becomes invalid, and it will not limit the rate of log messages.
 
 ### Enabling ELog Internal Trace Messages
 
