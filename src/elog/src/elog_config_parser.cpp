@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <list>
 
 #include "elog.h"
 #include "elog_common.h"
@@ -187,7 +188,8 @@ bool ELogConfigParser::parseRateLimit(const std::string& rateLimitCfg, uint64_t&
     std::string timeSpec = rateLimitCfg.substr(colonPos + 1);
     colonPos = timeSpec.find(':');
     if (colonPos == std::string::npos) {
-        ELOG_REPORT_ERROR("Rate limit specification missing colon: %s", rateLimitCfg.c_str());
+        ELOG_REPORT_ERROR("Rate limit specification missing colon after max message count: %s",
+                          rateLimitCfg.c_str());
         return false;
     }
     if (!parseIntProp("timeout", "", timeSpec.substr(0, colonPos), timeout, false)) {
@@ -201,6 +203,84 @@ bool ELogConfigParser::parseRateLimit(const std::string& rateLimitCfg, uint64_t&
     }
     return true;
 }
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+bool ELogConfigParser::parseLifeSignReport(const std::string& lifeSignCfg, ELogLifeSignScope& scope,
+                                           ELogLevel& level, ELogFrequencySpec& frequencySpec,
+                                           std::string& name, bool& removeCfg) {
+    // split string by ':' token
+    std::list<std::string> tokens;
+    std::istringstream s(lifeSignCfg);
+    std::string token;
+    while (std::getline(s, token, ':')) {
+        tokens.emplace_back(token);
+    }
+    if (tokens.empty()) {
+        ELOG_REPORT_ERROR("Invalid life-sign configuration string, no token parsed: %s",
+                          lifeSignCfg.c_str());
+        return false;
+    }
+
+    // parse scope
+    const std::string& scopeStr = tokens.front();
+    if (!parseLifeSignScope(scopeStr.c_str(), scope)) {
+        ELOG_REPORT_ERROR("Invalid scope '%s' at life-sign specification: %s", scopeStr.c_str(),
+                          lifeSignCfg.c_str());
+        return false;
+    }
+    tokens.pop_front();
+
+    // parse log-level
+    const std::string& levelStr = tokens.front();
+    if (!elogLevelFromStr(levelStr.c_str(), level)) {
+        ELOG_REPORT_ERROR("Invalid log level '%s' at life-sign specification: %s", levelStr.c_str(),
+                          lifeSignCfg.c_str());
+        return false;
+    }
+    tokens.pop_front();
+
+    // peek last token, if it is 'remove' then frequency is not expected
+    if (tokens.back().compare("remove") == 0) {
+        removeCfg = true;
+        tokens.pop_back();
+    } else {
+        // parse frequency
+        const std::string& freqSpec = tokens.front();
+        if (!parseFrequencySpec(freqSpec.c_str(), frequencySpec)) {
+            ELOG_REPORT_ERROR("Invalid frequency specification '%s' in life-sign: %s",
+                              freqSpec.c_str(), lifeSignCfg.c_str());
+            return false;
+        }
+    }
+
+    // if there is nothing more then we are done
+    if (tokens.empty()) {
+        if (scope == ELogLifeSignScope::LS_LOG_SOURCE) {
+            ELOG_REPORT_ERROR("Invalid life-sign specification, missing log source name: %s",
+                              lifeSignCfg.c_str());
+            return false;
+        } else if (scope == ELogLifeSignScope::LS_THREAD) {
+            ELOG_REPORT_ERROR("Invalid life-sign specification, missing thread name: %s",
+                              lifeSignCfg.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    // get log-source or thread name
+    name = tokens.front();
+    tokens.pop_front();
+
+    // check for excess tokens
+    if (!tokens.empty()) {
+        ELOG_REPORT_ERROR("Invalid life-sign configuration, excess tokens: %s",
+                          lifeSignCfg.c_str());
+        return false;
+    }
+
+    return true;
+}
+#endif
 
 void ELogConfigParser::insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                           const std::string& value) {

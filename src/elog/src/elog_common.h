@@ -32,6 +32,11 @@
 #define ELOG_RATE_LIMIT_CONFIG_NAME "log_rate_limit"
 #define ELOG_AFFINITY_CONFIG_NAME "log_affinity"
 // #define ELOG_LEVEL_FORMAT_CONFIG_NAME "log_level_format"
+#ifdef ELOG_ENABLE_LIFE_SIGN
+#define ELOG_LIFE_SIGN_REPORT_CONFIG_NAME "life_sign_report"
+#define ELOG_LIFE_SIGN_LOG_FORMAT_CONFIG_NAME "life_sign_log_format"
+#define ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME "life_sign_sync_period"
+#endif
 
 // simple colors for internal use
 #define RED "\x1B[31m"
@@ -77,6 +82,20 @@ inline bool getProp(const ELogPropertySequence& props, const char* propName,
     return false;
 }
 
+inline void getPropsByPrefix(const ELogPropertySequence& props, const char* propPrefix,
+                             std::vector<std::string>& propValues) {
+    ELogPropertySequence::const_iterator itr = std::find_if(
+        props.begin(), props.end(),
+        [propPrefix](const ELogProperty& prop) { return prop.first.starts_with(propPrefix) == 0; });
+    while (itr != props.end()) {
+        propValues.emplace_back(itr->second);
+        ++itr;
+        itr = std::find_if(itr, props.end(), [propPrefix](const ELogProperty& prop) {
+            return prop.first.starts_with(propPrefix) == 0;
+        });
+    }
+}
+
 /** @brief Helper function for parsing an integer property */
 extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
                          const std::string& prop, int32_t& value, bool issueError = true);
@@ -118,6 +137,14 @@ extern bool parseSizeProp(const char* propName, const std::string& logTargetCfg,
 /** @brief Converts time value from one unit to another. */
 extern bool convertTimeUnit(uint64_t value, ELogTimeUnits sourceUnits, ELogTimeUnits targetUnits,
                             uint64_t& res, bool issueError = true);
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+/** @brief Parses life-sign scope string. */
+extern bool parseLifeSignScope(const char* lifeSignScopeStr, ELogLifeSignScope& scope);
+
+/** @brief Parses life-sign frequency spec string. */
+extern bool parseFrequencySpec(const char* freqSpecStr, ELogFrequencySpec& freqSpec);
+#endif
 
 /** @brief Trims a string's prefix from the left side (in-place). */
 inline void ltrim(std::string& s) { s.erase(0, s.find_first_not_of(" \n\r\t")); }

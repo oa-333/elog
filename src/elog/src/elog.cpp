@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fstream>
 #include <mutex>
+#include <regex>
 #include <unordered_map>
 
 #include "elog_buffered_file_target.h"
@@ -42,6 +43,7 @@
 #include "elog_life_sign_filter.h"
 #include "elog_tls.h"
 #include "life_sign_manager.h"
+#include "os_thread_manager.h"
 #endif
 
 // #include "elog_props_formatter.h"
@@ -101,6 +103,7 @@ static void setReportLevelFromEnv();
 extern ELogSource* createLogSource(ELogSourceId sourceId, const char* name,
                                    ELogSource* parent = nullptr, ELogLevel logLevel = ELEVEL_INFO);
 extern void deleteLogSource(ELogSource* logSource);
+static void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources);
 
 // local helpers
 static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
@@ -521,72 +524,399 @@ static ELogLifeSignFilter* getThreadLifeSignFilter() {
     return sThreadLifeSignFilter;
 }
 
-static ELogLifeSignFilter* getLifeSignFilter(ELogLifeSignScope scope, ELogSource* logSource) {
-    if (scope == ELogLifeSignScope::LS_APP) {
-        assert(sAppLifeSignFilter != nullptr);
-        return sAppLifeSignFilter;
-    } else if (scope == ELogLifeSignScope::LS_THREAD) {
-        return getThreadLifeSignFilter();
-    } else if (scope == ELogLifeSignScope::LS_LOG_SOURCE) {
-        if (logSource == nullptr) {
-            ELOG_REPORT_ERROR("Cannot retrieve log source life-sign report, missing log source");
-            return nullptr;
-        }
-        return logSource->getLifeSignFilter();
+static bool setAppLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                 uint64_t currentEpoch) {
+    // set filter
+    ELogFilter* prevFilter = nullptr;
+    if (!sAppLifeSignFilter->setLevelFilter(level, frequencySpec, prevFilter)) {
+        ELOG_REPORT_ERROR("Failed to set application-scope life-sign report");
+        return false;
     }
-    ELOG_REPORT_ERROR("Cannot retrieve life-sign filter, invalid scope %u", (unsigned)scope);
-    return nullptr;
+
+    // retire previous filter if any and finish
+    if (prevFilter != nullptr) {
+        sLifeSignGC->retire(prevFilter, currentEpoch);
+    }
+    return true;
 }
 
-bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
-                       const ELogFrequencySpec& frequencySpec,
-                       ELogSource* logSource /* = nullptr */) {
-    // increment epoch
-    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
-    sLifeSignGC->beginEpoch(epoch);
+static bool removeAppLifeSignReport(ELogLevel level, uint64_t currentEpoch) {
+    // remove filter
+    ELogFilter* prevFilter = sAppLifeSignFilter->removeLevelFilter(level);
 
-    // get filter by scope
-    ELogLifeSignFilter* filter = getLifeSignFilter(scope, logSource);
-    if (filter == nullptr) {
+    // retire previous filter if any and finish
+    if (prevFilter != nullptr) {
+        sLifeSignGC->retire(prevFilter, currentEpoch);
+    }
+    return true;
+}
+
+static bool setCurrentThreadLifeSignReport(ELogLevel level,
+                                           const ELogFrequencySpec& frequencySpec) {
+    ELogLifeSignFilter* threadFilter = getThreadLifeSignFilter();
+    if (threadFilter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to retrieve current thread's life-sign filter");
         return false;
     }
 
     // set filter
     ELogFilter* prevFilter = nullptr;
-    if (!filter->setLevelFilter(level, frequencySpec, prevFilter)) {
-        ELOG_REPORT_ERROR("Failed to set life-sign report");
+    if (!threadFilter->setLevelFilter(level, frequencySpec, prevFilter)) {
+        ELOG_REPORT_ERROR("Failed to set current thread's life-sign report");
         return false;
     }
 
-    // retire previous filter if any and finish
+    // no need for GC in case of current thread
     if (prevFilter != nullptr) {
-        sLifeSignGC->retire(prevFilter, epoch);
+        delete prevFilter;
     }
-    sLifeSignGC->endEpoch(epoch);
     return true;
 }
 
-bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
-                          ELogSource* logSource /* = nullptr */) {
-    // increment epoch
-    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
-    sLifeSignGC->beginEpoch(epoch);
-
-    // get filter by scope
-    ELogLifeSignFilter* filter = getLifeSignFilter(scope, logSource);
-    if (filter == nullptr) {
+static bool removeCurrentThreadLifeSignReport(ELogLevel level) {
+    ELogLifeSignFilter* threadFilter = getThreadLifeSignFilter();
+    if (threadFilter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to retrieve current thread's life-sign filter");
         return false;
     }
 
     // remove filter
-    ELogFilter* prevFilter = filter->removeLevelFilter(level);
+    ELogFilter* prevFilter = threadFilter->removeLevelFilter(level);
+
+    // no need for GC in case of current thread
+    if (prevFilter != nullptr) {
+        delete prevFilter;
+    }
+    return true;
+}
+
+static bool setThreadLifeSignReport(uint32_t threadId, const char* name, ELogLevel level,
+                                    const ELogFrequencySpec& frequencySpec,
+                                    dbgutil::ThreadNotifier* notifier) {
+    dbgutil::DbgUtilErr requestResult = DBGUTIL_ERR_OK;
+    dbgutil::ThreadWaitParams waitParams;
+    waitParams.m_notifier = notifier;
+    dbgutil::DbgUtilErr rc = dbgutil::execThreadRequest(
+        threadId, requestResult, waitParams, [level, &frequencySpec]() -> dbgutil::DbgUtilErr {
+            if (setCurrentThreadLifeSignReport(level, frequencySpec)) {
+                return DBGUTIL_ERR_OK;
+            } else {
+                return DBGUTIL_ERR_GENERIC;
+            };
+        });
+    if (rc != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR("Failed to execute request on thread %u with name %s: %s", threadId, name,
+                          dbgutil::errorToString(rc));
+        return false;
+    }
+    if (requestResult != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR(
+            "Attempt to set life-sign report on target thread %u with name %s failed: %s", threadId,
+            name, dbgutil::errorToString(requestResult));
+        return false;
+    }
+    return true;
+}
+
+static bool removeThreadLifeSignReport(uint32_t threadId, const char* name, ELogLevel level,
+                                       dbgutil::ThreadNotifier* notifier) {
+    dbgutil::DbgUtilErr requestResult = DBGUTIL_ERR_OK;
+    dbgutil::ThreadWaitParams waitParams;
+    waitParams.m_notifier = notifier;
+    dbgutil::DbgUtilErr rc = dbgutil::execThreadRequest(
+        threadId, requestResult, waitParams, [level]() -> dbgutil::DbgUtilErr {
+            if (removeCurrentThreadLifeSignReport(level)) {
+                return DBGUTIL_ERR_OK;
+            } else {
+                return DBGUTIL_ERR_GENERIC;
+            };
+        });
+    if (rc != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR("Failed to execute request on thread %u with name %s: %s", threadId, name,
+                          dbgutil::errorToString(rc));
+        return false;
+    }
+    if (requestResult != DBGUTIL_ERR_OK) {
+        ELOG_REPORT_ERROR(
+            "Attempt to remove life-sign report on target thread %u with name %s failed: %s",
+            threadId, name, dbgutil::errorToString(requestResult));
+        return false;
+    }
+    return true;
+}
+
+static bool setNamedThreadLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                         const char* name) {
+    uint32_t threadId = 0;
+    dbgutil::ThreadNotifier* notifier = nullptr;
+    if (!getThreadDataByName(name, threadId, notifier)) {
+        ELOG_REPORT_WARN("Cannot set life-sign report, thread by name %s not found", name);
+        return false;
+    }
+    return setThreadLifeSignReport(threadId, name, level, frequencySpec, notifier);
+}
+
+static bool removeNamedThreadLifeSignReport(ELogLevel level, const char* name) {
+    uint32_t threadId = 0;
+    dbgutil::ThreadNotifier* notifier = nullptr;
+    if (!getThreadDataByName(name, threadId, notifier)) {
+        ELOG_REPORT_WARN("Cannot remove life-sign report, thread by name %s not found", name);
+        return false;
+    }
+    return removeThreadLifeSignReport(threadId, name, level, notifier);
+}
+
+static bool setThreadLifeSignReportByRegEx(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                           const char* nameRegEx) {
+    ThreadDataMap threadData;
+    getThreadDataByNameRegEx(nameRegEx, threadData);
+    if (threadData.empty()) {
+        ELOG_REPORT_WARN(
+            "Cannot set life-sign report for threads with name %s regular expression, no thread "
+            "was found matching this name",
+            nameRegEx);
+        return false;
+    }
+
+    bool res = true;
+    for (const auto& entry : threadData) {
+        if (!setThreadLifeSignReport(entry.first, entry.second.first.c_str(), level, frequencySpec,
+                                     entry.second.second)) {
+            res = false;
+        }
+    }
+    return res;
+}
+
+static bool removeThreadLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx) {
+    ThreadDataMap threadData;
+    getThreadDataByNameRegEx(nameRegEx, threadData);
+    if (threadData.empty()) {
+        ELOG_REPORT_WARN(
+            "Cannot remove life-sign report for threads with name %s regular expression, no thread "
+            "was found matching this name",
+            nameRegEx);
+        return false;
+    }
+
+    bool res = true;
+    for (const auto& entry : threadData) {
+        if (!removeThreadLifeSignReport(entry.first, entry.second.first.c_str(), level,
+                                        entry.second.second)) {
+            res = false;
+        }
+    }
+    return res;
+}
+
+static bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                       ELogSource* logSource, uint64_t currentEpoch) {
+    // set filter
+    ELogFilter* prevFilter = nullptr;
+    if (!logSource->getLifeSignFilter()->setLevelFilter(level, frequencySpec, prevFilter)) {
+        ELOG_REPORT_ERROR("Failed to set log source %s life-sign report",
+                          logSource->getQualifiedName());
+        return false;
+    }
 
     // retire previous filter if any and finish
     if (prevFilter != nullptr) {
-        sLifeSignGC->retire(prevFilter, epoch);
+        sLifeSignGC->retire(prevFilter, currentEpoch);
     }
-    sLifeSignGC->endEpoch(epoch);
     return true;
+}
+
+static bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource,
+                                          uint64_t currentEpoch) {
+    // remove filter
+    ELogFilter* prevFilter = logSource->getLifeSignFilter()->removeLevelFilter(level);
+
+    // retire previous filter if any and finish
+    if (prevFilter != nullptr) {
+        sLifeSignGC->retire(prevFilter, currentEpoch);
+    }
+    return true;
+}
+
+static bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                       const char* name, uint64_t currentEpoch) {
+    ELogSource* logSource = getLogSource(name);
+    if (logSource == nullptr) {
+        ELOG_REPORT_ERROR("Cannot set life-sign report for log source %s, log source not found",
+                          name);
+        return false;
+    }
+    return setLogSourceLifeSignReport(level, frequencySpec, logSource, currentEpoch);
+}
+
+static bool removeLogSourceLifeSignReport(ELogLevel level, const char* name,
+                                          uint64_t currentEpoch) {
+    ELogSource* logSource = getLogSource(name);
+    if (logSource == nullptr) {
+        ELOG_REPORT_ERROR("Cannot remove life-sign report for log source %s, log source not found",
+                          name);
+        return false;
+    }
+    return removeLogSourceLifeSignReport(level, logSource, currentEpoch);
+}
+
+static bool setLogSourceLifeSignReportByRegEx(ELogLevel level,
+                                              const ELogFrequencySpec& frequencySpec,
+                                              const char* nameRegEx, uint64_t currentEpoch) {
+    std::vector<ELogSource*> logSources;
+    getLogSources(nameRegEx, logSources);
+    if (logSources.empty()) {
+        ELOG_REPORT_ERROR(
+            "Cannot set life report for log sources with reg-ex name %s, no log source "
+            "matches the given name",
+            nameRegEx);
+        return false;
+    }
+
+    bool res = true;
+    for (ELogSource* logSource : logSources) {
+        if (!setLogSourceLifeSignReport(level, frequencySpec, logSource, currentEpoch)) {
+            res = false;
+        }
+    }
+    return res;
+}
+
+static bool removeLogSourceLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx,
+                                                 uint64_t currentEpoch) {
+    std::vector<ELogSource*> logSources;
+    getLogSources(nameRegEx, logSources);
+    if (logSources.empty()) {
+        ELOG_REPORT_ERROR(
+            "Cannot remove life report for log sources with reg-ex name %s, no log source "
+            "matches the given name",
+            nameRegEx);
+        return false;
+    }
+
+    bool res = true;
+    for (ELogSource* logSource : logSources) {
+        if (!removeLogSourceLifeSignReport(level, logSource, currentEpoch)) {
+            res = false;
+        }
+    }
+    return res;
+}
+
+bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
+                       const ELogFrequencySpec& frequencySpec, const char* name /* = nullptr */,
+                       bool isRegex /* = false */) {
+    // increment epoch
+    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+
+    // application scope
+    if (scope == ELogLifeSignScope::LS_APP) {
+        if (name != nullptr && *name != 0) {
+            ELOG_REPORT_WARN("Ignoring name % sspecified for application-scope life-sign report",
+                             name);
+        }
+        if (isRegex) {
+            ELOG_REPORT_WARN(
+                "Ignoring regular expression flag in application-scope life-sign report");
+        }
+        return setAppLifeSignReport(level, frequencySpec, ELOG_CURRENT_EPOCH);
+    }
+
+    // thread scope
+    if (scope == ELogLifeSignScope::LS_THREAD) {
+        // current thread
+        if ((name == nullptr || *name == 0)) {
+            if (isRegex) {
+                ELOG_REPORT_WARN(
+                    "Ignoring regular expression flag in current-thread-scope life-sign report");
+            }
+            return setCurrentThreadLifeSignReport(level, frequencySpec);
+        } else {
+            if (isRegex) {
+                return setThreadLifeSignReportByRegEx(level, frequencySpec, name);
+            } else {
+                return setNamedThreadLifeSignReport(level, frequencySpec, name);
+            }
+        }
+    }
+
+    // log source scope
+    if (scope == ELogLifeSignScope::LS_LOG_SOURCE) {
+        if (isRegex) {
+            return setLogSourceLifeSignReportByRegEx(level, frequencySpec, name,
+                                                     ELOG_CURRENT_EPOCH);
+        } else {
+            return setLogSourceLifeSignReport(level, frequencySpec, name, ELOG_CURRENT_EPOCH);
+        }
+    }
+
+    ELOG_REPORT_ERROR("Invalid life-sign report scope: %u", (uint32_t)scope);
+    return false;
+}
+
+bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
+                          const char* name /* = nullptr */, bool isRegex /* = false */) {
+    // increment epoch
+    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+
+    // application scope
+    if (scope == ELogLifeSignScope::LS_APP) {
+        if (name != nullptr && *name != 0) {
+            ELOG_REPORT_WARN(
+                "Ignoring name % sspecified when removing application-scope life-sign report",
+                name);
+        }
+        if (isRegex) {
+            ELOG_REPORT_WARN(
+                "Ignoring regular expression flag when removing application-scope life-sign "
+                "report");
+        }
+        return removeAppLifeSignReport(level, ELOG_CURRENT_EPOCH);
+    }
+
+    // thread scope
+    if (scope == ELogLifeSignScope::LS_THREAD) {
+        // current thread
+        if ((name == nullptr || *name == 0)) {
+            if (isRegex) {
+                ELOG_REPORT_WARN(
+                    "Ignoring regular expression flag when removing current-thread-scope life-sign "
+                    "report");
+            }
+            return removeCurrentThreadLifeSignReport(level);
+        } else {
+            if (isRegex) {
+                return removeThreadLifeSignReportByRegEx(level, name);
+            } else {
+                return removeNamedThreadLifeSignReport(level, name);
+            }
+        }
+    }
+
+    // log source scope
+    if (scope == ELogLifeSignScope::LS_LOG_SOURCE) {
+        if (isRegex) {
+            return removeLogSourceLifeSignReportByRegEx(level, name, ELOG_CURRENT_EPOCH);
+        } else {
+            return removeLogSourceLifeSignReport(level, name, ELOG_CURRENT_EPOCH);
+        }
+    }
+
+    ELOG_REPORT_ERROR("Invalid life-sign report scope: %u", (uint32_t)scope);
+    return false;
+}
+
+bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                ELogSource* logSource) {
+    // increment epoch and execute
+    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+    return setLogSourceLifeSignReport(level, frequencySpec, logSource, ELOG_CURRENT_EPOCH);
+}
+
+bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource) {
+    // increment epoch and execute
+    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+    return removeLogSourceLifeSignReport(level, logSource, ELOG_CURRENT_EPOCH);
 }
 
 bool setLifeSignLogFormat(const char* logFormat) {
@@ -623,7 +953,7 @@ bool setLifeSignLogFormat(const char* logFormat) {
     return true;
 }
 
-void setLifeSignSyncPeriod(uint32_t syncPeriodMillis) {
+void setLifeSignSyncPeriod(uint64_t syncPeriodMillis) {
     // check if the timer thread is running, and if so update it's period, otherwise launch a new
     // timer thread
     std::unique_lock<std::mutex> lock(sLifeSignLock);
@@ -671,10 +1001,35 @@ void reportLifeSign(const char* msg) {
     dbgutil::getLifeSignManager()->writeLifeSignRecord(msg, (uint32_t)len);
 }
 
+bool configureLifeSign(const char* lifeSignCfg) {
+    ELogLifeSignScope scope = ELogLifeSignScope::LS_APP;
+    ELogLevel level = ELEVEL_INFO;
+    ELogFrequencySpec freqSpec(ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES, 1);
+    std::string name;
+    bool removeCfg = false;
+    if (!ELogConfigParser::parseLifeSignReport(lifeSignCfg, scope, level, freqSpec, name,
+                                               removeCfg)) {
+        ELOG_REPORT_ERROR("Cannot configure life-sign, invalid configuration: %s", lifeSignCfg);
+        return false;
+    }
+
+    // NOTE: treating string as regular expression (if it is a simple string we will get the
+    // correct result anyway)
+    return removeCfg ? removeLifeSignReport(scope, level, name.c_str(), true)
+                     : setLifeSignReport(scope, level, freqSpec, name.c_str(), true);
+}
+
+bool setCurrentThreadNotifier(dbgutil::ThreadNotifier* notifier) {
+    return setCurrentThreadNotifierImpl(notifier);
+}
+
+bool setThreadNotifier(const char* threadName, dbgutil::ThreadNotifier* notifier) {
+    return setThreadNotifierImpl(threadName, notifier);
+}
+
 void sendLifeSignReport(const ELogRecord& logRecord) {
     // increment epoch, so pointers are still valid
-    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
-    sLifeSignGC->beginEpoch(epoch);
+    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
 
     // first check life sign filter in log source
     bool sendReport = false;
@@ -716,9 +1071,6 @@ void sendLifeSignReport(const ELogRecord& logRecord) {
             ELOG_REPORT_ERROR("Failed to write life sign record: %s", dbgutil::errorToString(rc));
         }
     }
-
-    // finish
-    sLifeSignGC->endEpoch(epoch);
 }
 
 void reportAppNameLifeSign(const char* appName) {
@@ -1022,6 +1374,37 @@ bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /
         cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
     }
 
+// configure life-sign report settings
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    std::vector<std::string> lifeSignCfgArray;
+    getPropsByPrefix(props, ELOG_LIFE_SIGN_REPORT_CONFIG_NAME, lifeSignCfgArray);
+    for (const auto& lifeSignCfg : lifeSignCfgArray) {
+        if (!configureLifeSign(lifeSignCfg.c_str())) {
+            return false;
+        }
+    }
+
+    std::string lifeSignLogFormat;
+    if (getProp(props, ELOG_LIFE_SIGN_LOG_FORMAT_CONFIG_NAME, lifeSignLogFormat)) {
+        if (!setLifeSignLogFormat(lifeSignLogFormat.c_str())) {
+            return false;
+        }
+    }
+
+    std::string lifeSignSyncPeriodStr;
+    if (getProp(props, ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, lifeSignSyncPeriodStr)) {
+        uint64_t syncPeriodMillis = 0;
+        ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
+        if (!parseTimeValueProp(ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, "", lifeSignSyncPeriodStr,
+                                syncPeriodMillis, origUnits, ELogTimeUnits::TU_MILLI_SECONDS)) {
+            ELOG_REPORT_ERROR("Invalid life-sign synchronization period configuration: %s",
+                              lifeSignSyncPeriodStr.c_str());
+            return false;
+        }
+        setLifeSignSyncPeriod(syncPeriodMillis);
+    }
+#endif
+
     return true;
 }
 
@@ -1322,6 +1705,60 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
                           (uint32_t)cfg.m_propagationMode);
         cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
     }
+
+// configure life-sign report settings
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    const ELogConfigValue* cfgValue = cfgMap->getValue(ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
+    if (cfgValue != nullptr) {
+        if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE) {
+            ELOG_REPORT_ERROR("Invalid type for %s, expecting array",
+                              ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
+            return false;
+        }
+        const ELogConfigArrayNode* arrayNode =
+            ((const ELogConfigArrayValue*)cfgValue)->getArrayNode();
+        for (uint32_t i = 0; i < arrayNode->getValueCount(); ++i) {
+            const ELogConfigValue* subValue = arrayNode->getValueAt(i);
+            if (subValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
+                ELOG_REPORT_ERROR(
+                    "Invalid type for %uth sub-element in life-sign report array, expecting "
+                    "string, "
+                    "got instead %s",
+                    i, configValueTypeToString(subValue->getValueType()));
+                return false;
+            }
+            const char* lifeSignCfg = ((const ELogConfigStringValue*)subValue)->getStringValue();
+            if (!configureLifeSign(lifeSignCfg)) {
+                return false;
+            }
+        }
+    }
+
+    std::string lifeSignLogFormat;
+    if (!cfgMap->getStringValue(ELOG_LIFE_SIGN_LOG_FORMAT_CONFIG_NAME, found, lifeSignLogFormat)) {
+        return false;
+    }
+    if (found && !setLifeSignLogFormat(lifeSignLogFormat.c_str())) {
+        return false;
+    }
+
+    std::string lifeSignSyncPeriodStr;
+    if (!cfgMap->getStringValue(ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, found,
+                                lifeSignSyncPeriodStr)) {
+        return false;
+    }
+    if (found) {
+        uint64_t syncPeriodMillis = 0;
+        ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
+        if (!parseTimeValueProp(ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, "", lifeSignSyncPeriodStr,
+                                syncPeriodMillis, origUnits, ELogTimeUnits::TU_MILLI_SECONDS)) {
+            ELOG_REPORT_ERROR("Invalid life-sign synchronization period configuration: %s",
+                              lifeSignSyncPeriodStr.c_str());
+            return false;
+        }
+        setLifeSignSyncPeriod(syncPeriodMillis);
+    }
+#endif
 
     return true;
 }
@@ -1816,6 +2253,18 @@ ELogSource* getLogSource(ELogSourceId logSourceId) {
     return logSource;
 }
 
+void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources) {
+    std::regex pattern(logSourceRegEx);
+    std::unique_lock<std::mutex> lock(sSourceTreeLock);
+    ELogSourceMap::iterator itr = sLogSourceMap.begin();
+    while (itr != sLogSourceMap.end()) {
+        if (std::regex_match(itr->second->getQualifiedName(), pattern)) {
+            logSources.emplace_back(itr->second);
+        }
+        ++itr;
+    }
+}
+
 ELogSource* getRootLogSource() { return sRootLogSource; }
 
 // void configureLogSourceLevel(const char* qualifiedName, ELogLevel logLevel);
@@ -1927,7 +2376,7 @@ ELogCacheEntryId getOrCacheFormatMsg(const char* fmt) {
 
 void setAppName(const char* appName) { setAppNameField(appName); }
 
-void setCurrentThreadName(const char* threadName) { setCurrentThreadNameField(threadName); }
+bool setCurrentThreadName(const char* threadName) { return setCurrentThreadNameField(threadName); }
 
 bool configureLogFilter(const char* logFilterCfg) {
     if (logFilterCfg[0] != '(') {

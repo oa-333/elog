@@ -137,6 +137,39 @@ private:
     void recycleObjectList(ELogManagedObject* itr);
 };
 
+/** @brief Helper class for managing GC epoch. */
+class ELOG_API ELogScopedEpoch {
+public:
+    ELogScopedEpoch(ELogGC& gc, std::atomic<uint64_t>& epoch) : m_gc(gc), m_epoch(epoch) {
+        m_currentEpoch = m_epoch.fetch_add(1, std::memory_order_relaxed);
+        m_gc.beginEpoch(epoch);
+    }
+    ELogScopedEpoch(ELogGC* gc, std::atomic<uint64_t>& epoch) : m_gc(*gc), m_epoch(epoch) {
+        m_currentEpoch = m_epoch.fetch_add(1, std::memory_order_relaxed);
+        m_gc.beginEpoch(epoch);
+    }
+    ELogScopedEpoch(const ELogScopedEpoch&) = delete;
+    ELogScopedEpoch(ELogScopedEpoch&&) = delete;
+    ELogScopedEpoch& operator=(const ELogScopedEpoch&) = delete;
+    ~ELogScopedEpoch() { m_gc.endEpoch(m_currentEpoch); }
+
+    inline uint64_t getCurrentEpoch() const { return m_currentEpoch; }
+
+private:
+    ELogGC& m_gc;
+    std::atomic<uint64_t>& m_epoch;
+    uint64_t m_currentEpoch;
+};
+
+/** @def Helper macro for managing GC epoch */
+#define ELOG_SCOPED_EPOCH(gc, epoch) ELogScopedEpoch scopedEpoch(gc, epoch);
+
+/**
+ * @def Helper macro for getting the epoch in the current call. @ref ELOG_SCOPED_EPOCH() must have
+ * been used prior in the same function call.
+ */
+#define ELOG_CURRENT_EPOCH scopedEpoch.getCurrentEpoch()
+
 }  // namespace elog
 
 #endif  // __ELOG_GC_H__

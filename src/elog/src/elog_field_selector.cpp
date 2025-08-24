@@ -39,11 +39,14 @@
 #include <cstring>
 #include <format>
 #include <iomanip>
+#include <mutex>
+#include <regex>
 #include <sstream>
 #include <unordered_map>
 
 #include "elog_common.h"
 #include "elog_concurrent_hash_table.h"
+#include "elog_field_selector_internal.h"
 #include "elog_filter.h"
 #include "elog_report.h"
 #include "elog_tls.h"
@@ -62,6 +65,27 @@ typedef ELogConcurrentHashTable<const char*> ELogThreadNameMap;
 static ELogThreadNameMap sThreadNameMap;
 static ELogTlsKey sThreadNameKey = ELOG_INVALID_TLS_KEY;
 
+struct ELogThreadData {
+    ELogThreadData(uint32_t threadId = 0) : m_threadId(threadId) {
+#ifdef ELOG_ENABLE_LIFE_SIGN
+        m_notifier = nullptr;
+#endif
+    }
+
+    ELogThreadData(const ELogThreadData&) = default;
+    ELogThreadData(ELogThreadData&&) = delete;
+    ELogThreadData& operator=(const ELogThreadData&) = default;
+    ~ELogThreadData() {}
+
+    uint32_t m_threadId;
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    dbgutil::ThreadNotifier* m_notifier;
+#endif
+};
+typedef std::unordered_map<std::string, ELogThreadData> ELogThreadDataMap;
+static ELogThreadDataMap sThreadDataMap;
+static std::mutex sLock;
+
 #define ELOG_THREAD_NAME_MAP_SIZE 4096
 
 static char sHostName[HOST_NAME_MAX];
@@ -74,7 +98,17 @@ static thread_local char sThreadName[THREAD_NAME_MAX] = {};
 
 static void cleanupThreadName(void* key) {
     elog_thread_id_t threadId = (elog_thread_id_t)(uint64_t)key;
+    // NOTE: the returned value is a compile time string literal, so it is valid even after being
+    // removed from the map
+    const char* threadName = getThreadNameField(threadId);
     sThreadNameMap.setItem(threadId, nullptr);
+
+    // cleanup inverse map as well
+    std::unique_lock<std::mutex> lock;
+    ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
+    if (itr != sThreadDataMap.end()) {
+        sThreadDataMap.erase(itr);
+    }
 }
 
 #ifdef ELOG_WINDOWS
@@ -469,15 +503,20 @@ void setAppNameField(const char* appName) {
 #endif
 }
 
-void setCurrentThreadNameField(const char* threadName) {
+bool setCurrentThreadNameField(const char* threadName) {
     elog_strncpy(sThreadName, threadName, THREAD_NAME_MAX);
     elog_thread_id_t threadId = getCurrentThreadId();
     sThreadNameMap.setItem((uint64_t)threadId, sThreadName);
     // this is required to trigger cleanup when thread ends
     elogSetTls(sThreadNameKey, (void*)(uint64_t)threadId);
+
 #ifdef ELOG_ENABLE_LIFE_SIGN
     reportCurrentThreadNameLifeSign(threadId, threadName);
 #endif
+
+    ELogThreadData threadData(threadId);
+    std::unique_lock<std::mutex> lock;
+    return sThreadDataMap.insert(ELogThreadDataMap::value_type(threadName, {threadId})).second;
 }
 
 const char* getThreadNameField(uint32_t threadId) {
@@ -486,6 +525,47 @@ const char* getThreadNameField(uint32_t threadId) {
     (void)sThreadNameMap.getItem((uint64_t)threadId, threadName);
     return threadName;
 }
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+bool setCurrentThreadNotifierImpl(dbgutil::ThreadNotifier* notifier) {
+    return setThreadNotifierImpl(sThreadName, notifier);
+}
+
+extern bool setThreadNotifierImpl(const char* threadName, dbgutil::ThreadNotifier* notifier) {
+    std::unique_lock<std::mutex> lock;
+    ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
+    if (itr == sThreadDataMap.end()) {
+        return false;
+    }
+    itr->second.m_notifier = notifier;
+    return true;
+}
+
+bool getThreadDataByName(const char* threadName, uint32_t& threadId,
+                         dbgutil::ThreadNotifier*& notifier) {
+    std::unique_lock<std::mutex> lock;
+    ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
+    if (itr != sThreadDataMap.end()) {
+        threadId = itr->second.m_threadId;
+        notifier = itr->second.m_notifier;
+        return true;
+    }
+    return false;
+}
+
+void getThreadDataByNameRegEx(const char* threadNameRegEx, ThreadDataMap& threadIds) {
+    std::regex pattern(threadNameRegEx);
+    std::unique_lock<std::mutex> lock;
+    ELogThreadDataMap::iterator itr = sThreadDataMap.begin();
+    while (itr != sThreadDataMap.end()) {
+        if (std::regex_match(itr->first, pattern)) {
+            threadIds.insert(ThreadDataMap::value_type(itr->second.m_threadId,
+                                                       {itr->first, itr->second.m_notifier}));
+        }
+        ++itr;
+    }
+}
+#endif
 
 void ELogStaticTextSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {

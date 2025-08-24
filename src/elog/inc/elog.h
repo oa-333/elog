@@ -161,34 +161,84 @@ extern ELOG_API bool registerSchemaHandler(const char* schemeName,
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
 /**
- * @brief Sets up periodic life-sign reports. This call is thread-safe.
+ * @brief Sets up life-sign reports. This call is thread-safe. This calls allows configuring
+ * life-sign reports to be automatically sent by ELog to a shared memory segment. Such configuration
+ * is per-log level, and allows specifying the frequency of the reports (i.e. once in every N calls,
+ * or imposing some rate limit). The following report scopes are supported:
+ *
+ * - application scope
+ * - thread scope
+ * - log-source scope
+ *
+ * When application scope is specified, each logging call is checked for life-sign report. When
+ * frequent logging is used, this may incur a slight performance hit.
+ *
+ * When thread-scope is specified, then only logging of the current thread (or target thread
+ * specified by name), are affected.
+ *
+ * When log-source scope is specified, then only logging calls made through loggers of the specified
+ * log source are affected.
+ *
  * @note This function may be called several times for specific threads or log sources.
  *
- * @param scope Report scope. Can be application-level, current thread or a specified log source. In
- * the latter case a log source must be specified. In any other case, if a log source is specified,
- * it will be ignored. Precedence is from log source to thread to application - meaning that for
- * each message the log source is first checked, then the current thread, then the application-level
- * life-sign filter. If a filter is found and allows it, then sending life-sign report. Although all
- * configured relevant filters are invoked (so that internal counters may be updated), the log
- * message life-sign report is sent only once.
+ * @param scope Report scope. If scope is application then the name parameter is ignored. If the
+ * scope is log-source, then the qualified name of the log source should also be specified. If the
+ * scope is thread then a name can be optionally specified (see below).
  * @param level The log level for which the report is being set up.
  * @param frequencySpec The report frequency.
- * @param logSource Optional log source. Required if report scope is LS_LOG_SOURCE.
+ * @param name The name of the log source or target thread. In case of log source this is expected
+ * to be a fully qualified name (see @ref ELogSource). In case of thread, this must match a thread,
+ * whose name was previously set with a call to @ref setCurrentThreadName(). If the scope is thread
+ * and no thread name was specified (i.e. null or empty string), then life-sign report is configured
+ * for the current thread.
+ * @param isRegex Specifies whether the specified name should be treated as a regular expression
+ * matching several threads or log sources. This allows addressing several threads or log sources in
+ * a single call. This parameter is ignored when setting life-sign report for the entire application
+ * or for the curren thread.
  * @return The operation's result.
  */
 extern ELOG_API bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
                                        const ELogFrequencySpec& frequencySpec,
-                                       ELogSource* logSource = nullptr);
+                                       const char* name = nullptr, bool isRegex = false);
 
 /**
  * @brief Removes life-sign periodic reports. This call is thread-safe.
- * @param scope Report scope.
+ * @param scope Report scope. If scope is application then the name parameter is ignored. If the
+ * scope is log-source, then a name should also be specified. If the scope is thread then a name can
+ * be optionally specified (see below).
  * @param level The log level for which the report is to be removed.
- * @param logSource Optional log source. Required if report scope is LS_LOG_SOURCE.
+ * @param name The name of the log source or target thread. In case of log source this is expected
+ * to be a fully qualified name (see @ref ELogSource). In case of thread, this must match a thread,
+ * whose name was previously set with a call to @ref setCurrentThreadName(). If the scope is thread
+ * and no thread name was specified, then life-sign report is removed for the current thread.
+ * @param isRegex Specifies whether the specified name should be treated as a regular expression
+ * matching several threads or log sources. This allows addressing several threads or log sources in
+ * a single call.
  * @return The operation's result.
  */
 extern ELOG_API bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
-                                          ELogSource* logSource = nullptr);
+                                          const char* name = nullptr, bool isRegex = false);
+
+/**
+ * @brief Set life-sign report for the specified log source. For more details see @ref
+ * setLifeSignReport().
+ * @param level The log level for which the report is being set up.
+ * @param frequencySpec The report frequency.
+ * @param logSource The target log source.
+ * @return The operation's result.
+ */
+extern ELOG_API bool setLogSourceLifeSignReport(ELogLevel level,
+                                                const ELogFrequencySpec& frequencySpec,
+                                                ELogSource* logSource);
+
+/**
+ * @brief Remove life-sign report for the specified log source. For more details see @ref
+ * removeLifeSignReport().
+ * @param level The log level for which the report is being set up.
+ * @param logSource The target log source.
+ * @return The operation's result.
+ */
+extern ELOG_API bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource);
 
 /** @brief Configures log line format for life sign reports. */
 extern ELOG_API bool setLifeSignLogFormat(const char* logFormat);
@@ -205,13 +255,63 @@ extern ELOG_API bool setLifeSignLogFormat(const char* logFormat);
  * @param syncPeriodMillis The synchronization period in milliseconds. Setting this value to zero
  * would cause periodic synchronization to stop.
  */
-extern ELOG_API void setLifeSignSyncPeriod(uint32_t syncPeriodMillis);
+extern ELOG_API void setLifeSignSyncPeriod(uint64_t syncPeriodMillis);
 
 /** @brief Synchronizes the life-sign report shared memory segment to disk (Windows only). */
 extern ELOG_API bool syncLifeSignReport();
 
 /** @brief Voluntarily send a life sign report. */
 extern ELOG_API void reportLifeSign(const char* msg);
+
+/**
+ * @brief Configures life sign report by a configuration string. The expected format is as follows:
+ *
+ * scope:log-level:freq-spec:optional-name
+ *
+ * scope is anyone of: app, thread, log_source
+ * freq-spec is either of the form 'every[N]', specifying one message per N messages (to be sent to
+ * life-sign report), or rate_limit[msx-msg:timeout:unit], specifying rate limit. When scope is
+ * thread or log_source, a name is expected, designating the name of the thread or the log source.
+ * Following are some examples:
+ *
+ * app:ERROR:every[1]
+ * app:WARN:every[10],
+ * thread:WARN:every[1]:monitor_thread
+ * log_source:INFO:rate[3:2:second]:file_manager
+ *
+ * @param lifeSignCfg The configuration string.
+ * @return The operation's result.
+ */
+extern ELOG_API bool configureLifeSign(const char* lifeSignCfg);
+
+/**
+ * @brief Installs a notifier for the current thread so that incoming signals can be processed
+ * (mostly required on Windows). This is required for configuring life sign reports on a target
+ * thread by name, mostly on Windows platforms (but not only), since this operation may deadlock.
+ * The notifier should wake up the target thread so that it can process incoming signals (or APC on
+ * Windows platforms). Consequently the target thread can return to sleep/wait.
+ *
+ * @note @ref setCurrentThreadName() must have been called for the current thread prior to this
+ * call.
+ *
+ * @return True if operation succeeded, otherwise false, indicating the name of the current thread
+ * has not been set yet.
+ */
+extern ELOG_API bool setCurrentThreadNotifier(dbgutil::ThreadNotifier* notifier);
+
+/**
+ * @brief Installs a notifier for the named thread, so that incoming signals can be processed
+ * (mostly required on Windows). This is required for configuring life sign reports on a target
+ * thread by name, mostly on Windows platforms (but not only), since this operation may deadlock.
+ * The notifier should wake up the target thread so that it can process incoming signals (or APC on
+ * Windows platforms). Consequently the target thread can return to sleep/wait.
+ *
+ * @note @ref setCurrentThreadName() must have been called for the some thread prior to this call.
+ *
+ * @return True if operation succeeded, otherwise false, indicating no thread with the given name
+ * was found.
+ */
+extern ELOG_API bool setThreadNotifier(const char* threadName, dbgutil::ThreadNotifier* notifier);
 #endif
 
 /**************************************************************************************
@@ -522,7 +622,8 @@ extern ELOG_API ELogTargetId addWin32EventLogTarget(ELogLevel logLevel = ELEVEL_
                                                     ELogFormatter* logFormatter = nullptr);
 
 /**
- * @brief Adds a dedicated tracer, that receives messages only from a specific logger.
+ * @brief Adds a dedicated tracer, that receives messages only from a specific logger and directs
+ * all logs only to a specified log target.
  * @param traceFilePath The trace file path.
  * @param traceBufferSize The trace buffer size. If buffer is full then tracing blocks until
  * buffer has more free space (as trace messages are being written to the trace file).
@@ -779,8 +880,12 @@ extern ELOG_API ELogCacheEntryId getOrCacheFormatMsg(const char* fmt);
 /** @brief Sets the application's name, to be referenced by token ${app}. */
 extern ELOG_API void setAppName(const char* appName);
 
-/** @brief Sets the current thread's name, to be referenced by token ${tname}. */
-extern ELOG_API void setCurrentThreadName(const char* threadName);
+/**
+ * @brief Sets the current thread's name, to be referenced by token ${tname}.
+ * @param threadName The name of the thread. Duplicate names are not allowed.
+ * @return True if succeeded, or false if name is already used by another thread.
+ */
+extern ELOG_API bool setCurrentThreadName(const char* threadName);
 
 /**************************************************************************************
  *

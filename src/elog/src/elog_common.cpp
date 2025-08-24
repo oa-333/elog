@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "elog_config_parser.h"
 #include "elog_report.h"
 
 namespace elog {
@@ -388,6 +389,68 @@ bool convertTimeUnit(uint64_t value, ELogTimeUnits sourceUnits, ELogTimeUnits ta
     // now convert to target units
     return fromNanos(res, targetUnits, res, issueError);
 }
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+bool parseLifeSignScope(const char* lifeSignScopeStr, ELogLifeSignScope& scope) {
+    if (strcmp(lifeSignScopeStr, "app") == 0) {
+        scope = ELogLifeSignScope::LS_APP;
+    } else if (strcmp(lifeSignScopeStr, "thread") == 0) {
+        scope = ELogLifeSignScope::LS_THREAD;
+    } else if (strcmp(lifeSignScopeStr, "log-source") == 0) {
+        scope = ELogLifeSignScope::LS_LOG_SOURCE;
+    } else {
+        ELOG_REPORT_ERROR("Invalid life-sign scope specification: %s", lifeSignScopeStr);
+        return false;
+    }
+    return true;
+}
+
+bool parseFrequencySpec(const char* freqSpecStr, ELogFrequencySpec& freqSpec) {
+    // either every[N] or rate[max-msg:timeout:time-unit]
+    // find first '['
+    std::string freqStr = freqSpecStr;
+    std::string::size_type bracketPos = freqStr.find('[');
+    if (bracketPos == std::string::npos) {
+        ELOG_REPORT_ERROR("Invalid life-sign frequency specification, missing '[': %s",
+                          freqSpecStr);
+        return false;
+    }
+    if (freqStr.back() != ']') {
+        ELOG_REPORT_ERROR("Invalid life-sign frequency specification, should end with ']': %s",
+                          freqSpecStr);
+        return false;
+    }
+    std::string freqMethod = freqStr.substr(0, bracketPos);
+    std::string freqCfg = freqStr.substr(bracketPos + 1, freqStr.length() - bracketPos - 2);
+    if (freqMethod.compare("every") == 0) {
+        freqSpec.m_method = ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES;
+        if (!parseIntProp("every-N", "", freqCfg, freqSpec.m_msgCount)) {
+            ELOG_REPORT_ERROR(
+                "Invalid life-sign frequency specification, every-N method expects integer within "
+                "brackets []: %s",
+                freqSpecStr);
+            return false;
+        }
+    } else if (freqMethod.compare("rate_limit") == 0) {
+        freqSpec.m_method = ELogFrequencySpecMethod::FS_RATE_LIMIT;
+        if (!ELogConfigParser::parseRateLimit(freqCfg, freqSpec.m_msgCount, freqSpec.m_timeout,
+                                              freqSpec.m_timeoutUnits)) {
+            ELOG_REPORT_ERROR(
+                "Invalid life-sign frequency specification, rate_limit specification is malformed: "
+                "%s",
+                freqSpecStr);
+            return false;
+        }
+    } else {
+        ELOG_REPORT_ERROR(
+            "Invalid life-sign frequency method '%s', expecting either 'every' or 'rate_limit': %s",
+            freqSpecStr);
+        return false;
+    }
+
+    return true;
+}
+#endif
 
 size_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen /* = 0 */) {
     assert(destLen > 0);

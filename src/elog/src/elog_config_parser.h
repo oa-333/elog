@@ -22,6 +22,12 @@ public:
     static bool parseRateLimit(const std::string& rateLimitCfg, uint64_t& maxMsg, uint64_t& timeout,
                                ELogTimeUnits& units);
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    static bool parseLifeSignReport(const std::string& lifeSignCfg, ELogLifeSignScope& scope,
+                                    ELogLevel& level, ELogFrequencySpec& frequencySpec,
+                                    std::string& name, bool& remove);
+#endif
+
 private:
     static void insertPropOverride(ELogPropertyMap& props, const std::string& key,
                                    const std::string& value);

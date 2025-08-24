@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cinttypes>
+#include <condition_variable>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -1282,32 +1283,23 @@ static int testRegression() {
     return 0;
 }
 
-static int testLifeSign() {
 #ifdef ELOG_ENABLE_LIFE_SIGN
-    // baseline test - no filter used, direct life sign report
-    fprintf(stderr, "Running basic life-sign test\n");
-    elog::ELogTarget* logTarget = initElog();
-    if (logTarget == nullptr) {
-        fprintf(stderr, "Failed to init life-sign test, aborting\n");
-        return 1;
-    }
-    fprintf(stderr, "initElog() OK\n");
-
-    // run simple test - write one record
-    elog::reportLifeSign("Test life sign");
-    std::this_thread::sleep_for(std::chrono::seconds(3));
-
-    // multi-threaded test
-    fprintf(stderr, "Multi-threaded life-sign test\n");
+static int testAppLifeSign(uint32_t threadCount) {
+    fprintf(stderr, "Application life-sign test starting\n");
 
     // test application level filter
-    elog::setLifeSignReport(
-        elog::ELogLifeSignScope::LS_APP, elog::ELEVEL_INFO,
-        elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES, 1));
+    if (!elog::setLifeSignReport(
+            elog::ELogLifeSignScope::LS_APP, elog::ELEVEL_INFO,
+            elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES, 1))) {
+        ELOG_ERROR("Failed to set life-sign report");
+        return 1;
+    }
+
+    // launch threads
     std::vector<std::thread> threads;
     volatile bool done = false;
     fprintf(stderr, "Launching test threads\n");
-    for (uint32_t i = 0; i < 5; ++i) {
+    for (uint32_t i = 0; i < threadCount; ++i) {
         threads.emplace_back(std::thread([i, &done]() {
             std::string tname = "test-thread-app-";
             tname += std::to_string(i);
@@ -1323,24 +1315,39 @@ static int testLifeSign() {
         std::this_thread::sleep_for(std::chrono::milliseconds(77));
     }
     fprintf(stderr, "Launched all threads\n");
+
+    // let threads work for 5 seconds and close
     std::this_thread::sleep_for(std::chrono::seconds(5));
     fprintf(stderr, "Wait ended, joining threads\n");
     done = true;
     for (auto& t : threads) {
         t.join();
     }
-    fprintf(stderr, "Application-level filter test finished\n");
+    fprintf(stderr, "All threads finished\n");
 
-    // remove application level filter, and set thread-level filter
-    fprintf(stderr, "Thread-level filter test starting\n");
-    elog::removeLifeSignReport(elog::ELogLifeSignScope::LS_APP, elog::ELEVEL_INFO);
-    threads.clear();
-    done = false;
-    for (uint32_t i = 0; i < 5; ++i) {
-        threads.emplace_back(std::thread([i, &done]() {
-            elog::setLifeSignReport(
-                elog::ELogLifeSignScope::LS_THREAD, elog::ELEVEL_INFO,
-                elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES, 2));
+    if (!elog::removeLifeSignReport(elog::ELogLifeSignScope::LS_APP, elog::ELEVEL_INFO)) {
+        ELOG_ERROR("Failed to remove life-sign report");
+        return 1;
+    }
+    fprintf(stderr, "Application-level life-sign test finished\n");
+    return 0;
+}
+
+static int testThreadLifeSign(uint32_t threadCount) {
+    fprintf(stderr, "Thread-level life-sign test starting\n");
+
+    std::vector<std::thread> threads;
+    std::vector<int> threadRes(threadCount, 0);
+    volatile bool done = false;
+    for (uint32_t i = 0; i < threadCount; ++i) {
+        threads.emplace_back(std::thread([i, &done, &threadRes]() {
+            if (!elog::setLifeSignReport(
+                    elog::ELogLifeSignScope::LS_THREAD, elog::ELEVEL_INFO,
+                    elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES,
+                                            2))) {
+                ELOG_ERROR("Failed to set life-sign report");
+                threadRes[i] = 1;
+            }
             std::string tname = "test-thread-";
             tname += std::to_string(i);
             elog::setCurrentThreadName(tname.c_str());
@@ -1351,24 +1358,42 @@ static int testLifeSign() {
                     ++count, i);
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
+            threadRes[i] = 0;
         }));
         std::this_thread::sleep_for(std::chrono::milliseconds(77));
     }
+    fprintf(stderr, "Launched all threads\n");
+
+    // let threads work for 5 seconds and close
     std::this_thread::sleep_for(std::chrono::seconds(5));
+    fprintf(stderr, "Wait ended, joining threads\n");
     done = true;
     for (auto& t : threads) {
         t.join();
     }
-    fprintf(stderr, "Thread-level filter test ended, aborting\n");
+    for (int res : threadRes) {
+        if (res != 0) {
+            fprintf(stderr, "Thread-level filter test failed\n");
+            return res;
+        }
+    }
+    fprintf(stderr, "Thread-level life-sign test ended, aborting\n");
+    return 0;
+}
 
-    // set log-source filter
-    fprintf(stderr, "log-source filter test starting\n");
-    elog::setLifeSignReport(elog::ELogLifeSignScope::LS_LOG_SOURCE, elog::ELEVEL_INFO,
-                            elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_RATE_LIMIT, 5,
-                                                    1, elog::ELogTimeUnits::TU_SECONDS),
-                            elog::getDefaultLogger()->getLogSource());
-    threads.clear();
-    done = false;
+static int testLogSourceLifeSign(uint32_t threadCount) {
+    fprintf(stderr, "log-source life-sign test starting\n");
+    if (!elog::setLogSourceLifeSignReport(
+            elog::ELEVEL_INFO,
+            elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_RATE_LIMIT, 5, 1,
+                                    elog::ELogTimeUnits::TU_SECONDS),
+            elog::getDefaultLogger()->getLogSource())) {
+        ELOG_ERROR("Failed to set life-sign report for default logger");
+        return 1;
+    }
+
+    std::vector<std::thread> threads;
+    volatile bool done = false;
     for (uint32_t i = 0; i < 5; ++i) {
         threads.emplace_back(std::thread([i, &done]() {
             std::string tname = "test-log-source-thread-";
@@ -1385,12 +1410,138 @@ static int testLifeSign() {
         }));
         std::this_thread::sleep_for(std::chrono::milliseconds(77));
     }
+    fprintf(stderr, "Launched all threads\n");
+
+    // let threads work for 5 seconds and close
     std::this_thread::sleep_for(std::chrono::seconds(5));
+    fprintf(stderr, "Wait ended, joining threads\n");
     done = true;
     for (auto& t : threads) {
         t.join();
     }
-    fprintf(stderr, "Log-source filter test ended, aborting\n");
+    fprintf(stderr, "Log-source life-sign test ended\n");
+
+    if (!elog::removeLogSourceLifeSignReport(elog::ELEVEL_INFO,
+                                             elog::getDefaultLogger()->getLogSource())) {
+        ELOG_ERROR("Failed to remove life-sign report for default logger");
+        return 1;
+    }
+    return 0;
+}
+
+static int testTargetThreadLifeSign() {
+    fprintf(stderr, "Target-thread life-sign test starting\n");
+    bool threadReady = false;
+    bool appReady = false;
+    volatile bool done = false;
+    std::mutex m;
+    std::condition_variable cv;
+    std::thread t = std::thread([&threadReady, &appReady, &m, &cv, &done]() {
+        std::string tname = "test-life-sign-thread";
+        elog::setCurrentThreadName(tname.c_str());
+
+        {
+            std::unique_lock<std::mutex> lock(m);
+            threadReady = true;
+            cv.notify_one();
+            cv.wait(lock, [&appReady]() { return appReady; });
+        }
+
+        uint32_t count = 0;
+        while (!done) {
+            ELOG_INFO(
+                "This is a life sign log (count %u) from test-life-sign-thread, with target thread "
+                "rate limit of 3 msg/sec",
+                ++count);
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    });
+
+    // wait for test thread to finish wait
+    {
+        std::unique_lock<std::mutex> lock(m);
+        cv.wait(lock, [&threadReady]() { return threadReady; });
+    }
+
+    // set life sign report for the target thread
+    // NOTE: we must install a notifier on windows
+    dbgutil::CVThreadNotifier notifier(cv);
+    if (!elog::setThreadNotifier("test-life-sign-thread", &notifier)) {
+        ELOG_ERROR("Failed to set target thread notifier");
+        return 1;
+    }
+
+    if (!elog::setLifeSignReport(
+            elog::ELogLifeSignScope::LS_THREAD, elog::ELEVEL_INFO,
+            elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_RATE_LIMIT, 3, 1,
+                                    elog::ELogTimeUnits::TU_SECONDS),
+            "test-life-sign-thread")) {
+        ELOG_ERROR("Failed to set life-sign report for target thread 'test-life-sign-thread'");
+        bool done = true;
+        {
+            std::unique_lock<std::mutex> lock(m);
+            appReady = true;
+            cv.notify_one();
+        }
+        return 1;
+    }
+
+    // notify thread it can start the test
+    {
+        std::unique_lock<std::mutex> lock(m);
+        appReady = true;
+        cv.notify_one();
+    }
+    fprintf(stderr, "Launched test thread\n");
+
+    // let thread work for 5 seconds and close
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    fprintf(stderr, "Wait ended, joining thread\n");
+    done = true;
+    t.join();
+    fprintf(stderr, "Target thread life-sign test ended\n");
+    return 0;
+}
+#endif
+
+static int testLifeSign() {
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    // baseline test - no filter used, direct life sign report
+    fprintf(stderr, "Running basic life-sign test\n");
+    elog::ELogTarget* logTarget = initElog();
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init life-sign test, aborting\n");
+        return 1;
+    }
+    fprintf(stderr, "initElog() OK\n");
+
+    // run simple test - write one record
+    elog::reportLifeSign("Test life sign");
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    // app-scope test
+    int res = testAppLifeSign(5);
+    if (res != 0) {
+        return res;
+    }
+
+    // current thread test
+    res = testThreadLifeSign(5);
+    if (res != 0) {
+        return res;
+    }
+
+    // log source test
+    res = testLogSourceLifeSign(5);
+    if (res != 0) {
+        return res;
+    }
+
+    // test target thread life-sign
+    res = testTargetThreadLifeSign();
+    if (res != 0) {
+        return res;
+    }
 
     abort();
     return 0;

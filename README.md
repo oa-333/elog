@@ -355,6 +355,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Nested Specification Style](#nested-specification-style)
     - [Terminal Text Formatting](#terminal-text-formatting)
     - [Terminal Text Formatting Syntax](#terminal-formatting-formal-syntax-specification)
+    - [Configuring Life Sign Reports](#configuring-life-sign-reports)
 - [Extending The Library](#extending-the-library)
     - [Extending The Formatting Scheme](#extending-the-formatting-scheme)
     - [Supporting User-Defined Types in Binary Logging](#supporting-user-defined-types-in-binary-logging)
@@ -913,17 +914,22 @@ As in other common logging frameworks, another way of limiting the rate of log m
 
 ELog supports out of the box life-sign reporting and post-mortem analysis tools. For this ELog needs to be compiled with ELOG_ENABLE_LIFE_SIGN=ON. The main philosophy of life-sign reporting is to be automated as much as possible. The user only needs to configure when and how log records are sent to the life-sign shared memory segment.
 
-Life-sign reporting can be configured for the entire application (such that each log message is checked for life-sign reporting), for the current thread (such that each message in the current thread is checked), or for a specific log source (such that each message originating from the log source is checked, for all threads). In addition, the frequency of life-sign reporting can be configured, such that once in every N messages, the log record is sent to the shared memory segment, or that rate limiting is imposed (only N messages per second are allowed to pass through). Finally, life-sign reports are configured on a per-level basis, so that, for instance, FATAL/ERROR log messages can be always sent to life-sign reporting, and WARN/NOTICE only once in a while.
+Life-sign reporting can be configured for the entire application (such that each log message is checked for life-sign reporting), for the current thread (such that each message in the current thread is checked), for a named thread, or for a specific log source (such that each message originating from the log source is checked, for all threads). In addition, the frequency of life-sign reporting can be configured, such that once in every N messages, the log record is sent to the shared memory segment, or that rate limiting is imposed (only N messages per second are allowed to pass through). Finally, life-sign reports are configured on a per-level basis, so that, for instance, FATAL/ERROR log messages can be always sent to life-sign reporting, and WARN/NOTICE only once in a while.
 
 This is the API for configuring how life sign reports are sent:
 
     bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
                             const ELogFrequencySpec& frequencySpec,
-                            ELogSource* logSource = nullptr);
+                            const char* name = nullptr, bool isRegEx = false);
 
 A previous configuration can be reconfigured, or removed altogether with the following API:
 
-    removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level, ELogSource* logSource = nullptr);
+    removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level, const char* name = nullptr, bool isRegEx = false);
+
+Convenience API functions are defined for configuring life-sign report for a log source (object pointer):
+
+- setLogSourceLifeSignReport()
+- removeLogSourceLifeSignReport()
 
 The user is free to voluntarily send any text to the life-sign shared memory segment:
 
@@ -943,6 +949,12 @@ Periodic syncing can be configured with:
 
     void setLifeSignSyncPeriod(uint32_t syncPeriodMillis);
 
+Configuring life-sign reports from string is supported with the following API:
+
+    bool configureLifeSign(const char* lifeSignCfg);
+
+Refer to [Configuring Life-Sign Reports](#configuring-life-sign-reports) for more details.
+
 #### Initializing Life-Sign Reporting
 
 When initializing ELog, the life-sign reporting can be configured via the ELogParams structure. In particular the following members can be used to control how the life-sign reporting is configured:
@@ -957,6 +969,15 @@ As life-sign reporting is designed for thread-safe configuration during normal o
 Unless configuring life-sign reporting frequently during ongoing ELog operation, there is no need to set m_lifeSignGCPeriodMillis and m_lifeSignGCTaskCount, as they are tuned for infrequent life-sign reporting configuration changes.
 
 It is possible to disable life-sign reporting altogether (even though compiled with ELOG_ENABLE_LIFE_SIGN=ON) by setting m_enableLifeSignReport to false before calling elog::initialize();
+
+### Resolving Life-Sign Thread Configuration Deadlocks
+
+As the mechanism used for configuring life-sign report for named threads involves sending signals/APCs, it is possible that the call to configure a named thread would deadlock, since the target thread is not pulling queued signals/APCs. For this reason, an API was added to install a helper object to notify a target thread. This allows ELog to invoke the notifier after queueing a signal/APC for configuration request on the target thread. The API for that is:
+
+- setCurrentThreadNotifier()
+- setThreadNotifier()
+
+The API allows for each thread to install the notifier required to wake up the thread from sleep/wait and executing queued signals/APCs. Alternative a notifier can be installed for a thread by name. This requires that the thread first configure its name by calling @ref setCurrentThreadName().
 
 #### Inspecting Shared Memory Segments
 
@@ -1816,6 +1837,44 @@ Conditional formatting takes place in three main forms:
     ${expr-switch: ${case: (filter-pred) : ${fmt:<format>}}, ..., ${default:${fmt: <format>}} }
 
 TODO: finish this after documenting filter predicates.
+
+### Configuring Life Sign Reports
+
+Life-sign reports are fully configurable from string or file. Life-sign configuration consists of the following main 3 components:
+
+- Life-sign report frequency (may be repeated)
+- Life-sign log format (optional)
+- Life-sign synchronization (to disk) period
+
+The expected format for life-sign report configuration as follows:
+
+    scope:log-level:freq-spec:optional-name
+
+- scope is anyone of: app, thread, log_source
+- freq-spec is either of the form:
+    - 'every[N]', specifying one message per N messages (to be sent to life-sign report)
+    - rate_limit[msx-msg:timeout:unit], specifying rate limit.
+    
+When scope is thread or log_source, a name is expected, designating the name of the thread or the log source.
+
+Following are some examples:
+
+    app:ERROR:every[1]
+    app:WARN:every[10],
+    thread:WARN:every[1]:monitor_thread
+    log_source:INFO:rate[3:2:second]:core.file_manager
+
+In the last example the log source with qualified name 'core.file_manager' sends INFO level log messages to the life-sign shared memory segment in a rate that does not surpass 3 log messages in every 2 seconds.
+
+TODO: add a sentence about 'remove' option when reload-config feature is implemented.
+
+The log format of life-sign reports can be specified, overriding default global log format:
+
+life_sign_log_format = ${src} ${msg}
+
+Finally, periodic synchronization of life-sign shared memory segments to disk (required on Windows) can be configured as follows:
+
+life_sign_sync_period = 5 seconds
 
 ## Extending The Library
 
