@@ -57,6 +57,12 @@ public:
         return receiveStringField(typeId, text.c_str(), fieldSpec);
     }
 
+    /** @brief Receives the log time as unix epoch time in milliseconds. */
+    virtual void receiveTimeEpoch(uint32_t typeId, uint64_t timeEpochMillis,
+                                  const ELogFieldSpec& fieldSpec) {
+        return receiveIntField(typeId, timeEpochMillis, fieldSpec);
+    }
+
     /** @brief Receives the log record id. */
     virtual void receiveRecordId(uint32_t typeId, uint64_t recordId,
                                  const ELogFieldSpec& fieldSpec) {

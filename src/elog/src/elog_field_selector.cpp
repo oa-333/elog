@@ -120,6 +120,7 @@ static pid_t pid = 0;
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogStaticTextSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogRecordIdSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogTimeSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogTimeEpochSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogHostNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogUserNameSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogOsNameSelector)
@@ -589,6 +590,15 @@ void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* 
     size_t len = elogTimeToString(record.m_logTime, timeBuffer);
     receptor->receiveTimeField(getTypeId(), record.m_logTime, timeBuffer.m_buffer, m_fieldSpec,
                                len);
+}
+
+void ELogTimeEpochSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    uint64_t unixTimeMillis = elogTimeToUnixTimeNanos(record.m_logTime) / 1000000ull;
+    if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
+        receptor->receiveTimeEpoch(getTypeId(), unixTimeMillis, m_fieldSpec);
+    } else {
+        receptor->receiveIntField(getTypeId(), unixTimeMillis, m_fieldSpec);
+    }
 }
 
 void ELogHostNameSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {

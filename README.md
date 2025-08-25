@@ -323,6 +323,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Log Level Propagation](#log-level-propagation)
     - [Log Line Format](#log-line-format)
     - [Log Record Field Reference Tokens](#log-record-field-reference-tokens)
+    - [Structured Logging](#structured-logging)
     - [Log Targets](#log-targets)
     - [Configuration Styles](#configuration-styles)
     - [Flush Policy](#flush-policy)
@@ -335,7 +336,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Moderated Logging](#moderated-logging)
     - [Every-N Logging](#every-n-logging)
     - [Life Sign Management](#life-sign-management)
-- [Configuration](#configuring)
+- [Configuration](#configuration)
     - [Configuration Units](#configuration-units)
     - [Configuring Log Level](#configuring-log-level)
     - [Configuring Log Targets](#configuring-log-targets)
@@ -621,6 +622,7 @@ The following special log record field reference tokens are understood by the EL
 
 - ${rid} - the log record id (unique per thread).
 - ${time} - the logging time.
+- ${time_epoch} - the logging time, given as UNIX time in milliseconds, since the epoch 1/1/1970 00:00:00 UTC
 - ${host} - the host name.
 - ${user} - the logged in user.
 - ${os_name} - the operating system name.
@@ -650,6 +652,41 @@ Log record field reference tokens may be specified in several places in the conf
 An extended syntax for reference token was defined for special terminal formatting escape sequences (colors and fonts).
 See [terminal text formatting](#terminal-text-formatting) for more details.
 
+### Structured Logging
+
+In order to enable structured logging, one only needs to specify a log line format according to the desired output format. For instance, if JSON output is required, then the following can be done:
+
+    elog::configureLogFormat(
+        "{\n"
+            "\t\"time\": ${time_epoch},\n"
+            "\t\"level\": \"${level}\",\n"
+            "\t\"thread_id\": ${tid},\n"
+            "\t\"log_source\": \"${src}\",\n"
+            "\t\"log_msg\": \"${msg}\"\n"
+        "}");
+
+Pay attention to the escaped quotes, so that the JSON output is properly formatted. Following is a sample output:
+
+    {
+        "time": 1756116881664,
+        "level": "INFO",
+        "thread_id": 39952,
+        "log_source": "elog_root",
+        "log_msg": "This is a test message with JSON structured logging"
+    }
+
+When configuring through a file or string (e.g. elog::configureByStr()), one should be careful how to use quotes, and single quotes nay be used to solve any ambiguities. Following is an example of configuring a [log target](#log-targets) using [nested-style configuration](#nested-specification-style):
+
+    elog::configureByStr("{            // begin map node
+        log_target = \'sys://stderr?"  // single quote starts a string value
+            "log_format={\n"
+                "\t\"time\": ${time_epoch},\n"
+                "\t\"level\": \"${level}\",\n"
+                "\t\"thread_id\": ${tid},\n"
+                "\t\"log_source\": \"${src}\",\n"
+                "\t\"log_msg\": \"${msg}\"\n"
+            "}\'"  // closing log_format, single quote ends a string value
+        "}");      // closing map node
 
 ### Log Targets
 

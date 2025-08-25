@@ -812,7 +812,8 @@ extern ELOG_API void setLogLevel(ELogLevel logLevel, ELogPropagateMode propagate
  * @note The log line format specification is a string with normal text and white space, that
  * may contain special token references. The following special tokens are in use:
  * ${rid} - the log record id.
- * ${time} - the loging time.
+ * ${time} - the loging time (local time with milliseconds).
+ * ${time_epoch} - the logging time (unix epoch milliseconds)
  * @{host} - the host name.
  * ${user} - the logged in user.
  * ${prog} - the running program name.

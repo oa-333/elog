@@ -157,7 +157,7 @@ inline bool compareLogLevel(ELogCmpOp cmpOp, ELogLevel lhs, ELogLevel rhs) {
 }
 
 inline bool compareTime(ELogCmpOp cmpOp, ELogTime lhs, ELogTime rhs) {
-    return compareInt<uint64_t>(cmpOp, elogTimeToUTCNanos(lhs), elogTimeToUTCNanos(rhs));
+    return compareInt<uint64_t>(cmpOp, elogTimeToUnixTimeNanos(lhs), elogTimeToUnixTimeNanos(rhs));
 }
 
 ELogNotFilter::~ELogNotFilter() {

@@ -1047,6 +1047,37 @@ static void testLogMacros() {
     }
 }
 
+static void testJson() {
+    // test structured logging in JSON format
+
+    // clang-format off
+    const char* cfg = "sys://stderr?"
+        "log_format={\n"
+            "\t\"time\": ${time_epoch},\n"
+            "\t\"level\": \"${level}\",\n"
+            "\t\"thread_id\": ${tid},\n"
+            "\t\"log_source\": \"${src}\",\n"
+            "\t\"log_msg\": \"${msg}\"\n"
+        "}";
+    // clang-format on
+
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init async-thread-name test, aborting\n");
+        return;
+    }
+
+    // test moderate macro
+    for (uint32_t i = 0; i < 30; ++i) {
+        ELOG_MODERATE_INFO(
+            2, 1, elog::ELogTimeUnits::TU_SECONDS,
+            "This is a test moderate message (twice per second) with JSON structured logging");
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    termELog();
+}
+
 int main(int argc, char* argv[]) {
     // print some messages before elog starts
     ELOG_INFO("Accumulated message 1");
@@ -1170,8 +1201,8 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
             props.m_sequence.push_back({"log_target", prop});
             res = elog::configureByPropsEx(props, true, true);
         } else {
-            std::string cfgStr = "{ log_target = \"";
-            cfgStr += namedCfg + "\"}";
+            std::string cfgStr = "{ log_target = \'";
+            cfgStr += namedCfg + "\'}";
             fprintf(stderr, "Using configuration: log_target = %s\n", namedCfg.c_str());
             res = elog::configureByStr(cfgStr.c_str(), true, true);
         }
@@ -1280,6 +1311,7 @@ static int testRegression() {
     testFmtLibSanity();
 #endif
     testLogMacros();
+    testJson();
     return 0;
 }
 

@@ -61,7 +61,7 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     m_logItemArray[index]["status"] = elogLevelToStr(logRecord.m_logLevel);
     m_logItemArray[index]["hostname"] = getHostName();
     // TODO: this is not working well, neither as int, nor as string
-    // m_logItemArray[index]["timestamp"] = elogTimeToUTCSeconds(logRecord.m_logTime);
+    // m_logItemArray[index]["timestamp"] = elogTimeToUnixTimeSeconds(logRecord.m_logTime);
     m_logItemArray[index]["logger.name"] = logRecord.m_logger->getLogSource()->getQualifiedName();
 
     const char* threadName = getThreadNameField(logRecord.m_threadId);

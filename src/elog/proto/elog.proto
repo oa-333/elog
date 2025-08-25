@@ -20,7 +20,7 @@ service ELogService {
 // ELog Record
 message ELogRecordMsg {
     optional uint64 recordId = 1;
-    optional uint64 timeUTCMillis = 2;
+    optional uint64 timeUnixEpochMillis = 2;
     optional string hostName = 3;
     optional string userName = 4;
     optional string osName = 5;

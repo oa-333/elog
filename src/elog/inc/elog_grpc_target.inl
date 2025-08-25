@@ -121,8 +121,8 @@ void ELogGRPCBaseReceptor<MessageType>::receiveTimeField(uint32_t typeId, const 
                                                          const char* timeStr,
                                                          const ELogFieldSpec& fieldSpec,
                                                          size_t length) {
-    uint64_t utcTimeMillis = elogTimeToUTCNanos(logTime) / 1000000ULL;
-    m_logRecordMsg->set_timeutcmillis(utcTimeMillis);
+    uint64_t unixTimeMillis = elogTimeToUnixTimeNanos(logTime) / 1000000ULL;
+    m_logRecordMsg->set_timeunixepochmillis(unixTimeMillis);
 }
 
 template <typename MessageType>

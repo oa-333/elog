@@ -193,6 +193,21 @@ private:
     ELOG_DECLARE_FIELD_SELECTOR(ELogTimeSelector, time);
 };
 
+class ELOG_API ELogTimeEpochSelector : public ELogFieldSelector {
+public:
+    ELogTimeEpochSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_INT, fieldSpec) {}
+    ELogTimeEpochSelector(const ELogTimeEpochSelector&) = delete;
+    ELogTimeEpochSelector(ELogTimeEpochSelector&&) = delete;
+    ELogTimeEpochSelector& operator=(const ELogTimeEpochSelector&) = delete;
+    ~ELogTimeEpochSelector() final {}
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeEpochSelector, time_epoch);
+};
+
 class ELOG_API ELogHostNameSelector : public ELogFieldSelector {
 public:
     ELogHostNameSelector(const ELogFieldSpec& fieldSpec)

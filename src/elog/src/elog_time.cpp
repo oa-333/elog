@@ -20,6 +20,20 @@ namespace elog {
 // maximum size of prepared integer as string (up to value 3000, including terminating null)
 #define ELOG_INT_BUF_SIZE 5
 
+#ifdef ELOG_MSVC
+#define UNIX_MSVC_DIFF_SECONDS 11644473600LL
+#define SECONDS_TO_100NANOS(seconds) ((seconds) * 10000000LL)
+#define FILE_TIME_TO_LL(ft) (*(LONGLONG*)&(ft))
+#define FILETIME_TO_UNIXTIME_NANOS(ft) \
+    (FILE_TIME_TO_LL(ft) - SECONDS_TO_100NANOS(UNIX_MSVC_DIFF_SECONDS)) * 100LL
+#define FILETIME_TO_UNIXTIME(ft) FILETIME_TO_UNIXTIME_NANOS(ft) / 1000000000LL
+#define UNIXTIME_TO_FILETIME(ut, ft) \
+    FILE_TIME_TO_LL(ft) = SECONDS_TO_100NANOS(ut + UNIX_MSVC_DIFF_SECONDS)
+// #define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
+// #define UNIXTIME_TO_FILETIME(ut, ft) (*(LONGLONG*)&(ft) = (ut) * 10000000LL +
+// 116444736000000000LL)
+#endif
+
 /** @brief Integer represented as string, stuffed into 8 bytes struct */
 struct IntStr {
     char m_buf[ELOG_INT_BUF_SIZE];
@@ -162,6 +176,69 @@ static bool elogTimeFromStringUnix(const char* timeStr, ELogTime& logTime) {
     return true;
 }
 #endif
+
+uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime, bool useLocalTime /* = false */) {
+#ifdef ELOG_TIME_USE_CHRONO
+    if (useLocalTime) {
+        auto timePoint = std::chrono::time_point_cast<std::chrono::nanoseconds>(logTime);
+        std::chrono::zoned_time<std::chrono::nanoseconds> zt(std::chrono::current_zone(),
+                                                             timePoint);
+        return zt.get_local_time().time_since_epoch().count();
+    } else {
+        auto epochNanos =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(logTime.time_since_epoch());
+        uint64_t unixTimeNanos = epochMillis.count();
+        return unixTimeNanos;
+    }
+#elif defined(ELOG_MSVC)
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+    FILETIME ft = {};
+    if (SystemTimeToFileTime(&logTime, &ft)) {
+        if (useLocalTime) {
+            FILETIME ftLocal;
+            if (FileTimeToLocalFileTime(&ft, &ftLocal)) {
+                uint64_t unixTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ftLocal);
+                return unixTimeNanos;
+            }
+        } else {
+            uint64_t unixTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ft);
+            return unixTimeNanos;
+        }
+    }
+    return 0;
+#else
+    if (useLocalTime) {
+        FILETIME ftLocal;
+        if (FileTimeToLocalFileTime(&logTime, &ftLocal)) {
+            uint64_t unixTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(ftLocal);
+            return unixTimeNanos;
+        }
+    } else {
+        uint64_t unixTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(logTime);
+        return unixTimeNanos;
+    }
+#endif
+#else
+    if (useLocalTime) {
+        time_t timer = logTime.m_seconds + sUnixTimeRef;
+        struct tm tmInfo = {};
+#ifdef ELOG_WINDOWS
+        (void)localtime_s(&tmInfo, &timer);
+#else
+        (void)localtime_r(&timer, &tmInfo);
+#endif
+        time_t localTime = mktime(&tmInfo);
+        uint64_t unixTimeNanos =
+            (localTime + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
+        return unixTimeNanos;
+    } else {
+        uint64_t unixTimeNanos =
+            (logTime.m_seconds + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
+        return unixTimeNanos;
+    }
+#endif
+    return 0;
+}
 
 bool elogTimeFromString(const char* timeStr, ELogTime& logTime) {
 #ifdef ELOG_TIME_USE_CHRONO

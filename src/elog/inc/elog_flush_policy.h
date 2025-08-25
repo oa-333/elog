@@ -383,7 +383,7 @@ private:
     }
 
     inline uint64_t getTimeDiffMillis(const ELogTime& later, const ELogTime& earlier) const {
-        return (elogTimeToUTCNanos(later) - elogTimeToUTCNanos(earlier)) / 1000000ull;
+        return (elogTimeToUnixTimeNanos(later) - elogTimeToUnixTimeNanos(earlier)) / 1000000ull;
     }
 
     uint64_t m_logTimeLimitMillis;
