@@ -286,9 +286,9 @@ static void handleLogRecord(const elog_grpc::ELogRecordMsg* msg) {
         s << "{rid = " << msg->recordid() << "}";
         ++fieldCount;
     }
-    if (msg->has_timeutcmillis()) {
+    if (msg->has_timeunixepochmillis()) {
         if (fieldCount++ > 0) s << ", ";
-        s << "utc = " << msg->timeutcmillis();
+        s << "utc = " << msg->timeunixepochmillis();
     }
     if (msg->has_hostname()) {
         if (fieldCount++ > 0) s << ", ";
