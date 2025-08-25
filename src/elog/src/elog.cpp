@@ -601,7 +601,7 @@ static bool setThreadLifeSignReport(uint32_t threadId, const char* name, ELogLev
             if (setCurrentThreadLifeSignReport(level, frequencySpec)) {
                 return DBGUTIL_ERR_OK;
             } else {
-                return DBGUTIL_ERR_GENERIC;
+                return DBGUTIL_ERR_SYSTEM_FAILURE;
             };
         });
     if (rc != DBGUTIL_ERR_OK) {
@@ -628,7 +628,7 @@ static bool removeThreadLifeSignReport(uint32_t threadId, const char* name, ELog
             if (removeCurrentThreadLifeSignReport(level)) {
                 return DBGUTIL_ERR_OK;
             } else {
-                return DBGUTIL_ERR_GENERIC;
+                return DBGUTIL_ERR_SYSTEM_FAILURE;
             };
         });
     if (rc != DBGUTIL_ERR_OK) {
