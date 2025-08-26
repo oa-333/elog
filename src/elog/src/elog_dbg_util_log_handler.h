@@ -1,7 +1,7 @@
 #ifndef __ELOG_DBG_UTIL_LOG_HANDLER_H__
 #define __ELOG_DBG_UTIL_LOG_HANDLER_H__
 
-#ifdef ELOG_ENABLE_STACK_TRACE
+#ifdef ELOG_USING_DBG_UTIL
 
 #include <vector>
 
@@ -55,6 +55,6 @@ private:
 
 }  // namespace elog
 
-#endif  // ELOG_ENABLE_STACK_TRACE
+#endif  // ELOG_USING_DBG_UTIL
 
 #endif  // __ELOG_DBG_UTIL_LOG_HANDLER_H__

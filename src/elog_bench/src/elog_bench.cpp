@@ -1078,6 +1078,99 @@ static void testJson() {
     termELog();
 }
 
+static void testReloadConfig() {
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+    const char* cfg =
+        "sys://stderr?log_format=${time} ${level:6} [${tid:5}] [${tname}] ${src} ${msg}";
+
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init reload-config test, aborting\n");
+        return;
+    }
+
+    // launch a fre threads with same log source, have them print a few times each second, then
+    // after 3 seconds change log level
+    elog::defineLogSource("test_source");
+
+    fprintf(stderr, "Launching test threads\n");
+    volatile bool done = false;
+    std::vector<std::thread> threads;
+    for (uint32_t i = 0; i < 5; ++i) {
+        threads.emplace_back(std::thread([&done, i]() {
+            elog::ELogLogger* logger = elog::getPrivateLogger("test_source");
+            while (!done) {
+                ELOG_INFO_EX(logger, "Test message from thread %u", i);
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+        }));
+    }
+
+    // wait 1 second and set log level to WARN
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    fprintf(stderr, "Modifying log level to WARN by STRING (messages should stop)\n");
+    elog::reloadConfigStr("{ test_source.log_level=WARN }");
+
+    // wait 1 second and set log level back to INFO
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    fprintf(stderr, "Modifying log level back to INFO (messages should reappear)\n");
+    elog::reloadConfigStr("{ test_source.log_level=INFO }");
+
+    // wait 1 second and set log level to WARN (from file)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    fprintf(stderr, "Modifying log level to WARN by FILE (messages should stop)\n");
+    std::ofstream f("./test.cfg");
+    f << "{ test_source.log_level=WARN }";
+    f.close();
+    elog::reloadConfigFile("./test.cfg");
+
+    // wait 1 second and set log level back to INFO
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    fprintf(stderr, "Modifying log level back to INFO (messages should reappear)\n");
+    elog::reloadConfigStr("{ test_source.log_level=INFO }");
+
+    // wait 1 second and set log level to WARN (periodic update from file)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    fprintf(stderr, "Modifying log level to WARN by PERIODIC update (messages should stop)\n");
+    f.open("./test.cfg", std::ios::out | std::ios::trunc);
+    f << "{ test_source.log_level=WARN }";
+    f.close();
+    elog::setPeriodicReloadConfigFile("./test.cfg");
+    elog::setReloadConfigPeriodMillis(100);
+
+    // wait 1 second and set log level back to INFO (by periodic update)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    fprintf(stderr,
+            "Modifying log level back to INFO by PERIODIC update (messages should reappear)\n");
+    elog::reloadConfigStr("{ test_source.log_level=INFO }");
+    f.open("./test.cfg", std::ios::out | std::ios::trunc);
+    f << "{ test_source.log_level=INFO }";
+    f.close();
+
+    // NEGATIVE test
+    // wait 1 second and stop periodic update
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    elog::setReloadConfigPeriodMillis(0);
+
+    // now change lgo level in file and see there is no effect
+    fprintf(stderr, "Modifying log level to WARN (no effect expected, messages should continue)\n");
+    f.open("./test.cfg", std::ios::out | std::ios::trunc);
+    f << "{ test_source.log_level=WARN }";
+    f.close();
+
+    // wait 1 second and set log level back to INFO
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    fprintf(stderr, "Modifying log level back to INFO (messages should reappear)\n");
+    elog::reloadConfigStr("{ test_source.log_level=INFO }");
+
+    fprintf(stderr, "Finishing test\n");
+    done = true;
+    for (uint32_t i = 0; i < 5; ++i) {
+        threads[i].join();
+    }
+#endif
+}
+
 int main(int argc, char* argv[]) {
     // print some messages before elog starts
     ELOG_INFO("Accumulated message 1");
@@ -1312,6 +1405,7 @@ static int testRegression() {
 #endif
     testLogMacros();
     testJson();
+    testReloadConfig();
     return 0;
 }
 

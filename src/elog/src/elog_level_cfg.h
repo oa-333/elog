@@ -24,7 +24,7 @@ struct ELogLevelCfg {
     /** @var Controls how the log level affects the child log sources. */
     ELogPropagateMode m_propagationMode;
 
-#ifdef ELOG_ENABLE_STACK_TRACE
+#ifdef ELOG_USING_DBG_UTIL
     /** @var Identifies the origin Debug Utilities logger. */
     size_t m_dbgUtilLoggerId;
 

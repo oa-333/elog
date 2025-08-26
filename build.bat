@@ -11,6 +11,7 @@ REM -x|--cxx-ver
 REM -s|--stack-trace
 REM -b|--fmt-lib
 REM -n|--life-sign
+REM -p|--reload-config
 REM -f|--full
 REM -c|--conn sqlite|mysql|postgresql|kafka
 REM -i|--install-dir <INSTALL_DIR>
@@ -29,6 +30,7 @@ SET CXX_VER=20
 SET STACK_TRACE=0
 SET FMT_LIB=0
 SET LIFE_SIGN=0
+SET RELOAD_CONFIG=0
 SET VERBOSE=0
 SET FULL=0
 SET CLEAN=0
@@ -66,6 +68,8 @@ IF /I "%ARG1%" == "-b" SET FMT_LIB=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--fmt-lib" SET FMT_LIB=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-n" SET LIFE_SIGN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--life-sign" SET LIFE_SIGN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-p" SET RELOAD_CONFIG=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--reload-config" SET RELOAD_CONFIG=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-f" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--full" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-c" SET CONNS[!CONN_INDEX!]=%ARG2% & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
@@ -108,6 +112,7 @@ echo [DEBUG] CXX_VER=%CXX_VER%
 echo [DEBUG] STACK_TRACE=%STACK_TRACE%
 echo [DEBUG] FMT_LIB=%FMT_LIB%
 echo [DEBUG] LIFE_SIGN=%LIFE_SIGN%
+echo [DEBUG] RELOAD_CONFIG=%RELOAD_CONFIG%
 echo [DEBUG] VERBOSE=%VERBOSE%
 echo [DEBUG] FULL=%FULL%
 echo [DEBUG] CLEAN=%CLEAN%
@@ -122,6 +127,7 @@ IF %FULL% EQU 1 (
     SET STACK_TRACE=1
     SET FMT_LIB=1
     SET LIFE_SIGN=1
+    SET RELOAD_CONFIG=1
     SET CONNS[0]=all
     SET CONN_INDEX=1
 )
@@ -137,6 +143,7 @@ IF %FMT_LIB% EQU 1 (
     vcpkg add port fmt
 )
 IF %LIFE_SIGN% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_LIFE_SIGN=ON
+IF %RELOAD_CONFIG% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_RELOAD_CONFIG=ON
 IF %MEM_CHECK% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_MEM_CHECK=ON
 IF %TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_GROUP_FLUSH_GC_TRACE=ON
 echo [DEBUG] Current options: %OPTS%
@@ -315,6 +322,7 @@ echo       -c^|--conn CONNECTOR_NAME    Enables connector.
 echo       -s^|--stack-trace            Enables stack trace logging API.
 echo       -b^|--fmt-lib                Enables fmtlib formatting style support.
 echo       -n^|--life-sign              Enables periodic life-sign reports.
+echo       -p^|--reload-config          Enables periodic configuration reloading.
 echo       -f^|--full                   Enables all connectors and stack trace logging API.
 echo.
 echo By default no connector is enabled, and stack trace logging is disabled.

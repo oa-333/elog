@@ -17,6 +17,10 @@
 #include "dbg_stack_trace.h"
 #endif
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
+#include "os_thread_manager.h"
+#endif
+
 // include fmtlib main header
 #ifdef ELOG_ENABLE_FMT_LIB
 // reduce noise coming from fmt lib
@@ -48,14 +52,16 @@ struct ELOG_API ELogParams {
      * @brief A configuration file path. The file's contents are expected to match the format
      * specified by @ref configureByFile(). By default none is specified.
      */
-    const char* m_configFile;
+    std::string m_configFilePath;
 
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
     /**
      * @brief Specifies a configuration reload period in milliseconds.
      * @note Only log levels will be updated. If zero period is specified, then no periodic
      * reloading will take place. By default no periodic reloading takes place.
      */
-    uint32_t m_reloadPeriodMillis;
+    uint64_t m_reloadPeriodMillis;
+#endif
 
     /**
      * @brief Specifies a custom handler for ELog internal log message. If none specified, then all
@@ -79,6 +85,7 @@ struct ELOG_API ELogParams {
      */
     uint32_t m_maxThreads;
 
+#ifdef ELOG_ENABLE_LIFE_SIGN
     /**
      * @brief Specifies whether life sign reports are to be used.
      * This member is valid only when building ELog with ELOG_ENABLE_LIFE_SIGN.
@@ -98,16 +105,24 @@ struct ELOG_API ELogParams {
      * @brief The number of life-sign background garbage collection tasks.
      */
     uint32_t m_lifeSignGCTaskCount;
+#endif
 
     ELogParams()
-        : m_configFile(nullptr),
+        : m_configFilePath(""),
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
           m_reloadPeriodMillis(0),
+#endif
           m_reportHandler(nullptr),
           m_reportLevel(ELEVEL_WARN),
-          m_maxThreads(ELOG_DEFAULT_MAX_THREADS),
+          m_maxThreads(ELOG_DEFAULT_MAX_THREADS)
+#ifdef ELOG_ENABLE_LIFE_SIGN
+          ,
           m_enableLifeSignReport(ELOG_DEFAULT_ENABLE_LIFE_SIGN),
           m_lifeSignGCPeriodMillis(ELOG_DEFAULT_LIFE_SIGN_GC_PERIOD_MILLIS),
-          m_lifeSignGCTaskCount(ELOG_DEFAULT_LIFE_SIGN_GC_TASK_COUNT) {}
+          m_lifeSignGCTaskCount(ELOG_DEFAULT_LIFE_SIGN_GC_TASK_COUNT)
+#endif
+    {
+    }
     ELogParams(const ELogParams&) = default;
     ELogParams(ELogParams&&) = default;
     ELogParams& operator=(const ELogParams&) = default;
@@ -126,6 +141,46 @@ extern ELOG_API void terminate();
 
 /** @brief Queries whether the ELog library is initialized. */
 extern ELOG_API bool isInitialized();
+
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+/**
+ * @brief Reloads configuration from a file. If no configuration file path is specified, then the
+ * path provided during @ref initialize() is used.
+ *
+ * @note Only log levels are reloaded. All other configuration items are ignored.
+ */
+extern ELOG_API bool reloadConfigFile(const char* configFile = nullptr);
+
+/**
+ * @brief Reloads configuration from a string.
+ * @note Only log levels are reloaded. All other configuration items are ignored.
+ */
+extern ELOG_API bool reloadConfigStr(const char* configStr);
+
+/**
+ * @brief Sets the configuration file used for periodic configuration reload.
+ *
+ * @note Setting a null or empty path stops periodic reload if it was active. Setting a valid path
+ * either starts periodic reloading (only if reload period is set as well) or updates the  file
+ * change check period.
+ *
+ * @param configFile The configuration file path.
+ * @return The operation's result.
+ */
+extern ELOG_API bool setPeriodicReloadConfigFile(const char* configFilePath);
+
+/**
+ * @brief Set the configuration reload period in milliseconds.
+ *
+ * @note Setting a value of zero stops periodic reload if it was active. Setting a positive value
+ * either starts periodic reloading (only if configuration file path is set as well) or updates the
+ * the file change check period.
+ *
+ * @param reloadPeriodMillis The configuration reload period in milliseconds.
+ * @return The operation's result.
+ */
+extern ELOG_API bool setReloadConfigPeriodMillis(uint64_t reloadPeriodMillis);
+#endif
 
 /**
  * @brief Retrieves the logger that is used to accumulate log messages while the ELog library
@@ -677,7 +732,6 @@ extern ELOG_API void clearAllLogTargets();
  *
  **************************************************************************************/
 
-// log sources
 /**
  * @brief Defines a new log source by a qualified name if it does not already exist. If the log
  * source is already defined then no error is reported, and the existing logger is returned.

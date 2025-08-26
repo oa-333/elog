@@ -61,7 +61,11 @@ void ELogSource::removeChild(const char* name) {
 }
 
 void ELogSource::setLogLevel(ELogLevel logLevel, ELogPropagateMode propagateMode) {
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+    m_logLevel.store(logLevel, std::memory_order_relaxed);
+#else
     m_logLevel = logLevel;
+#endif
     if (propagateMode == ELogPropagateMode::PM_NONE) {
         // no propagation at all
         return;
@@ -77,15 +81,27 @@ void ELogSource::propagateLogLevel(ELogLevel logLevel, ELogPropagateMode propaga
     // adjust self log level
     switch (propagateMode) {
         case ELogPropagateMode::PM_SET:
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+            m_logLevel.store(logLevel, std::memory_order_relaxed);
+#else
             m_logLevel = logLevel;
+#endif
             break;
 
         case ELogPropagateMode::PM_RESTRICT:
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+            m_logLevel.store(std::min(getLogLevel(), logLevel), std::memory_order_relaxed);
+#else
             m_logLevel = std::min(m_logLevel, logLevel);
+#endif
             break;
 
         case ELogPropagateMode::PM_LOOSE:
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+            m_logLevel.store(std::max(getLogLevel(), logLevel), std::memory_order_relaxed);
+#else
             m_logLevel = std::max(m_logLevel, logLevel);
+#endif
             break;
 
         case ELogPropagateMode::PM_NONE:

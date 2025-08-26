@@ -1,6 +1,6 @@
 #include "elog_dbg_util_log_handler.h"
 
-#ifdef ELOG_ENABLE_STACK_TRACE
+#ifdef ELOG_USING_DBG_UTIL
 
 #include <algorithm>
 #include <string>
@@ -112,4 +112,4 @@ void ELogDbgUtilLogHandler::applyLogLevelCfg() {
 
 }  // namespace elog
 
-#endif  // ELOG_ENABLE_STACK_TRACE
+#endif  // ELOG_USING_DBG_UTIL

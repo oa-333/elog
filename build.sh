@@ -10,6 +10,7 @@
 # -s|--stack-trace
 # -b|--fmt-lib
 # -n|--life-sign
+# -p|--reload-config
 # -f|--full
 # -c|--conn sqlite|mysql|postgresql|kafka
 # -i|--install-dir <INSTALL_DIR>
@@ -33,6 +34,7 @@ CXX_VER=23
 STACK_TRACE=0
 FMT_LIB=0
 LIFE_SIGN=0
+RELOAD_CONFIG=0
 VERBOSE=0
 FULL=0
 CLEAN=0
@@ -44,7 +46,7 @@ TRACE=0
 HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwexsbnfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
+TEMP=$(getopt -o vdrwexsbnpfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,reload-config,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -59,6 +61,7 @@ while true; do
     -s | --stack-trace ) STACK_TRACE=1; shift ;;
     -b | --fmt-lib ) FMT_LIB=1; shift ;;
     -n | --life-sign ) LIFE_SIGN=1; shift ;;
+    -p | --reload-config ) RELOAD_CONFIG=1; shift ;;
     -f | --full ) FULL=1; shift;;
     -c | --conn ) CONNS+=($2); shift 2 ;;
     -i | --install-dir) INSTALL_DIR="$2"; shift 2 ;;
@@ -96,6 +99,7 @@ if [ "$HELP" -eq "1" ]; then
     echo "      -s|--stack-trace            Enables stack trace logging API."
     echo "      -b|--fmt-lib                Enables fmtlib formatting style support."
     echo "      -n|--life-sign              Enables periodic life-sign reports."
+    echo "      -p|--reload-config          Enables periodic configuration reloading."
     echo "      -f|--full                   Enables all connectors and stack trace logging API."
     echo ""
     echo "By default no connector is enabled, and stack trace logging is disabled."
@@ -142,6 +146,7 @@ echo "[INFO] CXX Version: $CXX_VER"
 echo "[INFO] Stack trace: $STACK_TRACE"
 echo "[INFO] fmtlib: $FMT_LIB"
 echo "[INFO] Life sign: $LIFE_SIGN"
+echo "[INFO] Reload config: $RELOAD_CONFIG"
 echo "[INFO] Verbose: $VERBOSE"
 echo "[INFO] Full: $FULL"
 echo "[INFO] Clean: $CLEAN"
@@ -155,6 +160,7 @@ if [ "$FULL" -eq "1" ]; then
     STACK_TRACE=1
     FMT_LIB=1
     LIFE_SIGN=1
+    RELOAD_CONFIG=1
     CONNS=(all)
 fi
 
@@ -175,6 +181,9 @@ if [ "$FMT_LIB" == "1" ]; then
 fi
 if [ "$LIFE_SIGN" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_LIFE_SIGN=ON"
+fi
+if [ "$RELOAD_CONFIG" == "1" ]; then
+    OPTS+=" -DELOG_ENABLE_RELOAD_CONFIG=ON"
 fi
 if [ "$MEM_CHECK" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_MEM_CHECK=ON"

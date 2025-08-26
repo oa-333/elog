@@ -46,12 +46,17 @@
 #include "os_thread_manager.h"
 #endif
 
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+#include <condition_variable>
+#include <thread>
+#endif
+
 // #include "elog_props_formatter.h"
 namespace elog {
 
 #define ELOG_MAX_TARGET_COUNT 256ul
 
-#ifdef ELOG_ENABLE_STACK_TRACE
+#ifdef ELOG_USING_DBG_UTIL
 static ELogDbgUtilLogHandler sDbgUtilLogHandler;
 static bool sDbgUtilInitialized = false;
 #endif
@@ -76,6 +81,12 @@ static ELogSourceMap sLogSourceMap;
 static ELogLogger* sDefaultLogger = nullptr;
 static ELogTarget* sDefaultLogTarget = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+static std::thread sReloadConfigThread;
+static std::mutex sReloadConfigLock;
+static std::condition_variable sReloadConfigCV;
+static bool sStopReloadConfig = false;
+#endif
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
 #define ELOG_LIFE_SIGN_APP_NAME_RECORD_ID 0
@@ -94,16 +105,22 @@ static bool initLifeSignReport();
 static bool termLifeSignReport();
 static void cleanupThreadLifeSignFilter(void* key);
 static void sendLifeSignReport(const ELogRecord& logRecord);
+static void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources);
 #endif
 
 // these functions are defined as external because they are friends of some classes
 extern bool initGlobals();
 extern void termGlobals();
 static void setReportLevelFromEnv();
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+static void startReloadConfigThread();
+static void stopReloadConfigThread();
+static uint64_t getFileModifyTime(const char* filePath);
+static bool reconfigure(ELogConfig* config);
+#endif
 extern ELogSource* createLogSource(ELogSourceId sourceId, const char* name,
                                    ELogSource* parent = nullptr, ELogLevel logLevel = ELEVEL_INFO);
 extern void deleteLogSource(ELogSource* logSource);
-static void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources);
 
 // local helpers
 static ELogSource* addChildSource(ELogSource* parent, const char* sourceName);
@@ -242,8 +259,9 @@ bool initGlobals() {
     }
     ELOG_REPORT_TRACE("Format message cache initialized");
 
-#ifdef ELOG_ENABLE_STACK_TRACE
+#ifdef ELOG_USING_DBG_UTIL
     // connect to debug util library
+    ELOG_REPORT_TRACE("Initializing Debug utility library");
     dbgutil::DbgUtilErr rc =
         dbgutil::initDbgUtil(nullptr, &sDbgUtilLogHandler, dbgutil::LS_INFO, DBGUTIL_FLAGS_ALL);
     if (rc != DBGUTIL_ERR_OK) {
@@ -252,14 +270,20 @@ bool initGlobals() {
         return false;
     }
     sDbgUtilLogHandler.applyLogLevelCfg();
-    initStackTrace();
     ELOG_REPORT_TRACE("Debug utility library logging initialized");
     sDbgUtilInitialized = true;
+#endif
+
+#ifdef ELOG_ENABLE_STACK_TRACE
+    ELOG_REPORT_TRACE("Initializing ELog stack trace services");
+    initStackTrace();
+    ELOG_REPORT_TRACE("ELog stack trace services initialized");
 #endif
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
     // initialize life-sign report
     if (sParams.m_enableLifeSignReport) {
+        ELOG_REPORT_TRACE("Initializing life-sign reports");
         if (!initLifeSignReport()) {
             termGlobals();
             return false;
@@ -267,6 +291,22 @@ bool initGlobals() {
         ELOG_REPORT_TRACE("Life-sign report initialized");
     }
 #endif
+
+    if (!sParams.m_configFilePath.empty()) {
+        ELOG_REPORT_TRACE("Loading configuration from: %s", sParams.m_configFilePath.c_str());
+        if (!configureByFile(sParams.m_configFilePath.c_str())) {
+            ELOG_REPORT_ERROR("Failed to load configuration from %s, ELog initialization aborted",
+                              sParams.m_configFilePath.c_str());
+            termGlobals();
+            return false;
+        }
+        ELOG_REPORT_TRACE("Configuration loaded");
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+        if (sParams.m_reloadPeriodMillis > 0) {
+            startReloadConfigThread();
+        }
+#endif
+    }
 
     // now we can enable elog's self logger
     // any error up until now will be printed into stderr with no special formatting
@@ -279,6 +319,11 @@ bool initGlobals() {
 
 void termGlobals() {
     sIsTerminating = true;
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+    if (!sParams.m_configFilePath.empty() && sParams.m_reloadPeriodMillis > 0) {
+        stopReloadConfigThread();
+    }
+#endif
     clearAllLogTargets();
     ELogReport::termReport();
 
@@ -291,7 +336,7 @@ void termGlobals() {
     }
 #endif
 
-#ifdef ELOG_ENABLE_STACK_TRACE
+#ifdef ELOG_USING_DBG_UTIL
     if (sDbgUtilInitialized) {
         dbgutil::DbgUtilErr rc = dbgutil::termDbgUtil();
         if (rc != DBGUTIL_ERR_OK) {
@@ -343,10 +388,6 @@ bool initialize(const ELogParams& params /* = ELogParams() */) {
     if (!initGlobals()) {
         return false;
     }
-    if (params.m_configFile != nullptr && !configureByFile(params.m_configFile)) {
-        termGlobals();
-        return false;
-    }
     sMaxThreads = params.m_maxThreads;
     sInitialized = true;
     return true;
@@ -362,6 +403,225 @@ void terminate() {
 }
 
 bool isInitialized() { return sInitialized; }
+
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+bool reloadConfigFile(const char* configPath /* = nullptr */) {
+    // we reload only log levels and nothing else
+    // future versions may allow adding log sources or log targets
+
+    std::string usedConfigPath;
+    if (configPath == nullptr) {
+        std::unique_lock<std::mutex> lock(sReloadConfigLock);
+        usedConfigPath = sParams.m_configFilePath;
+    } else {
+        usedConfigPath = configPath;
+    }
+
+    if (usedConfigPath.empty()) {
+        ELOG_REPORT_ERROR(
+            "Cannot reload configuration, no file path specified, and ELog was not initialized "
+            "with a configuration file");
+        return false;
+    }
+
+    ELogConfig* config = ELogConfig::loadFromFile(usedConfigPath.c_str());
+    if (config == nullptr) {
+        ELOG_REPORT_ERROR("Failed to reload configuration from file: %s", configPath);
+        return false;
+    }
+    bool res = reconfigure(config);
+    delete config;
+    return res;
+}
+
+bool reloadConfigStr(const char* configStr) {
+    // we reload only log levels and nothing else
+    // future versions may allow adding log sources or log targets
+
+    ELogConfig* config = ELogConfig::loadFromString(configStr);
+    if (config == nullptr) {
+        ELOG_REPORT_ERROR("Failed to reload configuration from string: %s", configStr);
+        return false;
+    }
+    bool res = reconfigure(config);
+    delete config;
+    return res;
+}
+
+enum ReloadAction { START_RELOAD_THREAD, STOP_RELOAD_THREAD, NOTIFY_THREAD, NO_ACTION };
+
+static bool execReloadAction(ReloadAction action, const char* configFilePath,
+                             bool resetReloadPeriod = false) {
+    if (action == START_RELOAD_THREAD) {
+        ELOG_REPORT_TRACE("Loading configuration from: %s", configFilePath);
+        if (!configureByFile(configFilePath)) {
+            ELOG_REPORT_ERROR("Failed to load configuration from %s, ELog initialization aborted",
+                              configFilePath);
+            return false;
+        }
+        startReloadConfigThread();
+    } else if (action == STOP_RELOAD_THREAD) {
+        stopReloadConfigThread();
+        if (resetReloadPeriod) {
+            std::unique_lock<std::mutex> lock(sReloadConfigLock);
+            sParams.m_reloadPeriodMillis = 0;
+        }
+    } else if (action == NOTIFY_THREAD) {
+        sReloadConfigCV.notify_one();
+    }
+
+    return true;
+}
+
+bool setPeriodicReloadConfigFile(const char* configFilePath) {
+    ReloadAction action = NO_ACTION;
+
+    bool isEmptyFile = (configFilePath == nullptr || *configFilePath == 0);
+    {
+        std::unique_lock<std::mutex> lock(sReloadConfigLock);
+        if (isEmptyFile) {
+            if (sParams.m_configFilePath.empty()) {
+                ELOG_REPORT_TRACE(
+                    "Request to reset configuration reload file ignored, configuration file path "
+                    "is already empty");
+            } else {
+                action = STOP_RELOAD_THREAD;
+            }
+        } else {
+            if (sParams.m_configFilePath.empty()) {
+                if (sParams.m_reloadPeriodMillis == 0) {
+                    ELOG_REPORT_TRACE(
+                        "Postponing launch of configuration reload thread until a reload period is "
+                        "provided");
+                } else {
+                    action = START_RELOAD_THREAD;
+                }
+            } else {
+                action = NOTIFY_THREAD;
+            }
+        }
+        sParams.m_configFilePath = configFilePath;
+    }
+
+    return execReloadAction(action, configFilePath);
+}
+
+bool setReloadConfigPeriodMillis(uint64_t reloadPeriodMillis) {
+    ReloadAction action = NO_ACTION;
+    std::string configFilePath;
+
+    {
+        std::unique_lock<std::mutex> lock(sReloadConfigLock);
+        if (reloadPeriodMillis == sParams.m_reloadPeriodMillis) {
+            ELOG_REPORT_TRACE("Request to update configuration reload period to %" PRIu64
+                              " milliseconds ignored, value is the same",
+                              reloadPeriodMillis);
+        } else if (sParams.m_reloadPeriodMillis == 0) {
+            sParams.m_reloadPeriodMillis = reloadPeriodMillis;
+            if (!sParams.m_configFilePath.empty()) {
+                configFilePath = sParams.m_configFilePath;
+                action = START_RELOAD_THREAD;
+            } else {
+                ELOG_REPORT_TRACE(
+                    "Postponing launch of configuration reload thread until a configuration file "
+                    "is provided");
+            }
+        } else {
+            if (reloadPeriodMillis == 0) {
+                // do not update period yet, otherwise config update thread might enter a tight loop
+                action = STOP_RELOAD_THREAD;
+            } else {
+                sParams.m_reloadPeriodMillis = reloadPeriodMillis;
+                action = NOTIFY_THREAD;
+            }
+        }
+    }
+
+    return execReloadAction(action, configFilePath.c_str(), true);
+}
+
+static bool shouldStopReloadConfig() {
+    std::unique_lock<std::mutex> lock(sReloadConfigLock);
+    return sStopReloadConfig;
+}
+
+void startReloadConfigThread() {
+    // launch config reload thread
+    sReloadConfigThread = std::thread([]() {
+        // get configuration file path (thread-safe, allowing concurrent updates)
+        std::string configFilePath;
+        {
+            std::unique_lock<std::mutex> lock(sReloadConfigLock);
+            configFilePath = sParams.m_configFilePath;
+        }
+        ELOG_REPORT_TRACE("Starting periodic configuration loading from %s, every %u milliseconds",
+                          configFilePath.c_str(), sParams.m_reloadPeriodMillis);
+
+        uint64_t lastFileModifyTime = getFileModifyTime(configFilePath.c_str());
+        while (!shouldStopReloadConfig()) {
+            // interruptible sleep until next reload check
+            {
+                std::unique_lock<std::mutex> lock(sReloadConfigLock);
+                sReloadConfigCV.wait_for(lock,
+                                         std::chrono::milliseconds(sParams.m_reloadPeriodMillis),
+                                         []() { return sStopReloadConfig; });
+                if (sStopReloadConfig) {
+                    break;
+                }
+
+                // NOTE: still holding lock
+                // update current config file path
+                // if file changed then reset last modify time
+                if (configFilePath.compare(sParams.m_configFilePath) != 0) {
+                    lastFileModifyTime = 0;
+                    configFilePath = sParams.m_configFilePath;
+                }
+            }
+
+            uint64_t fileModifyTime = getFileModifyTime(configFilePath.c_str());
+            if (fileModifyTime > lastFileModifyTime) {
+                reloadConfigFile();
+                lastFileModifyTime = fileModifyTime;
+            }
+        }
+    });
+}
+
+void stopReloadConfigThread() {
+    ELOG_REPORT_TRACE("Stopping periodic configuration loading thread");
+    {
+        std::unique_lock<std::mutex> lock(sReloadConfigLock);
+        sStopReloadConfig = true;
+        sReloadConfigCV.notify_one();
+    }
+    sReloadConfigThread.join();
+    ELOG_REPORT_TRACE("Periodic configuration loading thread stopped");
+}
+
+uint64_t getFileModifyTime(const char* filePath) {
+    // NOTE: we don't care that in each platform the time units are different (as well as the
+    // reference epoch)
+#ifdef ELOG_WINDOWS
+    WIN32_FILE_ATTRIBUTE_DATA attrs = {};
+    if (!GetFileAttributesExA(filePath, GetFileExInfoStandard, (LPVOID)&attrs)) {
+        ELOG_REPORT_WIN32_ERROR(GetFileAttributesExA, "Failed to get file attributes for: %s",
+                                filePath);
+        return 0;
+    }
+    // return time in 100-nano units
+    return static_cast<uint64_t>(attrs.ftLastWriteTime.dwHighDateTime) << 32 |
+           attrs.ftLastWriteTime.dwLowDateTime;
+#else
+    struct stat fileStat;
+    if (stat(filePath, &fileStat) == -1) {
+        ELOG_REPORT_SYS_ERROR(stat, "Failed to get file status for: %s", filePath);
+        return 0;
+    }
+    // return time in seconds
+    return fileStat.st_mtime;
+#endif
+}
+#endif  // ELOG_ENABLE_RELOAD_CONFIG
 
 ELogLogger* getPreInitLogger() { return &sPreInitLogger; }
 
@@ -395,6 +655,7 @@ bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHand
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
 bool initLifeSignReport() {
+    ELOG_REPORT_DEBUG("Creating life-sign shared memory segment");
     dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->createLifeSignShmSegment(
         DBGUTIL_MAX_CONTEXT_AREA_SIZE_BYTES, DBGUTIL_MAX_LIFE_SIGN_AREA_SIZE_BYTES, sMaxThreads,
         true);
@@ -1066,7 +1327,7 @@ void sendLifeSignReport(const ELogRecord& logRecord) {
         logBuffer.finalize();
         // NOTE: offset points to terminating null
         dbgutil::DbgUtilErr rc = dbgutil::getLifeSignManager()->writeLifeSignRecord(
-            logBuffer.getRef(), logBuffer.getOffset());
+            logBuffer.getRef(), (uint32_t)logBuffer.getOffset());
         if (rc != DBGUTIL_ERR_OK) {
             ELOG_REPORT_ERROR("Failed to write life sign record: %s", dbgutil::errorToString(rc));
         }
@@ -1125,6 +1386,18 @@ void reportCurrentThreadNameLifeSign(elog_thread_id_t threadId, const char* thre
                           dbgutil::errorToString(rc));
     }
     delete[] buf;
+}
+
+void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources) {
+    std::regex pattern(logSourceRegEx);
+    std::unique_lock<std::mutex> lock(sSourceTreeLock);
+    ELogSourceMap::iterator itr = sLogSourceMap.begin();
+    while (itr != sLogSourceMap.end()) {
+        if (std::regex_match(itr->second->getQualifiedName(), pattern)) {
+            logSources.emplace_back(itr->second);
+        }
+        ++itr;
+    }
 }
 #endif
 
@@ -1763,6 +2036,109 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
     return true;
 }
 
+// TODO: refactor reused code
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+static bool reconfigure(ELogConfig* config) {
+    // verify root node is of map type
+    if (config->getRootNode()->getNodeType() != ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {
+        ELOG_REPORT_ERROR("Top-level configuration node is not a map node");
+        return false;
+    }
+    ELogConfigMapNode* cfgMap = (ELogConfigMapNode*)config->getRootNode();
+
+    std::vector<ELogLevelCfg> logLevelCfg;
+    ELogLevel logLevel = ELEVEL_INFO;
+    ELogPropagateMode propagateMode = ELogPropagateMode::PM_NONE;
+
+    const char* logLevelSuffix = "." ELOG_LEVEL_CONFIG_NAME;
+    size_t logLevelSuffixLen = strlen(logLevelSuffix);
+
+    for (size_t i = 0; i < cfgMap->getEntryCount(); ++i) {
+        const ELogConfigMapNode::EntryType& prop = cfgMap->getEntryAt(i);
+        const ELogConfigValue* cfgValue = prop.second;
+        // check if this is root log level
+        if (prop.first.compare(ELOG_LEVEL_CONFIG_NAME) == 0) {
+            // global log level, should be a string
+            if (!validateConfigValueStringType(cfgValue, ELOG_LEVEL_CONFIG_NAME)) {
+                return false;
+            }
+            const char* logLevelStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+            if (!ELogConfigParser::parseLogLevel(logLevelStr, logLevel, propagateMode)) {
+                ELOG_REPORT_ERROR("Invalid global log level: %s", logLevelStr);
+                return false;
+            }
+            // configure later when we have all information gathered
+            logLevelCfg.push_back({getRootLogSource(), logLevel, propagateMode});
+            continue;
+        }
+
+        // configure log levels of log sources
+        // search for ".log_level" with a dot, in order to filter out global log_level key
+        if (prop.first.ends_with(logLevelSuffix)) {
+            const std::string& key = prop.first;
+            // shave off trailing ".log_level/_log_level" (that includes dot/underscore)
+            std::string sourceName = key.substr(0, key.size() - logLevelSuffixLen);
+            ELogSource* logSource = getLogSource(sourceName.c_str());
+            if (logSource == nullptr) {
+                ELOG_REPORT_ERROR("Invalid log source name: %s", sourceName.c_str());
+                return false;
+            }
+            propagateMode = ELogPropagateMode::PM_NONE;
+            // get log level, should be a string
+            if (!validateConfigValueStringType(cfgValue, key.c_str())) {
+                return false;
+            }
+            const char* logLevelStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+            if (!ELogConfigParser::parseLogLevel(logLevelStr, logLevel, propagateMode)) {
+                ELOG_REPORT_ERROR("Invalid source %s log level: %s", sourceName.c_str(),
+                                  logLevelStr);
+                return false;
+            }
+            logLevelCfg.push_back({logSource, logLevel, propagateMode});
+        }
+    }
+
+    // now we can apply log level propagation
+    for (const ELogLevelCfg& cfg : logLevelCfg) {
+        ELOG_REPORT_TRACE("Setting %s log level to %s (propagate - %u)",
+                          cfg.m_logSource->getQualifiedName(), elogLevelToStr(cfg.m_logLevel),
+                          (uint32_t)cfg.m_propagationMode);
+        cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
+    }
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+    // configure life-sign report settings
+    const ELogConfigValue* cfgValue = cfgMap->getValue(ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
+    if (cfgValue != nullptr) {
+        if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE) {
+            ELOG_REPORT_ERROR("Invalid type for %s, expecting array",
+                              ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
+            return false;
+        }
+        const ELogConfigArrayNode* arrayNode =
+            ((const ELogConfigArrayValue*)cfgValue)->getArrayNode();
+        for (uint32_t i = 0; i < arrayNode->getValueCount(); ++i) {
+            const ELogConfigValue* subValue = arrayNode->getValueAt(i);
+            if (subValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
+                ELOG_REPORT_ERROR(
+                    "Invalid type for %uth sub-element in life-sign report array, expecting "
+                    "string, "
+                    "got instead %s",
+                    i, configValueTypeToString(subValue->getValueType()));
+                return false;
+            }
+            const char* lifeSignCfg = ((const ELogConfigStringValue*)subValue)->getStringValue();
+            if (!configureLifeSign(lifeSignCfg)) {
+                return false;
+            }
+        }
+    }
+#endif
+
+    return true;
+}
+#endif
+
 ELogTargetId addLogTarget(ELogTarget* logTarget) {
     // TODO: should we guard against duplicate names (they are used in search by name and in log
     // affinity mask building) - this might require API change (returning at least bool)
@@ -2251,18 +2627,6 @@ ELogSource* getLogSource(ELogSourceId logSourceId) {
         logSource = itr->second;
     }
     return logSource;
-}
-
-void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources) {
-    std::regex pattern(logSourceRegEx);
-    std::unique_lock<std::mutex> lock(sSourceTreeLock);
-    ELogSourceMap::iterator itr = sLogSourceMap.begin();
-    while (itr != sLogSourceMap.end()) {
-        if (std::regex_match(itr->second->getQualifiedName(), pattern)) {
-            logSources.emplace_back(itr->second);
-        }
-        ++itr;
-    }
 }
 
 ELogSource* getRootLogSource() { return sRootLogSource; }

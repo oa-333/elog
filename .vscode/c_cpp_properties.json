@@ -12,7 +12,9 @@
                 "_UNICODE",
                 "ELOG_ENABLE_STACK_TRACE",
                 "ELOG_ENABLE_FMT_LIB",
-                "ELOG_ENABLE_LIFE_SIGN"
+                "ELOG_ENABLE_LIFE_SIGN",
+                "ELOG_ENABLE_RELOAD_CONFIG",
+                "ELOG_USING_DBG_UTIL"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "cStandard": "c23",

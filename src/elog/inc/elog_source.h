@@ -14,6 +14,10 @@
 #include "elog_life_sign_filter.h"
 #endif
 
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+#include <atomic>
+#endif
+
 namespace elog {
 
 // forward declaration
@@ -83,7 +87,13 @@ public:
     void removeChild(const char* name);
 
     /** @brief Retrieves the log level associated with the log source. */
-    inline ELogLevel getLogLevel() const { return m_logLevel; }
+    inline ELogLevel getLogLevel() const {
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+        return m_logLevel.load(std::memory_order_relaxed);
+#else
+        return m_logLevel;
+#endif
+    }
 
     /**
      * @brief Sets the log level associated with the log source and all of its managed loggers.
@@ -95,7 +105,7 @@ public:
 
     /** @brief Queries whether the log source can log a record with the given log level. */
     inline bool canLog(ELogLevel logLevel) {
-        return static_cast<int>(logLevel) <= static_cast<int>(m_logLevel);
+        return static_cast<uint32_t>(logLevel) <= static_cast<uint32_t>(getLogLevel());
     }
 
     /** @brief Sets log target affinity. */
@@ -165,7 +175,12 @@ private:
     std::string m_qname;
     std::string m_moduleName;
     ELogSource* m_parent;
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+    std::atomic<ELogLevel> m_logLevel;
+#else
     ELogLevel m_logLevel;
+#endif
+    uint32_t m_padding;
     typedef std::unordered_map<std::string, ELogSource*> ChildMap;
     ChildMap m_children;
     std::unordered_set<ELogLogger*> m_loggers;
