@@ -335,6 +335,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Once Logging](#once-logging)
     - [Moderated Logging](#moderated-logging)
     - [Every-N Logging](#every-n-logging)
+    - [Configuration Reloading](#configuration-reloading)
     - [Life Sign Management](#life-sign-management)
 - [Configuration](#configuration)
     - [Configuration Units](#configuration-units)
@@ -946,6 +947,53 @@ Here is a partial sample output:
 As in other common logging frameworks, another way of limiting the rate of log messages, is by issuing a log message once in every-N messages. This can be done as follows:
 
     ELOG_EVERY_N_INFO_EX(logger, 20, "Passing through here many times, but logging is restricted to only once per 20 messages");
+
+### Configuration Reloading
+
+ELog supports manual and periodic configuration reloading when built with ELOG_ENABLE_CONFIG_RELOAD=ON. Configuration reloading refers to the ability to reload log levels of all log sources (and life-sign filters) while ELog is in full multi-threaded operation. There is a measurable performance degradation of around 5% when enabling configuration reloading, so the feature is turned off by default.
+
+All configuration reloading API is thread safe.  
+All log level updates are lock-free.
+
+#### Configure Periodic Reloading During Initialization
+
+Configuration reloading can be configured during initialization through the ELogParams structure:
+
+    elog::ELogParams params;
+    params.m_configFilePath = path_to_config_file;
+    params.m_reloadPeriodMillis = 5000;
+    elog::initialize(params);
+
+When configuration reloading is set as above, then every 5 seconds the configuration file will be checked to see whether its last modification time has changed, and if so, all configuration items relating to log levels (or life-sign filters) will be reloaded. For instance, if we have the following definition in the configuration file:
+
+    core.file_manager.log_level = INFO
+
+We can change the definition to:
+
+    core.file_manager.log_level = TRACE
+
+And within 5 seconds the log level of the "core.file_manager" log source will be modified to TRACE.
+
+#### Manual Configuration
+
+It possible to manually reload configuration at any time with the following API:
+
+    bool reloadConfigFile(const char* configFile = nullptr);
+
+If null is provided, then configuration will be reloaded from the same file specified during initialization.
+
+Configuration can also be manually reloaded from a string:
+
+    bool reloadConfigStr(const char* configStr);
+
+#### Updating Periodic Configuration Reloading Parameters
+
+It is possible to update both the configuration reload period, and the configuration file with the following API:
+
+    bool setPeriodicReloadConfigFile(const char* configFilePath);
+    bool setReloadConfigPeriodMillis(uint64_t reloadPeriodMillis);
+
+In both cases, if the period is set to zero or file is set to empty file, then periodic configuration reloading is stopped (in case it was active prior to the call). If one parameter is set while the other is still missing, then no action will take place. Only when both parameters are present, then the periodic configuration reloading task will be started, or alternatively, if it was already running, its parameters will be updated - either reload period or configuration file.
 
 ### Life-Sign Management
 
