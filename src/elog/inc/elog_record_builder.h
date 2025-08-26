@@ -19,7 +19,7 @@ public:
 
     inline const ELogRecord& getLogRecord() const { return m_logRecord; }
     inline ELogRecord& getLogRecord() { return m_logRecord; }
-    inline uint32_t getOffset() const { return m_buffer.getOffset(); }
+    inline uint64_t getOffset() const { return m_buffer.getOffset(); }
     inline ELogRecordBuilder* getNext() { return m_next; }
     inline ELogBuffer& getBuffer() { return m_buffer; }
 
@@ -27,7 +27,7 @@ public:
     inline void finalize() {
         m_buffer.finalize();
         m_logRecord.m_logMsg = m_buffer.getRef();
-        m_logRecord.m_logMsgLen = m_buffer.getOffset();
+        m_logRecord.m_logMsgLen = (uint32_t)m_buffer.getOffset();
     }
 
     /** @brief Resets the log record. */
@@ -47,7 +47,7 @@ public:
 
     /** @brief Appends data (binary form). */
     template <typename T>
-    inline bool appendDataAt(const T& value, uint32_t offset) {
+    inline bool appendDataAt(const T& value, uint64_t offset) {
         return m_buffer.writeRawAt((const char*)&value, sizeof(T), offset);
     }
 

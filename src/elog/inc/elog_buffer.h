@@ -54,13 +54,13 @@ public:
     }
 
     /** @brief Retrieves the current capacity of the buffer. */
-    inline uint32_t size() const { return m_bufferSize; }
+    inline uint64_t size() const { return m_bufferSize; }
 
     /**
      * @brief Retrieves the current offset of data stored in the buffer. When adding only strings
      * (or formatted strings), the offset always points to the terminating null.
      */
-    inline uint32_t getOffset() const { return m_offset; }
+    inline uint64_t getOffset() const { return m_offset; }
 
     /**
      * @brief Increases the current capacity of the buffer. If the buffer's size is already
@@ -68,7 +68,7 @@ public:
      * @param newSize The required new size.
      * @return true If operation succeeded, otherwise false.
      */
-    bool resize(uint32_t newSize);
+    bool resize(uint64_t newSize);
 
     /** @brief Resets the buffer to original state. Releases the dynamic buffer if needed. */
     void reset();
@@ -121,7 +121,7 @@ public:
         if (m_bufferFull) {
             return false;
         }
-        uint32_t len = (uint32_t)sizeof(T);
+        uint64_t len = sizeof(T);
         if (!ensureBufferLength(len)) {
             return false;
         }
@@ -141,10 +141,10 @@ public:
     /**
      * @brief Writes raw data to the log buffer at the specified offset.
      */
-    bool writeRawAt(const char* data, size_t len, size_t offset);
+    bool writeRawAt(const char* data, size_t len, uint64_t offset);
 
     /** @brief Appends a char repeatedly to the log buffer. */
-    inline bool append(uint32_t count, char c) {
+    inline bool append(uint64_t count, char c) {
         if (m_bufferFull) {
             return false;
         }
@@ -157,7 +157,7 @@ public:
     }
 
     /** @brief Ensures the log buffer has enough bytes. */
-    inline bool ensureBufferLength(uint32_t requiredBytes) {
+    inline bool ensureBufferLength(uint64_t requiredBytes) {
         bool res = true;
         if (size() - m_offset < requiredBytes) {
             res = resize(m_offset + requiredBytes);
@@ -176,8 +176,8 @@ public:
 private:
     char m_fixedBuffer[ELOG_BUFFER_SIZE];
     char* m_dynamicBuffer;
-    uint32_t m_bufferSize;
-    uint32_t m_offset;
+    uint64_t m_bufferSize;
+    uint64_t m_offset;
     uint64_t m_bufferFull;
 };
 

@@ -16,7 +16,7 @@ ELogBuffer::~ELogBuffer() {
 #endif
 }
 
-bool ELogBuffer::resize(uint32_t newSize) {
+bool ELogBuffer::resize(uint64_t newSize) {
     if (m_bufferSize < newSize) {
         if (newSize > ELOG_MAX_BUFFER_SIZE) {
             ELOG_REPORT_ERROR("Cannot resize log buffer to size %zu, exceeding maximum allowed %zu",
@@ -24,7 +24,7 @@ bool ELogBuffer::resize(uint32_t newSize) {
             return false;
         }
         // allocate a bit more so we avoid another realloc and copy if possible
-        uint32_t actualNewSize = m_bufferSize;
+        uint64_t actualNewSize = m_bufferSize;
         while (actualNewSize < newSize) {
             actualNewSize *= 2;
         }
@@ -61,7 +61,7 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     // but prepare a copy in advance, even though mostly it will not be used
     va_list argsCopy;
     va_copy(argsCopy, args);
-    uint32_t sizeLeft = size() - m_offset;
+    uint64_t sizeLeft = size() - m_offset;
     int res = vsnprintf(getRef() + m_offset, sizeLeft, fmt, args);
     if (res < 0) {
         // output error occurred, report this, this is highly unexpected
@@ -70,7 +70,7 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     }
 
     // now we can safely make the cast
-    uint32_t res32 = (uint32_t)res;
+    uint64_t res64 = (uint64_t)res;
 
     // NOTE: return value does not include the terminating null, and number of copied characters,
     // including the terminating null, will not exceed size, so if res==size it means size - 1
@@ -78,14 +78,14 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     // if res > size if definitely means buffer was too small, and res shows the required size
 
     // NOTE: cast to int is safe (since size is limited to ELOG_MAX_BUFFER_SIZE = 16KB)
-    if (res32 < sizeLeft) {
+    if (res64 < sizeLeft) {
         va_end(argsCopy);
         m_offset += res;
         return true;
     }
 
     // buffer too small (make room also for terminating null, otherwise we can fail again)
-    if (!ensureBufferLength(res32 + 1)) {
+    if (!ensureBufferLength(res64 + 1)) {
         return false;
     }
     // this time we must succeed
@@ -101,17 +101,17 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     }
 
     // now we can safely make the cast
-    res32 = (uint32_t)res;
+    res64 = (uint64_t)res;
 
     // NOTE: cast to int is safe (since size is limited to ELOG_MAX_BUFFER_SIZE = 16KB)
-    if (res32 >= sizeLeft) {
+    if (res64 >= sizeLeft) {
         ELOG_REPORT_ERROR(
             "Internal error, failed to format string second time (unexpected truncation)");
         return false;
     }
 
     // NOTE: we continue appending at the same position of the terminating null
-    m_offset += res32;
+    m_offset += res64;
     return true;
 }
 
@@ -127,7 +127,7 @@ bool ELogBuffer::append(const char* msg, size_t len /* = 0 */) {
         return false;
     }
     // make room also for terminating null
-    if (!ensureBufferLength((uint32_t)(len + 1))) {
+    if (!ensureBufferLength(len + 1)) {
         return false;
     }
     // NOTE: at this point it is guaranteed that the added len will not exceed maximum buffer size,
@@ -135,7 +135,7 @@ bool ELogBuffer::append(const char* msg, size_t len /* = 0 */) {
     memcpy(getRef() + m_offset, msg, len + 1);
 
     // NOTE: offset points to the terminating null
-    m_offset += (uint32_t)len;
+    m_offset += len;
 
     // NOTE: we continue appending at the same position of the terminating null
     return true;
@@ -149,17 +149,17 @@ bool ELogBuffer::appendRaw(const char* data, size_t len) {
     if (len >= UINT32_MAX) {
         return false;
     }
-    if (!ensureBufferLength((uint32_t)len)) {
+    if (!ensureBufferLength(len)) {
         return false;
     }
     // NOTE: at this point it is guaranteed that the added len will not exceed maximum buffer size,
     // otherwise ensureBufferLength() would have failed
     memcpy(getRef() + m_offset, data, len);
-    m_offset += (uint32_t)len;
+    m_offset += len;
     return true;
 }
 
-bool ELogBuffer::writeRawAt(const char* data, size_t len, size_t offset) {
+bool ELogBuffer::writeRawAt(const char* data, size_t len, uint64_t offset) {
     // NOTE: be careful of size truncation
     if (len >= UINT32_MAX) {
         return false;
@@ -171,7 +171,7 @@ bool ELogBuffer::writeRawAt(const char* data, size_t len, size_t offset) {
             return false;
         }
         size_t requiredLen = (targetSize - m_offset);
-        if (!ensureBufferLength((uint32_t)requiredLen)) {
+        if (!ensureBufferLength(requiredLen)) {
             return false;
         }
     }
@@ -180,7 +180,7 @@ bool ELogBuffer::writeRawAt(const char* data, size_t len, size_t offset) {
     // otherwise ensureBufferLength() would have failed
     memcpy(getRef() + offset, data, len);
     if (targetSize > m_offset) {
-        m_offset = (uint32_t)targetSize;
+        m_offset = targetSize;
     }
     return true;
 }

@@ -1,6 +1,7 @@
 #include "elog_field_selector.h"
 
 #include "elog_def.h"
+#include "elog_internal.h"
 
 #ifdef ELOG_WINDOWS
 #define WIN32_LEAN_AND_MEAN
@@ -85,8 +86,6 @@ struct ELogThreadData {
 typedef std::unordered_map<std::string, ELogThreadData> ELogThreadDataMap;
 static ELogThreadDataMap sThreadDataMap;
 static std::mutex sLock;
-
-#define ELOG_THREAD_NAME_MAP_SIZE 4096
 
 static char sHostName[HOST_NAME_MAX];
 static char sUserName[LOGIN_NAME_MAX];
@@ -444,7 +443,7 @@ extern bool initFieldSelectors() {
         return false;
     }
 
-    if (!sThreadNameMap.initialize(ELOG_THREAD_NAME_MAP_SIZE)) {
+    if (!sThreadNameMap.initialize(getMaxThreads() * 4)) {
         ELOG_REPORT_ERROR(
             "Failed to initialize concurrent thread name map, during initialization of field "
             "selectors");
