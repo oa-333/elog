@@ -188,6 +188,8 @@ The ELog library provides the following notable features:
         - log target affinity (restricting log sources to specific log targets - file only)
         - rate limiting
     - All configurable parameters can be set either globally and/or per log target
+- Periodic Configuration Loading
+    - Periodically check and update all log levels according to changes in a specified configuration file
 - Extendibility
     - All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file)
         - log targets
@@ -207,11 +209,11 @@ The ELog library provides the following notable features:
 
 ### Planned/considered future features:
 
-- Automated periodic configuration reloading and updating log levels
 - Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
 - Logging hub framework for log pre-processing before shipping to server analysis (offload to edge compute)
+- Support clang
 - Support on MacOS
 
 
