@@ -88,8 +88,8 @@ bool ELogConfigLoader::loadFileProperties(const char* configPath, ELogPropertySe
         }
 
         // first check for multi-line chars
-        openBraceCount += std::count(line.begin(), line.end(), '{');
-        closeBraceCount += std::count(line.begin(), line.end(), '}');
+        openBraceCount += (uint64_t)std::count(line.begin(), line.end(), '{');
+        closeBraceCount += (uint64_t)std::count(line.begin(), line.end(), '}');
 
         // check for ill-formed braces
         if (openBraceCount < closeBraceCount) {
@@ -230,7 +230,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* logT
     }
 
     // we allow for flush policy to be specified as an object
-    const ELogConfigMapNode* flushPolicyCfg = ((ELogConfigMapValue*)cfgValue)->getMapNode();
+    const ELogConfigMapNode* flushPolicyCfg = ((const ELogConfigMapValue*)cfgValue)->getMapNode();
     std::string flushPolicyType;
     bool found = false;
     if (!flushPolicyCfg->getStringValue("type", found, flushPolicyType)) {
@@ -288,7 +288,7 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* logTargetCf
         return nullptr;
     }
 
-    const ELogConfigMapNode* filterCfg = ((ELogConfigMapValue*)cfgValue)->getMapNode();
+    const ELogConfigMapNode* filterCfg = ((const ELogConfigMapValue*)cfgValue)->getMapNode();
     std::string filterType;
     bool found = false;
     if (!filterCfg->getStringValue("type", found, filterType)) {
@@ -614,7 +614,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(const ELogExpression* exp
         flushPolicy = new (std::nothrow) ELogChainedFlushPolicy();
     } else if (expr->m_type == ELogExpressionType::ET_FUNC_EXPR) {
         // the function name should be able to load a composite flush policy by name
-        ELogFunctionExpression* funcExpr = (ELogFunctionExpression*)expr;
+        const ELogFunctionExpression* funcExpr = (const ELogFunctionExpression*)expr;
         flushPolicy = constructFlushPolicy(funcExpr->m_functionName.c_str());
         if (flushPolicy == nullptr) {
             ELOG_REPORT_ERROR("Failed to construct flush policy by name '%s'",
@@ -622,7 +622,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(const ELogExpression* exp
             return nullptr;
         }
     } else if (expr->m_type == ELogExpressionType::ET_NAME_EXPR) {
-        ELogNameExpression* nameExpr = (ELogNameExpression*)expr;
+        const ELogNameExpression* nameExpr = (const ELogNameExpression*)expr;
         flushPolicy = constructFlushPolicy(nameExpr->m_name.c_str());
         if (flushPolicy == nullptr) {
             ELOG_REPORT_ERROR("Failed to load flush policy by name '%s", nameExpr->m_name.c_str());
@@ -633,7 +633,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(const ELogExpression* exp
         // LHS is always the flush policy name
         // RHS is the value (size/count/time-millis), always an integer
         // OP is always "=="
-        ELogOpExpression* opExpr = (ELogOpExpression*)expr;
+        const ELogOpExpression* opExpr = (const ELogOpExpression*)expr;
         if (opExpr->m_op.compare("==") != 0 && opExpr->m_op.compare(":") != 0) {
             ELOG_REPORT_ERROR(
                 "Invalid flush policy operation '%s', only equals (==), or assign (:) operator is "

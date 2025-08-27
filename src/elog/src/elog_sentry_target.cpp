@@ -160,7 +160,7 @@ public:
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
-                            size_t length) {
+                            size_t length) final {
         sentry_value_set_by_key(m_context, fieldSpec.m_name.c_str(),
                                 sentry_value_new_string(field));
     }
@@ -200,7 +200,7 @@ public:
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
-                            size_t length) {
+                            size_t length) final {
         m_tagValues.push_back(field);
     }
 

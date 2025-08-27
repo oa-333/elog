@@ -60,7 +60,7 @@ public:
             // trying to read past buffer length
             return false;
         }
-        data = *(T*)(m_buffer + m_offset);
+        data = *(const T*)(m_buffer + m_offset);
         m_offset += sizeof(T);
         return true;
     }

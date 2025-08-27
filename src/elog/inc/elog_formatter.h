@@ -6,7 +6,7 @@
 
 namespace elog {
 
-class ELOG_API ELogFormatter : public ELogBaseFormatter {
+class ELOG_API ELogFormatter final : public ELogBaseFormatter {
 public:
     ELogFormatter() {}
     ELogFormatter(const ELogFormatter&) = delete;

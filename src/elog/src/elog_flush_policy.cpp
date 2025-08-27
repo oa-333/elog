@@ -4,6 +4,7 @@
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
+#include "elog_flush_policy_internal.h"
 #include "elog_internal.h"
 #include "elog_report.h"
 #include "elog_target.h"
@@ -435,7 +436,7 @@ bool ELogNotFlushPolicy::loadExpr(const ELogExpression* expr) {
         ELOG_REPORT_ERROR("Cannot load NOT flush policy from expression, invalid expression type");
         return false;
     }
-    ELogNotExpression* notExpr = (ELogNotExpression*)expr;
+    const ELogNotExpression* notExpr = (const ELogNotExpression*)expr;
     m_flushPolicy = ELogConfigLoader::loadFlushPolicyExpr(notExpr->m_expression);
     if (m_flushPolicy == nullptr) {
         ELOG_REPORT_ERROR("Failed to load sub-flush policy for NOT flush policy");
@@ -580,7 +581,7 @@ bool ELogChainedFlushPolicy::loadExpr(const ELogExpression* expr) {
             "Cannot load CHAIN flush policy from expression, invalid expression type");
         return false;
     }
-    ELogChainExpression* chainExpr = (ELogChainExpression*)expr;
+    const ELogChainExpression* chainExpr = (const ELogChainExpression*)expr;
     if (chainExpr->m_expressions.size() != 2) {
         ELOG_REPORT_ERROR("Invalid CHAIN expression, exactly two sub-expressions are expected");
         return false;

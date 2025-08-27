@@ -13,7 +13,7 @@
 #ifdef ELOG_MINGW
 // we need windows headers for MinGW
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #elif !defined(ELOG_WINDOWS)
 #include <sys/syscall.h>
 #include <unistd.h>

@@ -80,7 +80,7 @@ bool ELogBuffer::appendV(const char* fmt, va_list args) {
     // NOTE: cast to int is safe (since size is limited to ELOG_MAX_BUFFER_SIZE = 16KB)
     if (res64 < sizeLeft) {
         va_end(argsCopy);
-        m_offset += res;
+        m_offset += res64;
         return true;
     }
 

@@ -95,21 +95,20 @@
 namespace elog {
 static const char* LOG_SUFFIX = ".log";
 
-#define ELOG_SEGMENT_EPOCH_RING_SIZE 4096
-
-#define MEGA_BYTE (1024 * 1024)
+// determines the depth of the garbage collector wrt maximum number of threads
+#define ELOG_SEGMENT_EPOCH_RING_FACTOR 4
 
 #ifdef ELOG_MSVC
-static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& fileNames) {
+static bool scanDirFileWindows(const char* dirPath, std::vector<std::string>& fileNames) {
     // prepare search pattern
     std::string searchPattern = dirPath;
     searchPattern += "\\*";
 
     // begin search for files
-    WIN32_FIND_DATA findFileData = {};
-    HANDLE hFind = FindFirstFile(dirPath, &findFileData);
+    WIN32_FIND_DATAA findFileData = {};
+    HANDLE hFind = FindFirstFileA(dirPath, &findFileData);
     if (hFind == INVALID_HANDLE_VALUE) {
-        ELOG_REPORT_WIN32_ERROR(FindFirstFile, "Failed to search for files in directory: %s",
+        ELOG_REPORT_WIN32_ERROR(FindFirstFileA, "Failed to search for files in directory: %s",
                                 dirPath);
         return false;
     }
@@ -120,12 +119,12 @@ static bool scanDirFilesMsvc(const char* dirPath, std::vector<std::string>& file
             findFileData.dwFileAttributes & FILE_ATTRIBUTE_NORMAL) {
             fileNames.push_back(findFileData.cFileName);
         }
-    } while (FindNextFile(hFind, &findFileData));
+    } while (FindNextFileA(hFind, &findFileData));
 
     // check for error
     DWORD errCode = GetLastError();
     if (errCode != ERROR_NO_MORE_FILES) {
-        ELOG_REPORT_WIN32_ERROR_NUM(FindNextFile, errCode,
+        ELOG_REPORT_WIN32_ERROR_NUM(FindNextFileA, errCode,
                                     "Failed to search for next file in directory: %s", dirPath);
         return false;
     }
@@ -147,8 +146,8 @@ inline bool isRegularFile(const char* path, bool& res) {
 }
 #endif
 
-#ifdef ELOG_GCC
-static bool scanDirFilesGcc(const char* dirPath, std::vector<std::string>& fileNames) {
+#if defined(ELOG_LINUX) || defined(ELOG_MINGW)
+static bool scanDirFileLinux(const char* dirPath, std::vector<std::string>& fileNames) {
     DIR* dirp = opendir(dirPath);
     if (dirp == nullptr) {
         int errCode = errno;
@@ -362,7 +361,7 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(
 ELogSegmentedFileTarget::~ELogSegmentedFileTarget() {}
 
 bool ELogSegmentedFileTarget::startLogTarget() {
-    m_epochSet.resizeRing(ELOG_SEGMENT_EPOCH_RING_SIZE);
+    m_epochSet.resizeRing(elog::getMaxThreads() * ELOG_SEGMENT_EPOCH_RING_FACTOR);
     return (m_segmentCount > 0) ? openRotatingSegment() : openSegment();
 }
 
@@ -767,9 +766,9 @@ bool ELogSegmentedFileTarget::getSegmentCount(uint32_t& segmentCount,
 bool ELogSegmentedFileTarget::scanDirFiles(const char* dirPath,
                                            std::vector<std::string>& fileNames) {
 #ifdef ELOG_MSVC
-    return scanDirFilesMsvc(dirPath, fileNames);
+    return scanDirFileWindows(dirPath, fileNames);
 #else
-    return scanDirFilesGcc(dirPath, fileNames);
+    return scanDirFileLinux(dirPath, fileNames);
 #endif
 }
 

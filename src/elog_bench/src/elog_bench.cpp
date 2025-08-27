@@ -15,7 +15,7 @@
 
 #ifdef ELOG_WINDOWS
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #endif
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
@@ -33,7 +33,11 @@ inline int64_t elog_rdtscp() {
     return __rdtscp(&dummy);
 }
 #else
+#ifdef __clang__
+#include <x86intrin.h>
+#else
 #include <x86gprintrin.h>
+#endif
 inline int64_t elog_rdtscp() {
     unsigned int dummy = 0;
     return __rdtscp(&dummy);
@@ -43,7 +47,7 @@ inline int64_t elog_rdtscp() {
 #ifdef ELOG_MINGW
 // we need windows headers for MinGW
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #elif !defined(ELOG_WINDOWS)
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -1377,10 +1381,10 @@ static int testLogStackTrace() {
         return 1;
     }
 
-    ELOG_STACK_TRACE(elog::ELEVEL_INFO, "some test title", 0, "Testing stack trace for thread %u",
+    ELOG_STACK_TRACE(elog::ELEVEL_INFO, "some test title 1", 0, "Testing stack trace for thread %u",
                      getCurrentThreadId());
 
-    ELOG_APP_STACK_TRACE(elog::ELEVEL_INFO, "some test title", 0,
+    ELOG_APP_STACK_TRACE(elog::ELEVEL_INFO, "some test title 2", 0,
                          "Testing app stack trace for thread %u", getCurrentThreadId());
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));

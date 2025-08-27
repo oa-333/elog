@@ -48,7 +48,6 @@ protected:
      * @brief Select log record fields into a receptor.
      * @param logRecord The log record to format.
      * @param receptor The receiving end of the selector log record fields.
-     * @param[out] logMsg The resulting formatted log message.
      */
     void applyFieldSelectors(const ELogRecord& logRecord, ELogFieldReceptor* receptor);
 

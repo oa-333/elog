@@ -164,7 +164,7 @@ extern ELOG_API bool reloadConfigStr(const char* configStr);
  * either starts periodic reloading (only if reload period is set as well) or updates the  file
  * change check period.
  *
- * @param configFile The configuration file path.
+ * @param configFilePath The configuration file path.
  * @return The operation's result.
  */
 extern ELOG_API bool setPeriodicReloadConfigFile(const char* configFilePath);
@@ -398,12 +398,12 @@ extern ELOG_API bool setThreadNotifier(const char* threadName, dbgutil::ThreadNo
  * Other properties are disregarded, so it is ok to put elog definitions within a larger
  * property file.
  *
- * @param props The properties map.
- * @param defineLogSources[opt] Optional parameter specifying whether each log source
- * configuration item triggers creation of the log source.
- * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
- * all missing loggers along the name path. If not specified, and a logger on the path from root
- * to leaf is missing, then the call fails.
+ * @param configPath The properties configuration file path.
+ * @param defineLogSources Optional parameter specifying whether each log source configuration item
+ * triggers creation of the log source.
+ * @param defineMissingPath In case @ref defineLogSources is true, then optionally define all
+ * missing loggers along the name path. If not specified, and a logger on the path from root to leaf
+ * is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByPropFile(const char* configPath, bool defineLogSources = true,
@@ -418,11 +418,11 @@ extern ELOG_API bool configureByPropFile(const char* configPath, bool defineLogS
  * - <qualified-source-name>.log_level: Log level of a log source.
  * - log_target: expected log target URL.
  * @param props The properties map.
- * @param defineLogSources[opt] Optional parameter specifying whether each log source
- * configuration item triggers creation of the log source.
- * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
- * all missing loggers along the name path. If not specified, and a logger on the path from root
- * to leaf is missing, then the call fails.
+ * @param defineLogSources Optional parameter specifying whether each log source configuration item
+ * triggers creation of the log source.
+ * @param defineMissingPath In case @ref defineLogSources is true, then optionally define all
+ * missing loggers along the name path. If not specified, and a logger on the path from root to leaf
+ * is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByProps(const ELogPropertySequence& props,
@@ -438,12 +438,12 @@ extern ELOG_API bool configureByProps(const ELogPropertySequence& props,
  *   Determines the global (root source) log level.
  * - <qualified-source-name>.log_level: Log level of a log source.
  * - log_target: expected log target URL.
- * @param props The properties map.
- * @param defineLogSources[opt] Optional parameter specifying whether each log source
- * configuration item triggers creation of the log source.
- * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
- * all missing loggers along the name path. If not specified, and a logger on the path from root
- * to leaf is missing, then the call fails.
+ * @param configPath The properties configuration file path.
+ * @param defineLogSources Optional parameter specifying whether each log source configuration item
+ * triggers creation of the log source.
+ * @param defineMissingPath In case @ref defineLogSources is true, then optionally define all
+ * missing loggers along the name path. If not specified, and a logger on the path from root to leaf
+ * is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByPropFileEx(const char* configPath, bool defineLogSources = true,
@@ -459,11 +459,11 @@ extern ELOG_API bool configureByPropFileEx(const char* configPath, bool defineLo
  * - <qualified-source-name>.log_level: Log level of a log source.
  * - log_target: expected log target URL.
  * @param props The properties map.
- * @param defineLogSources[opt] Optional parameter specifying whether each log source
- * configuration item triggers creation of the log source.
- * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
- * all missing loggers along the name path. If not specified, and a logger on the path from root
- * to leaf is missing, then the call fails.
+ * @param defineLogSources Optional parameter specifying whether each log source configuration item
+ * triggers creation of the log source.
+ * @param defineMissingPath In case @ref defineLogSources is true, then optionally define all
+ * missing loggers along the name path. If not specified, and a logger on the path from root to leaf
+ * is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByPropsEx(const ELogPropertyPosSequence& props,
@@ -481,11 +481,11 @@ extern ELOG_API bool configureByPropsEx(const ELogPropertyPosSequence& props,
  * - log_target: expected log target URL.
  * @note The top level configuration item should be a map.
  * @param configPath The configuration file path.
- * @param defineLogSources[opt] Optional parameter specifying whether each log source
- * configuration item triggers creation of the log source.
- * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
- * all missing loggers along the name path. If not specified, and a logger on the path from root
- * to leaf is missing, then the call fails.
+ * @param defineLogSources Optional parameter specifying whether each log source configuration item
+ * triggers creation of the log source.
+ * @param defineMissingPath In case @ref defineLogSources is true, then optionally define all
+ * missing loggers along the name path. If not specified, and a logger on the path from root to leaf
+ * is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByFile(const char* configPath, bool defineLogSources = true,
@@ -501,11 +501,11 @@ extern ELOG_API bool configureByFile(const char* configPath, bool defineLogSourc
  * - <qualified-source-name>.log_level: Log level of a log source.
  * - log_target: expected log target URL.
  * @param configStr The configuration string.
- * @param defineLogSources[opt] Optional parameter specifying whether each log source
- * configuration item triggers creation of the log source.
- * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
- * all missing loggers along the name path. If not specified, and a logger on the path from root
- * to leaf is missing, then the call fails.
+ * @param defineLogSources Optional parameter specifying whether each log source configuration item
+ * triggers creation of the log source.
+ * @param defineMissingPath In case @ref defineLogSources is true, then optionally define all
+ * missing loggers along the name path. If not specified, and a logger on the path from root to leaf
+ * is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configureByStr(const char* configStr, bool defineLogSources = true,
@@ -521,11 +521,11 @@ extern ELOG_API bool configureByStr(const char* configStr, bool defineLogSources
  * - <qualified-source-name>.log_level: Log level of a log source.
  * - log_target: expected log target URL.
  * @param config The configuration object. Root node must be of map type (see @ref ELogConfig).
- * @param defineLogSources[opt] Optional parameter specifying whether each log source
- * configuration item triggers creation of the log source.
- * @param defineMissingPath[opt] In case @ref defineLogSources is true, then optionally define
- * all missing loggers along the name path. If not specified, and a logger on the path from root
- * to leaf is missing, then the call fails.
+ * @param defineLogSources Optional parameter specifying whether each log source configuration item
+ * triggers creation of the log source.
+ * @param defineMissingPath In case @ref defineLogSources is true, then optionally define all
+ * missing loggers along the name path. If not specified, and a logger on the path from root to leaf
+ * is missing, then the call fails.
  * @return true If configuration succeeded, otherwise false.
  */
 extern ELOG_API bool configure(ELogConfig* config, bool defineLogSources = true,
@@ -567,7 +567,7 @@ extern ELOG_API ELogTargetId configureLogTarget(const char* logTargetCfg);
  * (e.g. behind a global lock), then there is no need for the file target to make use of its own
  * lock. Pay attention that when buffering is used in a multi-threaded scenario, using a lock is
  * mandatory, and without a lock behavior is undefined.
- * @param segmentSizeMB Optionally specify a segment size limit, which will cause the log file
+ * @param segmentLimitMB Optionally specify a segment size limit, which will cause the log file
  * to be divided into segments. That is, when log file exceeds this limit, the log file segment
  * is closed, and a new log file segment is created.
  * @param segmentCount Optionally specify segment count limit (relevant only when a segment size
@@ -773,22 +773,22 @@ extern ELOG_API ELogLogger* getDefaultLogger();
  * @brief Retrieves a private (can be used by only one thread) logger from a log source by its
  * qualified name. The logger is managed and should not be deleted by the caller.
  * @param qualifiedSourceName The qualified log source name, from which a logger is to be obtained.
- * @param defineLogSourceIfMissing[opt] Orders to define the log source, in case it is not defined.
- * @param defineMissingPath[opt] In case @ref defineLogSource is true, then optionally define
+ * @param defineLogSource Optionally orders to define the log source, in case it is not defined.
+ * @param defineMissingPath In case @ref defineLogSource is true, then optionally define
  * all missing loggers along the name path. If not specified, and a logger on the path from root
  * to leaf is missing, then the call fails.
  * @note This call is NOT thread safe.
  */
 extern ELOG_API ELogLogger* getPrivateLogger(const char* qualifiedSourceName,
-                                             bool defineLogSourceIfMissing = true,
+                                             bool defineLogSource = true,
                                              bool defineMissingPath = true);
 
 /**
  * @brief Retrieves a shared (can be used by more than one thread) logger from a log source by
  * its qualified name. The logger is managed and should not be deleted by the caller.
  * @param qualifiedSourceName The qualified log source name, from which a logger is to be obtained.
- * @param defineLogSourceIfMissing[opt] Orders to define the log source, in case it is not defined.
- * @param defineMissingPath[opt] In case @ref defineLogSource is true, then optionally define
+ * @param defineLogSource Optionally orders to define the log source, in case it is not defined.
+ * @param defineMissingPath In case @ref defineLogSource is true, then optionally define
  * all missing loggers along the name path. If not specified, and a logger on the path from root
  * to leaf is missing, then the call fails.
  * @note This call is NOT thread safe.
@@ -961,7 +961,7 @@ extern ELOG_API bool configureRateLimit(const char* rateLimitCfg, bool replaceGl
  * @brief Sets a global rate limit on message logging.
  * @param maxMsg The maximum number of messages that can be logged in a time interval.
  * @param timeout The rate limit timeout interval value.
- * @param units The rate limit timeout units.
+ * @param timeoutUnits The rate limit timeout units.
  * @param replaceGlobalFilter Specified what to do in case of an existing global log filter. If
  * set to true, then the rate limiter will replace any configured global log filter. If set to
  * false then the rate limiter will be combined with the currently configured global log filter
@@ -992,10 +992,10 @@ extern ELOG_API bool filterLogMsg(const ELogRecord& logRecord);
 /**
  * @brief Prints stack trace to log with the given log level.
  * @param logger The logger to use for printing the stack trace.
- * @param logLevel[opt] The log level.
- * @param title[opt] The title to print before each thread stack trace.
- * @param skip[opt] The number of frames to skip.
- * @param formatter[opt] Optional stack entry formatter. Pass null to use default formatting.
+ * @param logLevel Optional log level.
+ * @param title Optional title to print before each thread stack trace.
+ * @param skip Optionally specifies the number of frames to skip.
+ * @param formatter Optional stack entry formatter. Pass null to use default formatting.
  */
 extern ELOG_API void logStackTrace(ELogLogger* logger, ELogLevel logLevel = ELEVEL_INFO,
                                    const char* title = "", int skip = 0,
@@ -1005,11 +1005,11 @@ extern ELOG_API void logStackTrace(ELogLogger* logger, ELogLevel logLevel = ELEV
  * @brief Prints stack trace to log with the given log level. Context is either captured by
  * calling thread, or is passed by OS through an exception/signal handler.
  * @param logger The logger to use for printing the stack trace.
- * @param context[opt] OS-specific thread context. Pass null to log current thread call stack.
- * @param logLevel[opt] The log level.
- * @param title[opt] The title to print before each thread stack trace.
- * @param skip[opt] The number of frames to skip.
- * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
+ * @param context Optional OS-specific thread context. Pass null to log current thread call stack.
+ * @param logLevel Optional log level.
+ * @param title Optional title to print before each thread stack trace.
+ * @param skip Optionally specifies the number of frames to skip.
+ * @param formatter Optional stack entry formatter. Pass null to use default formatting.
  */
 extern ELOG_API void logStackTraceContext(ELogLogger* logger, void* context = nullptr,
                                           ELogLevel logLevel = ELEVEL_INFO, const char* title = "",
@@ -1019,10 +1019,10 @@ extern ELOG_API void logStackTraceContext(ELogLogger* logger, void* context = nu
 /**
  * @brief Prints stack trace of all running threads to log with the given log level.
  * @param logger The logger to use for printing the stack trace.
- * @param logLevel[opt] The log level.
- * @param title[opt] The title to print before each thread stack trace.
- * @param skip[opt] The number of frames to skip.
- * @param formatter[opt] Stack entry formatter. Pass null to use default formatting.
+ * @param logLevel Optional log level.
+ * @param title Optional title to print before each thread stack trace.
+ * @param skip Optionally specifies the number of frames to skip.
+ * @param formatter Optional stack entry formatter. Pass null to use default formatting.
  */
 extern ELOG_API void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel = ELEVEL_INFO,
                                       const char* title = "", int skip = 0,

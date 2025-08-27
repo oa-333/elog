@@ -16,6 +16,9 @@ namespace elog {
 class ELOG_API ELogHttpClientAssistant {
 public:
     virtual ~ELogHttpClientAssistant() {}
+    ELogHttpClientAssistant(const ELogHttpClientAssistant&) = delete;
+    ELogHttpClientAssistant(ELogHttpClientAssistant&&) = delete;
+    ELogHttpClientAssistant& operator=(const ELogHttpClientAssistant&) = delete;
 
     /** @brief Embed headers in outgoing HTTP message. */
     virtual void embedHeaders(httplib::Headers& headers) {}
@@ -65,7 +68,7 @@ public:
      * @brief Initializes the HTTP client.
      *
      * @param serverAddress The HTTP server address.
-     * @param logTargetName The log target name (for logging purposes).
+     * @param serverName The server name (for logging purposes).
      * @param httpConfig Timeouts and backlog configuration
      * @param assistant Optional assistant in carrying out client operations.
      */

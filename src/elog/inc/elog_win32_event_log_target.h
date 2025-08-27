@@ -8,7 +8,7 @@
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #endif
 
 #define ELOG_DEFAULT_WIN32_EVENT_LOG_ID 0x1000

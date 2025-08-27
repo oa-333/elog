@@ -20,8 +20,8 @@ bool ELogWin32EventLogTarget::startLogTarget() {
     }
 
     // Register the event source
-    m_eventLogHandle = RegisterEventSourceA(NULL, m_eventSourceName.c_str());
-    if (m_eventLogHandle == NULL) {
+    m_eventLogHandle = RegisterEventSourceA(nullptr, m_eventSourceName.c_str());
+    if (m_eventLogHandle == nullptr) {
         ELOG_REPORT_WIN32_ERROR(RegisterEventSource,
                                 "Failed to register Windows event source by name %s",
                                 m_eventSourceName.c_str());
@@ -55,11 +55,11 @@ uint32_t ELogWin32EventLogTarget::writeLogRecord(const ELogRecord& logRecord) {
                           EVENTLOG_INFORMATION_TYPE,  // Event type
                           0,                          // Category
                           m_eventId,                  // Event identifier
-                          NULL,                       // No user SID
+                          nullptr,                    // No user SID
                           1,                          // Number of strings
                           0,                          // No binary data
                           &msg,                       // Array of strings
-                          NULL                        // No binary data
+                          nullptr                     // No binary data
                           )) {
             // silently ignore
             // TODO: should update some counter

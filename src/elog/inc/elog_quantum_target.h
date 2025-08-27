@@ -130,7 +130,6 @@ private:
     // CongestionPolicy m_congestionPolicy;
 
     std::thread m_logThread;
-    bool m_stop;
 
     void logThread();
 };

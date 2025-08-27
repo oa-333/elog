@@ -35,7 +35,7 @@ public:
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
-                            size_t length) {
+                            size_t length) final {
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, field, (int)length, SQLITE_TRANSIENT);
         if (m_res == 0) {
             m_res = res;
@@ -170,115 +170,6 @@ bool ELogSQLiteDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
     ELOG_REPORT_ERROR("Failed to execute sqlite statement parameters: %s", sqlite3_errstr(res));
     return false;
 }
-
-#if 0
-bool ELogSQLiteDbTarget::start() {
-    // parse the statement with log record field selector tokens
-    // this builds a processed statement text with questions marks instead of log record field
-    // references, and also prepares the field selector array
-    if (!parseInsertStatement(m_insertStmtText)) {
-        return false;
-    }
-    std::string processedInsertStmt = getProcessedInsertStatement();
-
-    int res = sqlite3_open_v2(m_filePath.c_str(), &m_connection,
-                              SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nullptr);
-    if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to open sqlite db at path %s: %s", m_filePath.c_str(),
-                                sqlite3_errstr(res));
-        return false;
-    }
-
-    res = sqlite3_prepare_v2(m_connection, processedInsertStmt.c_str(),
-                             processedInsertStmt.length(), &m_insertStmt, nullptr);
-    if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to prepare sqlite statement '%s': %s",
-                                processedInsertStmt.c_str(), sqlite3_errstr(res));
-        sqlite3_close_v2(m_connection);
-        m_connection = nullptr;
-        return false;
-    }
-
-    // notify parent class about connection state
-    setConnected();
-    return true;
-}
-
-bool ELogSQLiteDbTarget::stop() {
-    // stop any reconnect background task
-    stopReconnect();
-
-    if (m_insertStmt != nullptr) {
-        int res = sqlite3_finalize(m_insertStmt);
-        if (res != SQLITE_OK) {
-            ELOG_REPORT_ERROR("Failed to destroy sqlite statement: %s", sqlite3_errstr(res));
-            return false;
-        }
-        m_insertStmt = nullptr;
-    }
-
-    if (m_connection != nullptr) {
-        int res = sqlite3_close_v2(m_connection);
-        if (res != SQLITE_OK) {
-            ELOG_REPORT_ERROR("Failed to close sqlite connection: %s", sqlite3_errstr(res));
-            return false;
-        }
-        m_connection = nullptr;
-    }
-    return true;
-}
-
-void ELogSQLiteDbTarget::log(const ELogRecord& logRecord) {
-    if (!canLog(logRecord)) {
-        return;
-    }
-
-    // check if connected to database, otherwise discard log record
-    if (!isConnected()) {
-        return;
-    }
-
-    // reset statement parameters
-    int res = sqlite3_reset(m_insertStmt);
-    if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to reset sqlite statement: %s", sqlite3_errstr(res));
-
-        // failure to send a record, so order parent class to start reconnect background task
-        startReconnect();
-        return;
-    }
-
-    // this puts each log record field into the correct place in the prepared statement
-    ELogSQLiteDbFieldReceptor sqliteFieldReceptor(m_insertStmt);
-    fillInsertStatement(logRecord, &sqliteFieldReceptor);
-    res = sqliteFieldReceptor.getRes();
-    if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to bind sqlite statement parameters: %s",
-                                sqlite3_errstr(res));
-
-        // failure to send a record, so order parent class to start reconnect background task
-        startReconnect();
-        return;
-    }
-
-    // execute statement, retry if busy, discard all returned data (there shouldn't be any, though)
-    res = sqlite3_step(m_insertStmt);
-    while (res == SQLITE_BUSY) {
-        res = sqlite3_step(m_insertStmt);
-    }
-    while (res == SQLITE_ROW) {
-        res = sqlite3_step(m_insertStmt);
-    }
-    if (res == SQLITE_DONE) {
-        return;
-    }
-    ELOG_REPORT_ERROR("Failed to execute sqlite statement parameters: %s",
-                            sqlite3_errstr(res));
-
-    // failure to send a record, so order parent class to start reconnect background task
-    startReconnect();
-}
-#endif
 
 ELogSQLiteDbTarget::SQLiteDbData* ELogSQLiteDbTarget::validateConnectionState(
     void* dbData, bool shouldBeConnected) {

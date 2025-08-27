@@ -14,13 +14,13 @@ namespace elog {
  * @class A JSON formatter, which takes input as json map, and parses property names and values as
  * field selectors.
  */
-class ELOG_API ELogJsonFormatter : public ELogBaseFormatter {
+class ELOG_API ELogJsonFormatter final : public ELogBaseFormatter {
 public:
     ELogJsonFormatter() {}
     ELogJsonFormatter(const ELogJsonFormatter&) = delete;
     ELogJsonFormatter(ELogJsonFormatter&&) = delete;
     ELogJsonFormatter& operator=(const ELogJsonFormatter&) = delete;
-    ~ELogJsonFormatter() override {}
+    ~ELogJsonFormatter() final {}
 
     bool parseJson(const std::string& jsonStr);
 

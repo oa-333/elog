@@ -141,8 +141,7 @@ extern ELOG_API bool elogTimeFromString(const char* timeStr, ELogTime& logTime);
 /**
  * @brief Converts log time to string.
  * @param logTime The log time.
- * @param buffer The output buffer, receiving the log time string.
- * @param length The output buffer length.
+ * @param timeBuffer The output buffer, receiving the log time string.
  * @return The number of formatted characters (not including the terminating null). This should
  * normally be the constant value ELOG_TIME_STR_LEN.
  */

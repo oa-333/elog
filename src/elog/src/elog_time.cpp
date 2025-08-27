@@ -7,6 +7,7 @@
 #include <new>
 
 #include "elog_report.h"
+#include "elog_time_internal.h"
 
 #ifdef ELOG_TIME_USE_CHRONO
 #include <sstream>
@@ -23,12 +24,16 @@ namespace elog {
 #ifdef ELOG_MSVC
 #define UNIX_MSVC_DIFF_SECONDS 11644473600LL
 #define SECONDS_TO_100NANOS(seconds) ((seconds) * 10000000LL)
-#define FILE_TIME_TO_LL(ft) (*(LONGLONG*)&(ft))
+#define FILE_TIME_TO_LL(ft) (*(const LONGLONG*)&(ft))
 #define FILETIME_TO_UNIXTIME_NANOS(ft) \
     (FILE_TIME_TO_LL(ft) - SECONDS_TO_100NANOS(UNIX_MSVC_DIFF_SECONDS)) * 100LL
-#define FILETIME_TO_UNIXTIME(ft) FILETIME_TO_UNIXTIME_NANOS(ft) / 1000000000LL
-#define UNIXTIME_TO_FILETIME(ut, ft) \
-    FILE_TIME_TO_LL(ft) = SECONDS_TO_100NANOS(ut + UNIX_MSVC_DIFF_SECONDS)
+
+// unused, currently commented out
+// #define FILETIME_TO_UNIXTIME(ft) FILETIME_TO_UNIXTIME_NANOS(ft) / 1000000000LL
+// #define UNIXTIME_TO_FILETIME(ut, ft) \
+//    FILE_TIME_TO_LL(ft) = SECONDS_TO_100NANOS(ut + UNIX_MSVC_DIFF_SECONDS)
+
+// old definitions
 // #define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
 // #define UNIXTIME_TO_FILETIME(ut, ft) (*(LONGLONG*)&(ft) = (ut) * 10000000LL +
 // 116444736000000000LL)

@@ -24,6 +24,7 @@
 #include "elog_filter_internal.h"
 #include "elog_flush_policy.h"
 #include "elog_flush_policy_internal.h"
+#include "elog_internal.h"
 #include "elog_level_cfg.h"
 #include "elog_pre_init_logger.h"
 #include "elog_rate_limiter.h"
@@ -49,6 +50,11 @@
 #ifdef ELOG_ENABLE_RELOAD_CONFIG
 #include <condition_variable>
 #include <thread>
+#ifdef ELOG_LINUX
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
 #endif
 
 // #include "elog_props_formatter.h"
@@ -1223,9 +1229,10 @@ void setLifeSignSyncPeriod(uint64_t syncPeriodMillis) {
         // create timer thread on-demand (no race, we have the lock)
         if (!sLifeSignSyncThread.joinable()) {
             sLifeSignSyncThread = std::thread([]() {
-                std::unique_lock<std::mutex> lock(sLifeSignLock);
+                std::unique_lock<std::mutex> threadLock(sLifeSignLock);
                 while (sLifeSignSyncPeriodMillis > 0) {
-                    sLifeSignCV.wait_for(lock, std::chrono::milliseconds(sLifeSignSyncPeriodMillis),
+                    sLifeSignCV.wait_for(threadLock,
+                                         std::chrono::milliseconds(sLifeSignSyncPeriodMillis),
                                          []() { return true; });
                     syncLifeSignReport();
                 }
@@ -1815,7 +1822,8 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
         ELOG_REPORT_ERROR("Top-level configuration node is not a map node");
         return false;
     }
-    ELogConfigMapNode* cfgMap = (ELogConfigMapNode*)config->getRootNode();
+    ELogConfigMapNode* cfgMap =
+        const_cast<ELogConfigMapNode*>((const ELogConfigMapNode*)config->getRootNode());
 
     // augment with environment variables
     if (!augmentConfigFromEnv(cfgMap)) {
@@ -1877,7 +1885,7 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
             if (!validateConfigValueStringType(cfgValue, ELOG_LEVEL_CONFIG_NAME)) {
                 return false;
             }
-            const char* logLevelStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+            const char* logLevelStr = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
             if (!ELogConfigParser::parseLogLevel(logLevelStr, logLevel, propagateMode)) {
                 ELOG_REPORT_ERROR("Invalid global log level: %s", logLevelStr);
                 return false;
@@ -1891,7 +1899,8 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
         if (prop.first.compare(ELOG_TARGET_CONFIG_NAME) == 0) {
             // configure log target
             if (cfgValue->getValueType() == ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
-                const char* logTargetStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+                const char* logTargetStr =
+                    ((const ELogConfigStringValue*)cfgValue)->getStringValue();
                 if (!configureLogTargetImpl(logTargetStr)) {
                     ELOG_REPORT_ERROR("Failed to configure log target (context: %s)",
                                       cfgValue->getFullContext());
@@ -1935,7 +1944,7 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
             if (!validateConfigValueStringType(cfgValue, key.c_str())) {
                 return false;
             }
-            const char* logLevelStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+            const char* logLevelStr = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
             if (!ELogConfigParser::parseLogLevel(logLevelStr, logLevel, propagateMode)) {
                 ELOG_REPORT_ERROR("Invalid source %s log level: %s", sourceName.c_str(),
                                   logLevelStr);
@@ -1961,7 +1970,7 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
             if (!validateConfigValueStringType(cfgValue, key.c_str())) {
                 return false;
             }
-            const char* logAffinityStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+            const char* logAffinityStr = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
             if (!ELogConfigParser::parseLogAffinityList(logAffinityStr, mask)) {
                 ELOG_REPORT_ERROR("Invalid source %s log affinity specification: %s",
                                   sourceName.c_str(), logAffinityStr);
@@ -2044,7 +2053,7 @@ static bool reconfigure(ELogConfig* config) {
         ELOG_REPORT_ERROR("Top-level configuration node is not a map node");
         return false;
     }
-    ELogConfigMapNode* cfgMap = (ELogConfigMapNode*)config->getRootNode();
+    const ELogConfigMapNode* cfgMap = (const ELogConfigMapNode*)config->getRootNode();
 
     std::vector<ELogLevelCfg> logLevelCfg;
     ELogLevel logLevel = ELEVEL_INFO;
@@ -2062,7 +2071,7 @@ static bool reconfigure(ELogConfig* config) {
             if (!validateConfigValueStringType(cfgValue, ELOG_LEVEL_CONFIG_NAME)) {
                 return false;
             }
-            const char* logLevelStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+            const char* logLevelStr = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
             if (!ELogConfigParser::parseLogLevel(logLevelStr, logLevel, propagateMode)) {
                 ELOG_REPORT_ERROR("Invalid global log level: %s", logLevelStr);
                 return false;
@@ -2088,7 +2097,7 @@ static bool reconfigure(ELogConfig* config) {
             if (!validateConfigValueStringType(cfgValue, key.c_str())) {
                 return false;
             }
-            const char* logLevelStr = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+            const char* logLevelStr = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
             if (!ELogConfigParser::parseLogLevel(logLevelStr, logLevel, propagateMode)) {
                 ELOG_REPORT_ERROR("Invalid source %s log level: %s", sourceName.c_str(),
                                   logLevelStr);
@@ -2841,7 +2850,7 @@ public:
         }
     }
     void onEndStackTrace() override { ELOG_END_EX(m_logger); }
-    void onStackEntry(const char* stackEntry) {
+    void onStackEntry(const char* stackEntry) override {
         ELOG_APPEND_EX(m_logger, m_logLevel, "%s\n", stackEntry);
     }
 

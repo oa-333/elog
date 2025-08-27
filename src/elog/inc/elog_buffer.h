@@ -109,8 +109,8 @@ public:
 
     /**
      * @brief Appends a string to the log buffer, including its terminating null.
-     * @param The message to be appended.
-     * @param Optional precomputed message size. This should not include the terminating null.
+     * @param msg The message to be appended.
+     * @param len Optional precomputed message size. This should not include the terminating null.
      * @note Type size_t is used here for caller's convenience, but size limit @ref
      * ELOG_MAX_BUFFER_SIZE is still enforced.
      */

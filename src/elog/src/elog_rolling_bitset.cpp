@@ -93,7 +93,7 @@ void ELogRollingBitset::insert(uint64_t value) {
     // constant full word count)
     fullWordCount = m_fullWordCount.load(std::memory_order_acquire);
     if (wordId == fullWordCount) {
-        while ((newWordValue == FULL_WORD)) {
+        while (newWordValue == FULL_WORD) {
             if (m_traceLogger != nullptr) {
                 ELOG_INFO_EX(m_traceLogger, "Lowest word %" PRIu64 " became full", fullWordCount);
             }

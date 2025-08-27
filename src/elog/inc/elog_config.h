@@ -308,7 +308,7 @@ private:
 };
 
 /** @brief Null configuration value. */
-class ELOG_API ELogConfigNullValue : public ELogConfigValue {
+class ELOG_API ELogConfigNullValue final : public ELogConfigValue {
 public:
     ELogConfigNullValue(ELogConfigContext* context)
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_NULL_VALUE) {}
@@ -319,7 +319,7 @@ public:
 };
 
 /** @brief Integer (signed) configuration value. */
-class ELOG_API ELogConfigIntValue : public ELogConfigValue {
+class ELOG_API ELogConfigIntValue final : public ELogConfigValue {
 public:
     ELogConfigIntValue(ELogConfigContext* context, int64_t value = 0)
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_INT_VALUE), m_value(value) {}
@@ -336,7 +336,7 @@ private:
 };
 
 /** @brief Boolean configuration value. */
-class ELOG_API ELogConfigBoolValue : public ELogConfigValue {
+class ELOG_API ELogConfigBoolValue final : public ELogConfigValue {
 public:
     ELogConfigBoolValue(ELogConfigContext* context, bool value = false)
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_BOOL_VALUE), m_value(value) {}
@@ -353,7 +353,7 @@ private:
 };
 
 /** @brief String configuration value. */
-class ELOG_API ELogConfigStringValue : public ELogConfigValue {
+class ELOG_API ELogConfigStringValue final : public ELogConfigValue {
 public:
     ELogConfigStringValue(ELogConfigContext* context, const char* value = "")
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_STRING_VALUE), m_value(value) {}
@@ -370,7 +370,7 @@ private:
 };
 
 /** @brief Array configuration value. */
-class ELOG_API ELogConfigArrayValue : public ELogConfigValue {
+class ELOG_API ELogConfigArrayValue final : public ELogConfigValue {
 public:
     ELogConfigArrayValue(ELogConfigContext* context, ELogConfigArrayNode* value = nullptr)
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE), m_value(value) {}
@@ -394,7 +394,7 @@ private:
 };
 
 /** @brief Map configuration value. */
-class ELOG_API ELogConfigMapValue : public ELogConfigValue {
+class ELOG_API ELogConfigMapValue final : public ELogConfigValue {
 public:
     ELogConfigMapValue(ELogConfigContext* context, ELogConfigMapNode* value = nullptr)
         : ELogConfigValue(context, ELogConfigValueType::ELOG_CONFIG_MAP_VALUE), m_value(value) {}
@@ -458,8 +458,6 @@ public:
     ELogConfigSourceContext* getSourceContext() { return m_sourceContext; }
 
 private:
-    const uint32_t sContextWidth = 10;
-
     ELogConfigNode* m_root;
     ELogConfigSourceContext* m_sourceContext;
 

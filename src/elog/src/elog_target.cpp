@@ -232,12 +232,12 @@ uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     }
     logBuffer->reset();
     formatLogBuffer(logRecord, *logBuffer);
-    uint32_t bufferSize = logBuffer->getOffset();
+    uint64_t bufferSize = logBuffer->getOffset();
     if (m_enableStats) {
         m_stats->addBytesSubmitted(bufferSize);
     }
     logFormattedMsg(logBuffer->getRef(), bufferSize);
-    return bufferSize;
+    return (uint32_t)bufferSize;
 }
 
 bool ELogTarget::flush(bool allowModeration /* = false */) {

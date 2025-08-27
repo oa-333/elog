@@ -85,7 +85,7 @@ public:
      */
     bool flush(bool allowModeration = false);
 
-    /** @print statistics for this log target. */
+    /** @brief Prints statistics for this log target. */
     void statsToString(ELogBuffer& buffer, const char* msg = "");
 
     /** @brief Sets the log target id. */
@@ -298,7 +298,7 @@ protected:
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */
-class ELOG_API ELogCombinedTarget : public ELogTarget {
+class ELOG_API ELogCombinedTarget final : public ELogTarget {
 public:
     ELogCombinedTarget() : ELogTarget("combined") {}
     ELogCombinedTarget(const ELogCombinedTarget&) = delete;

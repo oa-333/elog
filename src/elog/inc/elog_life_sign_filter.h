@@ -26,14 +26,14 @@ public:
      * @param frequencySpec The required frequency.
      * @param prevFilter The previously installed filter. Caller is responsible for handing over
      * this filter to the life-sign garbage collector.
-     * @param The operation's result.
+     * @return The operation's result.
      */
     bool setLevelFilter(ELogLevel level, const ELogFrequencySpec& frequencySpec,
                         ELogFilter*& prevFilter);
 
     /**
      * @brief Removes the life-sign report filter for the given log level.
-     * @param The log level.
+     * @param level The log level.
      * @return The previously installed filter if any, for the given log level.
      */
     ELogFilter* removeLevelFilter(ELogLevel level);

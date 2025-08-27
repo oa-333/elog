@@ -5,6 +5,7 @@
 #include "elog_aligned_alloc.h"
 #include "elog_internal.h"
 #include "elog_report.h"
+#include "elog_stats_internal.h"
 #include "elog_target.h"
 #include "elog_tls.h"
 

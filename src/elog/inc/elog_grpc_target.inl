@@ -632,7 +632,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                             ReceptorType>::writeLogRecordUnary(const ELogRecord& logRecord) {
     // prepare log record message
     // NOTE: receptor must live until message sending, because it holds value strings
-    ELogGRPCBaseReceptor receptor;
+    ELogGRPCBaseReceptor<> receptor;
     MessageType msg;
     receptor.setLogRecordMsg(&msg);
     fillInParams(logRecord, &receptor);
@@ -674,7 +674,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                             ReceptorType>::writeLogRecordStream(const ELogRecord& logRecord) {
     // prepare log record message
     // NOTE: receptor must live until message sending, because it holds value strings
-    ELogGRPCBaseReceptor receptor;
+    ELogGRPCBaseReceptor<> receptor;
     MessageType msg;
     receptor.setLogRecordMsg(&msg);
     fillInParams(logRecord, &receptor);
@@ -715,7 +715,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                             ReceptorType>::writeLogRecordAsync(const ELogRecord& logRecord) {
     // prepare log record message
     // NOTE: receptor must live until message sending, because it holds value strings
-    ELogGRPCBaseReceptor receptor;
+    ELogGRPCBaseReceptor<> receptor;
     MessageType msg;
     receptor.setLogRecordMsg(&msg);
     fillInParams(logRecord, &receptor);
@@ -781,7 +781,7 @@ uint32_t
 ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                    ReceptorType>::writeLogRecordAsyncCallbackUnary(const ELogRecord& logRecord) {
     // NOTE: receptor must live until message sending, because it holds value strings
-    ELogGRPCBaseReceptor receptor;
+    ELogGRPCBaseReceptor<> receptor;
     MessageType msg;
     receptor.setLogRecordMsg(&msg);
     fillInParams(logRecord, &receptor);
@@ -806,8 +806,9 @@ ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     bool done = false;
     bool result = false;
     m_serviceStub->async()->SendLogRecord(
-        &context, &msg, &status, [&responseLock, &responseCV, &done, &result](grpc::Status status) {
-            if (status.ok()) {
+        &context, &msg, &status,
+        [&responseLock, &responseCV, &done, &result](grpc::Status localStatus) {
+            if (localStatus.ok()) {
                 result = true;
             }
             std::lock_guard<std::mutex> lock(responseLock);

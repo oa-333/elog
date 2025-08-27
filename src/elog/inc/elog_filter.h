@@ -13,13 +13,13 @@ namespace elog {
 /** @brief Parent interface for all log filters. */
 class ELOG_API ELogFilter : public ELogManagedObject {
 public:
-    virtual ~ELogFilter() {}
+    ~ELogFilter() override {}
 
     /** @brief Loads filter from configuration. */
     virtual bool load(const ELogConfigMapNode* filterCfg) { return true; }
 
     /** @brief Loads filter from a free-style predicate-like parsed expression. */
-    virtual bool loadExpr(const ELogExpression* expr) { return true; };
+    virtual bool loadExpr(const ELogExpression* expr) { return true; }
 
     /**
      * @brief Filters a log record.
@@ -42,7 +42,7 @@ class ELOG_API ELogFilterConstructor;
 /**
  * @brief Filter constructor registration helper.
  * @param name The filter identifier.
- * @param allocator The filter constructor.
+ * @param constructor The filter constructor.
  */
 extern ELOG_API void registerFilterConstructor(const char* name,
                                                ELogFilterConstructor* constructor);
@@ -75,7 +75,7 @@ protected:
 
 /** @def Utility macro for declaring filter factory method registration. */
 #define ELOG_DECLARE_FILTER(FilterType, Name)                                                 \
-    class ELOG_API FilterType##Constructor : public elog::ELogFilterConstructor {             \
+    class ELOG_API FilterType##Constructor final : public elog::ELogFilterConstructor {       \
     public:                                                                                   \
         FilterType##Constructor() : elog::ELogFilterConstructor(#Name) {}                     \
         elog::ELogFilter* constructFilter() final { return new (std::nothrow) FilterType(); } \
@@ -91,7 +91,7 @@ protected:
     FilterType::FilterType##Constructor FilterType::sConstructor;
 
 /** @brief A log filter that negates the result of another log filter. */
-class ELOG_API ELogNotFilter : public ELogFilter {
+class ELOG_API ELogNotFilter final : public ELogFilter {
 public:
     ELogNotFilter() : m_filter(nullptr) {}
     ELogNotFilter(ELogFilter* filter) : m_filter(filter) {}
@@ -116,7 +116,7 @@ public:
 private:
     ELogFilter* m_filter;
 
-    ELOG_DECLARE_FILTER(ELogNotFilter, NOT);
+    ELOG_DECLARE_FILTER(ELogNotFilter, NOT)
 };
 
 /**
@@ -156,7 +156,7 @@ private:
 /**
  * @brief An AND log filter that checks both underlying filters allow the record to be processed.
  */
-class ELOG_API ELogAndLogFilter : public ELogCompoundLogFilter {
+class ELOG_API ELogAndLogFilter final : public ELogCompoundLogFilter {
 public:
     ELogAndLogFilter() : ELogCompoundLogFilter(ELogCompoundLogFilter::OpType::OT_AND) {}
     ELogAndLogFilter(const ELogAndLogFilter&) = delete;
@@ -165,14 +165,14 @@ public:
     ~ELogAndLogFilter() final {}
 
 private:
-    ELOG_DECLARE_FILTER(ELogAndLogFilter, AND);
+    ELOG_DECLARE_FILTER(ELogAndLogFilter, AND)
 };
 
 /**
  * @brief An OR log filter that checks if either one of the underlying filters allows the record to
  * be processed.
  */
-class ELOG_API ELogOrLogFilter : public ELogCompoundLogFilter {
+class ELOG_API ELogOrLogFilter final : public ELogCompoundLogFilter {
 public:
     ELogOrLogFilter() : ELogCompoundLogFilter(ELogCompoundLogFilter::OpType::OT_OR) {}
     ELogOrLogFilter(const ELogOrLogFilter&) = delete;
@@ -181,7 +181,7 @@ public:
     ~ELogOrLogFilter() final {}
 
 private:
-    ELOG_DECLARE_FILTER(ELogOrLogFilter, OR);
+    ELOG_DECLARE_FILTER(ELogOrLogFilter, OR)
 };
 
 /** @brief Comparison operation constants. */
@@ -241,14 +241,14 @@ protected:
                            const char* propName = nullptr);
 };
 
-class ELOG_API ELogRecordIdFilter : public ELogCmpFilter {
+class ELOG_API ELogRecordIdFilter final : public ELogCmpFilter {
 public:
     ELogRecordIdFilter(uint64_t recordId = 0, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_GE)
         : ELogCmpFilter(cmpOp), m_recordId(recordId) {}
     ELogRecordIdFilter(const ELogRecordIdFilter&) = delete;
     ELogRecordIdFilter(ELogRecordIdFilter&&) = delete;
     ELogRecordIdFilter& operator=(const ELogRecordIdFilter&) = delete;
-    ~ELogRecordIdFilter() override {}
+    ~ELogRecordIdFilter() final {}
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -267,10 +267,10 @@ public:
 private:
     uint64_t m_recordId;
 
-    ELOG_DECLARE_FILTER(ELogRecordIdFilter, record_id);
+    ELOG_DECLARE_FILTER(ELogRecordIdFilter, record_id)
 };
 
-class ELOG_API ELogRecordTimeFilter : public ELogCmpFilter {
+class ELOG_API ELogRecordTimeFilter final : public ELogCmpFilter {
 public:
     ELogRecordTimeFilter() : ELogCmpFilter(ELogCmpOp::CMP_OP_GE) {}
     ELogRecordTimeFilter(ELogTime logTime, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_GE)
@@ -278,7 +278,7 @@ public:
     ELogRecordTimeFilter(const ELogRecordTimeFilter&) = delete;
     ELogRecordTimeFilter(ELogRecordTimeFilter&&) = delete;
     ELogRecordTimeFilter& operator=(const ELogRecordTimeFilter&) = delete;
-    ~ELogRecordTimeFilter() override {}
+    ~ELogRecordTimeFilter() final {}
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -297,7 +297,7 @@ public:
 private:
     ELogTime m_logTime;
 
-    ELOG_DECLARE_FILTER(ELogRecordTimeFilter, record_time);
+    ELOG_DECLARE_FILTER(ELogRecordTimeFilter, record_time)
 };
 
 // TODO: the filters below will be useful when we have some kind of dispatch hub/service, that reads
@@ -305,14 +305,14 @@ private:
 // the process/thread id filters make no sense, unless we apply some live filters during runtime
 // (i.e. as a result of some controlling dashboard for the purpose of live RCA)
 #if 0
-class ELOG_API ELogHostNameFilter : public ELogCmpFilter {
+class ELOG_API ELogHostNameFilter final : public ELogCmpFilter {
 public:
     ELogHostNameFilter(const char* hostName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_hostName(hostName) {}
     ELogHostNameFilter(const ELogHostNameFilter&) = delete;
     ELogHostNameFilter(ELogHostNameFilter&&) = delete;
     ELogHostNameFilter& operator=(const ELogHostNameFilter&) = delete;
-    ~ELogHostNameFilter() override {}
+    ~ELogHostNameFilter() final {}
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -331,17 +331,17 @@ public:
 private:
     std::string m_hostName;
 
-    ELOG_DECLARE_FILTER(ELogHostNameFilter, host_name);
+    ELOG_DECLARE_FILTER(ELogHostNameFilter, host_name)
 };
 
-class ELOG_API ELogUserNameFilter : public ELogCmpFilter {
+class ELOG_API ELogUserNameFilter final : public ELogCmpFilter {
 public:
     ELogUserNameFilter(const char* userName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_userName(userName) {}
     ELogUserNameFilter(const ELogUserNameFilter&) = delete;
     ELogUserNameFilter(ELogUserNameFilter&&) = delete;
     ELogUserNameFilter& operator=(const ELogUserNameFilter&) = delete;
-    ~ELogUserNameFilter() override {}
+    ~ELogUserNameFilter() final {}
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -360,17 +360,17 @@ public:
 private:
     std::string m_userName;
 
-    ELOG_DECLARE_FILTER(ELogUserNameFilter, user_name);
+    ELOG_DECLARE_FILTER(ELogUserNameFilter, user_name)
 };
 
-class ELOG_API ELogProgramNameFilter : public ELogCmpFilter {
+class ELOG_API ELogProgramNameFilter final : public ELogCmpFilter {
 public:
     ELogProgramNameFilter(const char* programName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_programName(programName) {}
     ELogProgramNameFilter(const ELogProgramNameFilter&) = delete;
     ELogProgramNameFilter(ELogProgramNameFilter&&) = delete;
     ELogProgramNameFilter& operator=(const ELogProgramNameFilter&) = delete;
-    ~ELogProgramNameFilter() override {}
+    ~ELogProgramNameFilter() final {}
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -389,17 +389,17 @@ public:
 private:
     std::string m_programName;
 
-    ELOG_DECLARE_FILTER(ELogProgramNameFilter, program_name);
+    ELOG_DECLARE_FILTER(ELogProgramNameFilter, program_name)
 };
 
-class ELOG_API ELogProcessIdFilter : public ELogCmpFilter {
+class ELOG_API ELogProcessIdFilter final : public ELogCmpFilter {
 public:
     ELogProcessIdFilter(const char* processIdName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_processIdName(processIdName) {}
     ELogProcessIdFilter(const ELogProcessIdFilter&) = delete;
     ELogProcessIdFilter(ELogProcessIdFilter&&) = delete;
     ELogProcessIdFilter& operator=(const ELogProcessIdFilter&) = delete;
-    ~ELogProcessIdFilter() override {}
+    ~ELogProcessIdFilter() final {}
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -418,17 +418,17 @@ public:
 private:
     std::string m_processIdName;
 
-    ELOG_DECLARE_FILTER(ELogProcessIdFilter, process_id_name);
+    ELOG_DECLARE_FILTER(ELogProcessIdFilter, process_id_name)
 };
 
-class ELOG_API ELogThreadIdFilter : public ELogCmpFilter {
+class ELOG_API ELogThreadIdFilter final : public ELogCmpFilter {
 public:
     ELogThreadIdFilter(const char* threadIdName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_threadIdName(threadIdName) {}
     ELogThreadIdFilter(const ELogThreadIdFilter&) = delete;
     ELogThreadIdFilter(ELogThreadIdFilter&&) = delete;
     ELogThreadIdFilter& operator=(const ELogThreadIdFilter&) = delete;
-    ~ELogThreadIdFilter() override {}
+    ~ELogThreadIdFilter() final {}
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -447,11 +447,11 @@ public:
 private:
     std::string m_threadIdName;
 
-    ELOG_DECLARE_FILTER(ELogThreadIdFilter, thread_id_name);
+    ELOG_DECLARE_FILTER(ELogThreadIdFilter, thread_id_name)
 };
 #endif
 
-class ELOG_API ELogThreadNameFilter : public ELogCmpFilter {
+class ELOG_API ELogThreadNameFilter final : public ELogCmpFilter {
 public:
     ELogThreadNameFilter(const char* threadName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_threadName(threadName) {}
@@ -477,10 +477,10 @@ public:
 private:
     std::string m_threadName;
 
-    ELOG_DECLARE_FILTER(ELogThreadNameFilter, thread_name);
+    ELOG_DECLARE_FILTER(ELogThreadNameFilter, thread_name)
 };
 
-class ELOG_API ELogSourceFilter : public ELogCmpFilter {
+class ELOG_API ELogSourceFilter final : public ELogCmpFilter {
 public:
     ELogSourceFilter(const char* logSourceName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_logSourceName(logSourceName) {}
@@ -506,10 +506,10 @@ public:
 private:
     std::string m_logSourceName;
 
-    ELOG_DECLARE_FILTER(ELogSourceFilter, log_source);
+    ELOG_DECLARE_FILTER(ELogSourceFilter, log_source)
 };
 
-class ELOG_API ELogModuleFilter : public ELogCmpFilter {
+class ELOG_API ELogModuleFilter final : public ELogCmpFilter {
 public:
     ELogModuleFilter(const char* logModuleName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_logModuleName(logModuleName) {}
@@ -535,10 +535,10 @@ public:
 private:
     std::string m_logModuleName;
 
-    ELOG_DECLARE_FILTER(ELogModuleFilter, log_module);
+    ELOG_DECLARE_FILTER(ELogModuleFilter, log_module)
 };
 
-class ELOG_API ELogFileNameFilter : public ELogCmpFilter {
+class ELOG_API ELogFileNameFilter final : public ELogCmpFilter {
 public:
     ELogFileNameFilter(const char* fileName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_fileName(fileName) {}
@@ -566,10 +566,10 @@ public:
 private:
     std::string m_fileName;
 
-    ELOG_DECLARE_FILTER(ELogFileNameFilter, file_name);
+    ELOG_DECLARE_FILTER(ELogFileNameFilter, file_name)
 };
 
-class ELOG_API ELogLineNumberFilter : public ELogCmpFilter {
+class ELOG_API ELogLineNumberFilter final : public ELogCmpFilter {
 public:
     ELogLineNumberFilter(int lineNumber = 0, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_lineNumber(lineNumber) {}
@@ -595,10 +595,10 @@ public:
 private:
     int m_lineNumber;
 
-    ELOG_DECLARE_FILTER(ELogLineNumberFilter, line_number);
+    ELOG_DECLARE_FILTER(ELogLineNumberFilter, line_number)
 };
 
-class ELOG_API ELogFunctionNameFilter : public ELogCmpFilter {
+class ELOG_API ELogFunctionNameFilter final : public ELogCmpFilter {
 public:
     ELogFunctionNameFilter(const char* functionName = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_functionName(functionName) {}
@@ -626,10 +626,10 @@ public:
 private:
     std::string m_functionName;
 
-    ELOG_DECLARE_FILTER(ELogFunctionNameFilter, function_name);
+    ELOG_DECLARE_FILTER(ELogFunctionNameFilter, function_name)
 };
 
-class ELOG_API ELogLevelFilter : public ELogCmpFilter {
+class ELOG_API ELogLevelFilter final : public ELogCmpFilter {
 public:
     ELogLevelFilter(ELogLevel logLevel = ELEVEL_INFO, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_LE)
         : ELogCmpFilter(cmpOp), m_logLevel(logLevel) {}
@@ -655,10 +655,10 @@ public:
 private:
     ELogLevel m_logLevel;
 
-    ELOG_DECLARE_FILTER(ELogLevelFilter, log_level);
+    ELOG_DECLARE_FILTER(ELogLevelFilter, log_level)
 };
 
-class ELOG_API ELogMsgFilter : public ELogCmpFilter {
+class ELOG_API ELogMsgFilter final : public ELogCmpFilter {
 public:
     ELogMsgFilter(const char* logMsg = "", ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
         : ELogCmpFilter(cmpOp), m_logMsg(logMsg) {}
@@ -684,10 +684,10 @@ public:
 private:
     std::string m_logMsg;
 
-    ELOG_DECLARE_FILTER(ELogMsgFilter, log_msg);
+    ELOG_DECLARE_FILTER(ELogMsgFilter, log_msg)
 };
 
-class ELOG_API ELogCountFilter : public ELogCmpFilter {
+class ELOG_API ELogCountFilter final : public ELogCmpFilter {
 public:
     ELogCountFilter(uint64_t count = 0)
         : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ), m_runningCounter(0), m_count(count) {}
@@ -714,7 +714,7 @@ private:
     std::atomic<uint64_t> m_runningCounter;
     uint64_t m_count;
 
-    ELOG_DECLARE_FILTER(ELogCountFilter, count);
+    ELOG_DECLARE_FILTER(ELogCountFilter, count)
 };
 
 }  // namespace elog

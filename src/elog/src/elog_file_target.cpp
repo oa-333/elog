@@ -2,9 +2,11 @@
 
 #include "elog_def.h"
 #ifdef ELOG_WINDOWS
+#ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#endif
 #include <io.h>
-#include <windows.h>
 #else
 #include <stdio.h>
 #include <sys/stat.h>
@@ -85,7 +87,7 @@ bool ELogFileTarget::configureOptimalBufferSize() {
     fprintf(stderr, "Recommended buffer size is %u, but optimal block size is %u\n",
             (unsigned)BUFSIZ, optimalBlockSize);
 
-    if (setvbuf(m_fileHandle, NULL, _IOFBF, optimalBlockSize) != 0) {
+    if (setvbuf(m_fileHandle, nullptr, _IOFBF, optimalBlockSize) != 0) {
         ELOG_REPORT_SYS_ERROR(setvbuf,
                               "Failed to configure log file %s buffer size to recommended size %u",
                               m_filePath.c_str(), optimalBlockSize);

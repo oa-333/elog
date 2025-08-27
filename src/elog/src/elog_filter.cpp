@@ -7,6 +7,7 @@
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_field_selector_internal.h"
+#include "elog_filter_internal.h"
 #include "elog_report.h"
 
 namespace elog {

@@ -17,7 +17,7 @@
 namespace elog {
 
 /** @brief Log rate limiter. */
-class ELOG_API ELogRateLimiter : public ELogCmpFilter {
+class ELOG_API ELogRateLimiter final : public ELogCmpFilter {
 public:
     ELogRateLimiter(uint64_t maxMsg = 0, uint64_t timeout = 0,
                     ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE);
@@ -54,7 +54,7 @@ protected:
 
     tstamp_t getTstamp();
 
-    ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limit);
+    ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limit)
 
 private:
     bool prepareInterval();

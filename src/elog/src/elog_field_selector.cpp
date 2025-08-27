@@ -4,9 +4,11 @@
 #include "elog_internal.h"
 
 #ifdef ELOG_WINDOWS
+#ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <winsock2.h>
+#include <Windows.h>
+#endif
+#include <WinSock2.h>
 #ifndef HOST_NAME_MAX
 #define HOST_NAME_MAX 256
 #endif
@@ -66,6 +68,9 @@ typedef ELogConcurrentHashTable<const char*> ELogThreadNameMap;
 static ELogThreadNameMap sThreadNameMap;
 static ELogTlsKey sThreadNameKey = ELOG_INVALID_TLS_KEY;
 
+// determines how sparse the thread hash map will be to achieve less collision
+#define ELOG_THREAD_HASH_MAP_FACTOR 4
+
 struct ELogThreadData {
     ELogThreadData(uint32_t threadId = 0) : m_threadId(threadId) {
 #ifdef ELOG_ENABLE_LIFE_SIGN
@@ -103,7 +108,7 @@ static void cleanupThreadName(void* key) {
     sThreadNameMap.setItem(threadId, nullptr);
 
     // cleanup inverse map as well
-    std::unique_lock<std::mutex> lock;
+    std::unique_lock<std::mutex> lock(sLock);
     ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
     if (itr != sThreadDataMap.end()) {
         sThreadDataMap.erase(itr);
@@ -383,7 +388,7 @@ static void initProgName() {
 
     // get executable file name
 #ifdef ELOG_WINDOWS
-    DWORD pathLen = GetModuleFileNameA(NULL, sProgName, PROG_NAME_MAX);
+    DWORD pathLen = GetModuleFileNameA(nullptr, sProgName, PROG_NAME_MAX);
     if (pathLen == 0) {
         ELOG_REPORT_ERROR("WARNING: Failed to get executable file name: %u", GetLastError());
         return;
@@ -443,7 +448,7 @@ extern bool initFieldSelectors() {
         return false;
     }
 
-    if (!sThreadNameMap.initialize(getMaxThreads() * 4)) {
+    if (!sThreadNameMap.initialize(getMaxThreads() * ELOG_THREAD_HASH_MAP_FACTOR)) {
         ELOG_REPORT_ERROR(
             "Failed to initialize concurrent thread name map, during initialization of field "
             "selectors");
@@ -515,8 +520,8 @@ bool setCurrentThreadNameField(const char* threadName) {
 #endif
 
     ELogThreadData threadData(threadId);
-    std::unique_lock<std::mutex> lock;
-    return sThreadDataMap.insert(ELogThreadDataMap::value_type(threadName, {threadId})).second;
+    std::unique_lock<std::mutex> lock(sLock);
+    return sThreadDataMap.insert(ELogThreadDataMap::value_type(threadName, threadData)).second;
 }
 
 const char* getThreadNameField(uint32_t threadId) {
@@ -532,7 +537,7 @@ bool setCurrentThreadNotifierImpl(dbgutil::ThreadNotifier* notifier) {
 }
 
 extern bool setThreadNotifierImpl(const char* threadName, dbgutil::ThreadNotifier* notifier) {
-    std::unique_lock<std::mutex> lock;
+    std::unique_lock<std::mutex> lock(sLock);
     ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
     if (itr == sThreadDataMap.end()) {
         return false;
@@ -543,7 +548,7 @@ extern bool setThreadNotifierImpl(const char* threadName, dbgutil::ThreadNotifie
 
 bool getThreadDataByName(const char* threadName, uint32_t& threadId,
                          dbgutil::ThreadNotifier*& notifier) {
-    std::unique_lock<std::mutex> lock;
+    std::unique_lock<std::mutex> lock(sLock);
     ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
     if (itr != sThreadDataMap.end()) {
         threadId = itr->second.m_threadId;
@@ -555,7 +560,7 @@ bool getThreadDataByName(const char* threadName, uint32_t& threadId,
 
 void getThreadDataByNameRegEx(const char* threadNameRegEx, ThreadDataMap& threadIds) {
     std::regex pattern(threadNameRegEx);
-    std::unique_lock<std::mutex> lock;
+    std::unique_lock<std::mutex> lock(sLock);
     ELogThreadDataMap::iterator itr = sThreadDataMap.begin();
     while (itr != sThreadDataMap.end()) {
         if (std::regex_match(itr->first, pattern)) {
@@ -782,27 +787,28 @@ public:
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* value, const ELogFieldSpec& fieldSpec,
-                            size_t length = 0) {
+                            size_t length = 0) override {
         m_stringValue = value;
         m_length = length;
         m_fieldType = ELogFieldType::FT_TEXT;
     }
 
     /** @brief Receives an integer log record field. */
-    void receiveIntField(uint32_t typeId, uint64_t value, const ELogFieldSpec& fieldSpec) {
+    void receiveIntField(uint32_t typeId, uint64_t value, const ELogFieldSpec& fieldSpec) override {
         m_intValue = value;
         m_fieldType = ELogFieldType::FT_INT;
     }
 
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
-                          const ELogFieldSpec& fieldSpec, size_t length = 0) {
+                          const ELogFieldSpec& fieldSpec, size_t length = 0) override {
         m_timeValue = logTime;
         m_fieldType = ELogFieldType::FT_DATETIME;
     }
 
     /** @brief Receives a log level log record field. */
-    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel, const ELogFieldSpec& fieldSpec) {
+    void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
+                              const ELogFieldSpec& fieldSpec) override {
         m_logLevel = logLevel;
         m_fieldType = ELogFieldType::FT_LOG_LEVEL;
     }

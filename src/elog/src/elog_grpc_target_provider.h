@@ -20,7 +20,6 @@ public:
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration object.
-     * @param targetSpec The parsed configuration string.
      * @param server The raw server specification.
      * @param host The RPC server host name or address.
      * @param port The RPC server port.

@@ -72,7 +72,7 @@ class ELOG_API ELogFieldSelectorConstructor;
 /**
  * @brief Field selector constructor registration helper.
  * @param name The field selector identifier.
- * @param allocator The field selector constructor.
+ * @param constructor The field selector constructor.
  */
 extern ELOG_API void registerFieldSelectorConstructor(const char* name,
                                                       ELogFieldSelectorConstructor* constructor);
@@ -118,7 +118,8 @@ private:
 /** @def Utility macro for declaring field selector factory method registration. */
 #define ELOG_DECLARE_FIELD_SELECTOR(FieldSelectorType, Name)                                       \
 private:                                                                                           \
-    class ELOG_API FieldSelectorType##Constructor : public elog::ELogFieldSelectorConstructor {    \
+    class ELOG_API FieldSelectorType##Constructor final                                            \
+        : public elog::ELogFieldSelectorConstructor {                                              \
     public:                                                                                        \
         FieldSelectorType##Constructor() : elog::ELogFieldSelectorConstructor(#Name) {}            \
         elog::ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec) final {    \
@@ -142,7 +143,7 @@ public:                                                                         
  * @brief Static text field selector, used for placing the strings between the fields in the log
  * format line specification string.
  */
-class ELOG_API ELogStaticTextSelector : public ELogFieldSelector {
+class ELOG_API ELogStaticTextSelector final : public ELogFieldSelector {
 public:
     ELogStaticTextSelector(const char* text = "")
         : ELogFieldSelector(ELogFieldType::FT_TEXT), m_text(text) {}
@@ -160,10 +161,10 @@ private:
 
     // we allow having ${text} as a keyword with no text context, solely for the purpose of allowing
     // specify text font/color specification
-    ELOG_DECLARE_FIELD_SELECTOR(ELogStaticTextSelector, text);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogStaticTextSelector, text)
 };
 
-class ELOG_API ELogRecordIdSelector : public ELogFieldSelector {
+class ELOG_API ELogRecordIdSelector final : public ELogFieldSelector {
 public:
     ELogRecordIdSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_INT, fieldSpec) {}
@@ -175,10 +176,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogRecordIdSelector, rid);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogRecordIdSelector, rid)
 };
 
-class ELOG_API ELogTimeSelector : public ELogFieldSelector {
+class ELOG_API ELogTimeSelector final : public ELogFieldSelector {
 public:
     ELogTimeSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_DATETIME, fieldSpec) {}
@@ -190,10 +191,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeSelector, time);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeSelector, time)
 };
 
-class ELOG_API ELogTimeEpochSelector : public ELogFieldSelector {
+class ELOG_API ELogTimeEpochSelector final : public ELogFieldSelector {
 public:
     ELogTimeEpochSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_INT, fieldSpec) {}
@@ -205,10 +206,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeEpochSelector, time_epoch);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeEpochSelector, time_epoch)
 };
 
-class ELOG_API ELogHostNameSelector : public ELogFieldSelector {
+class ELOG_API ELogHostNameSelector final : public ELogFieldSelector {
 public:
     ELogHostNameSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -220,10 +221,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogHostNameSelector, host);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogHostNameSelector, host)
 };
 
-class ELOG_API ELogUserNameSelector : public ELogFieldSelector {
+class ELOG_API ELogUserNameSelector final : public ELogFieldSelector {
 public:
     ELogUserNameSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -235,10 +236,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogUserNameSelector, user);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogUserNameSelector, user)
 };
 
-class ELOG_API ELogOsNameSelector : public ELogFieldSelector {
+class ELOG_API ELogOsNameSelector final : public ELogFieldSelector {
 public:
     ELogOsNameSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -250,10 +251,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogOsNameSelector, os_name);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogOsNameSelector, os_name)
 };
 
-class ELOG_API ELogOsVersionSelector : public ELogFieldSelector {
+class ELOG_API ELogOsVersionSelector final : public ELogFieldSelector {
 public:
     ELogOsVersionSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -265,10 +266,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogOsVersionSelector, os_ver);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogOsVersionSelector, os_ver)
 };
 
-class ELOG_API ELogAppNameSelector : public ELogFieldSelector {
+class ELOG_API ELogAppNameSelector final : public ELogFieldSelector {
 public:
     ELogAppNameSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -280,10 +281,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogAppNameSelector, app);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogAppNameSelector, app)
 };
 
-class ELOG_API ELogProgramNameSelector : public ELogFieldSelector {
+class ELOG_API ELogProgramNameSelector final : public ELogFieldSelector {
 public:
     ELogProgramNameSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -295,10 +296,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogProgramNameSelector, prog);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogProgramNameSelector, prog)
 };
 
-class ELOG_API ELogProcessIdSelector : public ELogFieldSelector {
+class ELOG_API ELogProcessIdSelector final : public ELogFieldSelector {
 public:
     ELogProcessIdSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_INT, fieldSpec) {}
@@ -310,10 +311,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogProcessIdSelector, pid);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogProcessIdSelector, pid)
 };
 
-class ELOG_API ELogThreadIdSelector : public ELogFieldSelector {
+class ELOG_API ELogThreadIdSelector final : public ELogFieldSelector {
 public:
     ELogThreadIdSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_INT, fieldSpec) {}
@@ -325,10 +326,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadIdSelector, tid);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadIdSelector, tid)
 };
 
-class ELOG_API ELogThreadNameSelector : public ELogFieldSelector {
+class ELOG_API ELogThreadNameSelector final : public ELogFieldSelector {
 public:
     ELogThreadNameSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -340,10 +341,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadNameSelector, tname);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadNameSelector, tname)
 };
 
-class ELOG_API ELogSourceSelector : public ELogFieldSelector {
+class ELOG_API ELogSourceSelector final : public ELogFieldSelector {
 public:
     ELogSourceSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -355,10 +356,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogSourceSelector, src);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogSourceSelector, src)
 };
 
-class ELOG_API ELogModuleSelector : public ELogFieldSelector {
+class ELOG_API ELogModuleSelector final : public ELogFieldSelector {
 public:
     ELogModuleSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -370,10 +371,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogModuleSelector, mod);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogModuleSelector, mod)
 };
 
-class ELOG_API ELogFileSelector : public ELogFieldSelector {
+class ELOG_API ELogFileSelector final : public ELogFieldSelector {
 public:
     ELogFileSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -385,10 +386,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogFileSelector, file);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFileSelector, file)
 };
 
-class ELOG_API ELogLineSelector : public ELogFieldSelector {
+class ELOG_API ELogLineSelector final : public ELogFieldSelector {
 public:
     ELogLineSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_INT, fieldSpec) {}
@@ -400,10 +401,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogLineSelector, line);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogLineSelector, line)
 };
 
-class ELOG_API ELogFunctionSelector : public ELogFieldSelector {
+class ELOG_API ELogFunctionSelector final : public ELogFieldSelector {
 public:
     ELogFunctionSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -415,10 +416,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogFunctionSelector, func);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFunctionSelector, func)
 };
 
-class ELOG_API ELogLevelSelector : public ELogFieldSelector {
+class ELOG_API ELogLevelSelector final : public ELogFieldSelector {
 public:
     ELogLevelSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_LOG_LEVEL, fieldSpec) {}
@@ -430,10 +431,10 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogLevelSelector, level);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogLevelSelector, level)
 };
 
-class ELOG_API ELogMsgSelector : public ELogFieldSelector {
+class ELOG_API ELogMsgSelector final : public ELogFieldSelector {
 public:
     ELogMsgSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -445,7 +446,7 @@ public:
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogMsgSelector, msg);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogMsgSelector, msg)
 };
 
 /**
@@ -455,7 +456,7 @@ private:
  */
 
 /** @brief Format text field selector. */
-class ELOG_API ELogFormatSelector : public ELogFieldSelector {
+class ELOG_API ELogFormatSelector final : public ELogFieldSelector {
 public:
     ELogFormatSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
@@ -469,14 +470,14 @@ public:
 private:
     // we allow having ${fmt} as a keyword, solely for the purpose of allowing specify text
     // font/color specification
-    ELOG_DECLARE_FIELD_SELECTOR(ELogFormatSelector, fmt);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFormatSelector, fmt)
 };
 
 /**
  * @brief Conditional field selector. Can be used for conditional formatting (i.e. no text emitted
  * except for formatting escape codes).
  */
-class ELOG_API ELogIfSelector : public ELogFieldSelector {
+class ELOG_API ELogIfSelector final : public ELogFieldSelector {
 public:
     ELogIfSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_FORMAT, fieldSpec),
@@ -505,11 +506,11 @@ private:
     ELogFieldSelector* m_trueSelector;
     ELogFieldSelector* m_falseSelector;
 
-    ELOG_DECLARE_FIELD_SELECTOR(ELogIfSelector, if);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogIfSelector, if)
 };
 
 /** @brief Switch-case field selector. Can be used also for conditional formatting. */
-class ELOG_API ELogSwitchSelector : public ELogFieldSelector {
+class ELOG_API ELogSwitchSelector final : public ELogFieldSelector {
 public:
     ELogSwitchSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_FORMAT, fieldSpec),
@@ -543,11 +544,11 @@ private:
     std::vector<std::pair<ELogFieldSelector*, ELogFieldSelector*>> m_cases;
     ELogFieldSelector* m_defaultFieldSelector;
 
-    ELOG_DECLARE_FIELD_SELECTOR(ELogSwitchSelector, switch);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogSwitchSelector, switch)
 };
 
 /** @brief Switch-case field selector. */
-class ELOG_API ELogExprSwitchSelector : public ELogFieldSelector {
+class ELOG_API ELogExprSwitchSelector final : public ELogFieldSelector {
 public:
     ELogExprSwitchSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_FORMAT, fieldSpec), m_defaultFieldSelector(nullptr) {}
@@ -575,12 +576,12 @@ private:
 
     // turn off clang formatting due to "expr-switch" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogExprSwitchSelector, expr-switch);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogExprSwitchSelector, expr-switch)
     // clang-format on
 };
 
 /** @brief Constant string field selector. */
-class ELOG_API ELogConstStringSelector : public ELogFieldSelector {
+class ELOG_API ELogConstStringSelector final : public ELogFieldSelector {
 public:
     ELogConstStringSelector(const char* value)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, ELogFieldSpec("const-string")),
@@ -599,12 +600,12 @@ private:
 
     // turn off clang formatting due to "const-string" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstStringSelector, const-string);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstStringSelector, const-string)
     // clang-format on
 };
 
 /** @brief Constant integer field selector. */
-class ELOG_API ELogConstIntSelector : public ELogFieldSelector {
+class ELOG_API ELogConstIntSelector final : public ELogFieldSelector {
 public:
     ELogConstIntSelector(uint64_t value)
         : ELogFieldSelector(ELogFieldType::FT_INT, ELogFieldSpec("const-int")), m_constInt(value) {}
@@ -622,12 +623,12 @@ private:
 
     // turn off clang formatting due to "const-int" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstIntSelector, const-int);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstIntSelector, const-int)
     // clang-format on
 };
 
 /** @brief Constant time field selector. */
-class ELOG_API ELogConstTimeSelector : public ELogFieldSelector {
+class ELOG_API ELogConstTimeSelector final : public ELogFieldSelector {
 public:
     ELogConstTimeSelector(const ELogTime& value, const char* timeStr)
         : ELogFieldSelector(ELogFieldType::FT_DATETIME, ELogFieldSpec("const-time")),
@@ -648,12 +649,12 @@ private:
 
     // turn off clang formatting due to "const-time" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstTimeSelector, const-time);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstTimeSelector, const-time)
     // clang-format on
 };
 
 /** @brief Constant log-level field selector. */
-class ELOG_API ELogConstLogLevelSelector : public ELogFieldSelector {
+class ELOG_API ELogConstLogLevelSelector final : public ELogFieldSelector {
 public:
     ELogConstLogLevelSelector(const ELogLevel value)
         : ELogFieldSelector(ELogFieldType::FT_LOG_LEVEL, ELogFieldSpec("const-level")),
@@ -672,7 +673,7 @@ private:
 
     // turn off clang formatting due to "const-level" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstLogLevelSelector, const-level);
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstLogLevelSelector, const-level)
     // clang-format on
 };
 

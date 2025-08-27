@@ -9,6 +9,12 @@ namespace elog {
 // the following implementation is based on ideas from here:
 // https://preshing.com/20130605/the-worlds-simplest-lock-free-hash-table/
 
+// disable important but annoying warnings on clang
+#ifdef ELOG_CLANG
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
+
 template <typename ValueType>
 class ELogConcurrentHashTable {
 public:
@@ -202,6 +208,10 @@ private:
         return h;
     }
 };
+
+#ifdef ELOG_CLANG
+#pragma clang diagnostic pop
+#endif
 
 }  // namespace elog
 

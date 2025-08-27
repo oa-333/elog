@@ -28,9 +28,8 @@ ELogQuantumTarget::ELogQuantumTarget(
       m_ringBufferSize(bufferSize),
       m_collectPeriodMicros(collectPeriodMicros),
       m_writePos(0),
-      m_readPos(0),
-      // m_congestionPolicy(congestionPolicy),
-      m_stop(false) {}
+      m_readPos(0) {}
+// m_congestionPolicy(congestionPolicy)
 
 bool ELogQuantumTarget::startLogTarget() {
     if (m_ringBuffer == nullptr) {
@@ -107,7 +106,7 @@ uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
 
     recordData.m_entryState.store(ES_WRITING, std::memory_order_seq_cst);
     // recordData.m_logRecord = logRecord;
-    memcpy(&recordData.m_logRecord, &logRecord, sizeof(ELogRecord));
+    memcpy((void*)&recordData.m_logRecord, &logRecord, sizeof(ELogRecord));
     recordData.m_logBuffer->assign(logRecord.m_logMsg, logRecord.m_logMsgLen);
     recordData.m_logRecord.m_logMsg = recordData.m_logBuffer->getRef();
     recordData.m_entryState.store(ES_READY, std::memory_order_release);

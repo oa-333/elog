@@ -20,10 +20,7 @@ public:
                        uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
         : ELogDbTarget("SQLite", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_QMARK,
                        threadModel, maxThreads, reconnectTimeoutMillis),
-          m_filePath(filePath),
-          m_insertStmtText(insertStmt),
-          m_connection(nullptr),
-          m_insertStmt(nullptr) {}
+          m_filePath(filePath) {}
 
     ELogSQLiteDbTarget(const ELogSQLiteDbTarget&) = delete;
     ELogSQLiteDbTarget(ELogSQLiteDbTarget&&) = delete;
@@ -47,10 +44,6 @@ protected:
 
 private:
     std::string m_filePath;
-    std::string m_insertStmtText;
-
-    sqlite3* m_connection;
-    sqlite3_stmt* m_insertStmt;
 
     struct SQLiteDbData {
         sqlite3* m_connection;

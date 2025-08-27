@@ -35,8 +35,9 @@ struct ELOG_API ELogBufferedStats : public ELogStats {
     inline void addBufferBytesCount(uint64_t bytes) { m_bufferByteCount.add(getSlotId(), bytes); }
 
     /**
-     * @brief Prints statistics to log.
-     * @param logLevel Print log level.
+     * @brief Prints log target statistics into a string buffer, adding the log buffer statistics.
+     * @param buffer The output string buffer.
+     * @param logTarget The log target whose statistics are to be printed.
      * @param msg Any title message that would precede the report.
      */
     void toString(ELogBuffer& buffer, ELogTarget* logTarget, const char* msg = "") override;

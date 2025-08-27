@@ -119,7 +119,6 @@ private:
     // insert statement parsing members
     ELogDbFormatter m_formatter;
     std::string m_rawInsertStatement;
-    bool m_insertStatementParsed;
     std::vector<ELogDbFormatter::ParamType> m_paramTypes;
 
     ThreadModel m_threadModel;

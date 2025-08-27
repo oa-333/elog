@@ -10,7 +10,7 @@
 
 namespace elog {
 
-/** @brief Abstract parent class for MON log targets. */
+/** @brief Abstract parent class for monitoring tool log targets. */
 class ELOG_API ELogMonTarget : public ELogTarget {
 protected:
     ELogMonTarget() : ELogTarget("mon") {}

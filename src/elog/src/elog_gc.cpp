@@ -176,7 +176,7 @@ void ELogGC::recycleRetiredObjects() {
         // we use countr_zero to find out first non-zero bit and then reset it and find the next
         uint64_t word = m_activeLists[wordIndex].m_atomicValue.load(std::memory_order_relaxed);
         while (word != 0) {
-            int bitOffset = std::countr_zero(word);
+            uint64_t bitOffset = (uint64_t)std::countr_zero(word);
             uint64_t listIndex = wordIndex * ELOG_WORD_SIZE + bitOffset;
             if (listIndex >= listCount) {
                 // be careful with last word not to exceed list count

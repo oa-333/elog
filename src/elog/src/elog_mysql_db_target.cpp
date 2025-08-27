@@ -16,7 +16,7 @@ public:
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
-                            size_t length) {
+                            size_t length) final {
         m_stmt->setString(m_fieldNum++, field);
     }
 

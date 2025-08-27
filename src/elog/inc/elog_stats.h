@@ -132,8 +132,9 @@ struct ELOG_API ELogStats {
     inline void incrementFlushDiscarded(uint64_t slotId) { m_flushDiscarded.add(slotId, 1); }
 
     /**
-     * @brief Prints statistics to log.
-     * @param logLevel Print log level.
+     * @brief Prints statistics to an output string buffer.
+     * @param buffer The output string buffer.
+     * @param logTarget The log target whose statistics are to be printed.
      * @param msg Any title message that would precede the report.
      * @note If overriding, first call perent class @ref toString(), then print your own stats.
      */

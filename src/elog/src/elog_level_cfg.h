@@ -15,6 +15,26 @@ class ELOG_API ELogSource;
 
 /** @brief Log level configuration used for delayed log level propagation. */
 struct ELogLevelCfg {
+#ifdef ELOG_USING_DBG_UTIL
+    ELogLevelCfg(ELogSource* logSource = nullptr, ELogLevel logLevel = ELEVEL_INFO,
+                 ELogPropagateMode propagateMode = ELogPropagateMode::PM_NONE,
+                 size_t dbgUtilLoggerId = 0,
+                 dbgutil::LogSeverity severity = dbgutil::LogSeverity::LS_INFO)
+        : m_logSource(logSource),
+          m_logLevel(logLevel),
+          m_propagationMode(propagateMode),
+          m_dbgUtilLoggerId(dbgUtilLoggerId),
+          m_severity(severity) {}
+#else
+    ELogLevelCfg(ELogSource* logSource = nullptr, ELogLevel logLevel = ELEVEL_INFO,
+                 ELogPropagateMode propagateMode = ELogPropagateMode::PM_NONE)
+        : m_logSource(logSource), m_logLevel(logLevel), m_propagationMode(propagateMode) {}
+#endif
+    ELogLevelCfg(const ELogLevelCfg&) = default;
+    ELogLevelCfg(ELogLevelCfg&&) = default;
+    ELogLevelCfg& operator=(const ELogLevelCfg&) = default;
+    ~ELogLevelCfg() {}
+
     /** @var The configures log source. */
     ELogSource* m_logSource;
 

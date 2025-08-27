@@ -15,7 +15,7 @@ static const uint32_t ELOG_DEFAULT_KAFKA_FLUSH_TIMEOUT_MILLIS = 100;
 
 class ELogKafkaMsgQFieldReceptor : public ELogFieldReceptor {
 public:
-    ELogKafkaMsgQFieldReceptor() : m_headers(nullptr) {}
+    ELogKafkaMsgQFieldReceptor() {}
     ELogKafkaMsgQFieldReceptor(const ELogKafkaMsgQFieldReceptor&) = delete;
     ELogKafkaMsgQFieldReceptor(ELogKafkaMsgQFieldReceptor&&) = delete;
     ELogKafkaMsgQFieldReceptor& operator=(const ELogKafkaMsgQFieldReceptor&) = delete;
@@ -23,7 +23,7 @@ public:
 
     /** @brief Receives a string log record field. */
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
-                            size_t length) {
+                            size_t length) final {
         m_headerValues.push_back(field);
     }
 
@@ -71,7 +71,6 @@ public:
 
 private:
     std::vector<std::string> m_headerValues;
-    rd_kafka_headers_t* m_headers;
 };
 
 bool ELogKafkaMsgQTarget::startLogTarget() {
@@ -216,7 +215,7 @@ uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
         }
     } else {
         if (rd_kafka_produce(m_topic, partition, RD_KAFKA_MSG_F_COPY, (void*)logMsg.c_str(),
-                             logMsg.length(), nullptr, 0, NULL) == -1) {
+                             logMsg.length(), nullptr, 0, nullptr) == -1) {
             const char* errMsg = rd_kafka_err2name(rd_kafka_last_error());
             ELOG_REPORT_ERROR("Failed to produce message on kafka topic %s: %s",
                               m_topicName.c_str(), errMsg);

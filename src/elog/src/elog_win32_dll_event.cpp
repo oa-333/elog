@@ -5,11 +5,13 @@
 // on MinGW we need to include windows header
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #endif
 
 #include <algorithm>
 #include <vector>
+
+#include "elog_report.h"
 
 namespace elog {
 typedef std::vector<ELogWin32DllListener*> ListenerList;
@@ -91,38 +93,53 @@ static void notifyProcessDetach() {
     }
 }
 
-}  // namespace elog
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL,  // handle to DLL module
-                    DWORD fdwReason,     // reason for calling function
-                    LPVOID lpvReserved)  // reserved
+static void handleWin32DllNotification(HINSTANCE hinstDLL,  // handle to DLL module
+                                       DWORD fdwReason,     // reason for calling function
+                                       LPVOID lpvReserved)  // reserved
 {
     // Perform actions based on the reason for calling.
     switch (fdwReason) {
         case DLL_PROCESS_ATTACH:
             // Initialize once for each new process.
             // Return FALSE to fail DLL load.
+            ELOG_REPORT_TRACE("DLL at 0x%p loaded", (void*)hinstDLL);
             break;
 
         case DLL_THREAD_ATTACH:
+            ELOG_REPORT_TRACE("Thread starting");
             elog::notifyThreadAttach();
             break;
 
         case DLL_THREAD_DETACH:
+            ELOG_REPORT_TRACE("Thread terminating");
             elog::notifyThreadDetach();
             break;
 
         case DLL_PROCESS_DETACH:
-
             if (lpvReserved != nullptr) {
+                ELOG_REPORT_TRACE("Process is shutting down");
                 break;  // do not do cleanup if process termination scenario
             }
 
             // Perform any necessary cleanup.
+            ELOG_REPORT_TRACE("DLL at 0x%p unloading", (void*)hinstDLL);
             elog::notifyProcessDetach();
             break;
+
+        default:
+            ELOG_REPORT_WARN("Invalid Win32 DLL notification code: %lu", fdwReason);
+            break;
     }
-    return TRUE;  // Successful DLL_PROCESS_ATTACH.
+}
+
+}  // namespace elog
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL,  // handle to DLL module
+                    DWORD fdwReason,     // reason for calling function
+                    LPVOID lpvReserved)  // reserved
+{
+    elog::handleWin32DllNotification(hinstDLL, fdwReason, lpvReserved);
+    return TRUE;  // designates successful DLL_PROCESS_ATTACH.
 }
 
 #endif

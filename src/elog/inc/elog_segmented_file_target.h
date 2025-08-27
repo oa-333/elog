@@ -138,8 +138,9 @@ private:
         }
 
         /**
-         * @brief Prints statistics to string.
-         * @param logLevel Print log level.
+         * @brief Prints statistics to an output string buffer.
+         * @param buffer The output string buffer.
+         * @param logTarget The log target whose statistics are to be printed.
          * @param msg Any title message that would precede the report.
          */
         void toString(ELogBuffer& buffer, ELogTarget* logTarget, const char* msg = "") override;

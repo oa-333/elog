@@ -104,8 +104,10 @@ bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {
         // something went bad, we have a negative timestamp, so we let the record be logged
         return true;
     }
+    uint64_t tstamp = (uint64_t)currTstamp.count();
+
     // we are not expecting negative value here
-    uint64_t wholeInterval = (uint64_t)(currTstamp.count() / m_intervalMillis);
+    uint64_t wholeInterval = tstamp / m_intervalMillis;
     uint64_t currInterval = m_currInterval.load(std::memory_order_acquire);
     if (currInterval == wholeInterval) {
         // compute sliding window rate
@@ -115,8 +117,8 @@ bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {
         // part covering the previous interval. no interpolation is required for current interval
         // message count, since it is being currently counted
         // NOTE: carefully compute, first multiply, then divide, otherwise value is truncated
-        uint64_t count = prevCount * (m_intervalMillis - (currTstamp.count() % m_intervalMillis)) /
-                         m_intervalMillis;
+        uint64_t count =
+            prevCount * (m_intervalMillis - (tstamp % m_intervalMillis)) / m_intervalMillis;
         count += currCount;
         if (count < m_maxMsg) {
             // NOTE: there might be a small breach here (due to possible sudden thundering herd),

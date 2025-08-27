@@ -13,7 +13,7 @@
 
 #ifdef ELOG_MINGW
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #endif
 
 namespace elog {
@@ -188,8 +188,8 @@ char* ELogReport::win32SysErrorToStr(unsigned long sysErrorCode) {
     LPSTR messageBuffer = nullptr;
     FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, sysErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0,
-        NULL);
+        nullptr, sysErrorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0,
+        nullptr);
     return messageBuffer;
 }
 

@@ -228,7 +228,7 @@ bool ELogConfigMapNode::getStringValue(const char* key, bool& found, std::string
             key, configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
         return false;
     }
-    value = ((ELogConfigStringValue*)cfgValue)->getStringValue();
+    value = ((const ELogConfigStringValue*)cfgValue)->getStringValue();
     return true;
 }
 
@@ -246,7 +246,7 @@ bool ELogConfigMapNode::getIntValue(const char* key, bool& found, int64_t& value
             key, configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
         return false;
     }
-    value = ((ELogConfigIntValue*)cfgValue)->getIntValue();
+    value = ((const ELogConfigIntValue*)cfgValue)->getIntValue();
     return true;
 }
 
@@ -264,7 +264,7 @@ bool ELogConfigMapNode::getBoolValue(const char* key, bool& found, bool& value) 
             key, configValueTypeToString(cfgValue->getValueType()), cfgValue->getFullContext());
         return false;
     }
-    value = ((ELogConfigBoolValue*)cfgValue)->getBoolValue();
+    value = ((const ELogConfigBoolValue*)cfgValue)->getBoolValue();
     return true;
 }
 
@@ -501,7 +501,7 @@ ELogConfig* ELogConfig::load(const char* str, ELogConfigSourceContext* sourceCon
     return cfg;
 }
 
-ELogConfigValue* parseSimpleValue(const std::string& token, ELogConfigContext* context) {
+static ELogConfigValue* parseSimpleValue(const std::string& token, ELogConfigContext* context) {
     ELogConfigValue* res = nullptr;
     // first take care of case of explicit quotes (string type)
     if (token.front() == '"') {
@@ -728,7 +728,7 @@ ELogConfigNode* parseConfigNode(ELogStringTokenizer& tok, ELogConfigSourceContex
                 if (!tok.parseExpectedToken(ELogTokenType::TT_COLON_SIGN, token, "':'")) {
                     break;
                 }
-            } else if ((configMode == ELogConfigMode::CM_ANY) &&
+            } else if ((configMode == ELogConfigMode::CM_ANY) ||
                        (configMode == ELogConfigMode::CM_CONSISTENT)) {
                 if (!tok.parseExpectedToken2(ELogTokenType::TT_EQUAL_SIGN,
                                              ELogTokenType::TT_COLON_SIGN, tokenType, token,

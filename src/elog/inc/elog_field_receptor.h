@@ -5,10 +5,6 @@
 #include <string>
 
 #include "elog_def.h"
-#ifndef ELOG_MSVC
-#include <sys/time.h>
-#endif
-
 #include "elog_field_spec.h"
 #include "elog_level.h"
 #include "elog_record.h"

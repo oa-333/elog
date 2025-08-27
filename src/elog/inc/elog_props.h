@@ -46,7 +46,7 @@ struct ELOG_API ELogPropertyPos {
 };
 
 /** @struct A property value with source text position. */
-struct ELOG_API ELogStringPropertyPos : public ELogPropertyPos {
+struct ELOG_API ELogStringPropertyPos final : public ELogPropertyPos {
     std::string m_value;
 
     ELogStringPropertyPos(const char* value = "", size_t keyPos = 0, size_t valuePos = 0)
@@ -58,7 +58,7 @@ struct ELOG_API ELogStringPropertyPos : public ELogPropertyPos {
 };
 
 /** @struct A property value with source text position. */
-struct ELOG_API ELogIntPropertyPos : public ELogPropertyPos {
+struct ELOG_API ELogIntPropertyPos final : public ELogPropertyPos {
     int64_t m_value;
 
     ELogIntPropertyPos(int64_t value = 0, size_t keyPos = 0, size_t valuePos = 0)
@@ -70,7 +70,7 @@ struct ELOG_API ELogIntPropertyPos : public ELogPropertyPos {
 };
 
 /** @struct A property value with source text position. */
-struct ELOG_API ELogBoolPropertyPos : public ELogPropertyPos {
+struct ELOG_API ELogBoolPropertyPos final : public ELogPropertyPos {
     bool m_value;
 
     ELogBoolPropertyPos(bool value = false, size_t keyPos = 0, size_t valuePos = 0)

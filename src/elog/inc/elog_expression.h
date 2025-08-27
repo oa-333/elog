@@ -93,7 +93,7 @@ struct ELOG_API ELogCompositeExpression : public ELogExpression {
     }
 };
 
-struct ELOG_API ELogAndExpression : public ELogCompositeExpression {
+struct ELOG_API ELogAndExpression final : public ELogCompositeExpression {
     ELogAndExpression() : ELogCompositeExpression(ELogExpressionType::ET_AND_EXPR) {}
     ELogAndExpression(const ELogAndExpression&) = delete;
     ELogAndExpression(ELogAndExpression&&) = delete;
@@ -101,7 +101,7 @@ struct ELOG_API ELogAndExpression : public ELogCompositeExpression {
     ~ELogAndExpression() final {}
 };
 
-struct ELOG_API ELogOrExpression : public ELogCompositeExpression {
+struct ELOG_API ELogOrExpression final : public ELogCompositeExpression {
     ELogOrExpression() : ELogCompositeExpression(ELogExpressionType::ET_OR_EXPR) {}
     ELogOrExpression(const ELogOrExpression&) = delete;
     ELogOrExpression(ELogOrExpression&&) = delete;
@@ -109,7 +109,7 @@ struct ELOG_API ELogOrExpression : public ELogCompositeExpression {
     ~ELogOrExpression() final {}
 };
 
-struct ELOG_API ELogChainExpression : public ELogCompositeExpression {
+struct ELOG_API ELogChainExpression final : public ELogCompositeExpression {
     ELogChainExpression() : ELogCompositeExpression(ELogExpressionType::ET_CHAIN_EXPR) {}
     ELogChainExpression(const ELogChainExpression&) = delete;
     ELogChainExpression(ELogChainExpression&&) = delete;
@@ -117,7 +117,7 @@ struct ELOG_API ELogChainExpression : public ELogCompositeExpression {
     ~ELogChainExpression() final {}
 };
 
-struct ELOG_API ELogFunctionExpression : public ELogCompositeExpression {
+struct ELOG_API ELogFunctionExpression final : public ELogCompositeExpression {
     std::string m_functionName;
     ELogFunctionExpression(const char* functionName)
         : ELogCompositeExpression(ELogExpressionType::ET_FUNC_EXPR), m_functionName(functionName) {}
@@ -127,7 +127,7 @@ struct ELOG_API ELogFunctionExpression : public ELogCompositeExpression {
     ~ELogFunctionExpression() final {}
 };
 
-struct ELOG_API ELogNotExpression : public ELogExpression {
+struct ELOG_API ELogNotExpression final : public ELogExpression {
     ELogExpression* m_expression;
     ELogNotExpression(ELogExpression* expr = nullptr)
         : ELogExpression(ELogExpressionType::ET_NOT_EXPR), m_expression(expr) {}
@@ -142,7 +142,7 @@ struct ELOG_API ELogNotExpression : public ELogExpression {
     }
 };
 
-struct ELOG_API ELogOpExpression : public ELogExpression {
+struct ELOG_API ELogOpExpression final : public ELogExpression {
     std::string m_lhs;
     std::string m_rhs;
     std::string m_op;
@@ -159,7 +159,7 @@ struct ELOG_API ELogOpExpression : public ELogExpression {
  * @brief A primitive expression having only a name and no operator/operands (e.g. 'immediate'
  * flush policy).
  */
-struct ELOG_API ELogNameExpression : public ELogExpression {
+struct ELOG_API ELogNameExpression final : public ELogExpression {
     std::string m_name;
 
     ELogNameExpression(const char* name = "")

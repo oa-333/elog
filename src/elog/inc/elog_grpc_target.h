@@ -180,7 +180,7 @@ public:
     ELogGRPCBaseReactor(const ELogGRPCBaseReactor&) = delete;
     ELogGRPCBaseReactor(ELogGRPCBaseReactor&&) = delete;
     ELogGRPCBaseReactor& operator=(const ELogGRPCBaseReactor&) = delete;
-    ~ELogGRPCBaseReactor() {
+    ~ELogGRPCBaseReactor() override {
         if (m_inFlightRequests != nullptr) {
             delete[] m_inFlightRequests;
             m_inFlightRequests = nullptr;
@@ -269,10 +269,10 @@ private:
 
 typedef ELogGRPCBaseReactor<> ELogGRPCReactor;
 
-template <typename ServiceType = elog_grpc::ELogService, typename StubType = ServiceType::Stub,
-          typename MessageType = elog_grpc::ELogRecordMsg,
-          typename ResponseType = elog_grpc::ELogStatusMsg,
-          typename ReceptorType = ELogGRPCReceptor>
+template <
+    typename ServiceType = elog_grpc::ELogService, typename StubType = typename ServiceType::Stub,
+    typename MessageType = elog_grpc::ELogRecordMsg,
+    typename ResponseType = elog_grpc::ELogStatusMsg, typename ReceptorType = ELogGRPCReceptor>
 class ELogGRPCBaseTarget : public ELogRpcTarget {
 public:
     ELogGRPCBaseTarget(ELogReportHandler* reportHandler, const std::string& server,
@@ -344,7 +344,7 @@ private:
 
     // helper method to set single RPC call deadline
     inline void setDeadline(grpc::ClientContext& context) {
-        std::chrono::time_point deadlineMillis =
+        std::chrono::time_point<std::chrono::system_clock> deadlineMillis =
             std::chrono::system_clock::now() + std::chrono::milliseconds(m_deadlineTimeoutMillis);
         context.set_deadline(deadlineMillis);
     }
@@ -368,6 +368,9 @@ typedef ELogGRPCBaseTarget<> ELogGRPCTarget;
 class ELOG_API ELogGRPCBaseTargetConstructor {
 public:
     virtual ~ELogGRPCBaseTargetConstructor() {}
+    ELogGRPCBaseTargetConstructor(const ELogGRPCBaseTargetConstructor&) = delete;
+    ELogGRPCBaseTargetConstructor(ELogGRPCBaseTargetConstructor&&) = delete;
+    ELogGRPCBaseTargetConstructor& operator=(const ELogGRPCBaseTargetConstructor&) = delete;
 
     virtual ELogRpcTarget* createLogTarget(ELogReportHandler* reportHandler,
                                            const std::string& server, const std::string& params,
@@ -395,6 +398,9 @@ template <typename ServiceType, typename StubType, typename MessageType, typenam
 class ELogGRPCTargetConstructor : public ELogGRPCBaseTargetConstructor {
 public:
     ELogGRPCTargetConstructor() {}
+    ELogGRPCTargetConstructor(const ELogGRPCTargetConstructor&) = delete;
+    ELogGRPCTargetConstructor(ELogGRPCTargetConstructor&&) = delete;
+    ELogGRPCTargetConstructor& operator=(const ELogGRPCTargetConstructor&) = delete;
     ~ELogGRPCTargetConstructor() final {}
 
     ELogRpcTarget* createLogTarget(ELogReportHandler* reportHandler, const std::string& server,
@@ -416,6 +422,11 @@ public:
     ELogGRPCTargetConstructorRegisterHelper(const char* name) {
         registerGRPCTargetConstructor(name, &m_constructor);
     }
+    ELogGRPCTargetConstructorRegisterHelper(const ELogGRPCTargetConstructorRegisterHelper&) =
+        delete;
+    ELogGRPCTargetConstructorRegisterHelper(ELogGRPCTargetConstructorRegisterHelper&&) = delete;
+    ELogGRPCTargetConstructorRegisterHelper& operator=(
+        const ELogGRPCTargetConstructorRegisterHelper&) = delete;
     ~ELogGRPCTargetConstructorRegisterHelper() {}
 
 private:

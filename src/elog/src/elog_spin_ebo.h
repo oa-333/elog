@@ -60,7 +60,6 @@ private:
     inline void spin() {
         for (uint64_t i = 0; i < m_spinCount; ++i) {
             CPU_RELAX;
-            ++i;
         }
         if (m_spinCount < m_maxSpinCount) {
             m_spinCount *= m_spinFactor;
