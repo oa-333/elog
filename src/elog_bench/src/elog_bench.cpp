@@ -66,6 +66,17 @@ inline uint32_t getCurrentThreadId() {
 #endif  // ELOG_WINDOWS
 }
 
+inline void pinThread(uint32_t coreId) {
+#ifdef ELOG_WINDOWS
+    // SetThreadAffinityMask(GetCurrentThread(), (DWORD_PTR)(1ull << coreId));
+#else
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(coreId, &cpuset);
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
+}
+
 // TODO: consider fixing measuring method as follows:
 // single thread:
 // run loop indefinitely, then:
@@ -1179,6 +1190,8 @@ static void testReloadConfig() {
 
 int main(int argc, char* argv[]) {
     // print some messages before elog starts
+    pinThread(16);
+    setlocale(LC_NUMERIC, "");
     ELOG_INFO("Accumulated message 1");
     ELOG_ERROR("Accumulated message 2");
     if (!parseArgs(argc, argv)) {
@@ -2230,6 +2243,19 @@ int testEventLog() {
 #endif
 }
 
+#ifdef ELOG_MSVC
+inline std::string win32FormatNumber(double number, unsigned precision = 3) {
+    char fmtStr[32];
+    snprintf(fmtStr, 32, "%%.%uf", precision);
+    char numStr[32] = {};
+    snprintf(numStr, 32, fmtStr, number);
+    char buf[32] = {};
+    NUMBERFMTA nf = {2, 0, 3, (LPSTR) ".", (LPSTR) ",", 1};
+    GetNumberFormatA(LOCALE_NAME_USER_DEFAULT, 0, numStr, &nf, buf, 32);
+    return buf;
+}
+#endif
+
 void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
                            double& ioThroughput, StatData& msgPercentile,
                            uint32_t msgCount /* = ST_MSG_COUNT */, bool enableTrace /* = false */) {
@@ -2262,6 +2288,7 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     }
 
     uint64_t bytesStart = logTarget->getBytesWritten();
+    pinThread(0);
     auto start = std::chrono::high_resolution_clock::now();
     for (uint64_t i = 0; i < msgCount; ++i) {
 #ifdef MEASURE_PERCENTILE
@@ -2292,10 +2319,15 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     // fprintf(stderr, "IO Test time: %u usec\n", (unsigned)testTime.count());
 
     msgThroughput = msgCount / (double)testTime0.count() * 1000000.0f;
-    fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", msgThroughput);
-
     ioThroughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
-    fprintf(stderr, "Throughput: %0.3f KB/Sec\n\n", ioThroughput);
+#ifdef ELOG_MSVC
+    fprintf(stderr, "Throughput: %s MSg/Sec\n", win32FormatNumber(msgThroughput).c_str());
+    fprintf(stderr, "Throughput: %s KB/Sec\n\n", win32FormatNumber(ioThroughput).c_str());
+#else
+    fprintf(stderr, "Throughput: %'.3f MSg/Sec\n", msgThroughput);
+    fprintf(stderr, "Throughput: %'.3f KB/Sec\n\n", ioThroughput);
+#endif
+
 #ifdef MEASURE_PERCENTILE
     getSamplePercentiles(samples, msgPercentile);
 #endif
@@ -2593,6 +2625,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
                 std::string tname = std::string("worker-") + std::to_string(i);
                 elog::setCurrentThreadName(tname.c_str());
+                pinThread(i);
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_INFO_EX(logger, "Thread %u Test log %u", i, j);
@@ -2625,7 +2658,12 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         for (double val : resVec) {
             throughput += val;
         }
-        fprintf(stderr, "%u thread accumulated throughput: %0.2f\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread accumulated throughput: %s\n", threadCount,
+                win32FormatNumber(throughput, 2).c_str());
+#else
+        fprintf(stderr, "%u thread accumulated throughput: %'.2f\n", threadCount, throughput);
+#endif
         accumThroughput.push_back(throughput);
 
         std::chrono::microseconds testTime0 =
@@ -2635,10 +2673,20 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         throughput = threadCount * msgCount / (double)testTime0.count() * 1000000.0f;
         /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
-        fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s MSg/Sec\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f MSg/Sec\n", threadCount, throughput);
+#endif
         msgThroughput.push_back(throughput);
         throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
-        fprintf(stderr, "%u thread Throughput: %0.3f KB/Sec\n\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s KB/Sec\n\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f KB/Sec\n\n", threadCount, throughput);
+#endif
         byteThroughput.push_back(throughput);
     }
 
@@ -2711,6 +2759,7 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
                 std::string tname = std::string("worker-") + std::to_string(i);
                 elog::setCurrentThreadName(tname.c_str());
+                pinThread(i);
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_BIN_INFO_EX(logger, "Thread {} Test log {}", i, j);
@@ -2742,7 +2791,12 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
         for (double val : resVec) {
             throughput += val;
         }
-        fprintf(stderr, "%u thread accumulated throughput: %0.2f\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread accumulated throughput: %s\n", threadCount,
+                win32FormatNumber(throughput, 2).c_str());
+#else
+        fprintf(stderr, "%u thread accumulated throughput: %'.2f\n", threadCount, throughput);
+#endif
         accumThroughput.push_back(throughput);
 
         std::chrono::microseconds testTime0 =
@@ -2752,10 +2806,20 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
         throughput = threadCount * msgCount / (double)testTime0.count() * 1000000.0f;
         /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
-        fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s MSg/Sec\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f MSg/Sec\n", threadCount, throughput);
+#endif
         msgThroughput.push_back(throughput);
         throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
-        fprintf(stderr, "%u thread Throughput: %0.3f KB/Sec\n\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s KB/Sec\n\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f KB/Sec\n\n", threadCount, throughput);
+#endif
         byteThroughput.push_back(throughput);
     }
 
@@ -2827,6 +2891,7 @@ void runMultiThreadTestBinaryCached(const char* title, const char* fileName, con
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
                 std::string tname = std::string("worker-") + std::to_string(i);
                 elog::setCurrentThreadName(tname.c_str());
+                pinThread(i);
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_CACHE_INFO_EX(logger, "Thread {} Test log {}", i, j);
@@ -2857,7 +2922,12 @@ void runMultiThreadTestBinaryCached(const char* title, const char* fileName, con
         for (double val : resVec) {
             throughput += val;
         }
-        fprintf(stderr, "%u thread accumulated throughput: %0.2f\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread accumulated throughput: %s\n", threadCount,
+                win32FormatNumber(throughput, 2).c_str());
+#else
+        fprintf(stderr, "%u thread accumulated throughput: %'.2f\n", threadCount, throughput);
+#endif
         accumThroughput.push_back(throughput);
 
         std::chrono::microseconds testTime0 =
@@ -2867,10 +2937,20 @@ void runMultiThreadTestBinaryCached(const char* title, const char* fileName, con
         throughput = threadCount * msgCount / (double)testTime0.count() * 1000000.0f;
         /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
-        fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s MSg/Sec\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f MSg/Sec\n", threadCount, throughput);
+#endif
         msgThroughput.push_back(throughput);
         throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
-        fprintf(stderr, "%u thread Throughput: %0.3f KB/Sec\n\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s KB/Sec\n\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f KB/Sec\n\n", threadCount, throughput);
+#endif
         byteThroughput.push_back(throughput);
     }
 
@@ -2943,6 +3023,7 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
             threads.emplace_back(std::thread([i, msgId, &resVec, logger, msgCount]() {
                 std::string tname = std::string("worker-") + std::to_string(i);
                 elog::setCurrentThreadName(tname.c_str());
+                pinThread(i);
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_ID_INFO_EX(logger, msgId, i, j);
@@ -2974,7 +3055,12 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
         for (double val : resVec) {
             throughput += val;
         }
-        fprintf(stderr, "%u thread accumulated throughput: %0.2f\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread accumulated throughput: %s\n", threadCount,
+                win32FormatNumber(throughput, 2).c_str());
+#else
+        fprintf(stderr, "%u thread accumulated throughput: %'.2f\n", threadCount, throughput);
+#endif
         accumThroughput.push_back(throughput);
 
         std::chrono::microseconds testTime0 =
@@ -2984,10 +3070,20 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
         throughput = threadCount * msgCount / (double)testTime0.count() * 1000000.0f;
         /*fprintf(stderr, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
-        fprintf(stderr, "%u thread Throughput: %0.3f MSg/Sec\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s MSg/Sec\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f MSg/Sec\n", threadCount, throughput);
+#endif
         msgThroughput.push_back(throughput);
         throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
-        fprintf(stderr, "%u thread Throughput: %0.3f KB/Sec\n\n", threadCount, throughput);
+#ifdef ELOG_MSVC
+        fprintf(stderr, "%u thread Throughput: %s KB/Sec\n\n", threadCount,
+                win32FormatNumber(throughput).c_str());
+#else
+        fprintf(stderr, "%u thread Throughput: %'.3f KB/Sec\n\n", threadCount, throughput);
+#endif
         byteThroughput.push_back(throughput);
     }
 
