@@ -4,6 +4,7 @@
 
 #include "elog_config_loader.h"
 #include "elog_deferred_target_provider.h"
+#include "elog_multi_quantum_target_provider.h"
 #include "elog_quantum_target_provider.h"
 #include "elog_queued_target_provider.h"
 #include "elog_report.h"
@@ -42,6 +43,9 @@ bool ELogAsyncSchemaHandler::registerPredefinedProviders() {
         return false;
     }
     if (!initAsyncTargetProvider<ELogQuantumTargetProvider>(this, "quantum")) {
+        return false;
+    }
+    if (!initAsyncTargetProvider<ELogMultiQuantumTargetProvider>(this, "multi_quantum")) {
         return false;
     }
     return true;

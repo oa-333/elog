@@ -51,6 +51,7 @@ target_sources(
             elog_mon_target.h
             elog_msgq_schema_handler.h
             elog_msgq_target.h
+            elog_multi_quantum_target.h
             elog_msgq_target_provider.h
             elog_mysql_db_target.h
             elog_pgsql_db_target.h

@@ -206,10 +206,14 @@ static void testPerfRotatingFile();
 static void testPerfDeferredFile();
 static void testPerfQueuedFile();
 static void testPerfQuantumFile(bool privateLogger);
+static void testPerfMultiQuantumFile();
 #ifdef ELOG_ENABLE_FMT_LIB
 static void testPerfQuantumFileBinary();
 static void testPerfQuantumFileBinaryCached();
 static void testPerfQuantumFileBinaryPreCached();
+static void testPerfMultiQuantumFileBinary();
+static void testPerfMultiQuantumFileBinaryCached();
+static void testPerfMultiQuantumFileBinaryPreCached();
 #endif
 static void testPerfAllSingleThread();
 
@@ -595,10 +599,14 @@ static bool sTestPerfDeferredFile = false;
 static bool sTestPerfQueuedFile = false;
 static bool sTestPerfQuantumPrivateFile = false;
 static bool sTestPerfQuantumSharedFile = false;
+static bool sTestPerfMultiQuantumFile = false;
 #ifdef ELOG_ENABLE_FMT_LIB
 static bool sTestPerfQuantumBinaryFile = false;
 static bool sTestPerfQuantumBinaryCachedFile = false;
 static bool sTestPerfQuantumBinaryPreCachedFile = false;
+static bool sTestPerfMultiQuantumBinaryFile = false;
+static bool sTestPerfMultiQuantumBinaryCachedFile = false;
+static bool sTestPerfMultiQuantumBinaryPreCachedFile = false;
 #endif
 static bool sTestSingleThread = false;
 
@@ -675,6 +683,34 @@ static bool getPerfParam(const char* param) {
                 "Invalid option quantum-bin=pre-cache, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
         return false;
 #endif
+    } else if (strcmp(param, "multi-quantum") == 0) {
+        sTestPerfMultiQuantumFile = true;
+    } else if (strcmp(param, "multi-quantum-bin") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfMultiQuantumBinaryFile = true;
+#else
+        fprintf(stderr,
+                "Invalid option multi0quantum-bin, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
+    } else if (strcmp(param, "multi-quantum-bin-cache") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfMultiQuantumBinaryCachedFile = true;
+#else
+        fprintf(
+            stderr,
+            "Invalid option multi-quantum-bin-cache, must compile with ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
+    } else if (strcmp(param, "multi-quantum-bin-pre-cache") == 0) {
+#ifdef ELOG_ENABLE_FMT_LIB
+        sTestPerfMultiQuantumBinaryPreCachedFile = true;
+#else
+        fprintf(stderr,
+                "Invalid option multi-quantum-bin=pre-cache, must compile with "
+                "ELOG_ENABLE_FMT_LIB=ON\n");
+        return false;
+#endif
     } else if (strcmp(param, "multi-thread") == 0) {
         sTestPerfDeferredFile = true;
         sTestPerfQueuedFile = true;
@@ -685,6 +721,7 @@ static bool getPerfParam(const char* param) {
         sTestPerfQuantumBinaryCachedFile = true;
         sTestPerfQuantumBinaryPreCachedFile = true;
 #endif
+        sTestPerfMultiQuantumFile = true;
     } else if (strcmp(param, "single-thread") == 0) {
         sTestSingleThread = true;
 #ifdef ELOG_ENABLE_FMT_LIB
@@ -1262,10 +1299,22 @@ int main(int argc, char* argv[]) {
         if (sTestPerfAll || sTestPerfQuantumBinaryPreCachedFile) {
             testPerfQuantumFileBinaryPreCached();
         }
+        if (sTestPerfAll || sTestPerfMultiQuantumBinaryFile) {
+            testPerfMultiQuantumFileBinary();
+        }
+        if (sTestPerfAll || sTestPerfMultiQuantumBinaryCachedFile) {
+            testPerfMultiQuantumFileBinaryCached();
+        }
+        if (sTestPerfAll || sTestPerfMultiQuantumBinaryPreCachedFile) {
+            testPerfMultiQuantumFileBinaryPreCached();
+        }
         if (sTestPerfAll || sTestPerfBinaryAcceleration) {
             testPerfBinaryAcceleration();
         }
 #endif
+        if (sTestPerfAll || sTestPerfMultiQuantumFile) {
+            testPerfMultiQuantumFile();
+        }
         if (sTestPerfAll || sTestSingleThread) {
             testPerfAllSingleThread();
         }
@@ -3353,6 +3402,14 @@ void testPerfQuantumFile(bool privateLogger) {
     runMultiThreadTest("Quantum 2000000 (1MB Buffer)", "elog_bench_quantum", cfg, privateLogger);
 }
 
+static void testPerfMultiQuantumFile() {
+    const char* cfg =
+        "async://"
+        "multi_quantum?quantum_buffer_size=11000&name=elog_bench"
+        "|file:///./bench_data/elog_bench_multi_quantum.log?file_buffer_size=1mb&file_lock=no";
+    runMultiThreadTest("Multi Quantum 11000 (1MB Buffer)", "elog_bench_multi_quantum", cfg);
+}
+
 #ifdef ELOG_ENABLE_FMT_LIB
 void testPerfQuantumFileBinary() {
     const char* cfg =
@@ -3381,6 +3438,35 @@ void testPerfQuantumFileBinaryPreCached() {
         "elog_bench_quantum_bin_pre_cache.log?file_buffer_size=1mb&file_lock=no";
     runMultiThreadTestBinaryPreCached("Quantum 2000000 (1MB Buffer, Binary, Pre-Cached)",
                                       "elog_bench_quantum_bin_pre_cache", cfg, true);
+}
+
+void testPerfMultiQuantumFileBinary() {
+    const char* cfg =
+        "async://"
+        "multi_quantum?quantum_buffer_size=11000&name=elog_bench"
+        "|file:///./bench_data/elog_bench_multi_quantum_bin.log?file_buffer_size=1mb&file_lock=no";
+    runMultiThreadTestBinary("Multi Quantum 11000 (1MB Buffer, Binary)",
+                             "elog_bench_multi_quantum_bin", cfg);
+}
+
+void testPerfMultiQuantumFileBinaryCached() {
+    const char* cfg =
+        "async://"
+        "multi_quantum?quantum_buffer_size=11000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_multi_quantum_bin_cache.log?file_buffer_size=1mb&file_lock=no";
+    runMultiThreadTestBinaryCached("Multi Quantum 11000 (1MB Buffer, Binary, Auto-Cached)",
+                                   "elog_bench_multi_quantum_bin_auto_cache", cfg);
+}
+
+void testPerfMultiQuantumFileBinaryPreCached() {
+    const char* cfg =
+        "async://"
+        "multi_quantum?quantum_buffer_size=11000&name=elog_bench"
+        "|file:///./bench_data/"
+        "elog_bench_multi_quantum_bin_pre_cache.log?file_buffer_size=1mb&file_lock=no";
+    runMultiThreadTestBinaryPreCached("Multi Quantum 11000 (1MB Buffer, Binary, Pre-Cached)",
+                                      "elog_bench_multi_quantum_bin_pre_cache", cfg);
 }
 #endif
 
