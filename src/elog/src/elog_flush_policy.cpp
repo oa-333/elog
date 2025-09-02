@@ -4,6 +4,7 @@
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
+#include "elog_field_selector_internal.h"
 #include "elog_flush_policy_internal.h"
 #include "elog_internal.h"
 #include "elog_report.h"
@@ -536,6 +537,7 @@ bool ELogTimedFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
 }
 
 void ELogTimedFlushPolicy::onTimer() {
+    setCurrentThreadNameField("flush-timer-thread");
     while (!shouldStop()) {
         // wait for timeout or for stop flag to be raised
         {

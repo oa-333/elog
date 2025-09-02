@@ -4,6 +4,7 @@
 
 #include "elog_aligned_alloc.h"
 #include "elog_common.h"
+#include "elog_field_selector_internal.h"
 #include "elog_report.h"
 
 #define ELOG_FLUSH_REQUEST ((uint8_t)-1)
@@ -126,6 +127,8 @@ bool ELogQuantumTarget::flushLogTarget() {
 }
 
 void ELogQuantumTarget::logThread() {
+    std::string threadName = std::string(getName()) + "-log-thread";
+    setCurrentThreadNameField(threadName.c_str());
     bool done = false;
     // const uint64_t SPIN_COUNT_INIT = 256;
     // const uint64_t SPIN_COUNT_MAX = 16384;

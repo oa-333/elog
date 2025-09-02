@@ -1,5 +1,7 @@
 #include "elog_http_client.h"
 
+#include "elog_field_selector_internal.h"
+
 #ifdef ELOG_ENABLE_HTTP
 
 #include <cassert>
@@ -47,7 +49,10 @@ bool ELogHttpClient::start() {
     }
 
     // start resend thread
-    m_resendThread = std::thread([this] { resendThread(); });
+    m_resendThread = std::thread([this] {
+        setCurrentThreadNameField("http-resend");
+        resendThread();
+    });
     return true;
 }
 

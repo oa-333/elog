@@ -1,5 +1,6 @@
 #include "elog_db_target.h"
 
+#include "elog_field_selector_internal.h"
 #include "elog_internal.h"
 #include "elog_report.h"
 
@@ -250,6 +251,8 @@ void ELogDbTarget::stopReconnect() {
 
 void ELogDbTarget::reconnectTask() {
     // now start reconnect attempt until success or ordered to stop
+    std::string threadName = std::string(getName()) + "-reconnect-db";
+    setCurrentThreadNameField(threadName.c_str());
     while (!shouldStop()) {
         for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
             ThreadSlot& slot = m_threadSlots[i];

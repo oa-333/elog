@@ -4,6 +4,7 @@
 
 #include "elog.h"
 #include "elog_common.h"
+#include "elog_field_selector_internal.h"
 #include "elog_report.h"
 
 #define ELOG_INVALID_GC_SLOT_ID ((uint64_t)-1)
@@ -56,7 +57,9 @@ bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFreque
     // background GC tasks
     if (gcPeriodMillis > 0) {
         for (uint32_t i = 0; i < gcThreadCount; ++i) {
-            m_gcThreads.emplace_back(std::thread([this]() {
+            m_gcThreads.emplace_back(std::thread([this, i]() {
+                std::string threadName = m_name + "-gc-thread-" + std::to_string(i);
+                setCurrentThreadNameField(threadName.c_str());
                 bool done = false;
                 while (!done) {
                     // recycle objects

@@ -2,6 +2,8 @@
 
 #include <cassert>
 
+#include "elog_field_selector_internal.h"
+
 #define ELOG_FLUSH_REQUEST ((uint8_t)-1)
 
 namespace elog {
@@ -47,6 +49,8 @@ bool ELogDeferredTarget::flushLogTarget() {
 }
 
 void ELogDeferredTarget::logThread() {
+    std::string threadName = std::string(getName()) + "-log-thread";
+    setCurrentThreadNameField(threadName.c_str());
     LogQueue logQueue;
     while (!shouldStop()) {
         {

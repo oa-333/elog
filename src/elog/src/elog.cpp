@@ -554,6 +554,7 @@ static bool shouldStopReloadConfig() {
 void startReloadConfigThread() {
     // launch config reload thread
     sReloadConfigThread = std::thread([]() {
+        setCurrentThreadNameField("reload-config");
         // get configuration file path (thread-safe, allowing concurrent updates)
         std::string configFilePath;
         {
@@ -1229,6 +1230,7 @@ void setLifeSignSyncPeriod(uint64_t syncPeriodMillis) {
         // create timer thread on-demand (no race, we have the lock)
         if (!sLifeSignSyncThread.joinable()) {
             sLifeSignSyncThread = std::thread([]() {
+                setCurrentThreadNameField("life-sign-sync");
                 std::unique_lock<std::mutex> threadLock(sLifeSignLock);
                 while (sLifeSignSyncPeriodMillis > 0) {
                     sLifeSignCV.wait_for(threadLock,

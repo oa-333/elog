@@ -1102,6 +1102,8 @@ static void testReloadConfig() {
     std::vector<std::thread> threads;
     for (uint32_t i = 0; i < 5; ++i) {
         threads.emplace_back(std::thread([&done, i]() {
+            std::string tname = std::string("test-thread-") + std::to_string(i);
+            elog::setCurrentThreadName(tname.c_str());
             elog::ELogLogger* logger = elog::getPrivateLogger("test_source");
             while (!done) {
                 ELOG_INFO_EX(logger, "Test message from thread %u", i);
@@ -1187,6 +1189,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Failed to initialize elog system\n");
         return 1;
     }
+    elog::setCurrentThreadName("elog_bench_main");
     ELOG_INFO("ELog system initialized");
     printPreInitMessages();
 
@@ -1268,7 +1271,6 @@ void getSamplePercentiles(std::vector<double>& samples, StatData& percentile) {
 }
 
 elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
-    elog::setCurrentThreadName("elog_bench_main");
     elog::setAppName("elog_bench_app");
     if (sTestException) {
         elog::addStdErrLogTarget();
@@ -1436,8 +1438,7 @@ static int testAppLifeSign(uint32_t threadCount) {
     fprintf(stderr, "Launching test threads\n");
     for (uint32_t i = 0; i < threadCount; ++i) {
         threads.emplace_back(std::thread([i, &done]() {
-            std::string tname = "test-thread-app-";
-            tname += std::to_string(i);
+            std::string tname = std::string("test-thread-app-") + std::to_string(i);
             elog::setCurrentThreadName(tname.c_str());
             uint32_t count = 0;
             while (!done) {
@@ -1476,6 +1477,8 @@ static int testThreadLifeSign(uint32_t threadCount) {
     volatile bool done = false;
     for (uint32_t i = 0; i < threadCount; ++i) {
         threads.emplace_back(std::thread([i, &done, &threadRes]() {
+            std::string tname = std::string("test-thread-") + std::to_string(i);
+            elog::setCurrentThreadName(tname.c_str());
             if (!elog::setLifeSignReport(
                     elog::ELogLifeSignScope::LS_THREAD, elog::ELEVEL_INFO,
                     elog::ELogFrequencySpec(elog::ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES,
@@ -1483,9 +1486,6 @@ static int testThreadLifeSign(uint32_t threadCount) {
                 ELOG_ERROR("Failed to set life-sign report");
                 threadRes[i] = 1;
             }
-            std::string tname = "test-thread-";
-            tname += std::to_string(i);
-            elog::setCurrentThreadName(tname.c_str());
             uint32_t count = 0;
             while (!done) {
                 ELOG_INFO(
@@ -1531,8 +1531,7 @@ static int testLogSourceLifeSign(uint32_t threadCount) {
     volatile bool done = false;
     for (uint32_t i = 0; i < 5; ++i) {
         threads.emplace_back(std::thread([i, &done]() {
-            std::string tname = "test-log-source-thread-";
-            tname += std::to_string(i);
+            std::string tname = std::string("test-log-source-thread-") + std::to_string(i);
             elog::setCurrentThreadName(tname.c_str());
             uint32_t count = 0;
             while (!done) {
@@ -2592,6 +2591,8 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         for (uint32_t i = 0; i < threadCount; ++i) {
             elog::ELogLogger* logger = loggers[i];
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
+                std::string tname = std::string("worker-") + std::to_string(i);
+                elog::setCurrentThreadName(tname.c_str());
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_INFO_EX(logger, "Thread %u Test log %u", i, j);
@@ -2708,6 +2709,8 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
         for (uint32_t i = 0; i < threadCount; ++i) {
             elog::ELogLogger* logger = loggers[i];
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
+                std::string tname = std::string("worker-") + std::to_string(i);
+                elog::setCurrentThreadName(tname.c_str());
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_BIN_INFO_EX(logger, "Thread {} Test log {}", i, j);
@@ -2822,6 +2825,8 @@ void runMultiThreadTestBinaryCached(const char* title, const char* fileName, con
         for (uint32_t i = 0; i < threadCount; ++i) {
             elog::ELogLogger* logger = loggers[i];
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
+                std::string tname = std::string("worker-") + std::to_string(i);
+                elog::setCurrentThreadName(tname.c_str());
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_CACHE_INFO_EX(logger, "Thread {} Test log {}", i, j);
@@ -2936,6 +2941,8 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
         for (uint32_t i = 0; i < threadCount; ++i) {
             elog::ELogLogger* logger = loggers[i];
             threads.emplace_back(std::thread([i, msgId, &resVec, logger, msgCount]() {
+                std::string tname = std::string("worker-") + std::to_string(i);
+                elog::setCurrentThreadName(tname.c_str());
                 auto start = std::chrono::high_resolution_clock::now();
                 for (uint64_t j = 0; j < msgCount; ++j) {
                     ELOG_ID_INFO_EX(logger, msgId, i, j);
