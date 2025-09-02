@@ -140,6 +140,14 @@ void ELogQuantumTarget::logThread() {
 
         // check if there is a new log record
         if (writePos > readPos) {
+            // NOTE: it is possible for writers to grab slots beyond the total available in the ring
+            // buffer, such that writePos - readPos > ring-buffer-size - for this reason we must
+            // restrict writePos so that it does not surpass the size limit, otherwise the reader
+            // will do full round and start looking at entries it has already marked as VACANT
+            if (writePos - readPos > m_ringBufferSize) {
+                writePos = readPos + m_ringBufferSize;
+            }
+
             // wait until record is ready for reading
             ELogRecordData& recordData = m_ringBuffer[readPos % m_ringBufferSize];
             EntryState entryState = recordData.m_entryState.load(std::memory_order_relaxed);
