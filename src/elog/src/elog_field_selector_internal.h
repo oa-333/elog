@@ -9,6 +9,9 @@
 #include "os_thread_manager.h"
 #endif
 
+#include <cstdint>
+#include <unordered_map>
+
 namespace elog {
 
 /** @brief Initialize all field selectors (for internal use only). */

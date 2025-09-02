@@ -15,6 +15,8 @@ namespace elog {
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
 
+#define ELOG_INVALID_CHT_ENTRY_ID ((uint32_t)-1)
+
 template <typename ValueType>
 class ELogConcurrentHashTable {
 public:
@@ -49,11 +51,13 @@ public:
         }
     }
 
+    // inserts a mapping, if the mapping already exists then overwrites the previous value
     uint32_t setItem(uint64_t key, const ValueType& value) {
         // this ensures any code prior to this is not moved after the fence
         std::atomic_thread_fence(std::memory_order_release);
 
-        for (uint32_t idx = hash64(key);; idx++) {
+        uint32_t count = 0;
+        for (uint32_t idx = hash64(key); count < m_size; ++idx, ++count) {
             idx &= m_size - 1;
 
             // load key in entry and compare to inserted key
@@ -77,10 +81,15 @@ public:
             m_entries[idx].m_value = value;
             return idx;
         }
+
+        // passed a full round without finding a vacant entry
+        return ELOG_INVALID_CHT_ENTRY_ID;
     }
 
-    bool getItem(uint64_t key, ValueType& value) const {
-        for (uint32_t idx = hash64(key);; idx++) {
+    // retrieves a value by a key
+    uint32_t getItem(uint64_t key, ValueType& value) const {
+        uint32_t count = 0;
+        for (uint32_t idx = hash64(key); count < m_size; ++idx, ++count) {
             idx &= m_size - 1;
 
             // check next entry
@@ -88,24 +97,24 @@ public:
             if (probedKey == key) {
                 // key matches, return value
                 value = m_entries[idx].m_value;
-                return true;
+                return idx;
             }
 
-            // hit empty entry, so linear probing ends here
-            if (probedKey == 0) {
-                return false;
-            }
+            // NOTE: it is possible that an entry was removed, creating a "hole" with null key, but
+            // the key we are looking for could still be ahead, so we keep looking
         }
-        // should not reach here, but just for safety
-        return false;
+
+        // key not found
+        return ELOG_INVALID_CHT_ENTRY_ID;
     }
 
-    // set items without overriding old value (i.e. returns old value if it exists)
+    // sets item without overriding old value (i.e. returns old value if it exists)
     uint32_t getOrSetItem(uint64_t key, const ValueType& value, bool* found = nullptr) {
         // this ensures any code prior to this is not moved after the fence
         std::atomic_thread_fence(std::memory_order_release);
 
-        for (uint32_t idx = hash64(key);; idx++) {
+        uint32_t count = 0;
+        for (uint32_t idx = hash64(key); count < m_size; ++idx, ++count) {
             idx &= m_size - 1;
 
             // load key in entry and compare to inserted key
@@ -134,9 +143,40 @@ public:
             m_entries[idx].m_value = value;
             return idx;
         }
+
+        // key not found and there is no vacant slot
+        return ELOG_INVALID_CHT_ENTRY_ID;
     }
 
+    // retrieves a value by index
     inline const ValueType& getAt(uint32_t idx) const { return m_entries[idx].m_value; }
+
+    // removes a mapping
+    inline uint32_t removeItem(uint64_t key) {
+        // this ensures any code prior to this is not moved after the fence
+        std::atomic_thread_fence(std::memory_order_release);
+
+        uint32_t count = 0;
+        for (uint32_t idx = hash64(key); count < m_size; ++idx, ++count) {
+            idx &= m_size - 1;
+
+            // load key in entry and compare to inserted key
+            uint64_t probedKey = m_entries[idx].m_key.load(std::memory_order_relaxed);
+            if (probedKey != key) {
+                // NOTE: null key visited means nothing, since other thread may have also removed an
+                // entry, and the searched key might appear afterwards, so in any case we continue
+                // searching
+                continue;
+            }
+
+            // key matches, try to remove it (possible race with another thread trying to remove it)
+            m_entries[idx].m_key.compare_exchange_strong(key, 0, std::memory_order_relaxed);
+            return idx;
+        }
+
+        // key not found
+        return ELOG_INVALID_CHT_ENTRY_ID;
+    }
 
 private:
     struct Entry {

@@ -25,7 +25,6 @@
 #define OS_VERSION_MAX 256
 #define APP_NAME_MAX 256
 #define PROG_NAME_MAX 256
-#define THREAD_NAME_MAX 256
 
 // windows version hack
 #ifdef ELOG_WINDOWS
@@ -98,14 +97,19 @@ static char sOsName[OS_NAME_MAX];
 static char sOsVersion[OS_VERSION_MAX];
 static char sAppName[APP_NAME_MAX];
 static char sProgName[PROG_NAME_MAX];
-static thread_local char sThreadName[THREAD_NAME_MAX] = {};
+static thread_local char* sThreadName = nullptr;
 
 static void cleanupThreadName(void* key) {
+    // cleanup both maps and deallocate memory for thread name
     elog_thread_id_t threadId = (elog_thread_id_t)(uint64_t)key;
-    // NOTE: the returned value is a compile time string literal, so it is valid even after being
-    // removed from the map
     const char* threadName = getThreadNameField(threadId);
-    sThreadNameMap.setItem(threadId, nullptr);
+    if (threadName == nullptr || *threadName == 0) {
+        ELOG_REPORT_WARN("Cannot cleanup thread name for current thread, thread name is null");
+        return;
+    }
+    ELOG_REPORT_TRACE("Cleaning up thread name %s", threadName);
+    uint32_t entryId = sThreadNameMap.removeItem(threadId);
+    ELOG_REPORT_TRACE("Removed thread name at entry %u", entryId);
 
     // cleanup inverse map as well
     std::unique_lock<std::mutex> lock(sLock);
@@ -113,6 +117,9 @@ static void cleanupThreadName(void* key) {
     if (itr != sThreadDataMap.end()) {
         sThreadDataMap.erase(itr);
     }
+
+    free((void*)threadName);
+    sThreadName = nullptr;
 }
 
 #ifdef ELOG_WINDOWS
@@ -509,30 +516,77 @@ void setAppNameField(const char* appName) {
 }
 
 bool setCurrentThreadNameField(const char* threadName) {
-    elog_strncpy(sThreadName, threadName, THREAD_NAME_MAX);
+    // first check for duplicate name
     elog_thread_id_t threadId = getCurrentThreadId();
-    sThreadNameMap.setItem((uint64_t)threadId, sThreadName);
-    // this is required to trigger cleanup when thread ends
-    elogSetTls(sThreadNameKey, (void*)(uint64_t)threadId);
+    ELogThreadData threadData(threadId);
+    {
+        std::unique_lock<std::mutex> lock(sLock);
+        if (!sThreadDataMap.insert(ELogThreadDataMap::value_type(threadName, threadData)).second) {
+            ELOG_REPORT_ERROR(
+                "Cannot set current thread name to '%s', name is already used by another thread",
+                threadName);
+            return false;
+        }
+    }
 
+// now we can save the name and add to the id/name map
+#ifdef ELOG_MSVC
+    char* threadNameDup = _strdup(threadName);
+#else
+    char* threadNameDup = strdup(threadName);
+#endif
+    if (threadNameDup == nullptr) {
+        ELOG_REPORT_ERROR("Failed to set current thread name for log reporting, out of memory");
+        std::unique_lock<std::mutex> lock(sLock);
+        ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
+        if (itr != sThreadDataMap.end()) {
+            sThreadDataMap.erase(itr);
+        }
+        return false;
+    }
+    sThreadName = threadNameDup;
+
+    // this is required to trigger cleanup when thread ends
+    if (!elogSetTls(sThreadNameKey, (void*)(uint64_t)threadId)) {
+        ELOG_REPORT_ERROR("Failed to setup TLS cleanup for current thread name");
+        free(threadNameDup);
+        sThreadName = nullptr;
+        std::unique_lock<std::mutex> lock(sLock);
+        ELogThreadDataMap::iterator itr = sThreadDataMap.find(threadName);
+        if (itr != sThreadDataMap.end()) {
+            sThreadDataMap.erase(itr);
+        }
+        return false;
+    }
+
+    // save thread id/name (allocated on heap) in a global map
+    uint32_t entryId = sThreadNameMap.setItem((uint64_t)threadId, threadNameDup);
+
+    // infrom life-sign of current thread name
 #ifdef ELOG_ENABLE_LIFE_SIGN
     reportCurrentThreadNameLifeSign(threadId, threadName);
 #endif
-
-    ELogThreadData threadData(threadId);
-    std::unique_lock<std::mutex> lock(sLock);
-    return sThreadDataMap.insert(ELogThreadDataMap::value_type(threadName, threadData)).second;
+    ELOG_REPORT_TRACE("Thread name set to %s at entry id %u", threadName, entryId);
+    return true;
 }
 
 const char* getThreadNameField(uint32_t threadId) {
     const char* threadName = "";
-    // if failed it remain empty, so we don't need to check return value
-    (void)sThreadNameMap.getItem((uint64_t)threadId, threadName);
+    // if failed it will remain empty, so we don't need to check return value
+    if (sThreadNameMap.getItem((uint64_t)threadId, threadName) == ELOG_INVALID_CHT_ENTRY_ID) {
+        ELOG_REPORT_TRACE("Could not find thread name by id %u", threadId);
+    }
     return threadName;
 }
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
 bool setCurrentThreadNotifierImpl(dbgutil::ThreadNotifier* notifier) {
+    if (sThreadName == nullptr) {
+        ELOG_REPORT_ERROR(
+            "Cannot set current thread notifier for life-sign reports, missing current thread "
+            "name");
+        return false;
+    }
     return setThreadNotifierImpl(sThreadName, notifier);
 }
 
