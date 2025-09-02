@@ -245,6 +245,59 @@ uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime, bool useLocalTime /* =
     return 0;
 }
 
+uint64_t elogTimeToInt64(const ELogTime& elogTime) {
+#ifdef ELOG_TIME_USE_CHRONO
+    return (uint64_t)elogTime.count();
+#elif defined(ELOG_MSVC)
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+    // convert from system time
+    FILETIME ft = {};
+    SystemTimeToFileTime(&elogTime, &ft);
+    ULARGE_INTEGER res;
+    res.LowPart = ft.dwLowDateTime;
+    res.HighPart = ft.dwHighDateTime;
+    return res.QuadPart;
+#else   // !define ELOG_TIME_USE_SYSTEMTIME
+    // convert from file time
+    ULARGE_INTEGER res;
+    res.LowPart = elogTime.dwLowDateTime;
+    res.HighPart = elogTime.dwHighDateTime;
+    return res.QuadPart;
+#endif  // ELOG_TIME_USE_SYSTEMTIME
+#else
+    // convert ELogTime struct to integer
+    uint64_t res = (((uint64_t)elogTime.m_seconds) << 32) | elogTime.m_100nanos;
+    return res;
+#endif  // ELOG_TIME_USE_CHRONO
+}
+
+void elogTimeFromInt64(uint64_t timeStamp, ELogTime& elogTime) {
+#ifdef ELOG_TIME_USE_CHRONO
+    // TODO: required some duration cast probably (time since epoch)
+    return (uint64_t)elogTime.count();
+#elif defined(ELOG_MSVC)
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+    // convert to system time
+    ULARGE_INTEGER res;
+    res.QuadPart = timeStamp;
+    FILETIME ft = {};
+    ft.dwLowDateTime = res.LowPart;
+    ft.dwHighDateTime = res.HighPart;
+    FileTimeToSystemTime(&ft, &elogTime);
+#else   // !define ELOG_TIME_USE_SYSTEMTIME
+    // convert to file time
+    ULARGE_INTEGER res;
+    res.QuadPart = timeStamp;
+    elogTime.dwLowDateTime = res.LowPart;
+    elogTime.dwHighDateTime = res.HighPart;
+#endif  // ELOG_TIME_USE_SYSTEMTIME
+#else
+    // convert from integer to ELogTime
+    elogTime.m_seconds = (timeStamp >> 32);
+    elogTime.m_100nanos = (timeStamp & 0xFFFFFFFF);
+#endif  // ELOG_TIME_USE_CHRONO
+}
+
 bool elogTimeFromString(const char* timeStr, ELogTime& logTime) {
 #ifdef ELOG_TIME_USE_CHRONO
     return elogTimeFromStringChrono(timeStr, logTime);

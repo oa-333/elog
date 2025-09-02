@@ -119,6 +119,18 @@ extern ELOG_API uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime,
                                                  bool useLocalTime = false);
 
 /**
+ * @brief Converts ELog time to UNIX time milliseconds (epoch since 1/1/1970 00:00:00 UTC).
+ *
+ * @param logTime The elog time.
+ * @param useLocalTime Specifies whether local time should be used to make the conversion (some log
+ * targets, such as Grafana may require this).
+ * @return The UNIX time in seconds.
+ */
+inline uint64_t elogTimeToUnixTimeMilliseconds(const ELogTime& logTime, bool useLocalTime = false) {
+    return elogTimeToUnixTimeNanos(logTime, useLocalTime) / 1000000ULL;
+}
+
+/**
  * @brief Converts ELog time to UNIX time seconds (epoch since 1/1/1970 00:00:00 UTC).
  *
  * @param logTime The elog time.
@@ -129,6 +141,15 @@ extern ELOG_API uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime,
 inline uint64_t elogTimeToUnixTimeSeconds(const ELogTime& logTime, bool useLocalTime = false) {
     return elogTimeToUnixTimeNanos(logTime, useLocalTime) / 1000000000ULL;
 }
+
+/**
+ * @brief Converts an ELogTime to a 64 bit integer value. This is a bit more optimized than @ref
+ * elogTimeToUnixTimeNanos().
+ */
+extern ELOG_API uint64_t elogTimeToInt64(const ELogTime& elogTime);
+
+/** @brief Converts a 64 bit integer value to an ELogTime. */
+extern ELOG_API void elogTimeFromInt64(uint64_t timeStamp, ELogTime& elogTime);
 
 /**
  * @brief Converts time string to ELog time type.
