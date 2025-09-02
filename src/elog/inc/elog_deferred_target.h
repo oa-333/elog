@@ -28,13 +28,6 @@ public:
     ELogDeferredTarget& operator=(const ELogDeferredTarget&) = delete;
     ~ELogDeferredTarget() override {}
 
-    /** @brief Queries whether the log target has written all pending messages. */
-    bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) final {
-        writeCount = m_writeCount.load(std::memory_order_relaxed);
-        readCount = m_readCount.load(std::memory_order_relaxed);
-        return writeCount == readCount;
-    }
-
 protected:
     typedef std::list<std::pair<ELogRecord, std::string>> LogQueue;
 

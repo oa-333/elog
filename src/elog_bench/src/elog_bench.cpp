@@ -1336,6 +1336,11 @@ void termELog() {
     elog::clearAllLogTargets();
 }
 
+inline bool isCaughtUp(elog::ELogTarget* logTarget, uint64_t targetMsgCount) {
+    bool caughtUp = false;
+    return logTarget->isCaughtUp(targetMsgCount, caughtUp) && caughtUp;
+}
+
 static int testAsyncThreadName() {
     const char* cfg =
         "async://quantum?quantum_buffer_size=2000000&name=elog_bench | "
@@ -1349,9 +1354,8 @@ static int testAsyncThreadName() {
 
     ELOG_INFO("Test thread name/id, expecting elog_bench_main/%u", getCurrentThreadId());
 
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount));
+    // wait for 1 message to be fully processed
+    while (!isCaughtUp(logTarget, 1));
 
     std::thread t = std::thread([logTarget]() {
         elog::setCurrentThreadName("another_thread");
@@ -1359,7 +1363,8 @@ static int testAsyncThreadName() {
 
         uint64_t writeCount = 0;
         uint64_t readCount = 0;
-        while (!logTarget->isCaughtUp(writeCount, readCount));
+        // wait for 2 messages to be fully processed
+        while (!isCaughtUp(logTarget, 2));
     });
 
     t.join();
@@ -1701,10 +1706,7 @@ void testPerfPrivateLog() {
         ELOG_DEBUG_EX(privateLogger, "Test log %u", i);
     }
 
-    // wait for test to end
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount));
+    // no need to wait for test to end, because no messages were issued
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime =
@@ -1741,10 +1743,7 @@ void testPerfSharedLogger() {
         ELOG_DEBUG_EX(sharedLogger, "Test log %u", i);
     }
 
-    // wait for test to end
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount));
+    // no need to wait for test to end, because no messages were issued
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime =
@@ -2278,16 +2277,10 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     }
     auto end0 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    // uint64_t waitCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+    while (!isCaughtUp(logTarget, msgCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
-        /*if (++waitCount % 10000 == 0) {
-            fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-        }*/
     }
-    // fputs("\n", stderr);
+
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime0 =
@@ -2360,16 +2353,10 @@ void runSingleThreadedTestBinary(const char* title, const char* cfg, double& msg
     }
     auto end0 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    // uint64_t waitCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+    while (!isCaughtUp(logTarget, msgCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
-        /*if (++waitCount % 10000 == 0) {
-            fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-        }*/
     }
-    // fputs("\n", stderr);
+
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime0 =
@@ -2441,16 +2428,10 @@ void runSingleThreadedTestBinaryCached(const char* title, const char* cfg, doubl
     }
     auto end0 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    // uint64_t waitCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+    while (!isCaughtUp(logTarget, msgCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
-        /*if (++waitCount % 10000 == 0) {
-            fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-        }*/
     }
-    // fputs("\n", stderr);
+
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime0 =
@@ -2523,16 +2504,10 @@ void runSingleThreadedTestBinaryPreCached(const char* title, const char* cfg, do
     }
     auto end0 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    // uint64_t waitCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+    while (!isCaughtUp(logTarget, msgCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
-        /*if (++waitCount % 10000 == 0) {
-            fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-        }*/
     }
-    // fputs("\n", stderr);
+
     auto end = std::chrono::high_resolution_clock::now();
     uint64_t bytesEnd = logTarget->getBytesWritten();
     std::chrono::microseconds testTime0 =
@@ -2612,6 +2587,8 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
                                                  : elog::getPrivateLogger("elog_bench_logger");
         }
         uint64_t bytesStart = logTarget->getBytesWritten();
+        uint64_t initMsgCount = logTarget->getProcessedMsgCount();
+        // fprintf(stderr, "Init msg count = %" PRIu64 "\n", initMsgCount);
         for (uint32_t i = 0; i < threadCount; ++i) {
             elog::ELogLogger* logger = loggers[i];
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount]() {
@@ -2634,20 +2611,12 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         }
         auto end0 = std::chrono::high_resolution_clock::now();
         fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-        uint64_t writeCount = 0;
-        uint64_t readCount = 0;
-        // uint64_t waitCount = 0;
-        while (!logTarget->isCaughtUp(writeCount, readCount)) {
+        uint64_t targetMsgCount = initMsgCount + threadCount * msgCount;
+        // fprintf(stderr, "Waiting for target msg count %" PRIu64 "\n", targetMsgCount);
+        while (!isCaughtUp(logTarget, targetMsgCount)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(0));
-            /*if (++waitCount % 10000 == 0) {
-                fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-            }*/
-            /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-                    readCount);*/
         }
-        // fputs("\n", stderr);
-        //  fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-        //  readCount);
+
         auto end = std::chrono::high_resolution_clock::now();
         ELOG_INFO("%u Thread Test ended", threadCount);
         uint64_t bytesEnd = logTarget->getBytesWritten();
@@ -2758,20 +2727,11 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
         }
         auto end0 = std::chrono::high_resolution_clock::now();
         fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-        uint64_t writeCount = 0;
-        uint64_t readCount = 0;
-        // uint64_t waitCount = 0;
-        while (!logTarget->isCaughtUp(writeCount, readCount)) {
+
+        while (!isCaughtUp(logTarget, threadCount * msgCount)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(0));
-            /*if (++waitCount % 10000 == 0) {
-                fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-            }*/
-            /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-                    readCount);*/
         }
-        // fputs("\n", stderr);
-        //  fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-        //  readCount);
+
         auto end = std::chrono::high_resolution_clock::now();
         ELOG_INFO("%u Thread Test ended", threadCount);
         uint64_t bytesEnd = logTarget->getBytesWritten();
@@ -2881,20 +2841,10 @@ void runMultiThreadTestBinaryCached(const char* title, const char* fileName, con
         }
         auto end0 = std::chrono::high_resolution_clock::now();
         fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-        uint64_t writeCount = 0;
-        uint64_t readCount = 0;
-        // uint64_t waitCount = 0;
-        while (!logTarget->isCaughtUp(writeCount, readCount)) {
+        while (!isCaughtUp(logTarget, threadCount * msgCount)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(0));
-            /*if (++waitCount % 10000 == 0) {
-                fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-            }*/
-            /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-                    readCount);*/
         }
-        // fputs("\n", stderr);
-        //  fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-        //  readCount);
+
         auto end = std::chrono::high_resolution_clock::now();
         ELOG_INFO("%u Thread Test ended", threadCount);
         uint64_t bytesEnd = logTarget->getBytesWritten();
@@ -3005,20 +2955,11 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
         }
         auto end0 = std::chrono::high_resolution_clock::now();
         fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
-        uint64_t writeCount = 0;
-        uint64_t readCount = 0;
-        // uint64_t waitCount = 0;
-        while (!logTarget->isCaughtUp(writeCount, readCount)) {
+
+        while (!isCaughtUp(logTarget, threadCount * msgCount)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(0));
-            /*if (++waitCount % 10000 == 0) {
-                fprintf(stderr, "%" PRIu64 "\\%" PRIu64 "\r", readCount, writeCount);
-            }*/
-            /*fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-                    readCount);*/
         }
-        // fputs("\n", stderr);
-        //  fprintf(stderr, "write-pos = %" PRIu64 ", read-pos = %" PRIu64 "\n", writeCount,
-        //  readCount);
+
         auto end = std::chrono::high_resolution_clock::now();
         ELOG_INFO("%u Thread Test ended", threadCount);
         uint64_t bytesEnd = logTarget->getBytesWritten();
@@ -4246,9 +4187,7 @@ static void runBinaryAccelTest(const char* title, const char* cfg, TestCode& tes
     auto end0 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
 
-    uint64_t writeCount = 0;
-    uint64_t readCount = 0;
-    while (!logTarget->isCaughtUp(writeCount, readCount)) {
+    while (!isCaughtUp(logTarget, msgCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
     }
     auto end = std::chrono::high_resolution_clock::now();

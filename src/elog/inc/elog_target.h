@@ -12,6 +12,9 @@
 #include "elog_record.h"
 #include "elog_stats.h"
 
+/** @def A constant value for designating invalid message count. */
+#define ELOG_INVALID_MSG_COUNT ((uint64_t)-1)
+
 namespace elog {
 
 class ELOG_API ELogFilter;
@@ -181,15 +184,24 @@ public:
     inline uint64_t getBytesWritten() { return getEndLogTarget()->getStats()->getBytesWritten(); }
 
     /**
-     * @brief Queries whether the log target has written all pending messages.
-     * @note If statistics were disabled (by calling @ref disableStats()), then this will always
-     * return true (since all counters are zero).
+     * @brief Retrieves the number of messages that were fully processed by the log target. This
+     * includes failed log messages. In case of a compound log target, the request is delegated to
+     * the end log target.
+     * @return The number of log messages that were fully processed or @ref ELOG_INVALID_MSG_COUNT
+     * in case statistics collection for the log target is disabled.
      */
-    virtual bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) {
-        ELogStats* endTargetStats = getEndLogTarget()->getStats();
-        return m_stats->getMsgSubmitted() ==
-               (endTargetStats->getMsgWritten() + endTargetStats->getMsgFailWrite());
-    }
+    virtual uint64_t getProcessedMsgCount();
+
+    /**
+     * @brief Queries whether the log target has written all pending messages.
+     * @param targetMsgCount The number of messages required to declare to log target has caught up.
+     * @param[out] caughtUp Returns true if the log target has fully processed the specified number
+     * of log messages.
+     * @return True if the operation was successful (whether lgo target has caught up or not). If
+     * statistics collection is disabled (by calling @ref disableStats()), then this call always
+     * returns false.
+     */
+    virtual bool isCaughtUp(uint64_t targetMsgCount, bool& caughtUp);
 
 protected:
     // NOTE: setting log level to DIAG by default has the effect of no log level limitation on the

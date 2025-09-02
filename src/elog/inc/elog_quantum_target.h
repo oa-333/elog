@@ -76,13 +76,6 @@ public:
     ELogQuantumTarget& operator=(const ELogQuantumTarget&) = delete;
     ~ELogQuantumTarget() final {}
 
-    /** @brief Queries whether the log target has written all pending messages. */
-    bool isCaughtUp(uint64_t& writeCount, uint64_t& readCount) final {
-        writeCount = m_writePos.load(std::memory_order_relaxed);
-        readCount = m_readPos.load(std::memory_order_relaxed);
-        return writeCount == readCount;
-    }
-
 private:
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() final;

@@ -299,6 +299,27 @@ void ELogTarget::setFlushPolicy(ELogFlushPolicy* flushPolicy) {
     m_flushPolicy = flushPolicy;
 }
 
+uint64_t ELogTarget::getProcessedMsgCount() {
+    ELogTarget* endTarget = getEndLogTarget();
+    if (endTarget == this) {
+        if (!m_enableStats || m_stats == nullptr) {
+            return ELOG_INVALID_MSG_COUNT;
+        }
+        return m_stats->getMsgWritten() + m_stats->getMsgFailWrite();
+    } else {
+        return endTarget->getProcessedMsgCount();
+    }
+}
+
+bool ELogTarget::isCaughtUp(uint64_t targetMsgCount, bool& caughtUp) {
+    uint64_t msgCount = getProcessedMsgCount();
+    if (msgCount == ELOG_INVALID_MSG_COUNT) {
+        return false;
+    }
+    caughtUp = msgCount >= targetMsgCount;
+    return true;
+}
+
 void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
     if (m_logFormatter != nullptr) {
         m_logFormatter->formatLogMsg(logRecord, logMsg);
