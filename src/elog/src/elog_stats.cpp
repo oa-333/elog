@@ -11,6 +11,9 @@
 
 namespace elog {
 
+/** @def Thread shutting down constant. */
+#define ELOG_SHUTDOWN_STAT_SLOT_ID ((uint64_t)-2)
+
 static thread_local uint64_t sThreadSlotId = ELOG_INVALID_STAT_SLOT_ID;
 static ELogTlsKey sStatTlsKey = ELOG_INVALID_TLS_KEY;
 
@@ -20,13 +23,18 @@ static uint64_t allocThreadSlotId();
 static void freeThreadSlotId(uint64_t slotId);
 
 static void cleanUpSlotId(void* key) {
-    // NOTE: in gcc, at this point we cannot access sThreadSlotId, so we must use key
+    // NOTE: in MinGW, apparently at this point we can still access sThreadSlotId
     // NOTE: initially we put (slotId + 1) to ensure tls dtor get triggered
+
+    sThreadSlotId = ELOG_SHUTDOWN_STAT_SLOT_ID;
     uint64_t slotId = ((uint64_t)key) - 1;
+    // NOTE: this internal logger call can trigger call to allocThreadSlotId(), so we first
+    // sThreadSlotId to ELOG_SHUTDOWN_STAT_SLOT_ID, so that the call to allocThreadSlotId() would
+    // reject the request
     ELOG_REPORT_TRACE(
         "Cleanup statistics slot called for current thread with key %p slot id %" PRIu64, key,
         sThreadSlotId);
-    elog::resetThreadStatCounters(slotId);
+    // elog::resetThreadStatCounters(slotId);
     freeThreadSlotId(slotId);
 }
 
@@ -59,6 +67,12 @@ void terminateStats() {
 }
 
 uint64_t allocThreadSlotId() {
+    // if we are during cleanup of slot, we reject any request to allocated the slot
+    if (sThreadSlotId == ELOG_SHUTDOWN_STAT_SLOT_ID) {
+        return ELOG_INVALID_STAT_SLOT_ID;
+    }
+
+    // search for any vacant slot
     uint64_t slotId = ELOG_INVALID_STAT_SLOT_ID;
     for (uint32_t i = 0; i < sMaxThreads; ++i) {
         uint64_t value = sThreadSlots[i].load(std::memory_order_acquire);
@@ -75,7 +89,7 @@ uint64_t allocThreadSlotId() {
 
 void freeThreadSlotId(uint64_t slotId) {
     ELOG_REPORT_TRACE("Freeing statistics thread slot id %" PRIu64, slotId);
-    sThreadSlots[slotId].store(0, std::memory_order_relaxed);
+    sThreadSlots[slotId].store(0, std::memory_order_seq_cst);
 }
 
 bool ELogStatVar::initialize(uint32_t maxThreads) {
@@ -137,21 +151,27 @@ void ELogStats::toString(ELogBuffer& buffer, ELogTarget* logTarget, const char* 
                           logTarget->getName());
     }
 
-    buffer.appendArgs("\tLog messages discarded: %" PRIu64 "\n", m_msgDiscarded.getSum());
-    buffer.appendArgs("\tLog messages submitted: %" PRIu64 "\n", m_msgSubmitted.getSum());
-    buffer.appendArgs("\tLog messages written: %" PRIu64 "\n", m_msgWritten.getSum());
-    buffer.appendArgs("\tLog messages failed write: %" PRIu64 "\n", m_msgFailWrite.getSum());
+#define PRINT_STAT(var, msg)                                    \
+    {                                                           \
+        uint64_t sum = var.getSum();                            \
+        if (sum > 0) {                                          \
+            buffer.appendArgs("\t" msg ": %" PRIu64 "\n", sum); \
+        }                                                       \
+    }
 
-    // buffer.appendArgs("Bytes discarded: %" PRIu64,
-    //             m_bytesDiscarded.getSum());
-    buffer.appendArgs("\tBytes submitted: %" PRIu64 "\n", m_bytesSubmitted.getSum());
-    buffer.appendArgs("\tBytes written: %" PRIu64 "\n", m_bytesWritten.getSum());
-    buffer.appendArgs("\tBytes failed write: %" PRIu64 "\n", m_bytesFailWrite.getSum());
+    PRINT_STAT(m_msgDiscarded, "Log messages discarded");
+    PRINT_STAT(m_msgSubmitted, "Log messages submitted");
+    PRINT_STAT(m_msgWritten, "Log messages written");
+    PRINT_STAT(m_msgFailWrite, "Log messages failed write");
 
-    buffer.appendArgs("\tFlush requests submitted: %" PRIu64 "\n", m_flushSubmitted.getSum());
-    buffer.appendArgs("\tFlush requests executed: %" PRIu64 "\n", m_flushExecuted.getSum());
-    buffer.appendArgs("\tFlush requests failed execution: %" PRIu64 "\n", m_flushFailed.getSum());
-    buffer.appendArgs("\tFlush requests discarded: %" PRIu64 "\n", m_flushDiscarded.getSum());
+    PRINT_STAT(m_bytesSubmitted, "Bytes submitted");
+    PRINT_STAT(m_bytesWritten, "Bytes written");
+    PRINT_STAT(m_bytesFailWrite, "Bytes failed write");
+
+    PRINT_STAT(m_flushSubmitted, "Flush requests submitted");
+    PRINT_STAT(m_flushExecuted, "Flush requests executed");
+    PRINT_STAT(m_flushFailed, "Flush requests failed write");
+    PRINT_STAT(m_flushDiscarded, "Flush requests discarded");
 }
 
 uint64_t ELogStats::getSlotId() {

@@ -371,14 +371,15 @@ bool ELogSegmentedFileTarget::stopLogTarget() {
         // NOTE: the following call logs all pending messages, although there shouldn't be any,
         // since if all threads stopped, then even during segment switch, the thread doing the
         // switch will drain all pending messages before returning - but this is just for safety
+        uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
         if (!segmentData->close()) {
             ELOG_REPORT_ERROR("Failed to close log segment");
-            if (m_enableStats) {
+            if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
                 m_segmentedStats->incrementCloseSegmentFailCount();
             }
             return false;
         }
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_segmentedStats->addCloseSegmentBytes(
                 segmentData->m_bytesLogged.load(std::memory_order_relaxed));
             if (segmentData->m_bufferedFileWriter != nullptr) {
@@ -455,7 +456,8 @@ bool ELogSegmentedFileTarget::flushLogTarget() {
         // a segment is right now being replaced, so the request can be discarded (because during
         // file close all file buffers are being flushed anyway, so there is no need for an addition
         // flush call)
-        if (m_enableStats) {
+        uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_stats->incrementFlushDiscarded();
         }
     }
@@ -569,15 +571,16 @@ bool ELogSegmentedFileTarget::openSegment() {
     formatSegmentPath(segmentPath, segmentCount);
     bool useLock = !isExternallyThreadSafe();
     bool truncateSegment = (m_segmentCount > 0);
+    uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
     if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment,
                            m_enableStats)) {
         delete segmentData;
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_segmentedStats->incrementOpenSegmentFailCount();
         }
         return false;
     }
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_segmentedStats->incrementSegmentCount();
     }
     m_currentSegment.store(segmentData, std::memory_order_relaxed);
@@ -653,15 +656,16 @@ bool ELogSegmentedFileTarget::openRotatingSegment() {
     std::string segmentPath;
     formatSegmentPath(segmentPath, segmentCount);
     bool useLock = !isExternallyThreadSafe();
+    uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
     if (!segmentData->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment,
                            m_enableStats)) {
         delete segmentData;
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_segmentedStats->incrementOpenSegmentFailCount();
         }
         return false;
     }
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_segmentedStats->incrementSegmentCount();
     }
     m_currentSegment.store(segmentData, std::memory_order_relaxed);
@@ -904,15 +908,16 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
     formatSegmentPath(segmentPath, segmentId);
     bool useLock = !isExternallyThreadSafe();
     bool truncateSegment = (m_segmentCount > 0);
+    uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
     if (!nextSegment->open(segmentPath.c_str(), m_fileBufferSizeBytes, useLock, truncateSegment,
                            m_enableStats)) {
         delete nextSegment;
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_segmentedStats->incrementOpenSegmentFailCount();
         }
         return false;
     }
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_segmentedStats->incrementSegmentCount();
     }
 
@@ -979,7 +984,7 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
             // NOTE: we are logging to the previous segment, so that we keep order of messages. this
             // may cause slight bloating of the segment, but that is probably acceptable in a
             // lock-free solution
-            if (m_enableStats) {
+            if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
                 m_segmentedStats->addPendingMsgCount(logMsg.size());
             }
             logMsgQueue(logMsgs, prevSegment->m_segmentFile);
@@ -991,17 +996,17 @@ bool ELogSegmentedFileTarget::advanceSegment(uint32_t segmentId, const std::stri
 
     // NOTE: only now we can close the segment (and this should also auto-drain/flush)
     ELOG_REPORT_TRACE("Logging %u final pending messages", prevSegment->m_pendingMsgs.size());
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_segmentedStats->addPendingMsgCount(prevSegment->m_pendingMsgs.size());
     }
     if (!prevSegment->close()) {
         ELOG_REPORT_ERROR("Failed to close segment %u log file", prevSegment->m_segmentId);
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_segmentedStats->incrementCloseSegmentFailCount();
         }
         // nevertheless continue
     } else {
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_segmentedStats->addCloseSegmentBytes(
                 prevSegment->m_bytesLogged.load(std::memory_order_relaxed));
             if (prevSegment->m_bufferedFileWriter != nullptr) {

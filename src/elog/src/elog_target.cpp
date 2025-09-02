@@ -52,6 +52,7 @@ ELogTarget::~ELogTarget() {
     setLogFormatter(nullptr);
     setFlushPolicy(nullptr);
     if (m_stats != nullptr) {
+        m_stats->terminate();
         delete m_stats;
         m_stats = nullptr;
     }
@@ -100,11 +101,18 @@ bool ELogTarget::startNoLock() {
                               m_typeName.c_str(), m_name.c_str());
             return false;
         }
+        if (!m_stats->initialize(elog::getMaxThreads())) {
+            ELOG_REPORT_ERROR("Failed to initialize statistics object");
+            delete m_stats;
+            m_stats = nullptr;
+            return false;
+        }
         m_stats->initialize(elog::getMaxThreads());
     }
     if (m_flushPolicy != nullptr) {
         if (!m_flushPolicy->start()) {
             if (m_stats != nullptr) {
+                m_stats->terminate();
                 delete m_stats;
                 m_stats = nullptr;
             }
@@ -118,6 +126,7 @@ bool ELogTarget::startNoLock() {
         delete m_flushPolicy;
         m_flushPolicy = nullptr;
         if (m_stats != nullptr) {
+            m_stats->terminate();
             delete m_stats;
             m_stats = nullptr;
         }
@@ -169,13 +178,13 @@ void ELogTarget::log(const ELogRecord& logRecord) {
 void ELogTarget::logNoLock(const ELogRecord& logRecord) {
     uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
     if (!canLog(logRecord)) {
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_stats->incrementMsgDiscarded(slotId);
         }
         return;
     }
 
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_stats->incrementMsgSubmitted(slotId);
     }
 
@@ -183,7 +192,7 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
     uint32_t bytesWritten = writeLogRecord(logRecord);
 
     // update statistics counter
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_stats->incrementMsgWritten(slotId);
         m_stats->addBytesWritten(slotId, bytesWritten);
     }
@@ -233,7 +242,8 @@ uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     logBuffer->reset();
     formatLogBuffer(logRecord, *logBuffer);
     uint64_t bufferSize = logBuffer->getOffset();
-    if (m_enableStats) {
+    uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_stats->addBytesSubmitted(bufferSize);
     }
     logFormattedMsg(logBuffer->getRef(), bufferSize);
@@ -258,7 +268,7 @@ bool ELogTarget::flushNoLock(bool allowModeration) {
     // NOTE: Being externally thread safe means that either there is an external lock, or that only
     // one thread accesses the log target - in either case, flush moderation is not required
     uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_stats->incrementFlushSubmitted(slotId);
     }
     bool res = false;
@@ -268,7 +278,7 @@ bool ELogTarget::flushNoLock(bool allowModeration) {
         res = flushLogTarget();
     }
 
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         if (res) {
             m_stats->incrementFlushExecuted(slotId);
         } else {

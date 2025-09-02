@@ -59,18 +59,18 @@ void ELogBufferedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t
 
 bool ELogBufferedFileTarget::flushLogTarget() {
     uint64_t slotId = m_enableStats ? m_stats->getSlotId() : ELOG_INVALID_STAT_SLOT_ID;
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_stats->incrementFlushSubmitted(slotId);
     }
     if (fflush(m_fileHandle) == EOF) {
         // TODO: should log once
         ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush buffered file");
-        if (m_enableStats) {
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_stats->incrementFlushFailed(slotId);
         }
         return false;
     }
-    if (m_enableStats) {
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_stats->incrementFlushExecuted(slotId);
     }
     return true;
