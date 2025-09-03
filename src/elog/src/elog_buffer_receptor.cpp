@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogBaseFormatter)
+
 void ELogBufferReceptor::receiveStringField(uint32_t typeId, const char* field,
                                             const ELogFieldSpec& fieldSpec, size_t length) {
     if (length == 0) {

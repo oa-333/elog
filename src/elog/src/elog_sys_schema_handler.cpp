@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogSysSchemaHandler)
+
 ELogTarget* ELogSysSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     std::string providerType;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "system", "type",

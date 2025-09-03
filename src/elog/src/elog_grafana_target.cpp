@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogGrafanaTarget)
+
 static const int ELOG_GRAFANA_HTTP_SUCCESS_STATUS = 204;
 
 ELogGrafanaTarget::ELogGrafanaTarget(const char* lokiAddress, const ELogHttpConfig& config)

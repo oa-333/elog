@@ -11,6 +11,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogAsyncSchemaHandler)
+
 template <typename T>
 static bool initAsyncTargetProvider(ELogAsyncSchemaHandler* schemaHandler, const char* name) {
     T* provider = new (std::nothrow) T();

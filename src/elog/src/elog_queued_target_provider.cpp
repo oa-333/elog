@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogQueuedTargetProvider)
+
 ELogAsyncTarget* ELogQueuedTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // make sure that we have queue_batch_size and
 

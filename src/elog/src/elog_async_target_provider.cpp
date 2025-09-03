@@ -6,6 +6,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogAsyncTargetProvider)
+
 ELogTarget* ELogAsyncTargetProvider::loadNestedTarget(const ELogConfigMapNode* logTargetCfg) {
     // load nested target
     const ELogConfigValue* value = logTargetCfg->getValue("log_target");

@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogExpressionTokenizer)
+
 static const char* sSpecialChars = "(){}[],=<>!:";
 
 inline bool isSpecialChar(char c) { return strchr(sSpecialChars, c) != nullptr; }

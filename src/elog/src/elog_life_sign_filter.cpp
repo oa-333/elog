@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogLifeSignFilter)
+
 ELogLifeSignFilter::ELogLifeSignFilter() {
     for (uint32_t i = 0; i < ELEVEL_COUNT; ++i) {
         m_levelFilters[i] = nullptr;

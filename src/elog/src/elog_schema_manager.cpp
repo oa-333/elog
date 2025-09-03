@@ -11,6 +11,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogSchemaManager)
+
 const char* ELogSchemaManager::ELOG_SCHEMA_MARKER = "://";
 const uint32_t ELogSchemaManager::ELOG_SCHEMA_LEN = 3;
 const uint32_t ELOG_MAX_SCHEMA = 20;

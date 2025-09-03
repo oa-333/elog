@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogCommon)
+
 bool parseIntProp(const char* propName, const std::string& logTargetCfg, const std::string& prop,
                   int32_t& value, bool issueError /* = true */) {
     std::size_t pos = 0;

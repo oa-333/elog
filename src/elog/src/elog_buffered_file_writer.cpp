@@ -14,6 +14,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogBufferedFileWriter)
+
 bool ELogBufferedStats::initialize(uint32_t maxThreads) {
     if (!ELogStats::initialize(maxThreads)) {
         return false;

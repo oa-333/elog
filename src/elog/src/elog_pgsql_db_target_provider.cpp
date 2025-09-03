@@ -9,6 +9,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogPGSQLDbTargetProvider)
+
 ELogDbTarget* ELogPGSQLDbTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
                                                     const std::string& connString,
                                                     const std::string& insertQuery,

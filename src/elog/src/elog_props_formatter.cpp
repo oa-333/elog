@@ -5,6 +5,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogPropsFormatter)
+
 bool ELogPropsFormatter::parseProps(const std::string& props) {
     // props is expected to wrapped with curly braces
     std::string trimmedProps = trim(props);

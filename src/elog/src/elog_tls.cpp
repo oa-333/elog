@@ -16,6 +16,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogTls)
+
 #ifdef ELOG_WINDOWS
 struct ELogTlsCleanupData {
     ELogTlsCleanupData(elogTlsDestructorFunc dtor, ELogTlsKey key) : m_dtor(dtor), m_key(key) {}

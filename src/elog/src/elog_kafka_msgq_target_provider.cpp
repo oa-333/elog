@@ -9,6 +9,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogKafkaMsgQTargetProvider)
+
 ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
                                                         const std::string& topic,
                                                         const std::string& headers) {

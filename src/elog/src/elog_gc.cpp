@@ -17,6 +17,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogGC)
+
 // TODO: using global slot id per-thread does not allow to use more than one GC, so either make the
 // GC a singleton, or use some per-thread array for that, so each GC can manage its own per-thread
 // slot id. Currently we don't have use for GC except for group flush, so this is not fixed for now

@@ -21,6 +21,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogQuantumTarget)
+
 ELogQuantumTarget::ELogQuantumTarget(
     ELogTarget* logTarget, uint32_t bufferSize, uint64_t collectPeriodMicros /* = 0 */,
     CongestionPolicy congestionPolicy /* = CongestionPolicy::CP_WAIT */)

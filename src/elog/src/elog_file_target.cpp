@@ -17,6 +17,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogFileTarget)
+
 #ifdef ELOG_WINDOWS
 static uint32_t getOptimalBlockSize(FILE* fileHandle) {
     // get file descriptor

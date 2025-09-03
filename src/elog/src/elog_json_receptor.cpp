@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogJsonReceptor)
+
 // NOTE: we disable the MSVC compiler warning c4866, which seems like a compiler limitation,
 // not being able to evaluate from left to right (see discussion here:
 // https://stackoverflow.com/questions/66185151/warning-c4866-raised-by-microsoft-visual-c)

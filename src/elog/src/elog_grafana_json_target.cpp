@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogGrafanaJsonTarget)
+
 bool ELogGrafanaJsonTarget::startLogTarget() {
     if (!m_labels.empty() && !parseLabels(m_labels)) {
         return false;

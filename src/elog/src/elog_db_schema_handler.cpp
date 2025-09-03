@@ -12,6 +12,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogDbSchemaHandler)
+
 template <typename T>
 static bool initDbTargetProvider(ELogDbSchemaHandler* schemaHandler, const char* name) {
     T* provider = new (std::nothrow) T();

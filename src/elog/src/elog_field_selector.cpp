@@ -63,6 +63,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogFieldSelector)
+
 typedef ELogConcurrentHashTable<const char*> ELogThreadNameMap;
 static ELogThreadNameMap sThreadNameMap;
 static ELogTlsKey sThreadNameKey = ELOG_INVALID_TLS_KEY;
@@ -100,6 +102,11 @@ static char sProgName[PROG_NAME_MAX];
 static thread_local char* sThreadName = nullptr;
 
 static void cleanupThreadName(void* key) {
+    // NOTE: self report handler cannot be used because the shared logger's thread local buffer may
+    // be already destroyed (depending on TLS destruction order) so we force using the default
+    // handler
+    ELOG_SCOPED_DEFAULT_REPORT();
+
     // cleanup both maps and deallocate memory for thread name
     elog_thread_id_t threadId = (elog_thread_id_t)(uint64_t)key;
     const char* threadName = getThreadNameField(threadId);

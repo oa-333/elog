@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogExpressionParser)
+
 static ELogExpression* parseExpression(ELogExpressionTokenizer& tok);
 static ELogExpression* parseSubExpression(ELogExpressionTokenizer& tok);
 static ELogExpression* parseAndExpression(ELogExpressionTokenizer& tok, ELogExpression* expr);

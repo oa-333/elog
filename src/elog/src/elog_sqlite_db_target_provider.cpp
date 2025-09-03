@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogSQLiteDbTargetProvider)
+
 ELogDbTarget* ELogSQLiteDbTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
                                                      const std::string& connString,
                                                      const std::string& insertQuery,

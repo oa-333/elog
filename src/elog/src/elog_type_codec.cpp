@@ -9,6 +9,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogTypeCodec)
+
 static ELogTypeDecoder* sTypeDecoders[ELOG_MAX_TYPE_COUNT] = {};
 
 bool registerTypeDecoder(uint32_t typeCode, ELogTypeDecoder* decoder) {

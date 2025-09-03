@@ -12,6 +12,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogRpcSchemaHandler)
+
 template <typename T>
 static bool initRpcTargetProvider(ELogRpcSchemaHandler* schemaHandler, const char* name) {
     T* provider = new (std::nothrow) T();

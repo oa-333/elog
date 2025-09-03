@@ -14,6 +14,9 @@
 #include "elog_report.h"
 
 namespace elog {
+
+ELOG_DECLARE_REPORT_LOGGER(ELogWin32DllEvent)
+
 typedef std::vector<ELogWin32DllListener*> ListenerList;
 static ListenerList sListeners;
 typedef std::vector<std::pair<elogWin32ThreadDllEventCB, void*>> CallbackList;

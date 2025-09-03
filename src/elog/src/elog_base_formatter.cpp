@@ -10,6 +10,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogBaseFormatter)
+
 ELogBaseFormatter::~ELogBaseFormatter() {
     for (ELogFieldSelector* fieldSelector : m_fieldSelectors) {
         delete fieldSelector;

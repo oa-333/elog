@@ -3,6 +3,7 @@
 
 #include <cerrno>
 #include <cstdarg>
+#include <string>
 
 #include "elog_def.h"
 #include "elog_error_handler.h"
@@ -25,8 +26,8 @@ public:
     static ELogLevel getReportLevel();
 
     /** @brief Reports an ELog's internal log message. */
-    static void report(ELogLevel logLevel, const char* file, int line, const char* function,
-                       const char* fmt, ...);
+    static void report(const ELogReportLogger& logger, ELogLevel logLevel, const char* file,
+                       int line, const char* function, const char* fmt, ...);
 
     /** @brief Converts system error code to string. */
     static char* sysErrorToStr(int sysErrorCode);
@@ -39,6 +40,18 @@ public:
     static void win32FreeErrorStr(char* errStr);
 #endif
 
+    /** @brief Disables reports for current thread. */
+    static void disableCurrentThreadReports();
+
+    /** @brief Enabled reports for current thread. */
+    static void enableCurrentThreadReports();
+
+    /** @brief Forces usage of the default report handler. */
+    static void startUseDefaultReportHandler();
+
+    /** @brief Stops forcing usage of the default report handler. */
+    static void stopUseDefaultReportHandler();
+
 private:
     // initialize/terminate reporting mechanism
     static void initReport();
@@ -49,8 +62,12 @@ private:
     friend void termGlobals();
 };
 
+/** @brief Helper macro for declaring internal logger by name. */
+#define ELOG_DECLARE_REPORT_LOGGER(name) static ELogReportLogger sLogger(#name);
+
+/** @brief Generic reporting macro. */
 #define ELOG_REPORT(level, fmt, ...) \
-    ELogReport::report(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
+    ELogReport::report(sLogger, level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
 
 /** @brief Report error message to enclosing application/library. */
 #define ELOG_REPORT_FATAL(fmt, ...) ELOG_REPORT(ELEVEL_FATAL, fmt, ##__VA_ARGS__)
@@ -76,6 +93,10 @@ private:
     ELOG_REPORT_SYS_ERROR_NUM(sysCall, errno, fmt, ##__VA_ARGS__)
 
 #ifdef ELOG_WINDOWS
+/**
+ * @brief Report Windows system call failure (error code provided by user) to enclosing
+ * application/library.
+ */
 #define ELOG_REPORT_WIN32_ERROR_NUM(sysCall, sysErr, fmt, ...)                                    \
     {                                                                                             \
         char* errStr = elog::ELogReport::win32SysErrorToStr(sysErr);                              \
@@ -84,10 +105,38 @@ private:
         ELOG_REPORT_ERROR(fmt, ##__VA_ARGS__);                                                    \
     }
 
+/**
+ * @brief Report Windows system call failure (error code taken from GetLastError()) to enclosing
+ * application/library.
+ */
 #define ELOG_REPORT_WIN32_ERROR(sysCall, fmt, ...) \
     ELOG_REPORT_WIN32_ERROR_NUM(sysCall, ::GetLastError(), fmt, ##__VA_ARGS__);
 
 #endif  // ELOG_WINDOWS
+
+// helper RAII class
+struct ScopedDisableReport {
+    ScopedDisableReport() { ELogReport::disableCurrentThreadReports(); }
+    ScopedDisableReport(const ScopedDisableReport&) = delete;
+    ScopedDisableReport(ScopedDisableReport&&) = delete;
+    ScopedDisableReport& operator=(const ScopedDisableReport&) = delete;
+    ~ScopedDisableReport() { ELogReport::enableCurrentThreadReports(); }
+};
+
+/** @def Disable ELog internal reporting altogether for the current block. */
+#define ELOG_SCOPED_DISABLE_REPORT() ScopedDisableReport _disableReport
+
+// helper RAII class
+struct ScopedDefaultReport {
+    ScopedDefaultReport() { ELogReport::startUseDefaultReportHandler(); }
+    ScopedDefaultReport(const ScopedDefaultReport&) = delete;
+    ScopedDefaultReport(ScopedDefaultReport&&) = delete;
+    ScopedDefaultReport& operator=(const ScopedDefaultReport&) = delete;
+    ~ScopedDefaultReport() { ELogReport::stopUseDefaultReportHandler(); }
+};
+
+/** @def Force usage of default ELog internal reporting for the current block. */
+#define ELOG_SCOPED_DEFAULT_REPORT() ScopedDefaultReport _defaultReport
 
 }  // namespace elog
 

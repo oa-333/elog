@@ -11,6 +11,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogConfig)
+
 static const char* sNodeTypeStr[] = {"simple", "array", "map"};
 static const size_t sNodeTypeCount = sizeof(sNodeTypeStr) / sizeof(sNodeTypeStr[0]);
 

@@ -9,6 +9,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogSentryTargetProvider)
+
 ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // expected url is as follows:
     // mon://sentry?

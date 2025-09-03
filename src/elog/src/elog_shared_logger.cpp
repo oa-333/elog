@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogSharedLogger)
+
 // use TLS instead of thread_local due to MinGW bug (static thread_local variable destruction
 // sometimes takes place twice, not clear under which conditions)
 static ELogTlsKey sRecordBuilderKey = ELOG_INVALID_TLS_KEY;

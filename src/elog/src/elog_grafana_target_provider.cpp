@@ -10,6 +10,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogGrafanaTargetProvider)
+
 ELogMonTarget* ELogGrafanaTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // expected url is as follows:
     // mon://grafana?mode=json&

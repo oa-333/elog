@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogPreInitLogger)
+
 void ELogPreInitLogger::writeAccumulatedLogMessages(ELogTarget* logTarget) {
     // use default logger
     ELogLogger* logger = elog::getDefaultLogger();

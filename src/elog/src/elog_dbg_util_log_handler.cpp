@@ -12,6 +12,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogDbgUtilLogHandler)
+
 inline ELogLevel severityToLogLevel(dbgutil::LogSeverity severity) {
     // values are aligned (on purpose), so direct cast can be used
     return (ELogLevel)severity;

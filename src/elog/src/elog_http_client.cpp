@@ -12,6 +12,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogHttpClient)
+
 bool ELogHttpClientAssistant::handleResult(const httplib::Result& result) {
     if (result->status != m_status) {
         ELOG_REPORT_ERROR(

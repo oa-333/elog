@@ -16,6 +16,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogSentryTarget)
+
 // TODO: understand how to work with Sentry transactions
 
 // TODO: checkout the beta logging interface

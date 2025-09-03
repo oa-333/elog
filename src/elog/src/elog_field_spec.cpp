@@ -6,6 +6,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogFieldSpec)
+
 struct NameColorEntry {
     const char* m_colorName;
     ELogColor m_color;

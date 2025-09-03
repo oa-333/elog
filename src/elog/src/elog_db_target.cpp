@@ -68,6 +68,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogDbTarget)
+
 static const uint32_t ELOG_DB_INVALID_SLOT_ID = 0xFFFFFFFF;
 
 static thread_local uint32_t sThreadSlotId = ELOG_DB_INVALID_SLOT_ID;

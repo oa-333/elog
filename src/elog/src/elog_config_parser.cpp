@@ -11,6 +11,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogConfigParser)
+
 bool ELogConfigParser::parseLogLevel(const char* logLevelStr, ELogLevel& logLevel,
                                      ELogPropagateMode& propagateMode) {
     const char* ptr = nullptr;

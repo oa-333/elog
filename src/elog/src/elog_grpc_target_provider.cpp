@@ -14,6 +14,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogGRPCTargetProvider)
+
 // register default implementation
 DECLARE_ELOG_GRPC_TARGET(elog_grpc::ELogService, elog_grpc::ELogRecordMsg, elog_grpc::ELogStatusMsg,
                          elog)

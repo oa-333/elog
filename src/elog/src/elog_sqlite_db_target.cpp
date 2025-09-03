@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogSQLiteDbTarget)
+
 /*static std::string iso_8859_1_to_utf8(const std::string& str) {
     std::string strOut;
     for (std::string::const_iterator it = str.begin(); it != str.end(); ++it) {

@@ -15,6 +15,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogTime)
+
 // the maximum value of precomputed integer as string
 #define ELOG_MAX_DATE_INT 3000
 

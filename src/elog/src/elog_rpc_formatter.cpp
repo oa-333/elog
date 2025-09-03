@@ -5,6 +5,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogRpcFormatter)
+
 bool ELogRpcFormatter::handleText(const std::string& text) {
     // text must be a comma only, perhaps surrounded with whitespace
     // ignore all white space parts

@@ -60,6 +60,8 @@
 // #include "elog_props_formatter.h"
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELog)
+
 #define ELOG_MAX_TARGET_COUNT 256ul
 
 #ifdef ELOG_USING_DBG_UTIL

@@ -2683,9 +2683,9 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
                 std::chrono::microseconds testTime =
                     std::chrono::duration_cast<std::chrono::microseconds>(end - start);
                 double throughput = msgCount / (double)testTime.count() * 1000000.0f;
-                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n",
-                (unsigned)testTime.count(), (unsigned)MSG_COUNT); fprintf(stderr, "Throughput:
-                %0.3f MSg/Sec\n", throughput);*/
+                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n", (unsigned)testTime.count(),
+                        (unsigned)msgCount);
+                fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", throughput);*/
                 resVec[i] = throughput;
             }));
         }

@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogMsgQSchemaHandler)
+
 template <typename T>
 static bool initMsgQTargetProvider(ELogMsgQSchemaHandler* schemaHandler, const char* name) {
     T* provider = new (std::nothrow) T();

@@ -16,6 +16,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogConfigLoader)
+
 inline void appendMultiLine(std::string& multiLine, const std::string& line) {
     if (!multiLine.empty()) {
         multiLine += " ";

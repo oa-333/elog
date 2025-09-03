@@ -11,6 +11,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogStats)
+
 /** @def Thread shutting down constant. */
 #define ELOG_SHUTDOWN_STAT_SLOT_ID ((uint64_t)-2)
 

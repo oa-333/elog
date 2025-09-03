@@ -20,6 +20,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogMonSchemaHandler)
+
 template <typename T>
 static bool initMonTargetProvider(ELogMonSchemaHandler* schemaHandler, const char* name) {
     T* provider = new (std::nothrow) T();

@@ -6,6 +6,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogMySqlDbTarget)
+
 class ELogMySqlDbFieldReceptor : public ELogFieldReceptor {
 public:
     ELogMySqlDbFieldReceptor(sql::PreparedStatement* stmt) : m_stmt(stmt), m_fieldNum(0) {}

@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogRateLimiter)
+
 ELOG_IMPLEMENT_FILTER(ELogRateLimiter)
 
 ELogRateLimiter::ELogRateLimiter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* = 0 */,

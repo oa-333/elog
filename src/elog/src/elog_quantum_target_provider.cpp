@@ -7,6 +7,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogQuantumTargetProvider)
+
 ELogAsyncTarget* ELogQuantumTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // make sure that we have quantum_buffer_size and
 

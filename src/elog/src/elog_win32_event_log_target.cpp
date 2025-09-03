@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogWin32EventLogTarget)
+
 bool ELogWin32EventLogTarget::startLogTarget() {
     if (m_eventSourceName.empty()) {
         m_eventSourceName = getAppName();

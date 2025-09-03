@@ -9,6 +9,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogPGSQLDbTarget)
+
 class ELogPGSQLDbFieldReceptor : public ELogFieldReceptor {
 public:
     ELogPGSQLDbFieldReceptor() {}

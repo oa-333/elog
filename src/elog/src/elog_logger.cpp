@@ -36,6 +36,8 @@
 
 namespace elog {
 
+ELOG_DECLARE_REPORT_LOGGER(ELogLogger)
+
 static thread_local uint64_t sNextRecordId = 0;
 
 void ELogLogger::logFormat(ELogLevel logLevel, const char* file, int line, const char* function,
