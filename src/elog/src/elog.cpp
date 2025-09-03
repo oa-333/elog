@@ -2533,6 +2533,10 @@ void deleteLogSource(ELogSource* logSource) { delete logSource; }
 
 ELogSource* addChildSource(ELogSource* parent, const char* sourceName) {
     ELogSource* logSource = createLogSource(allocLogSourceId(), sourceName, parent);
+    if (logSource == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create log source %s, out of memory", sourceName);
+        return nullptr;
+    }
     if (!parent->addChild(logSource)) {
         // impossible
         ELOG_REPORT_ERROR("Internal error, cannot add child source %s, already exists", sourceName);
