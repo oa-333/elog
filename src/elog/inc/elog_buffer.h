@@ -1,13 +1,17 @@
 #ifndef __ELOG_BUFFER_H__
 #define __ELOG_BUFFER_H__
 
+// clang-format off
+#include "elog_def.h"
+// clang-format on
+
 #include <cassert>
+#if ELOG_CPP_VER < 201703L
 #include <cstdalign>
+#endif
 #include <cstdarg>
 #include <cstdint>
 #include <cstring>
-
-#include "elog_def.h"
 
 namespace elog {
 

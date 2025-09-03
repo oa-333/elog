@@ -167,12 +167,8 @@ void ELogQuantumTarget::logThread() {
                 // immediately
             }
 
-            // set record in reading state
-            assert(entryState == ES_READY);
-            if (!recordData.m_entryState.compare_exchange_strong(entryState, ES_READING,
-                                                                 std::memory_order_relaxed)) {
-                assert(false);
-            }
+            // no need to move state to reading
+            assert(recordData.m_entryState.load(std::memory_order_relaxed) == ES_READY);
 
             // log record, flush or terminate
             if (recordData.m_logRecord.m_reserved == ELOG_STOP_REQUEST) {
