@@ -11,19 +11,28 @@ namespace elog {
 ELOG_DECLARE_REPORT_LOGGER(ELogSysSchemaHandler)
 
 ELogTarget* ELogSysSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+    // load target type
     std::string providerType;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "system", "type",
                                                       providerType)) {
         return nullptr;
     }
+
+    // load statistics enable flag if any
+    bool enableStats = true;
+    if (!ELogConfigLoader::getOptionalLogTargetBoolProperty(logTargetCfg, "system", "enable_stats",
+                                                            enableStats)) {
+        return nullptr;
+    }
+
     ELogTarget* logTarget = nullptr;
     if (providerType.compare("stderr") == 0) {
-        logTarget = new (std::nothrow) ELogFileTarget(stderr);
+        logTarget = new (std::nothrow) ELogFileTarget(stderr, nullptr, false, enableStats);
     } else if (providerType.compare("stdout") == 0) {
-        logTarget = new (std::nothrow) ELogFileTarget(stdout);
+        logTarget = new (std::nothrow) ELogFileTarget(stdout, nullptr, false, enableStats);
     } else if (providerType.compare("syslog") == 0) {
 #ifdef ELOG_LINUX
-        logTarget = new (std::nothrow) ELogSysLogTarget();
+        logTarget = new (std::nothrow) ELogSysLogTarget(enableStats);
 #else
         ELOG_REPORT_ERROR("Cannot create syslog log target, not supported on current platform");
         return nullptr;

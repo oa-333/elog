@@ -2729,7 +2729,10 @@ uint32_t getMaxThreads() { return sMaxThreads; }
 void resetThreadStatCounters(uint64_t slotId) {
     for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
-        logTarget->getStats()->resetThreadCounters(slotId);
+        ELogStats* stats = logTarget->getStats();
+        if (stats != nullptr) {
+            stats->resetThreadCounters(slotId);
+        }
     }
 }
 

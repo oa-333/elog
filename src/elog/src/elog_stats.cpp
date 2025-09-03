@@ -30,14 +30,19 @@ static void cleanUpSlotId(void* key) {
 
     sThreadSlotId = ELOG_SHUTDOWN_STAT_SLOT_ID;
     uint64_t slotId = ((uint64_t)key) - 1;
-    // NOTE: this internal logger call can trigger call to allocThreadSlotId(), so we first
+    // NOTE: this internal logger call can trigger call to allocThreadSlotId(), so we first set
     // sThreadSlotId to ELOG_SHUTDOWN_STAT_SLOT_ID, so that the call to allocThreadSlotId() would
     // reject the request
     ELOG_REPORT_TRACE(
         "Cleanup statistics slot called for current thread with key %p slot id %" PRIu64, key,
-        sThreadSlotId);
-    // elog::resetThreadStatCounters(slotId);
+        slotId);
+
+    // NOTE: we do not reset counters, since some other thread might want to check statistics,
+    // instead statistics are reset during slot allocation
+
     freeThreadSlotId(slotId);
+    // NOTE: we keep the thread local value as ELOG_SHUTDOWN_STAT_SLOT_ID so that it will not get
+    // allocated again in case other TLS cleanup code triggers a slot request
 }
 
 bool initializeStats(uint32_t maxThreads) {
@@ -85,7 +90,15 @@ uint64_t allocThreadSlotId() {
             }
         }
     }
-    ELOG_REPORT_TRACE("Allocated statistics thread slot id %" PRIu64, slotId);
+
+    // save slot in thread local var
+    if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
+        sThreadSlotId = slotId;
+        ELOG_REPORT_TRACE("Allocated statistics thread slot id %" PRIu64, sThreadSlotId);
+        // NOTE: we do not reset thread counters since that may cause wrong reporting, as the total
+        // message count for a log target may suddenly drop (when it can only increase) due to
+        // thread resetting its counters
+    }
     return slotId;
 }
 
@@ -177,16 +190,17 @@ void ELogStats::toString(ELogBuffer& buffer, ELogTarget* logTarget, const char* 
 }
 
 uint64_t ELogStats::getSlotId() {
-    if (sThreadSlotId == ELOG_INVALID_STAT_SLOT_ID) {
-        sThreadSlotId = allocThreadSlotId();
-        if (sThreadSlotId != ELOG_INVALID_STAT_SLOT_ID) {
+    uint64_t slotId = sThreadSlotId;
+    if (slotId == ELOG_INVALID_STAT_SLOT_ID) {
+        slotId = allocThreadSlotId();
+        if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             // NOTE: if tls value is null for the current thread, then dtor is not triggered, so we
             // want to any non-value here, but the problem with gcc (at least on MinGW), is that by
             // the time we reach the TLS dtor function, the thread_local variable sThreadSlotId is
             // already reset to initial value. so we must put the slot id in the tls key for cleanup
             // purposes. also we add +1 to avoid putting zero/null, otherwise on Linux/MinGW the
             // destructor function will not be called
-            elogSetTls(sStatTlsKey, (void*)(sThreadSlotId + 1));
+            elogSetTls(sStatTlsKey, (void*)(slotId + 1));
         } else {
             ELOG_REPORT_WARN(
                 "Attempt to allocates statistics slot for current thread failed, probable cause: "
