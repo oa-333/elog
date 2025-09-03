@@ -73,9 +73,7 @@ ELogMultiQuantumTarget::ELogMultiQuantumTarget(
       m_activeRevisitPeriod(activeRevisitPeriod),
       m_fullRevisitPeriod(fullRevisitPeriod),
       m_maxBatchSize(maxBatchSize),
-      m_collectPeriodMicros(collectPeriodMicros),
-      m_funnelWindowStart(0),
-      m_funnelWindowEnd(0) {
+      m_collectPeriodMicros(collectPeriodMicros) {
     m_bitsetSize = (m_maxThreadCount + WORD_BIT_SIZE - 1) / WORD_BIT_SIZE * WORD_BIT_SIZE;
     m_sortingFunnelSize = m_ringBufferSize * m_maxThreadCount;
 }
@@ -552,14 +550,9 @@ bool ELogMultiQuantumTarget::shipReadySortedRecords(uint64_t readPos, uint64_t e
     while (readPos < endPos && !done) {
         uint64_t index = readPos % m_sortingFunnelSize;
         ELogRecordData& recordData = *m_sortingFunnel.m_recordArray[index];
-        EntryState entryState = recordData.m_entryState.load(std::memory_order_relaxed);
 
-        // set record in reading state
-        assert(entryState == ES_READY);
-        /*if (!recordData.m_entryState.compare_exchange_strong(entryState, ES_READING,
-                                                             std::memory_order_relaxed)) {
-            assert(false);
-        }*/
+        // no need to move state to reading
+        assert(recordData.m_entryState.load(std::memory_order_relaxed) == ES_READY);
 
         // first check special records
         if (recordData.m_logRecord.m_reserved == ELOG_STOP_REQUEST) {

@@ -294,9 +294,6 @@ private:
     std::vector<std::thread> m_readerThreads;
     std::thread m_sortingThread;
 
-    uint64_t m_funnelWindowStart;
-    uint64_t m_funnelWindowEnd;
-
     std::atomic<uint64_t> m_readCount;
     std::atomic<uint64_t> m_funnelCount;
     std::atomic<uint64_t> m_stableCount;

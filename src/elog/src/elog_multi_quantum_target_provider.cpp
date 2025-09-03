@@ -20,30 +20,30 @@ ELogAsyncTarget* ELogMultiQuantumTargetProvider::loadTarget(const ELogConfigMapN
     }
 
     // parse quantum reader count
-    uint64_t readerCount = ELOG_MQT_DEFAULT_READER_COUNT;
-    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(logTargetCfg, "asynchronous",
-                                                            "quantum_reader_count", readerCount)) {
+    uint32_t readerCount = ELOG_MQT_DEFAULT_READER_COUNT;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
+            logTargetCfg, "asynchronous", "quantum_reader_count", readerCount)) {
         return nullptr;
     }
 
     // parse active revisit period
-    uint64_t activeRevisitPeriod = ELOG_MQT_DEFAULT_ACTIVE_REVISIT_COUNT;
-    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(
+    uint32_t activeRevisitPeriod = ELOG_MQT_DEFAULT_ACTIVE_REVISIT_COUNT;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
             logTargetCfg, "asynchronous", "quantum_active_revisit_period", activeRevisitPeriod)) {
         return nullptr;
     }
 
     // parse full revisit period
-    uint64_t fullRevisitPeriod = ELOG_MQT_DEFAULT_FULL_REVISIT_COUNT;
-    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(
+    uint32_t fullRevisitPeriod = ELOG_MQT_DEFAULT_FULL_REVISIT_COUNT;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(
             logTargetCfg, "asynchronous", "quantum_full_revisit_period", fullRevisitPeriod)) {
         return nullptr;
     }
 
     // parse max batch size
-    uint64_t maxBatchSize = ELOG_MQT_DEFAULT_MAX_BATCH_SIZE;
-    if (!ELogConfigLoader::getOptionalLogTargetUIntProperty(logTargetCfg, "asynchronous",
-                                                            "quantum_batch_size", maxBatchSize)) {
+    uint32_t maxBatchSize = ELOG_MQT_DEFAULT_MAX_BATCH_SIZE;
+    if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "asynchronous",
+                                                              "quantum_batch_size", maxBatchSize)) {
         return nullptr;
     }
 
