@@ -10,6 +10,11 @@
 
 namespace elog {
 
+// TODO: revise this, entries must be stable before front()/back() return
+// also what happens when there is not entry ready (empty() == true)? should we block, assert,
+// return false? check all places where this is being used (currently only segmented file target)
+// the READING state is not required and probably causes performance degradation
+// this should be fixed in all containers (quantum, multi-quantum, etc.)
 template <typename T>
 class ELOG_API ELogConcurrentRingBuffer {
 public:
@@ -45,29 +50,37 @@ public:
 
     inline const T& front() const {
         uint64_t readPos = m_readPos.load(std::memory_order_relaxed);
+        assert(m_writePos.load(std::memory_order_relaxed) > readPos);
         uint64_t index = readPos % m_ringBufferSize;
         EntryData& entryData = m_ringBuffer[index];
+        waitEntryStable(entryData);
         return entryData.m_data;
     }
 
     inline T& front() {
         uint64_t readPos = m_readPos.load(std::memory_order_relaxed);
+        assert(m_writePos.load(std::memory_order_relaxed) > readPos);
         uint64_t index = readPos % m_ringBufferSize;
         EntryData& entryData = m_ringBuffer[index];
+        waitEntryStable(entryData);
         return entryData.m_data;
     }
 
     inline const T& back() const {
         uint64_t writePos = m_writePos.load(std::memory_order_relaxed);
+        assert(writePos > m_readPos.load(std::memory_order_relaxed));
         uint64_t index = (writePos + m_ringBufferSize - 1) % m_ringBufferSize;
         EntryData& entryData = m_ringBuffer[index];
+        waitEntryStable(entryData);
         return entryData.m_data;
     }
 
     inline T& back() {
         uint64_t writePos = m_writePos.load(std::memory_order_relaxed);
+        assert(writePos > m_readPos.load(std::memory_order_relaxed));
         uint64_t index = (writePos + m_ringBufferSize - 1) % m_ringBufferSize;
         EntryData& entryData = m_ringBuffer[index];
+        waitEntryStable(entryData);
         return entryData.m_data;
     }
 
@@ -138,11 +151,13 @@ public:
 
     inline T& operator[](uint64_t index) {
         EntryData& entryData = m_ringBuffer[index];
+        waitEntryStable(entryData);
         return entryData.m_data;
     }
 
     inline const T& operator[](uint64_t index) const {
         const EntryData& entryData = m_ringBuffer[index];
+        waitEntryStable(entryData);
         return entryData.m_data;
     }
 
@@ -162,6 +177,15 @@ private:
 
         inline void setData(const T& data) { m_data = data; }
     };
+
+    void waitEntryStable(EntryData& entryData) {
+        EntryState entryState = entryData.m_entryState.load(std::memory_order_relaxed);
+
+        while (entryState != ES_READY) {
+            CPU_RELAX;
+            entryState = entryData.m_entryState.load(std::memory_order_relaxed);
+        }
+    }
 
     ELOG_CACHE_ALIGN EntryData* m_ringBuffer;
     uint64_t m_ringBufferSize;
