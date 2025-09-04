@@ -2,13 +2,13 @@
 #define __ELOG_SYSTEM_H__
 
 #include "elog_config.h"
-#include "elog_error_handler.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
 #include "elog_level.h"
 #include "elog_logger.h"
 #include "elog_props.h"
 #include "elog_rate_limiter.h"
+#include "elog_report_handler.h"
 #include "elog_schema_handler.h"
 #include "elog_source.h"
 #include "elog_target.h"

@@ -20,7 +20,6 @@ target_sources(
             elog_config.h
             elog_def.h
             elog_deferred_target.h
-            elog_error_handler.h
             elog_expression.h
             elog_field_receptor.h
             elog_field_selector.h
@@ -51,6 +50,7 @@ target_sources(
             elog_rate_limiter.h
             elog_read_buffer.h
             elog_record.h
+            elog_report_handler.h
             elog_rolling_bitset.h
             elog_record_builder.h
             elog_rpc_formatter.h

@@ -22,7 +22,7 @@
 #endif
 
 #include "elog_atomic.h"
-#include "elog_error_handler.h"
+#include "elog_report_handler.h"
 #include "elog_rpc_target.h"
 
 /** @def Default deadline used by gRPC log target. Beware of too small deadlines. */

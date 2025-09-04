@@ -6,8 +6,8 @@
 #include <string>
 
 #include "elog_def.h"
-#include "elog_error_handler.h"
 #include "elog_level.h"
+#include "elog_report_handler.h"
 
 namespace elog {
 
