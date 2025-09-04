@@ -55,16 +55,15 @@ target_sources(
             elog_stats.h
             elog_string_stream_receptor.h
             elog_string_receptor.h
-            elog_syslog_target.h
             elog_target_spec.h
             elog_target.h
             elog_time.h
             elog_tls.h
             elog_type_codec.h
-            elog_win32_event_log_target.h
             elog.h)
             
 add_subdirectory(mon)
 add_subdirectory(db)
 add_subdirectory(msgq)
 add_subdirectory(rpc)
+add_subdirectory(sys)

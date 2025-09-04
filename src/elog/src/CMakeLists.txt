@@ -55,17 +55,15 @@ target_sources(elog PRIVATE
     elog_stats.cpp
     elog_string_stream_receptor.cpp
     elog_string_receptor.cpp
-    elog_sys_schema_handler.cpp
-    elog_syslog_target.cpp
     elog_target.cpp
     elog_time.cpp
     elog_tls.cpp
     elog_type_codec.cpp
     elog_win32_dll_event.cpp
-    elog_win32_event_log_target.cpp
     elog.cpp)
 
 add_subdirectory(mon)
 add_subdirectory(db)
 add_subdirectory(msgq)
 add_subdirectory(rpc)
+add_subdirectory(sys)

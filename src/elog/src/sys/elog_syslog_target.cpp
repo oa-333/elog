@@ -1,4 +1,4 @@
-#include "elog_syslog_target.h"
+#include "sys/elog_syslog_target.h"
 
 #ifdef ELOG_LINUX
 

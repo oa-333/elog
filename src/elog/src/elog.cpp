@@ -34,10 +34,10 @@
 #include "elog_shared_logger.h"
 #include "elog_stack_trace.h"
 #include "elog_stats_internal.h"
-#include "elog_syslog_target.h"
 #include "elog_target_spec.h"
 #include "elog_time_internal.h"
-#include "elog_win32_event_log_target.h"
+#include "sys/elog_syslog_target.h"
+#include "sys/elog_win32_event_log_target.h"
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
 #include "elog_gc.h"
