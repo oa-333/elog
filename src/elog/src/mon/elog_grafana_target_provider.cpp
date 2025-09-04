@@ -1,12 +1,12 @@
-#include "elog_grafana_target_provider.h"
+#include "mon/elog_grafana_target_provider.h"
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
-#include "elog_grafana_json_target.h"
 #include "elog_http_config_loader.h"
 #include "elog_report.h"
+#include "mon/elog_grafana_json_target.h"
 
 namespace elog {
 

@@ -3,11 +3,11 @@
 #include "elog_async_schema_handler.h"
 #include "elog_db_schema_handler.h"
 #include "elog_file_schema_handler.h"
-#include "elog_mon_schema_handler.h"
 #include "elog_msgq_schema_handler.h"
 #include "elog_report.h"
 #include "elog_rpc_schema_handler.h"
 #include "elog_sys_schema_handler.h"
+#include "mon/elog_mon_schema_handler.h"
 
 namespace elog {
 

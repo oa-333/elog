@@ -702,6 +702,7 @@ endif()
 
 # include directories
 target_include_directories(elog PRIVATE src/elog/inc)
+target_include_directories(elog PRIVATE src/elog/src)
 if (ELOG_BUILD_BENCH)
     target_include_directories(elog_bench PRIVATE src/elog/inc)
 endif()

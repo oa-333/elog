@@ -12,8 +12,6 @@ target_sources(elog PRIVATE
     elog_config_loader.cpp
     elog_config_parser.cpp
     elog_config.cpp
-    elog_datadog_target_provider.cpp
-    elog_datadog_target.cpp
     elog_db_formatter.cpp
     elog_db_schema_handler.cpp
     elog_db_target.cpp
@@ -30,9 +28,6 @@ target_sources(elog PRIVATE
     elog_flush_policy.cpp
     elog_formatter.cpp
     elog_gc.cpp
-    elog_grafana_json_target.cpp
-    elog_grafana_target_provider.cpp
-    elog_grafana_target.cpp
     elog_grpc_target_provider.cpp
     elog_http_client.cpp
     elog_http_config_loader.cpp
@@ -43,7 +38,6 @@ target_sources(elog PRIVATE
     elog_level.cpp
     elog_life_sign_filter.cpp
     elog_logger.cpp
-    elog_mon_schema_handler.cpp
     elog_msgq_schema_handler.cpp
     elog_multi_quantum_target_provider.cpp
     elog_multi_quantum_target.cpp
@@ -67,8 +61,6 @@ target_sources(elog PRIVATE
     elog_rpc_schema_handler.cpp
     elog_schema_manager.cpp
     elog_segmented_file_target.cpp
-    elog_sentry_target_provider.cpp
-    elog_sentry_target.cpp
     elog_shared_logger.cpp
     elog_source.cpp
     elog_string_tokenizer.cpp
@@ -87,3 +79,5 @@ target_sources(elog PRIVATE
     elog_win32_dll_event.cpp
     elog_win32_event_log_target.cpp
     elog.cpp)
+
+add_subdirectory(mon)

@@ -1,11 +1,11 @@
-#include "elog_sentry_target_provider.h"
+#include "mon/elog_sentry_target_provider.h"
 
 #ifdef ELOG_ENABLE_SENTRY_CONNECTOR
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_report.h"
-#include "elog_sentry_target.h"
+#include "mon/elog_sentry_target.h"
 
 namespace elog {
 

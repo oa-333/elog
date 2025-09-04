@@ -5,7 +5,7 @@
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 
-#include "elog_mon_target_provider.h"
+#include "mon/elog_mon_target_provider.h"
 
 namespace elog {
 

@@ -1,4 +1,4 @@
-#include "elog_grafana_json_target.h"
+#include "mon/elog_grafana_json_target.h"
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
 

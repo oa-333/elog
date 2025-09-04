@@ -18,7 +18,6 @@ target_sources(
             elog_common_def.h
             elog_concurrent_ring_buffer.h
             elog_config.h
-            elog_datadog_target.h
             elog_db_formatter.h
             elog_db_schema_handler.h
             elog_db_target.h
@@ -35,8 +34,6 @@ target_sources(
             elog_flush_policy.h
             elog_formatter.h
             elog_gc.h
-            elog_grafana_json_target.h
-            elog_grafana_target.h
             elog_grpc_target.h
             elog_http_client.h
             elog_json_formatter.h
@@ -46,9 +43,6 @@ target_sources(
             elog_life_sign_filter.h
             elog_logger.h
             elog_managed_object.h
-            elog_mon_schema_handler.h
-            elog_mon_target_provider.h
-            elog_mon_target.h
             elog_msgq_schema_handler.h
             elog_msgq_target.h
             elog_multi_quantum_target.h
@@ -71,7 +65,6 @@ target_sources(
             elog_rpc_target.h
             elog_schema_handler.h
             elog_segmented_file_target.h
-            elog_sentry_target.h
             elog_shared_logger.h
             elog_source.h
             elog_sqlite_db_target.h
@@ -86,3 +79,5 @@ target_sources(
             elog_type_codec.h
             elog_win32_event_log_target.h
             elog.h)
+            
+add_subdirectory(mon)
