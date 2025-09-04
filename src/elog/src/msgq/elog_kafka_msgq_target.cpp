@@ -1,4 +1,4 @@
-#include "elog_kafka_msgq_target.h"
+#include "msgq/elog_kafka_msgq_target.h"
 
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 

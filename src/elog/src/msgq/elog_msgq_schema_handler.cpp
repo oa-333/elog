@@ -1,10 +1,10 @@
-#include "elog_msgq_schema_handler.h"
+#include "msgq/elog_msgq_schema_handler.h"
 
 #include <cassert>
 
 #include "elog_config_loader.h"
-#include "elog_kafka_msgq_target_provider.h"
 #include "elog_report.h"
+#include "msgq/elog_kafka_msgq_target_provider.h"
 
 namespace elog {
 

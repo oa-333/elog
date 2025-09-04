@@ -1,11 +1,11 @@
-#include "elog_kafka_msgq_target_provider.h"
+#include "msgq/elog_kafka_msgq_target_provider.h"
 
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
-#include "elog_kafka_msgq_target.h"
 #include "elog_report.h"
+#include "msgq/elog_kafka_msgq_target.h"
 
 namespace elog {
 

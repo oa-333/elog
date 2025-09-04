@@ -30,12 +30,9 @@ target_sources(elog PRIVATE
     elog_http_config_loader.cpp
     elog_json_formatter.cpp
     elog_json_receptor.cpp
-    elog_kafka_msgq_target.cpp
-    elog_kafka_msgq_target_provider.cpp
     elog_level.cpp
     elog_life_sign_filter.cpp
     elog_logger.cpp
-    elog_msgq_schema_handler.cpp
     elog_multi_quantum_target_provider.cpp
     elog_multi_quantum_target.cpp
     elog_pre_init_logger.cpp
@@ -73,3 +70,4 @@ target_sources(elog PRIVATE
 
 add_subdirectory(mon)
 add_subdirectory(db)
+add_subdirectory(msgq)

@@ -5,7 +5,7 @@
 
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 
-#include "elog_msgq_target_provider.h"
+#include "msgq/elog_msgq_target_provider.h"
 
 namespace elog {
 

@@ -33,15 +33,11 @@ target_sources(
             elog_http_client.h
             elog_json_formatter.h
             elog_json_receptor.h
-            elog_kafka_msgq_target.h
             elog_level.h
             elog_life_sign_filter.h
             elog_logger.h
             elog_managed_object.h
-            elog_msgq_schema_handler.h
-            elog_msgq_target.h
             elog_multi_quantum_target.h
-            elog_msgq_target_provider.h
             elog_private_logger.h
             elog_props_formatter.h
             elog_props.h
@@ -75,3 +71,4 @@ target_sources(
             
 add_subdirectory(mon)
 add_subdirectory(db)
+add_subdirectory(msgq)
