@@ -5,12 +5,9 @@
 
 #include "elog_common.h"
 #include "elog_config_parser.h"
-#include "elog_deferred_target.h"
 #include "elog_expression_parser.h"
 #include "elog_filter.h"
 #include "elog_formatter.h"
-#include "elog_quantum_target.h"
-#include "elog_queued_target.h"
 #include "elog_report.h"
 #include "elog_schema_manager.h"
 

@@ -6,9 +6,6 @@ target_sources(
         TYPE HEADERS
         FILES
             elog_aligned_alloc.h
-            elog_async_schema_handler.h
-            elog_async_target.h
-            elog_async_target_provider.h
             elog_atomic.h
             elog_base_formatter.h
             elog_buffer_receptor.h
@@ -19,7 +16,6 @@ target_sources(
             elog_concurrent_ring_buffer.h
             elog_config.h
             elog_def.h
-            elog_deferred_target.h
             elog_expression.h
             elog_field_receptor.h
             elog_field_selector.h
@@ -36,12 +32,9 @@ target_sources(
             elog_life_sign_filter.h
             elog_logger.h
             elog_managed_object.h
-            elog_multi_quantum_target.h
             elog_private_logger.h
             elog_props_formatter.h
             elog_props.h
-            elog_quantum_target.h
-            elog_queued_target.h
             elog_rate_limiter.h
             elog_read_buffer.h
             elog_record.h
@@ -67,3 +60,4 @@ add_subdirectory(db)
 add_subdirectory(msgq)
 add_subdirectory(rpc)
 add_subdirectory(sys)
+add_subdirectory(async)

@@ -1,7 +1,7 @@
 #include "elog_schema_manager.h"
 
+#include "async/elog_async_schema_handler.h"
 #include "db/elog_db_schema_handler.h"
-#include "elog_async_schema_handler.h"
 #include "elog_file_schema_handler.h"
 #include "elog_report.h"
 #include "mon/elog_mon_schema_handler.h"

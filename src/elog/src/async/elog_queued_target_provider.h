@@ -1,7 +1,7 @@
 #ifndef __ELOG_QUEUED_TARGET_PROVIDER_H__
 #define __ELOG_QUEUED_TARGET_PROVIDER_H__
 
-#include "elog_async_target_provider.h"
+#include "async/elog_async_target_provider.h"
 
 namespace elog {
 

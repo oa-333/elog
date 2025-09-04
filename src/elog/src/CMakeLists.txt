@@ -1,7 +1,4 @@
 target_sources(elog PRIVATE
-    elog_async_schema_handler.cpp
-    elog_async_target_provider.cpp
-    elog_async_target.cpp
     elog_base_formatter.cpp
     elog_buffer_receptor.cpp
     elog_buffer.cpp
@@ -13,8 +10,6 @@ target_sources(elog PRIVATE
     elog_config_parser.cpp
     elog_config.cpp
     elog_dbg_util_log_handler.cpp
-    elog_deferred_target.cpp
-    elog_deferred_target_provider.cpp
     elog_expression_parser.cpp
     elog_expression_tokenizer.cpp
     elog_field_selector.cpp
@@ -32,15 +27,9 @@ target_sources(elog PRIVATE
     elog_level.cpp
     elog_life_sign_filter.cpp
     elog_logger.cpp
-    elog_multi_quantum_target_provider.cpp
-    elog_multi_quantum_target.cpp
     elog_pre_init_logger.cpp
     elog_private_logger.cpp
     elog_props_formatter.cpp
-    elog_quantum_target.cpp
-    elog_quantum_target_provider.cpp
-    elog_queued_target.cpp
-    elog_queued_target_provider.cpp
     elog_rate_limiter.cpp
     elog_record.cpp
     elog_report.cpp
@@ -67,3 +56,4 @@ add_subdirectory(db)
 add_subdirectory(msgq)
 add_subdirectory(rpc)
 add_subdirectory(sys)
+add_subdirectory(async)

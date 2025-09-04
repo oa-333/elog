@@ -1,12 +1,12 @@
-#include "elog_async_schema_handler.h"
+#include "async/elog_async_schema_handler.h"
 
 #include <cassert>
 
+#include "async/elog_deferred_target_provider.h"
+#include "async/elog_multi_quantum_target_provider.h"
+#include "async/elog_quantum_target_provider.h"
+#include "async/elog_queued_target_provider.h"
 #include "elog_config_loader.h"
-#include "elog_deferred_target_provider.h"
-#include "elog_multi_quantum_target_provider.h"
-#include "elog_quantum_target_provider.h"
-#include "elog_queued_target_provider.h"
 #include "elog_report.h"
 
 namespace elog {
