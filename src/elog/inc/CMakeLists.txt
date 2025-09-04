@@ -18,10 +18,6 @@ target_sources(
             elog_common_def.h
             elog_concurrent_ring_buffer.h
             elog_config.h
-            elog_db_formatter.h
-            elog_db_schema_handler.h
-            elog_db_target.h
-            elog_db_target_provider.h
             elog_def.h
             elog_deferred_target.h
             elog_error_handler.h
@@ -47,8 +43,6 @@ target_sources(
             elog_msgq_target.h
             elog_multi_quantum_target.h
             elog_msgq_target_provider.h
-            elog_mysql_db_target.h
-            elog_pgsql_db_target.h
             elog_private_logger.h
             elog_props_formatter.h
             elog_props.h
@@ -67,7 +61,6 @@ target_sources(
             elog_segmented_file_target.h
             elog_shared_logger.h
             elog_source.h
-            elog_sqlite_db_target.h
             elog_stats.h
             elog_string_stream_receptor.h
             elog_string_receptor.h
@@ -81,3 +74,4 @@ target_sources(
             elog.h)
             
 add_subdirectory(mon)
+add_subdirectory(db)

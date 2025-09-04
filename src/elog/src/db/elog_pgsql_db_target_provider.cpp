@@ -1,10 +1,10 @@
-#include "elog_pgsql_db_target_provider.h"
+#include "db/elog_pgsql_db_target_provider.h"
 
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 
+#include "db/elog_pgsql_db_target.h"
 #include "elog_common.h"
 #include "elog_config_loader.h"
-#include "elog_pgsql_db_target.h"
 #include "elog_report.h"
 
 namespace elog {

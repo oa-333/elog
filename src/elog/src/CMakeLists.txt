@@ -12,9 +12,6 @@ target_sources(elog PRIVATE
     elog_config_loader.cpp
     elog_config_parser.cpp
     elog_config.cpp
-    elog_db_formatter.cpp
-    elog_db_schema_handler.cpp
-    elog_db_target.cpp
     elog_dbg_util_log_handler.cpp
     elog_deferred_target.cpp
     elog_deferred_target_provider.cpp
@@ -41,10 +38,6 @@ target_sources(elog PRIVATE
     elog_msgq_schema_handler.cpp
     elog_multi_quantum_target_provider.cpp
     elog_multi_quantum_target.cpp
-    elog_mysql_db_target.cpp
-    elog_mysql_db_target_provider.cpp
-    elog_pgsql_db_target_provider.cpp
-    elog_pgsql_db_target.cpp
     elog_pre_init_logger.cpp
     elog_private_logger.cpp
     elog_props_formatter.cpp
@@ -64,8 +57,6 @@ target_sources(elog PRIVATE
     elog_shared_logger.cpp
     elog_source.cpp
     elog_string_tokenizer.cpp
-    elog_sqlite_db_target.cpp
-    elog_sqlite_db_target_provider.cpp
     elog_stack_trace.cpp
     elog_stats.cpp
     elog_string_stream_receptor.cpp
@@ -81,3 +72,4 @@ target_sources(elog PRIVATE
     elog.cpp)
 
 add_subdirectory(mon)
+add_subdirectory(db)

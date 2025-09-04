@@ -1,4 +1,4 @@
-#include "elog_pgsql_db_target.h"
+#include "db/elog_pgsql_db_target.h"
 
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 

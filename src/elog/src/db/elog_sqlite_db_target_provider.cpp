@@ -1,9 +1,9 @@
-#include "elog_sqlite_db_target_provider.h"
+#include "db/elog_sqlite_db_target_provider.h"
 
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
 
+#include "db/elog_sqlite_db_target.h"
 #include "elog_report.h"
-#include "elog_sqlite_db_target.h"
 
 namespace elog {
 

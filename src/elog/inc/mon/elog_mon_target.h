@@ -5,7 +5,6 @@
 #include <mutex>
 #include <thread>
 
-#include "elog_db_formatter.h"
 #include "elog_target.h"
 
 namespace elog {
