@@ -3,8 +3,8 @@
 
 #include <cstdio>
 
-#include "elog_buffered_file_writer.h"
 #include "elog_target.h"
+#include "file/elog_buffered_file_writer.h"
 
 namespace elog {
 

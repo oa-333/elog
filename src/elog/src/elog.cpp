@@ -11,7 +11,6 @@
 #include <regex>
 #include <unordered_map>
 
-#include "elog_buffered_file_target.h"
 #include "elog_cache.h"
 #include "elog_common.h"
 #include "elog_config.h"
@@ -19,8 +18,6 @@
 #include "elog_config_parser.h"
 #include "elog_dbg_util_log_handler.h"
 #include "elog_field_selector_internal.h"
-#include "elog_file_schema_handler.h"
-#include "elog_file_target.h"
 #include "elog_filter_internal.h"
 #include "elog_flush_policy.h"
 #include "elog_flush_policy_internal.h"
@@ -30,12 +27,15 @@
 #include "elog_rate_limiter.h"
 #include "elog_report.h"
 #include "elog_schema_manager.h"
-#include "elog_segmented_file_target.h"
 #include "elog_shared_logger.h"
 #include "elog_stack_trace.h"
 #include "elog_stats_internal.h"
 #include "elog_target_spec.h"
 #include "elog_time_internal.h"
+#include "file/elog_buffered_file_target.h"
+#include "file/elog_file_schema_handler.h"
+#include "file/elog_file_target.h"
+#include "file/elog_segmented_file_target.h"
 #include "sys/elog_syslog_target.h"
 #include "sys/elog_win32_event_log_target.h"
 

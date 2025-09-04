@@ -1,8 +1,8 @@
 #include "sys/elog_sys_schema_handler.h"
 
 #include "elog_config_loader.h"
-#include "elog_file_target.h"
 #include "elog_report.h"
+#include "file/elog_file_target.h"
 #include "sys/elog_syslog_target.h"
 #include "sys/elog_win32_event_log_target.h"
 

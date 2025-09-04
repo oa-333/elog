@@ -2,8 +2,6 @@ target_sources(elog PRIVATE
     elog_base_formatter.cpp
     elog_buffer_receptor.cpp
     elog_buffer.cpp
-    elog_buffered_file_target.cpp
-    elog_buffered_file_writer.cpp
     elog_cache.cpp
     elog_common.cpp
     elog_config_loader.cpp
@@ -14,8 +12,6 @@ target_sources(elog PRIVATE
     elog_expression_tokenizer.cpp
     elog_field_selector.cpp
     elog_field_spec.cpp
-    elog_file_schema_handler.cpp
-    elog_file_target.cpp
     elog_filter.cpp
     elog_flush_policy.cpp
     elog_formatter.cpp
@@ -36,7 +32,6 @@ target_sources(elog PRIVATE
     elog_report.h
     elog_rolling_bitset.cpp
     elog_schema_manager.cpp
-    elog_segmented_file_target.cpp
     elog_shared_logger.cpp
     elog_source.cpp
     elog_string_tokenizer.cpp
@@ -57,3 +52,4 @@ add_subdirectory(msgq)
 add_subdirectory(rpc)
 add_subdirectory(sys)
 add_subdirectory(async)
+add_subdirectory(file)

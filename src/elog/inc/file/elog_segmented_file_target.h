@@ -5,10 +5,10 @@
 #include <list>
 #include <string>
 
-#include "elog_buffered_file_writer.h"
 #include "elog_concurrent_ring_buffer.h"
 #include "elog_rolling_bitset.h"
 #include "elog_target.h"
+#include "file/elog_buffered_file_writer.h"
 
 namespace elog {
 
