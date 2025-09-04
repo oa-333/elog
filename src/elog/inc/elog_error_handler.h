@@ -1,6 +1,8 @@
 #ifndef __ELOG_ERROR_HANDLER_H__
 #define __ELOG_ERROR_HANDLER_H__
 
+#include <string>
+
 #include "elog_def.h"
 #include "elog_level.h"
 

@@ -157,7 +157,8 @@ public:
     ELogGRPCBaseReactor(ELogReportHandler* reportHandler, StubType* stub,
                         ELogRpcFormatter* rpcFormatter,
                         uint32_t maxInflightCalls = ELOG_GRPC_DEFAULT_MAX_INFLIGHT_CALLS)
-        : m_reportHandler(reportHandler),
+        : m_logger("grpc.ELogGRPCBaseReactor"),
+          m_reportHandler(reportHandler),
           m_stub(stub),
           m_rpcFormatter(rpcFormatter),
           m_state(ReactorState::RS_INIT),
@@ -173,7 +174,7 @@ public:
         m_inFlightRequests = new (std::nothrow) CallData[m_maxInflightCalls];
         if (m_inFlightRequests == nullptr) {
             m_reportHandler->onReport(
-                ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+                m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                 "Failed to allocate in-flight message array in gRPC base reactor");
         }
     }
@@ -217,6 +218,7 @@ public:
     void OnDone(const grpc::Status& status) override;
 
 private:
+    ELogReportLogger m_logger;
     ELogReportHandler* m_reportHandler;
     grpc::ClientContext m_context;
     grpc::Status m_status;
@@ -281,6 +283,7 @@ public:
                        ELogGRPCClientMode clientMode = ELogGRPCClientMode::GRPC_CM_UNARY,
                        uint64_t deadlineTimeoutMillis = 0, uint32_t maxInflightCalls = 0)
         : ELogRpcTarget(server.c_str(), "", 0, ""),
+          m_logger("grpc.ELogGRPCBaseTarget"),
           m_reportHandler(reportHandler),
           m_params(params),
           m_serverCA(serverCA),
@@ -312,6 +315,7 @@ protected:
 
 private:
     // configuration
+    ELogReportLogger m_logger;
     ELogReportHandler* m_reportHandler;
     std::string m_params;
     std::string m_serverCA;

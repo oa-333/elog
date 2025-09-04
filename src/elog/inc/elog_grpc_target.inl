@@ -145,7 +145,7 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
     // this must be done regardless of state
     CallData* callData = allocCallData();
     if (callData == nullptr) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Failed to allocate gRPC call data");
         return 0;
     }
@@ -164,7 +164,7 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
         // at this point no OnWriteDone() or onDone() can arrive concurrently (as there is
         // no inflight message)
         if (m_reportHandler->isTraceEnabled()) {
-            m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+            m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                       "*** INIT --> BATCH, adding HOLD ***");
         }
         // NOTE: we need to add hold since there is a write flow that is outside of the reactor
@@ -179,7 +179,8 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
         if (m_reportHandler->isTraceEnabled()) {
             std::string msg = "*** Set inflight (INIT) to true for request id ";
             msg += std::to_string(requestId);
-            m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION, msg.c_str());
+            m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                                      msg.c_str());
         }
         BaseClass::StartWrite(callData->m_logRecordMsg);
         BaseClass::StartCall();  // this actually marks the start of a new RPC stream
@@ -200,7 +201,7 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
             if (m_reportHandler->isTraceEnabled()) {
                 std::string msg = "*** Set inflight (BATCH) to true for request id ";
                 msg += std::to_string(requestId);
-                m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                           msg.c_str());
             }
             BaseClass::StartWrite(callData->m_logRecordMsg);
@@ -215,7 +216,7 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
                 std::string msg =
                     "*** Inflight (BATCH) is already true, pushing pending request id ";
                 msg += std::to_string(requestId);
-                m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                           msg.c_str());
             }
         }
@@ -232,7 +233,8 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
 template <typename StubType, typename MessageType, typename ReceptorType>
 void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::flush() {
     if (m_reportHandler->isTraceEnabled()) {
-        m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION, "*** FLUSH ***");
+        m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                                  "*** FLUSH ***");
     }
     // move to state flush
     // from this point until flush is done, no incoming requests are allowed
@@ -248,14 +250,14 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::flush() {
             if (m_reportHandler->isTraceEnabled()) {
                 std::string msg = "*** FLUSH request submitted, in-flight=";
                 msg += inFlight ? "yes" : "no";
-                m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                           msg.c_str());
             }
             m_pendingWriteRequests.push_front(ELOG_FLUSH_REQUEST_ID);
             if (m_reportHandler->isTraceEnabled()) {
                 std::string msg = "*** Pushed flush request on queue, inflight is ";
                 msg += inFlight ? "true" : "false";
-                m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                           msg.c_str());
             }
 
@@ -267,7 +269,7 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::flush() {
     // requests are blocked on ELogTarget's mutex, or are pending in some external queue, and by the
     // time they are served a new stream writer will be established), so don't need a lock here
     if (m_reportHandler->isTraceEnabled()) {
-        m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "*** FLUSH request starting, removing HOLD");
     }
     // NOTE: it is ok to call these two concurrently with OnWriteDone()
@@ -292,7 +294,7 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnWriteDone(bool 
     // TODO: what if ok is false? currently we still continue, but we should at least issue some
     // trace
     if (!ok) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Single message stream write failed");
         // TODO: now what?
     }
@@ -309,7 +311,8 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnWriteDone(bool 
     if (m_reportHandler->isTraceEnabled()) {
         std::string msg = "*** OnWriteDone(): in-flight is true, completed request id ";
         msg += std::to_string(requestId);
-        m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION, msg.c_str());
+        m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                                  msg.c_str());
     }
 
     // in order to maintain correct order, we do not reset yet the inflight flag,
@@ -327,7 +330,7 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnWriteDone(bool 
     if (requestId == ELOG_FLUSH_REQUEST_ID) {
         // now we can end the batch (delayed flush execution)
         if (m_reportHandler->isTraceEnabled()) {
-            m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+            m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                       "*** Delayed FLUSH request starting, removing HOLD");
         }
         // these calls to gRPC are thread safe, since we use Holds
@@ -353,7 +356,8 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnWriteDone(bool 
         if (m_reportHandler->isTraceEnabled()) {
             std::string msg = "*** OnWriteDone(): Starting write for delayed request id ";
             msg += std::to_string(requestId);
-            m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION, msg.c_str());
+            m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                                      msg.c_str());
         }
         // must store the currently executed in-flight message request id, otherwise next round of
         // OnWriteDone() will not be able to find the call data and clean it up
@@ -366,7 +370,7 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnWriteDone(bool 
         // is set to false, so racing writers will see it as true, until it is set to false here
         if (m_reportHandler->isTraceEnabled()) {
             m_reportHandler->onReport(
-                ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                 "*** OnWriteDone(): No pending request, resetting inflight to false");
         }
         if (!m_inFlight.compare_exchange_strong(inFlight, false, std::memory_order_release)) {
@@ -381,7 +385,7 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnDone(const grpc
     if (!status.ok()) {
         std::string errorMsg = "gRPC call (asynchronous callback stream) ended with error: ";
         errorMsg += status.error_message();
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
     }
 
@@ -390,7 +394,8 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnDone(const grpc
         s << "*** OnDone(): state = " << (int)m_state.load(std::memory_order_relaxed)
           << ", in-flight=" << (m_inFlight ? "yes" : "no")
           << "pending-requests=" << m_pendingWriteRequests.size();
-        m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION, s.str().c_str());
+        m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+                                  s.str().c_str());
     }
 
     // in order to avoid newcomers writing messages before the ones that needed to wait during
@@ -407,7 +412,7 @@ void ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::OnDone(const grpc
         assert(false);
     }
     if (m_reportHandler->isTraceEnabled()) {
-        m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "*** FLUSH --> DONE, FLUSH request executed");
     }
     m_cv.notify_one();
@@ -442,7 +447,7 @@ ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::allocCallData() {
         }
     }
     if (!callData->init(requestId)) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Failed to allocate gRPC log record message, out of memory");
         callData->clear();
         return nullptr;
@@ -472,7 +477,7 @@ bool ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::setStateFlush() {
         assert(false);
     }
     if (m_reportHandler->isTraceEnabled()) {
-        m_reportHandler->onReport(ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_TRACE, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "*** BATCH --> FLUSH ***");
     }
     return false;
@@ -573,7 +578,8 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
 
     std::string errorMsg = "Cannot write log record, invalid gRPC client mode: ";
     errorMsg += std::to_string((unsigned)m_clientMode);
-    m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION, errorMsg.c_str());
+    m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+                              errorMsg.c_str());
     return 0;
 }
 
@@ -649,7 +655,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     if (!callStatus.ok()) {
         std::string errorMsg = "Failed to send log record over gRPC (synchronous unary): ";
         errorMsg += callStatus.error_message();
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
         // TODO: what now?
         return 0;
@@ -660,7 +666,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     if (bytesWritten > UINT32_MAX) {
         std::string errorMsg = "Invalid gRPC payload size: ";
         errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
         bytesWritten = UINT32_MAX;
         // nevertheless we continue, but size will be incorrect
@@ -689,7 +695,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
 
     // write next message in current RPC stream
     if (!m_clientWriter->Write(msg)) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Failed to stream log record over gRPC");
         // TODO: what now?
         return 0;
@@ -701,7 +707,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     if (bytesWritten > UINT32_MAX) {
         std::string errorMsg = "Invalid gRPC payload size: ";
         errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
         bytesWritten = UINT32_MAX;
         // nevertheless we continue, but size will be incorrect
@@ -742,14 +748,14 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     bool ok = false;
     if (!m_cq.Next(&tag, &ok) || !ok) {
         m_reportHandler->onReport(
-            ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+            m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
             "Failed to get completion queue response in asynchronous mode gRPC");
         // TODO: what now?
         return 0;
     }
 
     if (tag != (void*)1) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Unexpected response tag in asynchronous mode gRPC");
         return 0;
     }
@@ -757,7 +763,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     if (!callStatus.ok()) {
         std::string errorMsg = "Asynchronous mode gRPC call ended with status FAIL: ";
         errorMsg += callStatus.error_message();
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
         return 0;
     }
@@ -767,7 +773,7 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     if (bytesWritten > UINT32_MAX) {
         std::string errorMsg = "Invalid gRPC payload size: ";
         errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
         bytesWritten = UINT32_MAX;
         // nevertheless we continue, but size will be incorrect
@@ -826,7 +832,7 @@ ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     if (bytesWritten > UINT32_MAX) {
         std::string errorMsg = "Invalid gRPC payload size: ";
         errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
         bytesWritten = UINT32_MAX;
         // nevertheless we continue, but size will be incorrect
@@ -857,7 +863,7 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                         ReceptorType>::createStreamContext() {
     m_streamContext = new (std::nothrow) grpc::ClientContext();
     if (m_streamContext == nullptr) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Failed to allocate gRPC stream context, out of memory");
         return false;
     }
@@ -881,7 +887,7 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                         ReceptorType>::createStreamWriter() {
     m_clientWriter = m_serviceStub->StreamLogRecords(m_streamContext, &m_streamStatus);
     if (m_clientWriter.get() == nullptr) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Failed to create gRPC synchronous streaming client writer");
         return false;
     }
@@ -898,7 +904,7 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
         std::string errorMsg =
             "Failed to terminate log record synchronous stream sending over gRPC: ";
         errorMsg += callStatus.error_message();
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   errorMsg.c_str());
         return false;
     }
@@ -919,7 +925,7 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     m_reactor = new ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>(
         m_reportHandler, m_serviceStub.get(), getRpcFormatter(), m_maxInflightCalls);
     if (m_reactor == nullptr) {
-        m_reportHandler->onReport(ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Failed to allocate gRPC reactor, out of memory");
         return false;
     }
