@@ -19,7 +19,7 @@
 #endif
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
-#include "elog_grpc_target.h"
+#include "rpc/elog_grpc_target.h"
 #endif
 
 #if defined(ELOG_MSVC) || defined(ELOG_MINGW)

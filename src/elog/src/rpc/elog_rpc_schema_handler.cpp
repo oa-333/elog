@@ -1,4 +1,4 @@
-#include "elog_rpc_schema_handler.h"
+#include "rpc/elog_rpc_schema_handler.h"
 
 #include <cassert>
 
@@ -7,7 +7,7 @@
 #include "elog_report.h"
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
-#include "elog_grpc_target_provider.h"
+#include "rpc/elog_grpc_target_provider.h"
 #endif
 
 namespace elog {

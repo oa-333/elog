@@ -5,7 +5,7 @@
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
 
-#include "elog_rpc_target_provider.h"
+#include "rpc/elog_rpc_target_provider.h"
 
 namespace elog {
 

@@ -25,7 +25,6 @@ target_sources(elog PRIVATE
     elog_flush_policy.cpp
     elog_formatter.cpp
     elog_gc.cpp
-    elog_grpc_target_provider.cpp
     elog_http_client.cpp
     elog_http_config_loader.cpp
     elog_json_formatter.cpp
@@ -47,8 +46,6 @@ target_sources(elog PRIVATE
     elog_report.cpp
     elog_report.h
     elog_rolling_bitset.cpp
-    elog_rpc_formatter.cpp
-    elog_rpc_schema_handler.cpp
     elog_schema_manager.cpp
     elog_segmented_file_target.cpp
     elog_shared_logger.cpp
@@ -71,3 +68,4 @@ target_sources(elog PRIVATE
 add_subdirectory(mon)
 add_subdirectory(db)
 add_subdirectory(msgq)
+add_subdirectory(rpc)

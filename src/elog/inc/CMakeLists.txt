@@ -29,7 +29,6 @@ target_sources(
             elog_flush_policy.h
             elog_formatter.h
             elog_gc.h
-            elog_grpc_target.h
             elog_http_client.h
             elog_json_formatter.h
             elog_json_receptor.h
@@ -49,10 +48,6 @@ target_sources(
             elog_report_handler.h
             elog_rolling_bitset.h
             elog_record_builder.h
-            elog_rpc_formatter.h
-            elog_rpc_schema_handler.h
-            elog_rpc_target_provider.h
-            elog_rpc_target.h
             elog_schema_handler.h
             elog_segmented_file_target.h
             elog_shared_logger.h
@@ -72,3 +67,4 @@ target_sources(
 add_subdirectory(mon)
 add_subdirectory(db)
 add_subdirectory(msgq)
+add_subdirectory(rpc)

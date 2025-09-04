@@ -1,4 +1,4 @@
-#include "elog_grpc_target_provider.h"
+#include "rpc/elog_grpc_target_provider.h"
 
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
 
@@ -7,8 +7,8 @@
 
 #include "elog_common.h"
 #include "elog_config_loader.h"
-#include "elog_grpc_target.h"
 #include "elog_report.h"
+#include "rpc/elog_grpc_target.h"
 
 #define ELOG_MAX_GRPC_TARGETS 10
 
