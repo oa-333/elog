@@ -3,6 +3,7 @@ target_sources(elog PRIVATE
     elog_buffer_receptor.cpp
     elog_buffer.cpp
     elog_cache.cpp
+    elog_comm_util_log_handler.cpp
     elog_common.cpp
     elog_config_loader.cpp
     elog_config_parser.cpp
@@ -53,3 +54,6 @@ add_subdirectory(rpc)
 add_subdirectory(sys)
 add_subdirectory(async)
 add_subdirectory(file)
+add_subdirectory(msg)
+add_subdirectory(net)
+add_subdirectory(ipc)

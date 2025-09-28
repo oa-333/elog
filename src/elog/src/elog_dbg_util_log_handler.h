@@ -49,7 +49,7 @@ public:
     void applyLogLevelCfg();
 
 private:
-    std::vector<ELogLevelCfg> m_logLevelCfg;
+    std::vector<ELogDbgLevelCfg> m_logLevelCfg;
     std::vector<ELogLogger*> m_dbgUtilLoggers;
 };
 

@@ -9,6 +9,14 @@
 #include "rpc/elog_rpc_schema_handler.h"
 #include "sys/elog_sys_schema_handler.h"
 
+#ifdef ELOG_ENABLE_NET
+#include "net/elog_net_schema_handler.h"
+#endif
+
+#ifdef ELOG_ENABLE_IPC
+#include "ipc/elog_ipc_schema_handler.h"
+#endif
+
 namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogSchemaManager)
@@ -47,6 +55,18 @@ bool ELogSchemaManager::initSchemaHandlers() {
         !initSchemaHandler<ELogMonSchemaHandler>("mon")) {
         return false;
     }
+
+#ifdef ELOG_ENABLE_NET
+    if (!initSchemaHandler<ELogNetSchemaHandler>("net")) {
+        return false;
+    }
+#endif
+
+#ifdef ELOG_ENABLE_IPC
+    if (!initSchemaHandler<ELogIpcSchemaHandler>("ipc")) {
+        return false;
+    }
+#endif
     return true;
 }
 

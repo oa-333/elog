@@ -1,0 +1,123 @@
+#ifndef __ELOG_MSG_TARGET_H__
+#define __ELOG_MSG_TARGET_H__
+
+#ifdef ELOG_ENABLE_MSG
+
+#include <msg/msg.h>
+#include <msg/msg_config.h>
+#include <msg/msg_def.h>
+#include <msg/msg_sender.h>
+#include <transport/data_client.h>
+
+#include "elog_target.h"
+#include "msg/elog_binary_format_provider.h"
+#include "msg/elog_msg.h"
+#include "msg/elog_msg_stats.h"
+
+namespace elog {
+
+/** @brief Abstract parent class for messaging log targets. */
+class ELOG_API ELogMsgTarget : public ELogTarget,
+                               public commutil::MsgStatListener,
+                               public commutil::MsgResponseHandler {
+public:
+    ELogMsgTarget(const char* name, const commutil::MsgConfig& msgConfig,
+                  commutil::DataClient* dataClient, ELogBinaryFormatProvider* binaryFormatProvider,
+                  bool syncMode, bool compress, uint32_t maxConcurrentRequests)
+        : ELogTarget(name),
+          commutil::MsgResponseHandler(name),
+          m_msgConfig(msgConfig),
+          m_dataClient(dataClient),
+          m_binaryFormatProvider(binaryFormatProvider),
+          m_msgStats(nullptr),
+          m_syncMode(syncMode),
+          m_compress(compress),
+          m_maxConcurrentRequests(maxConcurrentRequests) {}
+    ELogMsgTarget(const ELogMsgTarget&) = delete;
+    ELogMsgTarget(ELogMsgTarget&&) = delete;
+    ELogMsgTarget& operator=(const ELogMsgTarget&) = delete;
+    ~ELogMsgTarget() override {}
+
+    /**
+     * @brief Notifies on sent message statistics.
+     * @param msgSizeBytes The payload size (not including framing protocol header).
+     * @param compressedMsgSizeBytes The compressed pay load size, in case compression is used,
+     * otherwise zero.
+     * @param status Denotes send result status. Zero means success.
+     */
+    void onSendMsgStats(uint32_t msgSizeBytes, uint32_t compressedMsgSizeBytes,
+                        int status) override;
+
+    /**
+     * @brief Notifies on received message statistics.
+     * @param msgSizeBytes The payload size (not including framing protocol header).
+     * @param compressedMsgSizeBytes The compressed pay load size, in case compression is used,
+     * otherwise zero.
+     */
+    void onRecvMsgStats(uint32_t msgSizeBytes, uint32_t compressedMsgSizeBytes) override;
+
+    /**
+     * @brief Handles message response.
+     * @param msgHeader The header of the incoming meta-message frame.
+     * @param responseBuffer The response message buffer.
+     * @param bufferSize The buffer length.
+     * @param status Deserialization error status. Zero denotes success.
+     * @return E_OK If the transaction was successful, otherwise an error code, in which case the
+     * message will be stored in a backlog for future attempt to resend to the server.
+     */
+    commutil::ErrorCode handleResponse(const commutil::MsgHeader& msgHeader,
+                                       const char* responseBuffer, uint32_t bufferSize,
+                                       int status) override;
+
+    /**
+     * @brief Retrieves the number of messages that were fully processed by the log target. This
+     * includes failed log messages. In case of a compound log target, the request is delegated to
+     * the end log target.
+     * @return The number of log messages that were fully processed or @ref ELOG_INVALID_MSG_COUNT
+     * in case statistics collection for the log target is disabled.
+     */
+    uint64_t getProcessedMsgCount() override;
+
+protected:
+    /**
+     * @brief Order the log target to start. In the case of a network target this means starting all
+     * the machinery going AND performing full handshake to resolve binary format and protocol
+     * version. So this is normally a blocking call, unless the user specifies in the constructor or
+     * configuration to use asynchronous connect mode in which case the log target will accomplish
+     * the connect/handshake in the background. The user can call @ref isReady() or @ref waitReady()
+     * in order to verify.
+     */
+    bool startLogTarget() override;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() override;
+
+    /**
+     * @brief Order the log target to write a log record (thread-safe).
+     * @return The number of bytes written to log.
+     */
+    uint32_t writeLogRecord(const ELogRecord& logRecord) override;
+
+    /** @brief Order the log target to flush. */
+    bool flushLogTarget() override;
+
+    /** @brief Creates a statistics object. */
+    ELogStats* createStats() final;
+
+    commutil::MsgConfig m_msgConfig;
+    commutil::DataClient* m_dataClient;
+    commutil::MsgClient m_msgClient;
+    commutil::MsgSender m_msgSender;
+    ELogBinaryFormatProvider* m_binaryFormatProvider;
+    ELogMsgStats* m_msgStats;
+    commutil::MsgBufferArray m_msgBufferArray;
+    bool m_syncMode;
+    bool m_compress;
+    uint32_t m_maxConcurrentRequests;
+};
+
+}  // namespace elog
+
+#endif  // ELOG_ENABLE_MSG
+
+#endif  // __ELOG_MSG_TARGET_H__

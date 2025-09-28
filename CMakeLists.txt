@@ -62,6 +62,8 @@ option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
 option(ELOG_ENABLE_GRAFANA_CONNECTOR "ELog Grafana connector" OFF)
 option(ELOG_ENABLE_SENTRY_CONNECTOR "ELog Sentry connector" OFF)
 option(ELOG_ENABLE_DATADOG_CONNECTOR "ELog Datadog connector" OFF)
+option(ELOG_ENABLE_NET "ELog Network connector" OFF)
+option(ELOG_ENABLE_IPC "ELog IPC connector" OFF)
 
 # debug options
 option(ELOG_ENABLE_MEM_CHECK "Enables ELog memory check" OFF)
@@ -73,6 +75,20 @@ set(ELOG_ENABLE_JSON OFF)
 if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR)
     set(ELOG_ENABLE_HTTP ON)
     set(ELOG_ENABLE_JSON ON)
+endif()
+
+# figure out whether dbgutil support is required
+set(ELOG_USING_DBG_UTIL OFF)
+if(ELOG_ENABLE_STACK_TRACE OR ELOG_ENABLE_LIFE_SIGN)
+    set(ELOG_USING_DBG_UTIL ON)
+endif()
+
+# figure out whether commutil and messaging support is required
+set(ELOG_USING_COMM_UTIL OFF)
+set(ELOG_ENABLE_MSG OFF)
+if(ELOG_ENABLE_NET OR ELOG_ENABLE_IPC)
+    set(ELOG_USING_COMM_UTIL ON)
+    set(ELOG_ENABLE_MSG ON)
 endif()
 
 # figure out whether gzip support is required (currently only when http is also used)
@@ -91,7 +107,7 @@ if (ELOG_ENABLE_LIFE_SIGN)
 endif()
 
 # Use a common flag for dbgutil
-if(ELOG_ENABLE_STACK_TRACE OR ELOG_ENABLE_LIFE_SIGN)
+if(ELOG_USING_DBG_UTIL)
     target_compile_definitions(elog PRIVATE ELOG_USING_DBG_UTIL)
     if (ELOG_BUILD_BENCH)
         target_compile_definitions(elog_bench PRIVATE ELOG_USING_DBG_UTIL)
@@ -99,6 +115,23 @@ if(ELOG_ENABLE_STACK_TRACE OR ELOG_ENABLE_LIFE_SIGN)
     if (ELOG_ENABLE_LIFE_SIGN)
         target_compile_definitions(elog_pm PRIVATE ELOG_USING_DBG_UTIL)
     endif()
+endif()
+
+# Use a common flag for commutil
+if(ELOG_USING_COMM_UTIL)
+    target_compile_definitions(elog PRIVATE ELOG_USING_COMM_UTIL)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_USING_COMM_UTIL)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_USING_COMM_UTIL)
+    endif()
+endif()
+
+# figure out whether protobuf support is required
+set(ELOG_USING_PROTOBUF OFF)
+if (ELOG_ENABLE_GRPC_CONNECTOR OR ELOG_ENABLE_MSG)
+    set(ELOG_USING_PROTOBUF ON)
 endif()
 
 #############################################################
@@ -137,7 +170,7 @@ if (ELOG_ENABLE_GROUP_FLUSH_GC_TRACE)
 endif()
 
 #############################################################
-# get fmtlib if needed
+# get fmtlib if needed (header-only on Linux)
 #############################################################
 if (ELOG_ENABLE_FMT_LIB)
     message(STATUS "Enabling fmtlib")
@@ -164,7 +197,7 @@ if (ELOG_ENABLE_FMT_LIB)
 endif()
 
 #############################################################
-# get HTTP client if needed
+# get HTTP client if needed (header-only)
 #############################################################
 if (ELOG_ENABLE_HTTP)
     message(STATUS "Enabling http")
@@ -208,7 +241,7 @@ if (ELOG_USING_GZIP)
 endif()
 
 #############################################################
-# get JSON if needed
+# get JSON if needed (header-only)
 #############################################################
 if (ELOG_ENABLE_JSON)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_JSON)
@@ -218,9 +251,9 @@ if (ELOG_ENABLE_JSON)
 endif()
 
 #############################################################
-# stack trace and life-sign require dbgutil
+# get dbgutil if needed
 #############################################################
-if (ELOG_ENABLE_STACK_TRACE OR ELOG_ENABLE_LIFE_SIGN)
+if (ELOG_USING_DBG_UTIL)
     # for local builds we use local dbgutil
     if (ELOG_BUILD_BENCH)
         message(STATUS "Fetching dbgutil from local path: ${CMAKE_SOURCE_DIR}/../dbgutil")
@@ -230,8 +263,7 @@ if (ELOG_ENABLE_STACK_TRACE OR ELOG_ENABLE_LIFE_SIGN)
         message(STATUS "Fetching dbgutil from github")
         FetchContent_Declare(dbgutil
             GIT_REPOSITORY https://github.com/oa-333/dbgutil.git
-            GIT_TAG v0.1.6
-        )
+            GIT_TAG v0.1.6)
     endif()
     FetchContent_MakeAvailable(dbgutil)
     target_include_directories(elog PRIVATE ${dbgutil_SOURCE_DIR}/inc)
@@ -248,6 +280,40 @@ if (ELOG_ENABLE_STACK_TRACE OR ELOG_ENABLE_LIFE_SIGN)
     endif()
 endif()
 
+#############################################################
+# get commutil if needed
+#############################################################
+if (ELOG_USING_COMM_UTIL)
+    # for local builds we use local commutil
+    if (ELOG_BUILD_BENCH)
+        message(STATUS "Fetching commutil from local path: ${CMAKE_SOURCE_DIR}/../commutil")
+        FetchContent_Declare(commutil
+            SOURCE_DIR ${CMAKE_SOURCE_DIR}/../commutil)
+    else()
+        message(STATUS "Fetching commutil from github")
+        FetchContent_Declare(commutil
+            GIT_REPOSITORY https://github.com/oa-333/commutil.git
+            GIT_TAG v0.1.0)
+    endif()
+    FetchContent_MakeAvailable(commutil)
+    message(STATUS "Adding commutil include directory: ${commutil_SOURCE_DIR}/inc")
+    target_include_directories(elog PRIVATE ${commutil_SOURCE_DIR}/inc)
+    target_link_libraries(elog commutil)
+    
+    if (ELOG_BUILD_BENCH)
+        target_include_directories(elog_bench PRIVATE ${commutil_SOURCE_DIR}/inc)
+        target_link_libraries(elog_bench commutil)
+    endif()
+
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_include_directories(elog_pm PRIVATE ${commutil_SOURCE_DIR}/inc)
+        target_link_libraries(elog_pm commutil)
+    endif()
+endif()
+
+#############################################################
+# stack trace definitions
+#############################################################
 if (ELOG_ENABLE_STACK_TRACE)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_STACK_TRACE)
     if (ELOG_BUILD_BENCH)
@@ -258,6 +324,9 @@ if (ELOG_ENABLE_STACK_TRACE)
     endif()
 endif()
 
+#############################################################
+# life sign definitions
+#############################################################
 if (ELOG_ENABLE_LIFE_SIGN)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_LIFE_SIGN)
     if (ELOG_BUILD_BENCH)
@@ -266,6 +335,9 @@ if (ELOG_ENABLE_LIFE_SIGN)
     target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_LIFE_SIGN)
 endif()
 
+#############################################################
+# reload config definitions
+#############################################################
 if (ELOG_ENABLE_RELOAD_CONFIG)
     target_compile_definitions(elog PRIVATE ELOG_ENABLE_RELOAD_CONFIG)
     if (ELOG_BUILD_BENCH)
@@ -277,16 +349,49 @@ if (ELOG_ENABLE_RELOAD_CONFIG)
 endif()
 
 #############################################################
+# net definitions
+#############################################################
+if (ELOG_ENABLE_NET)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_NET)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_NET)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_NET)
+    endif()
+endif()
+
+#############################################################
+# ipc definitions
+#############################################################
+if (ELOG_ENABLE_IPC)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_IPC)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_IPC)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_IPC)
+    endif()
+endif()
+
+#############################################################
+# msg definitions
+#############################################################
+if (ELOG_ENABLE_MSG)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_MSG)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_MSG)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_MSG)
+    endif()
+endif()
+
+#############################################################
 # gRPC Connector
 #############################################################
 # NOTE: all definitions here are adapted from the gRPC C++ client example in grpc.io
-if (ELOG_ENABLE_GRPC_CONNECTOR)
-    # enable connector in code
-    target_compile_definitions(elog PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
-    if (ELOG_BUILD_BENCH)
-        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
-    endif()
-
+if (ELOG_USING_PROTOBUF)
     # Find Protobuf installation
     option(protobuf_MODULE_COMPATIBLE TRUE)
     find_package(Protobuf CONFIG REQUIRED)
@@ -412,6 +517,14 @@ if (ELOG_ENABLE_GRPC_CONNECTOR)
     endif()
 endif()
 
+if (ELOG_ENABLE_GRPC_CONNECTOR)
+    # enable connector in code
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_GRPC_CONNECTOR)
+    endif()
+endif()
+
 #############################################################
 # Grafana Loki connector
 #############################################################
@@ -499,8 +612,8 @@ endif()
 #############################################################
 # MySQL connector - supported only on Windows
 #############################################################
-if (MSVC)
-    if (ELOG_ENABLE_MYSQL_DB_CONNECTOR)
+if (ELOG_ENABLE_MYSQL_DB_CONNECTOR)
+    if (MSVC)
         # all attempts to use vcpkg failed (no jdbc driver, only xdev for document API), so using old method
         # env var MYSQL_ROOT is required to point to installation dir
         # default value: "C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
@@ -511,6 +624,11 @@ if (MSVC)
         target_include_directories(elog PRIVATE "${MYSQL_ROOT}\\include")
         target_link_directories(elog PRIVATE "${MYSQL_ROOT}\\lib64\\vs14")
         target_link_libraries(elog mysqlcppconn)
+        if (ELOG_ENABLE_LIFE_SIGN)
+            target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_MYSQL_DB_CONNECTOR)
+            target_link_directories(elog_pm PRIVATE "${MYSQL_ROOT}\\lib64\\vs14")
+            target_link_libraries(elog_pm mysqlcppconn)
+        endif()
         if (ELOG_BUILD_BENCH)
             target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_MYSQL_DB_CONNECTOR)
             target_link_directories(elog_bench PRIVATE "${MYSQL_ROOT}\\lib64\\vs14")
@@ -652,6 +770,29 @@ if (MSVC)
     if (ELOG_BUILD_BENCH)
         target_compile_options(elog_bench PRIVATE /wd4251)
     endif()
+
+    # get rid of annoying fmtlib warnings
+    if (ELOG_ENABLE_FMT_LIB)
+        target_compile_options(elog PRIVATE /wd4582)
+        target_compile_options(elog PRIVATE /wd4623)
+        target_compile_options(elog PRIVATE /wd4625)
+        target_compile_options(elog PRIVATE /wd4626)
+        target_compile_options(elog PRIVATE /wd5026)
+        target_compile_options(elog PRIVATE /wd5027)
+    endif()
+    
+    # get rid of annoying protobuf warnings
+    if (ELOG_USING_PROTOBUF)
+        target_compile_options(elog PRIVATE /wd4625)
+        target_compile_options(elog PRIVATE /wd4626)
+        target_compile_options(elog PRIVATE /wd4868)
+        target_compile_options(elog PRIVATE /wd5027)
+    endif()
+
+    # get rid of annoying gzip warnings
+    if (ELOG_USING_GZIP)
+        target_compile_options(elog PRIVATE /wd4068)
+    endif()
 else()
     target_compile_options(elog PRIVATE -Wall)
     # -Wno-interference-size - don't warn about using std::hardware_destructive_interference_size
@@ -692,6 +833,9 @@ if (MSVC)
     # /Zi - generate full debug information
     # /EHsc - catch(..) catches only C++ exceptions, extern "C" functions never throw C++ exception
     add_compile_options(/Zi /EHsc)
+endif()
+
+if (MSVC OR MINGW)
     target_link_libraries(elog Ws2_32 Advapi32)
 endif()
 
@@ -772,5 +916,45 @@ if (ELOG_BUILD_BENCH)
         install(FILES run_bench.bat DESTINATION ${ELOG_INSTALL_PATH})
     else()
         install(FILES run_bench.sh DESTINATION ${ELOG_INSTALL_PATH})
+    endif()
+
+    # install dependencies on Windows
+    if (ELOG_USING_DBG_UTIL)
+        install(IMPORTED_RUNTIME_ARTIFACTS dbgutil DESTINATION ${ELOG_INSTALL_PATH})
+        if (MSVC)
+            install(FILES $<TARGET_PDB_FILE:dbgutil> DESTINATION ${ELOG_INSTALL_PATH} OPTIONAL)
+        endif()
+    endif()
+
+    if (ELOG_USING_COMM_UTIL)
+        install(IMPORTED_RUNTIME_ARTIFACTS commutil DESTINATION ${ELOG_INSTALL_PATH})
+        if (MSVC)
+            install(FILES $<TARGET_PDB_FILE:commutil> DESTINATION ${ELOG_INSTALL_PATH} OPTIONAL)
+        endif()
+    endif()
+
+    if (ELOG_ENABLE_FMT_LIB)
+        #install(IMPORTED_RUNTIME_ARTIFACTS fmt::fmt DESTINATION ${ELOG_INSTALL_PATH})
+    endif()
+
+    if (MSVC)
+        if (ELOG_USING_PROTOBUF)
+            install(IMPORTED_RUNTIME_ARTIFACTS ${_PROTOBUF_LIBPROTOBUF} DESTINATION ${ELOG_INSTALL_PATH})
+        endif()
+        if (ELOG_ENABLE_SENTRY_CONNECTOR)
+            install(IMPORTED_RUNTIME_ARTIFACTS sentry::sentry DESTINATION ${ELOG_INSTALL_PATH})
+        endif()
+        if (ELOG_ENABLE_SQLITE_DB_CONNECTOR)
+            install(IMPORTED_RUNTIME_ARTIFACTS unofficial::sqlite3::sqlite3 DESTINATION ${ELOG_INSTALL_PATH})
+        endif()
+        if (ELOG_ENABLE_PGSQL_DB_CONNECTOR)
+            install(IMPORTED_RUNTIME_ARTIFACTS libpqxx::pqxx DESTINATION ${ELOG_INSTALL_PATH})
+        endif()
+        if (ELOG_ENABLE_MYSQL_DB_CONNECTOR)
+            #install(IMPORTED_RUNTIME_ARTIFACTS mysqlcppconn DESTINATION ${ELOG_INSTALL_PATH})
+        endif()
+        if (ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
+            install(IMPORTED_RUNTIME_ARTIFACTS RdKafka::rdkafka RdKafka::rdkafka++ DESTINATION ${ELOG_INSTALL_PATH})
+        endif()
     endif()
 endif()

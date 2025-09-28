@@ -39,4 +39,8 @@ message ELogRecordMsg {
     optional string logMsg = 18;
 }
 
-message ELogStatusMsg {}
+// ELog Status Response
+message ELogStatusMsg {
+    optional int32 status = 1;
+    optional uint64 recordsProcessed = 2;
+}

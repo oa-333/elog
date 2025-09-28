@@ -21,6 +21,7 @@ REM -g|--reconfigure
 REM -m|--mem-check
 REM -a|--clang
 REM -t|--trace
+REM -h|--help
 
 REM set default values
 SET PLATFORM=WINDOWS
@@ -129,6 +130,7 @@ echo [DEBUG] Args parsed, options left: %*
 
 IF %FULL% EQU 1 (
     echo [INFO]  Configuring FULL options
+    SET SECURE=1
     SET STACK_TRACE=1
     SET FMT_LIB=1
     SET LIFE_SIGN=1
@@ -206,6 +208,12 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         vcpkg add port gzip-hpp
         vcpkg add port zlib
     )
+    IF "!conn!" == "net" (
+        SET OPTS=!OPTS! -DELOG_ENABLE_NET=ON
+    )
+    IF "!conn!" == "ipc" (
+        SET OPTS=!OPTS! -DELOG_ENABLE_IPC=ON
+    )
     IF "!conn!" == "all" (
         echo [INFO]  Enabling all connectors
         IF "%MYSQL_ROOT%" == "" SET MYSQL_ROOT="C:\\Program Files\\MySQL\\MySQL Connector C++ 9.3"
@@ -217,6 +225,8 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_GRAFANA_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_SENTRY_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_DATADOG_CONNECTOR=ON
+        SET OPTS=!OPTS! -DELOG_ENABLE_NET=ON
+        SET OPTS=!OPTS! -DELOG_ENABLE_IPC=ON
         vcpkg add port sqlite3
         vcpkg add port libpqxx
         vcpkg add port librdkafka
@@ -224,6 +234,8 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         vcpkg add port cpp-httplib
         vcpkg add port nlohmann-json
         vcpkg add port sentry-native
+        vcpkg add port gzip-hpp
+        vcpkg add port zlib
     )
 )
 REM echo [DEBUG] Parsed connections
@@ -350,6 +362,8 @@ echo   mysql           MySQL database connector (experimental)
 echo   postgresql      PostgreSQL database connector
 echo   kafka           Kafka topic connector
 echo   grpc            gRPC connector
+echo   net             Network (TCP/UDP) connector
+echo   ipc             IPC (Unix Domain Sockets/Windows Pipes) connector
 echo   all             Enables all connectors
 echo.
 echo.

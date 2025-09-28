@@ -108,6 +108,54 @@ static int sMsgCnt = -1;
 static int sMinThreadCnt = -1;
 static int sMaxThreadCnt = -1;
 
+enum CompressMode { CM_YES, CM_NO, CM_BOTH };
+enum SyncMode { SM_SYNC, SM_ASYNC, SM_BOTH };
+
+static bool parseCompressMode(const char* str, CompressMode& mode) {
+    if (strcmp(str, "yes") == 0) {
+        mode = CM_YES;
+    } else if (strcmp(str, "no") == 0) {
+        mode = CM_NO;
+    } else if (strcmp(str, "both") == 0) {
+        mode = CM_BOTH;
+    } else {
+        fprintf(stderr, "Invalid compression mode: %s\n", str);
+        return false;
+    }
+    return true;
+}
+
+static bool parseSyncMode(const char* str, SyncMode& mode) {
+    if (strcmp(str, "sync") == 0) {
+        mode = SM_SYNC;
+    } else if (strcmp(str, "async") == 0) {
+        mode = SM_ASYNC;
+    } else if (strcmp(str, "both") == 0) {
+        mode = SM_BOTH;
+    } else {
+        fprintf(stderr, "Invalid sync mode: %s\n", str);
+        return false;
+    }
+    return true;
+}
+
+// connection test options
+static bool sTestGrpc = false;
+static bool sTestNet = false;
+static bool sTestNetTcp = false;
+static bool sTestNetUdp = false;
+static bool sTestIpc = false;
+static bool sTestIpcPipe = false;
+static CompressMode sTestCompressMode = CM_BOTH;
+static SyncMode sTestSyncMode = SM_BOTH;
+static bool sTestMySQL = false;
+static bool sTestSQLite = false;
+static bool sTestPostgreSQL = false;
+static bool sTestKafka = false;
+static bool sTestGrafana = false;
+static bool sTestSentry = false;
+static bool sTestDatadog = false;
+
 struct StatData {
     double p50;
     double p95;
@@ -131,6 +179,13 @@ static int testGRPCStream();
 static int testGRPCAsync();
 static int testGRPCAsyncCallbackUnary();
 static int testGRPCAsyncCallbackStream();
+#endif
+#ifdef ELOG_ENABLE_NET
+static int testTcp();
+static int testUdp();
+#endif
+#ifdef ELOG_ENABLE_IPC
+static int testPipe();
 #endif
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 static void testMySQL();
@@ -291,10 +346,10 @@ static void testPerfBinaryAcceleration();
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
 
-static std::mutex coutLock;
+static std::mutex sGrpcCoutLock;
 
 std::atomic<uint64_t> sGrpcMsgCount;
-static void handleLogRecord(const elog_grpc::ELogRecordMsg* msg) {
+static void handleGrpcLogRecord(const elog_grpc::ELogRecordMsg* msg) {
     // TODO: conduct a real test - collect messages, verify they match the log messages
     sGrpcMsgCount.fetch_add(1, std::memory_order_relaxed);
     return;
@@ -361,7 +416,7 @@ static void handleLogRecord(const elog_grpc::ELogRecordMsg* msg) {
         if (fieldCount++ > 0) s << ", ";
         s << "msg = " << msg->logmsg();
     }
-    std::unique_lock<std::mutex> lock(coutLock);
+    std::unique_lock<std::mutex> lock(sGrpcCoutLock);
     std::cout << s.str() << std::endl;
 }
 
@@ -372,7 +427,7 @@ public:
     ::grpc::Status SendLogRecord(::grpc::ServerContext* context,
                                  const ::elog_grpc::ELogRecordMsg* request,
                                  ::elog_grpc::ELogStatusMsg* response) final {
-        handleLogRecord(request);
+        handleGrpcLogRecord(request);
         return grpc::Status::OK;
     }
 
@@ -381,7 +436,7 @@ public:
                                     ::elog_grpc::ELogStatusMsg* response) {
         elog_grpc::ELogRecordMsg msg;
         while (reader->Read(&msg)) {
-            handleLogRecord(&msg);
+            handleGrpcLogRecord(&msg);
         }
         return grpc::Status::OK;
     }
@@ -453,7 +508,7 @@ private:
                 m_callState = CS_PROCESS;
             } else if (m_callState == CS_PROCESS) {
                 // handle currently arrived request (print log record)
-                handleLogRecord(&m_logRecordMsg);
+                handleGrpcLogRecord(&m_logRecordMsg);
 
                 // Spawn a new CallData instance to serve new clients while we process
                 // the one for this CallData. The instance will deallocate itself as
@@ -507,7 +562,7 @@ public:
         class Reactor : public grpc::ServerUnaryReactor {
         public:
             Reactor(const elog_grpc::ELogRecordMsg& logRecordMsg) {
-                handleLogRecord(&logRecordMsg);
+                handleGrpcLogRecord(&logRecordMsg);
                 Finish(grpc::Status::OK);
             }
 
@@ -525,7 +580,7 @@ public:
 
             void OnReadDone(bool ok) override {
                 if (ok) {
-                    handleLogRecord(&m_logRecord);
+                    handleGrpcLogRecord(&m_logRecord);
                     StartRead(&m_logRecord);
                 } else {
                     // all stream/batch messages read, now call Finish()
@@ -546,6 +601,165 @@ public:
 };
 #endif
 
+#if defined(ELOG_ENABLE_NET) || defined(ELOG_ENABLE_IPC)
+#include "msg/elog_binary_format_provider.h"
+#include "msg/elog_msg_server.h"
+#include "msg/msg_server.h"
+
+#ifdef ELOG_ENABLE_NET
+#include "transport/tcp_server.h"
+#include "transport/udp_server.h"
+#endif
+
+#ifdef ELOG_ENABLE_IPC
+#include "transport/pipe_server.h"
+#endif
+
+static std::mutex sNetCoutLock;
+
+std::atomic<uint64_t> sNetMsgCount;
+static std::atomic<bool> sPrintNetMsg(false);
+static void handleNetLogRecord(const elog_grpc::ELogRecordMsg* msg) {
+    // TODO: conduct a real test - collect messages, verify they match the log messages
+    sNetMsgCount.fetch_add(1, std::memory_order_relaxed);
+    if (!sPrintNetMsg.load()) {
+        return;
+    }
+    std::stringstream s;
+    uint32_t fieldCount = 0;
+    s << "Received log record: [";
+    if (msg->has_recordid()) {
+        s << "{rid = " << msg->recordid() << "}";
+        ++fieldCount;
+    }
+    if (msg->has_timeunixepochmillis()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "utc = " << msg->timeunixepochmillis();
+    }
+    if (msg->has_hostname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "host = " << msg->hostname();
+    }
+    if (msg->has_username()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "user = " << msg->username();
+    }
+    if (msg->has_programname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "program = " << msg->programname();
+    }
+    if (msg->has_appname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "app = " << msg->appname();
+    }
+    if (msg->has_processid()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "pid = " << msg->programname();
+    }
+    if (msg->has_threadid()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "tid = " << msg->threadid();
+    }
+    if (msg->has_threadname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "tname = " << msg->threadname();
+    }
+    if (msg->has_logsourcename()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "source = " << msg->logsourcename();
+    }
+    if (msg->has_modulename()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "module = " << msg->modulename();
+    }
+    if (msg->has_file()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "file = " << msg->file();
+    }
+    if (msg->has_line()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "line = " << msg->line();
+    }
+    if (msg->has_functionname()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "function = " << msg->functionname();
+    }
+    if (msg->has_loglevel()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "log_level = " << msg->loglevel();
+    }
+    if (msg->has_logmsg()) {
+        if (fieldCount++ > 0) s << ", ";
+        s << "msg = " << msg->logmsg();
+    }
+    std::unique_lock<std::mutex> lock(sNetCoutLock);
+    std::cout << s.str() << std::endl;
+}
+
+class TestServer : public elog::ELogMsgServer {
+public:
+    TestServer(const char* name, commutil::ByteOrder byteOrder)
+        : elog::ELogMsgServer(name, byteOrder), m_dataServer(nullptr) {}
+    ~TestServer() override {}
+
+    bool initTestServer() {
+        return initialize(m_dataServer, 10, 5, 1024) == commutil::ErrorCode::E_OK;
+    }
+
+protected:
+    /** @brief Handle an incoming log record. */
+    int handleLogRecordMsg(elog_grpc::ELogRecordMsg* logRecordMsg) override {
+        handleNetLogRecord(logRecordMsg);
+        // randomly delay response to test for resend crashes
+        uint64_t r = rand() / ((double)RAND_MAX) * 20;
+        // std::this_thread::sleep_for(std::chrono::milliseconds(r));
+        return 0;
+    }
+
+    commutil::DataServer* m_dataServer;
+};
+
+#ifdef ELOG_ENABLE_NET
+class TestTcpServer final : public TestServer {
+public:
+    TestTcpServer(const char* iface, int port)
+        : TestServer("TCP", commutil::ByteOrder::NETWORK_ORDER), m_tcpServer(iface, port, 5, 10) {
+        m_dataServer = &m_tcpServer;
+    }
+    ~TestTcpServer() override {}
+
+private:
+    commutil::TcpServer m_tcpServer;
+};
+
+class TestUdpServer : public TestServer {
+public:
+    TestUdpServer(const char* iface, int port)
+        : TestServer("UDP", commutil::ByteOrder::NETWORK_ORDER), m_udpServer(iface, port, 60) {
+        m_dataServer = &m_udpServer;
+    }
+    ~TestUdpServer() override {}
+
+private:
+    commutil::UdpServer m_udpServer;
+};
+#endif
+
+#ifdef ELOG_ENABLE_IPC
+class TestPipeServer : public TestServer {
+public:
+    TestPipeServer(const char* pipeName)
+        : TestServer("Pipe", commutil::ByteOrder::HOST_ORDER), m_pipeServer(pipeName, 5, 10) {
+        m_dataServer = &m_pipeServer;
+    }
+    ~TestPipeServer() override {}
+
+private:
+    commutil::PipeServer m_pipeServer;
+};
+#endif
+#endif
+
 // plots:
 // file flush count values
 // file flush size values
@@ -554,32 +768,71 @@ public:
 // quantum, deferred Vs. best sync log
 
 static int testConnectors() {
+    int res = 0;
 #ifdef ELOG_ENABLE_GRPC_CONNECTOR
-    int res = testGRPC();
-    if (res != 0) {
-        return res;
+    if (sTestGrpc) {
+        res = testGRPC();
+        if (res != 0) {
+            return res;
+        }
+    }
+#endif
+#ifdef ELOG_ENABLE_NET
+    if (sTestNet || sTestNetTcp) {
+        res = testTcp();
+        if (res != 0) {
+            return res;
+        }
+    }
+    if (sTestNet || sTestNetUdp) {
+        res = testUdp();
+        if (res != 0) {
+            return res;
+        }
+    }
+#endif
+#ifdef ELOG_ENABLE_IPC
+    if (sTestIpc || sTestIpcPipe) {
+        res = testPipe();
+        if (res != 0) {
+            return res;
+        }
     }
 #endif
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
-    testMySQL();
+    if (sTestMySQL) {
+        testMySQL();
+    }
 #endif
 #ifdef ELOG_ENABLE_SQLITE_DB_CONNECTOR
-    testSQLite();
+    if (sTestSQLite) {
+        testSQLite();
+    }
 #endif
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
-    testPostgreSQL();
+    if (sTestPostgreSQL) {
+        testPostgreSQL();
+    }
 #endif
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
-    testKafka();
+    if (sTestKafka) {
+        testKafka();
+    }
 #endif
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
-    testGrafana();
+    if (sTestGrafana) {
+        testGrafana();
+    }
 #endif
 #ifdef ELOG_ENABLE_SENTRY_CONNECTOR
-    testSentry();
+    if (sTestSentry) {
+        testSentry();
+    }
 #endif
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
-    testDatadog();
+    if (sTestDatadog) {
+        testDatadog();
+    }
 #endif
     return 0;
 }
@@ -817,6 +1070,67 @@ static bool getSingleParam(const char* param) {
     return true;
 }
 
+static bool getConnParam(int argc, char* argv[]) {
+    int i = 2;
+    while (i < argc) {
+        if (strcmp(argv[i], "--server-addr") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing server address after argument --server-addr\n");
+                return false;
+            }
+            sServerAddr = argv[i];
+        } else if (strcmp(argv[i], "--grpc") == 0) {
+            sTestGrpc = true;
+        } else if (strcmp(argv[i], "--net") == 0) {
+            sTestNet = true;
+        } else if (strcmp(argv[i], "--ipc") == 0) {
+            sTestIpc = true;
+        } else if (strcmp(argv[i], "--tcp") == 0) {
+            sTestNetTcp = true;
+        } else if (strcmp(argv[i], "--udp") == 0) {
+            sTestNetUdp = true;
+        } else if (strcmp(argv[i], "--pipe") == 0) {
+            sTestIpcPipe = true;
+        } else if (strcmp(argv[i], "--compress") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing argument after --compress (required, yes/no/both)\n");
+                return false;
+            }
+            if (!parseCompressMode(argv[i], sTestCompressMode)) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--sync-mode") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "Missing argument after --sync-mode (required, sync/async/both)\n");
+                return false;
+            }
+            if (!parseSyncMode(argv[i], sTestSyncMode)) {
+                return false;
+            }
+        } else if (strcmp(argv[i], "--mysql") == 0) {
+            sTestMySQL = true;
+        } else if (strcmp(argv[i], "--sqlite") == 0) {
+            sTestSQLite = true;
+        } else if (strcmp(argv[i], "--postgresql") == 0) {
+            sTestPostgreSQL = true;
+        } else if (strcmp(argv[i], "--kafka") == 0) {
+            sTestKafka = true;
+        } else if (strcmp(argv[i], "--grafana") == 0) {
+            sTestGrafana = true;
+        } else if (strcmp(argv[i], "--sentry") == 0) {
+            sTestSentry = true;
+        } else if (strcmp(argv[i], "--datadog") == 0) {
+            sTestDatadog = true;
+        } else {
+            fprintf(stderr, "Invalid --test-conn option: %s\n", argv[i]);
+            return false;
+        }
+        ++i;
+    }
+
+    return true;
+}
+
 static bool parseIntParam(char* valueStr, int& value, const char* paramName) {
     std::size_t pos = 0;
     try {
@@ -841,10 +1155,7 @@ static bool parseArgs(int argc, char* argv[]) {
     if (argc >= 2) {
         if (strcmp(argv[1], "--test-conn") == 0) {
             sTestConns = true;
-            if (argc >= 3 && strcmp(argv[2], "--server-addr") == 0) {
-                sServerAddr = argv[3];
-            }
-            return true;
+            return getConnParam(argc, argv);
         } else if (strcmp(argv[1], "--test-colors") == 0) {
             sTestColors = true;
             return true;
@@ -881,8 +1192,8 @@ static bool parseArgs(int argc, char* argv[]) {
     // flush-immediate|flush-never|flush-count|flush-size|flush-time|buffered|deferred|queued|quantum
     // this may be repeated
     // if none specified then all single thread tests are performed
-    // in the future we should also allow specifying count, size, time buffer size, queue params,
-    // quantum params, and even entire log target specification
+    // in the future we should also allow specifying count, size, time buffer size, queue
+    // params, quantum params, and even entire log target specification
     int i = 1;
     while (i < argc) {
         if (strcmp(argv[i], "--perf") == 0) {
@@ -1035,8 +1346,8 @@ ELOG_IMPLEMENT_TYPE_DECODE_EX(Coord) {
 
 static void testFmtLibSanity() {
 #ifdef ELOG_ENABLE_FMT_LIB
-    // TODO: use string log target with format line containing only ${msg} so we can inspect output
-    // and compare all will be printed to default log target (stderr)
+    // TODO: use string log target with format line containing only ${msg} so we can inspect
+    // output and compare all will be printed to default log target (stderr)
     int someInt = 5;
     ELOG_FMT_INFO("This is a test message for fmtlib: {}", someInt);
     ELOG_BIN_INFO("This is a test binary message, with int {}, bool {} and string {}", (int)5, true,
@@ -1244,20 +1555,18 @@ int main(int argc, char* argv[]) {
     printPreInitMessages();
 
     int res = 0;
-    if (argc == 2) {
-        if (sTestConns) {
-            res = testConnectors();
-        } else if (sTestColors) {
-            res = testColors();
-        } else if (sTestException) {
-            res = testException();
-        } else if (sTestEventLog) {
-            res = testEventLog();
-        } else if (sTestRegression) {
-            res = testRegression();
-        } else if (sTestLifeSign) {
-            res = testLifeSign();
-        }
+    if (sTestConns) {
+        res = testConnectors();
+    } else if (sTestColors) {
+        res = testColors();
+    } else if (sTestException) {
+        res = testException();
+    } else if (sTestEventLog) {
+        res = testEventLog();
+    } else if (sTestRegression) {
+        res = testRegression();
+    } else if (sTestLifeSign) {
+        res = testLifeSign();
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
 
@@ -1385,6 +1694,7 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     elog::ELogTargetAffinityMask mask = 0;
     ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
     logSource->setLogTargetAffinity(mask);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     return logTarget;
 }
 
@@ -1551,7 +1861,8 @@ static int testThreadLifeSign(uint32_t threadCount) {
             uint32_t count = 0;
             while (!done) {
                 ELOG_INFO(
-                    "This is a life sign log (count %u) from thread %u, with THREAD filter freq 2",
+                    "This is a life sign log (count %u) from thread %u, with THREAD filter "
+                    "freq 2",
                     ++count, i);
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
@@ -1598,7 +1909,8 @@ static int testLogSourceLifeSign(uint32_t threadCount) {
             uint32_t count = 0;
             while (!done) {
                 ELOG_INFO(
-                    "This is a life sign log (count %u) from thread %u, with LOG-SOURCE rate limit "
+                    "This is a life sign log (count %u) from thread %u, with LOG-SOURCE rate "
+                    "limit "
                     "of 5 msg/sec",
                     ++count, i);
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -1646,7 +1958,8 @@ static int testTargetThreadLifeSign() {
         uint32_t count = 0;
         while (!done) {
             ELOG_INFO(
-                "This is a life sign log (count %u) from test-life-sign-thread, with target thread "
+                "This is a life sign log (count %u) from test-life-sign-thread, with target "
+                "thread "
                 "rate limit of 3 msg/sec",
                 ++count);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -1917,10 +2230,10 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
         totalMsg += 2;
     }
     if (receivedMsgCount != totalMsg) {
-        fprintf(
-            stderr,
-            "%s gRPC client test failed, missing messages on server side, expected %u, got %u\n",
-            clientType, totalMsg, receivedMsgCount);
+        fprintf(stderr,
+                "%s gRPC client test failed, missing messages on server side, expected %u, got "
+                "%u\n",
+                clientType, totalMsg, receivedMsgCount);
         server->Shutdown();
         t.join();
         fprintf(stderr, "%s gRPC client test FAILED\n", clientType);
@@ -1948,10 +2261,10 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
         totalMsg += 2;
     }
     if (receivedMsgCount != totalMsg) {
-        fprintf(
-            stderr,
-            "%s gRPC client test failed, missing messages on server side, expected %u, got %u\n",
-            clientType, totalMsg, receivedMsgCount);
+        fprintf(stderr,
+                "%s gRPC client test failed, missing messages on server side, expected %u, got "
+                "%u\n",
+                clientType, totalMsg, receivedMsgCount);
         fprintf(stderr, "%s gRPC client test FAILED\n", clientType);
         return 2;
     }
@@ -1979,11 +2292,275 @@ int testGRPCAsyncCallbackStream() {
 }
 #endif
 
+#if defined(ELOG_ENABLE_NET) || defined(ELOG_ENABLE_IPC)
+
+#define MSG_OPT_HAS_PRE_INIT 0x01
+#define MSG_OPT_TRACE 0x02
+
+int testMsgClient(TestServer& server, const char* schema, const char* serverType, const char* mode,
+                  const char* address, bool compress = false, int opts = 0,
+                  uint32_t stMsgCount = 1000, uint32_t mtMsgCount = 1000) {
+    if (!server.initTestServer()) {
+        fprintf(stderr, "Failed to initialize test server\n");
+        return 1;
+    }
+    if (server.start() != commutil::ErrorCode::E_OK) {
+        fprintf(stderr, "Failed to start test server\n");
+        server.terminate();
+        return 2;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    //  prepare log target URL and test name
+    std::string cfg = std::string(schema) + "://" + serverType + "?mode=" + mode +
+                      "&address=" + address + "&" +
+                      "log_format=rpc:${rid}, ${time}, ${level}, ${msg}&"
+                      "binary_format=protobuf&compress=" +
+                      (compress ? "yes" : "no") +
+                      "&max_concurrent_requests=1024&"
+                      "flush_policy=count&flush_count=1024&";
+    std::string testName = std::string(mode) + " " + serverType;
+    std::string mtResultFileName = std::string("elog_bench_") + mode + "_" + serverType;
+
+    // run single threaded test
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+
+    sNetMsgCount.store(0, std::memory_order_relaxed);
+
+    if (elog::hasAccumulatedLogMessages()) {
+        opts |= MSG_OPT_HAS_PRE_INIT;
+    }
+
+    if (opts & MSG_OPT_TRACE) {
+        elog::setReportLevel(elog::ELEVEL_TRACE);
+    }
+
+    runSingleThreadedTest(testName.c_str(), cfg.c_str(), msgPerf, ioPerf, statData, stMsgCount);
+    uint32_t receivedMsgCount = (uint32_t)sNetMsgCount.load(std::memory_order_relaxed);
+    // total: 2 pre-init + stMsgCount single-thread messages
+    uint32_t totalMsg = stMsgCount;
+    if (opts & MSG_OPT_HAS_PRE_INIT) {
+        totalMsg += 2;
+    }
+    if (receivedMsgCount != totalMsg) {
+        fprintf(stderr,
+                "%s client single-thread test failed, missing messages on server side, expected "
+                "%u, got %u\n",
+                testName.c_str(), totalMsg, receivedMsgCount);
+        server.stop();
+        server.terminate();
+        fprintf(stderr, "%s client test FAILED\n", testName.c_str());
+        return 1;
+    }
+
+    // multi-threaded test
+    sMsgCnt = mtMsgCount;
+    sNetMsgCount.store(0, std::memory_order_relaxed);
+    runMultiThreadTest(testName.c_str(), mtResultFileName.c_str(), cfg.c_str(), true, 1, 4);
+    sMsgCnt = 0;
+
+    server.stop();
+    server.terminate();
+
+    receivedMsgCount = (uint32_t)sNetMsgCount.load(std::memory_order_relaxed);
+    // total: sMsgCnt multi-thread messages + total threads
+    // each test adds 2 more messages for start and end test phase
+    // we run total 10 threads  in 4 phases(1 + 2 + 3 + 4)
+    const uint32_t threadCount = 10;
+    const uint32_t phaseCount = 4;
+    const uint32_t exMsgPerPhase = 2;
+    totalMsg = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
+    if (opts & MSG_OPT_HAS_PRE_INIT) {
+        totalMsg += 2;
+    }
+    if (receivedMsgCount != totalMsg) {
+        fprintf(stderr,
+                "%s client multi-thread test failed, missing messages on server side, expected %u, "
+                "got %u\n",
+                testName.c_str(), totalMsg, receivedMsgCount);
+        fprintf(stderr, "%s client test FAILED\n", testName.c_str());
+        return 2;
+    }
+
+    if (compress) {
+        fprintf(stderr, "%s client test (compressed) PASSED\n", testName.c_str());
+    } else {
+        fprintf(stderr, "%s client test PASSED\n", testName.c_str());
+    }
+    return 0;
+}
+
+#endif
+
+#ifdef ELOG_ENABLE_NET
+
+static int testTcpSync(bool compress);
+static int testUdpSync(bool compress);
+static int testTcpAsync(bool compress);
+static int testUdpAsync(bool compress);
+
+int testTcp() {
+    int res = 0;
+    if (sTestSyncMode == SM_SYNC || sTestSyncMode == SM_BOTH) {
+        if (sTestCompressMode == CM_NO || sTestCompressMode == CM_BOTH) {
+            res = testTcpSync(false);
+            if (res != 0) {
+                return res;
+            }
+        }
+        elog::discardAccumulatedLogMessages();
+
+        if (sTestCompressMode == CM_YES || sTestCompressMode == CM_BOTH) {
+            res = testTcpSync(true);
+            if (res != 0) {
+                return res;
+            }
+        }
+    }
+
+    if (sTestSyncMode == SM_ASYNC || sTestSyncMode == SM_BOTH) {
+        if (sTestCompressMode == CM_NO || sTestCompressMode == CM_BOTH) {
+            res = testTcpAsync(false);
+            if (res != 0) {
+                return res;
+            }
+        }
+
+        if (sTestCompressMode == CM_YES || sTestCompressMode == CM_BOTH) {
+            res = testTcpAsync(true);
+            if (res != 0) {
+                return res;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int testUdp() {
+    int res = 0;
+    if (sTestSyncMode == SM_SYNC || sTestSyncMode == SM_BOTH) {
+        if (sTestCompressMode == CM_NO || sTestCompressMode == CM_BOTH) {
+            res = testUdpSync(false);
+            if (res != 0) {
+                return res;
+            }
+        }
+
+        if (sTestCompressMode == CM_YES || sTestCompressMode == CM_BOTH) {
+            res = testUdpSync(true);
+            if (res != 0) {
+                return res;
+            }
+        }
+    }
+
+    if (sTestSyncMode == SM_ASYNC || sTestSyncMode == SM_BOTH) {
+        if (sTestCompressMode == CM_NO || sTestCompressMode == CM_BOTH) {
+            res = testUdpAsync(false);
+            if (res != 0) {
+                return res;
+            }
+        }
+
+        if (sTestCompressMode == CM_YES || sTestCompressMode == CM_BOTH) {
+            res = testUdpAsync(true);
+            if (res != 0) {
+                return res;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int testTcpSync(bool compress) {
+    TestTcpServer server("0.0.0.0", 5051);
+    std::cout << "Server listening on port 5051" << std::endl;
+    return testMsgClient(server, "net", "tcp", "sync", "127.0.0.1:5051", compress);
+}
+
+int testTcpAsync(bool compress) {
+    TestTcpServer server("0.0.0.0", 5051);
+    std::cout << "Server listening on port 5051" << std::endl;
+    // sPrintNetMsg.store(true);
+    return testMsgClient(server, "net", "tcp", "async", "127.0.0.1:5051", compress);
+}
+
+int testUdpSync(bool compress) {
+    TestUdpServer server("0.0.0.0", 5051);
+    return testMsgClient(server, "net", "udp", "sync", "127.0.0.1:5051", compress);
+}
+
+int testUdpAsync(bool compress) {
+    TestUdpServer server("0.0.0.0", 5051);
+    return testMsgClient(server, "net", "udp", "async", "127.0.0.1:5051", compress);
+}
+#endif
+
+#ifdef ELOG_ENABLE_IPC
+
+static int testPipeSync(bool compress);
+static int testPipeAsync(bool compress);
+
+int testPipe() {
+    int res = 0;
+    if (sTestSyncMode == SM_SYNC || sTestSyncMode == SM_BOTH) {
+        if (sTestCompressMode == CM_NO || sTestCompressMode == CM_BOTH) {
+            res = testPipeSync(false);
+            if (res != 0) {
+                return res;
+            }
+            elog::discardAccumulatedLogMessages();
+        }
+
+        if (sTestCompressMode == CM_YES || sTestCompressMode == CM_BOTH) {
+            res = testPipeSync(true);
+            if (res != 0) {
+                return res;
+            }
+        }
+    }
+
+    if (sTestSyncMode == SM_ASYNC || sTestSyncMode == SM_BOTH) {
+        if (sTestCompressMode == CM_NO || sTestCompressMode == CM_BOTH) {
+            res = testPipeAsync(false);
+            if (res != 0) {
+                return res;
+            }
+        }
+
+        if (sTestCompressMode == CM_YES || sTestCompressMode == CM_BOTH) {
+            res = testPipeAsync(true);
+            if (res != 0) {
+                return res;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int testPipeSync(bool compress) {
+    TestPipeServer server("elog_test_pipe");
+    std::cout << "Server listening on pipe elog_test_pipe" << std::endl;
+    return testMsgClient(server, "ipc", "pipe", "sync", "elog_test_pipe", compress);
+}
+
+int testPipeAsync(bool compress) {
+    TestPipeServer server("elog_test_pipe");
+    std::cout << "Server listening on pipe elog_test_pipe" << std::endl;
+    return testMsgClient(server, "ipc", "pipe", "async", "elog_test_pipe", compress);
+}
+#endif
+
 #ifdef ELOG_ENABLE_MYSQL_DB_CONNECTOR
 void testMySQL() {
     const char* cfg =
         "db://mysql?conn_string=tcp://127.0.0.1&db=test&user=root&passwd=root&"
-        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, ${user},"
+        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, "
+        "${user},"
         "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
         "db_thread_model=conn-per-thread";
     double msgPerf = 0.0f;
@@ -1997,7 +2574,8 @@ void testMySQL() {
 void testSQLite() {
     const char* cfg =
         "db://sqlite?conn_string=test.db&"
-        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, ${user},"
+        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, "
+        "${user},"
         "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
         "db_thread_model=conn-per-thread";
     double msgPerf = 0.0f;
@@ -2009,12 +2587,12 @@ void testSQLite() {
 
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 void testPostgreSQL() {
-    std::string cfg =
-        std::string("db://postgresql?conn_string=") + sServerAddr +
-        "&port=5432&db=mydb&user=oren&passwd=1234&"
-        "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, ${host}, ${user},"
-        "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
-        "db_thread_model=conn-per-thread";
+    std::string cfg = std::string("db://postgresql?conn_string=") + sServerAddr +
+                      "&port=5432&db=mydb&user=oren&passwd=1234&"
+                      "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, "
+                      "${host}, ${user},"
+                      "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
+                      "db_thread_model=conn-per-thread";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
     StatData statData;
@@ -2352,6 +2930,7 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     }
     auto end0 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
+    logTarget->flush();
     while (!isCaughtUp(logTarget, msgCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
     }
@@ -2660,8 +3239,8 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         std::vector<double> resVec(threadCount, 0.0);
         auto start = std::chrono::high_resolution_clock::now();
         std::vector<elog::ELogLogger*> loggers(threadCount);
-        // create private loggers before running threads, otherwise race condition may happen (log
-        // source is not thread-safe)
+        // create private loggers before running threads, otherwise race condition may happen
+        // (log source is not thread-safe)
         for (uint32_t i = 0; i < threadCount; ++i) {
             loggers[i] = sharedLogger != nullptr ? sharedLogger
                                                  : elog::getPrivateLogger("elog_bench_logger");
@@ -2683,9 +3262,9 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
                 std::chrono::microseconds testTime =
                     std::chrono::duration_cast<std::chrono::microseconds>(end - start);
                 double throughput = msgCount / (double)testTime.count() * 1000000.0f;
-                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n", (unsigned)testTime.count(),
-                        (unsigned)msgCount);
-                fprintf(stderr, "Throughput: %0.3f MSg/Sec\n", throughput);*/
+                /*fprintf(stderr, "Test time: %u usec, msg count: %u\n",
+                (unsigned)testTime.count(), (unsigned)msgCount); fprintf(stderr, "Throughput:
+                %0.3f MSg/Sec\n", throughput);*/
                 resVec[i] = throughput;
             }));
         }
@@ -2696,6 +3275,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         fprintf(stderr, "Finished logging, waiting for logger to catch up\n");
         uint64_t targetMsgCount = initMsgCount + threadCount * msgCount;
         // fprintf(stderr, "Waiting for target msg count %" PRIu64 "\n", targetMsgCount);
+        logTarget->flush();  // required for net/ipc tests
         while (!isCaughtUp(logTarget, targetMsgCount)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(0));
         }
@@ -2708,10 +3288,11 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
             throughput += val;
         }
 #ifdef ELOG_MSVC
-        fprintf(stderr, "%u thread accumulated throughput: %s\n", threadCount,
+        fprintf(stderr, "%u thread accumulated throughput: %s Msg/Sec\n", threadCount,
                 win32FormatNumber(throughput, 2).c_str());
 #else
-        fprintf(stderr, "%u thread accumulated throughput: %'.2f\n", threadCount, throughput);
+        fprintf(stderr, "%u thread accumulated throughput: %'.2f Msg/Sec\n", threadCount,
+                throughput);
 #endif
         accumThroughput.push_back(throughput);
 
@@ -2796,8 +3377,8 @@ void runMultiThreadTestBinary(const char* title, const char* fileName, const cha
         std::vector<double> resVec(threadCount, 0.0);
         auto start = std::chrono::high_resolution_clock::now();
         std::vector<elog::ELogLogger*> loggers(threadCount);
-        // create private loggers before running threads, otherwise race condition may happen (log
-        // source is not thread-safe)
+        // create private loggers before running threads, otherwise race condition may happen
+        // (log source is not thread-safe)
         for (uint32_t i = 0; i < threadCount; ++i) {
             loggers[i] = sharedLogger != nullptr ? sharedLogger
                                                  : elog::getPrivateLogger("elog_bench_logger");
@@ -2928,8 +3509,8 @@ void runMultiThreadTestBinaryCached(const char* title, const char* fileName, con
         std::vector<double> resVec(threadCount, 0.0);
         auto start = std::chrono::high_resolution_clock::now();
         std::vector<elog::ELogLogger*> loggers(threadCount);
-        // create private loggers before running threads, otherwise race condition may happen (log
-        // source is not thread-safe)
+        // create private loggers before running threads, otherwise race condition may happen
+        // (log source is not thread-safe)
         for (uint32_t i = 0; i < threadCount; ++i) {
             loggers[i] = sharedLogger != nullptr ? sharedLogger
                                                  : elog::getPrivateLogger("elog_bench_logger");
@@ -3060,8 +3641,8 @@ void runMultiThreadTestBinaryPreCached(const char* title, const char* fileName, 
         std::vector<double> resVec(threadCount, 0.0);
         auto start = std::chrono::high_resolution_clock::now();
         std::vector<elog::ELogLogger*> loggers(threadCount);
-        // create private loggers before running threads, otherwise race condition may happen (log
-        // source is not thread-safe)
+        // create private loggers before running threads, otherwise race condition may happen
+        // (log source is not thread-safe)
         for (uint32_t i = 0; i < threadCount; ++i) {
             loggers[i] = sharedLogger != nullptr ? sharedLogger
                                                  : elog::getPrivateLogger("elog_bench_logger");
@@ -3393,7 +3974,8 @@ void testPerfQuantumFile(bool privateLogger) {
         "count=4096&quantum_buffer_size=2000000";*/
     const char* cfg =
         "async://"
-        "quantum?quantum_buffer_size=2000000&flush_policy=count&flush_count=4096&name=elog_bench"
+        "quantum?quantum_buffer_size=2000000&flush_policy=count&flush_count=4096&name=elog_"
+        "bench"
         "|file:///./bench_data/elog_bench_quantum.log?file_buffer_size=4k&file_lock=no";
     cfg =
         "async://"
@@ -3444,7 +4026,8 @@ void testPerfMultiQuantumFileBinary() {
     const char* cfg =
         "async://"
         "multi_quantum?quantum_buffer_size=11000&name=elog_bench"
-        "|file:///./bench_data/elog_bench_multi_quantum_bin.log?file_buffer_size=1mb&file_lock=no";
+        "|file:///./bench_data/"
+        "elog_bench_multi_quantum_bin.log?file_buffer_size=1mb&file_lock=no";
     runMultiThreadTestBinary("Multi Quantum 11000 (1MB Buffer, Binary)",
                              "elog_bench_multi_quantum_bin", cfg);
 }
@@ -3477,7 +4060,8 @@ static void writeSTCsv(const char* fname, const std::vector<double>& data) {
       << std::endl;
     f << column << " \"Flush\\nNever\" " << std::fixed << std::setprecision(2) << data[column++]
       << std::endl;
-    /*f << column << " \"Flush\\nGroup\" " << std::fixed << std::setprecision(2) << data[column++]
+    /*f << column << " \"Flush\\nGroup\" " << std::fixed << std::setprecision(2) <<
+      data[column++]
       << std::endl;*/
     f << column << " \"Flush\\nCount=4096\" " << std::fixed << std::setprecision(2)
       << data[column++] << std::endl;
@@ -3728,9 +4312,9 @@ void testPerfSTSegmentedFile1mb(std::vector<double>& msgThroughput,
 void testPerfSTRotatingFile1mb(std::vector<double>& msgThroughput,
                                std::vector<double>& ioThroughput, std::vector<double>& msgp50,
                                std::vector<double>& msgp95, std::vector<double>& msgp99) {
-    // rotation takes place at ~13000 messages with 1 mb segment, meaning that with 1000000 messages
-    // we get ~76 segment rotation, this is too much for a short test
-    // we would like to restrict the segment count to let's say 5 so we use segment size 15 mb
+    // rotation takes place at ~13000 messages with 1 mb segment, meaning that with 1000000
+    // messages we get ~76 segment rotation, this is too much for a short test we would like to
+    // restrict the segment count to let's say 5 so we use segment size 15 mb
     const char* cfg =
         "file:///./bench_data/"
         "elog_bench_rotating_15mb.log?file_segment_size=15mb&file_buffer_size=1mb&"

@@ -26,6 +26,14 @@ public:
     ELogRollingBitset& operator=(const ELogRollingBitset&) = delete;
     ~ELogRollingBitset() {}
 
+    /** @brief Single word size used by the ring buffer */
+    static const uint64_t WORD_SIZE;
+
+    /** @brief Computes the number of words required to contain the given number of bits. */
+    static uint64_t computeWordCount(uint64_t bitCount) {
+        return (bitCount + WORD_SIZE - 1) / WORD_SIZE * WORD_SIZE;
+    }
+
     /** @brief Order rolling bitset to trace its operation with this logger. */
     void setTraceLogger(ELogLogger* logger) { m_traceLogger = logger; }
 
@@ -79,7 +87,6 @@ private:
     std::atomic<uint64_t> m_fullWordCount;
     ELogLogger* m_traceLogger;
 
-    static const uint64_t WORD_SIZE;
     static const uint64_t FULL_WORD;
     static const uint64_t EMPTY_WORD;
 };

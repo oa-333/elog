@@ -12,6 +12,7 @@
 #include <unordered_map>
 
 #include "elog_cache.h"
+#include "elog_comm_util_log_handler.h"
 #include "elog_common.h"
 #include "elog_config.h"
 #include "elog_config_loader.h"
@@ -48,6 +49,10 @@
 #include "os_thread_manager.h"
 #endif
 
+#ifdef ELOG_ENABLE_MSG
+#include "msg/elog_msg_internal.h"
+#endif
+
 #ifdef ELOG_ENABLE_RELOAD_CONFIG
 #include <condition_variable>
 #include <thread>
@@ -68,6 +73,11 @@ ELOG_DECLARE_REPORT_LOGGER(ELog)
 #ifdef ELOG_USING_DBG_UTIL
 static ELogDbgUtilLogHandler sDbgUtilLogHandler;
 static bool sDbgUtilInitialized = false;
+#endif
+
+#ifdef ELOG_USING_COMM_UTIL
+static ELogCommUtilLogHandler sCommUtilLogHandler;
+static bool sCommUtilInitialized = false;
 #endif
 
 static bool sInitialized = false;
@@ -290,6 +300,21 @@ bool initGlobals() {
     sDbgUtilInitialized = true;
 #endif
 
+#ifdef ELOG_USING_COMM_UTIL
+    // connect to debug util library
+    ELOG_REPORT_TRACE("Initializing Communication utility library");
+    commutil::ErrorCode rc2 = commutil::initCommUtil(&sCommUtilLogHandler, commutil::LS_INFO);
+    if (rc2 != commutil::ErrorCode::E_OK) {
+        ELOG_REPORT_ERROR("Failed to initialize commutil library: %s",
+                          commutil::errorCodeToString(rc2));
+        termGlobals();
+        return false;
+    }
+    sCommUtilLogHandler.applyLogLevelCfg();
+    ELOG_REPORT_TRACE("Communication utility library logging initialized");
+    sCommUtilInitialized = true;
+#endif
+
 #ifdef ELOG_ENABLE_STACK_TRACE
     ELOG_REPORT_TRACE("Initializing ELog stack trace services");
     initStackTrace();
@@ -305,6 +330,15 @@ bool initGlobals() {
             return false;
         }
         ELOG_REPORT_TRACE("Life-sign report initialized");
+    }
+#endif
+
+#ifdef ELOG_ENABLE_MSG
+    if (!initBinaryFormatProviders()) {
+        ELOG_REPORT_ERROR(
+            "Failed to initialize binary format providers for log record serialization");
+        termGlobals();
+        return false;
     }
 #endif
 
@@ -343,12 +377,28 @@ void termGlobals() {
     clearAllLogTargets();
     ELogReport::termReport();
 
+#ifdef ELOG_ENABLE_MSG
+    termBinaryFormatProviders();
+#endif
+
 #ifdef ELOG_ENABLE_LIFE_SIGN
     if (sParams.m_enableLifeSignReport) {
         if (!termLifeSignReport()) {
             ELOG_REPORT_ERROR("Failed to terminate life-sign reports");
             // continue anyway
         }
+    }
+#endif
+
+#ifdef ELOG_USING_COMM_UTIL
+    if (sCommUtilInitialized) {
+        commutil::ErrorCode rc = commutil::termCommUtil();
+        if (rc != commutil::ErrorCode::E_OK) {
+            // issue error and continue
+            ELOG_REPORT_ERROR("Failed to terminate Communication Util library: %s",
+                              commutil::errorCodeToString(rc));
+        }
+        sCommUtilInitialized = false;
     }
 #endif
 
@@ -2003,6 +2053,10 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
                           (uint32_t)cfg.m_propagationMode);
         cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
     }
+
+#ifdef ELOG_USING_COMM_UTIL
+    sCommUtilLogHandler.refreshLogLevelCfg();
+#endif
 
 // configure life-sign report settings
 #ifdef ELOG_ENABLE_LIFE_SIGN

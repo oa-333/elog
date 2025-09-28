@@ -18,6 +18,8 @@
 # -r|--rebuild (no reconfigure)
 # -g|--reconfigure
 # -m|--mem-check
+# -a|--clang
+# -t|--trace
 # -h|--help
 
 # set default values
@@ -114,6 +116,8 @@ if [ "$HELP" -eq "1" ]; then
     echo "  postgresql      PostgreSQL database connector"
     echo "  kafka           Kafka topic connector"
     echo "  grpc            gRPC connector"
+    echo "  net             Network (TCP/UDP) connector"
+    echo "  ipc             IPC (Unix Domain Sockets/Windows Pipes) connector"
     echo "  all             Enables all connectors"
     echo ""
     echo ""
@@ -157,6 +161,7 @@ echo "[INFO] Clang: $CLANG"
 
 if [ "$FULL" -eq "1" ]; then
     echo "[INFO] Configuring FULL options"
+    SECURE=1
     STACK_TRACE=1
     FMT_LIB=1
     LIFE_SIGN=1
@@ -226,6 +231,12 @@ do
     elif [ "$conn" == "datadog" ]; then
         echo "[INFO] Adding Datadog connector"
         OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
+    elif [ "$conn" == "net" ]; then
+        echo "[INFO] Adding Network connector"
+        OPTS+=" -DELOG_ENABLE_NET=ON"
+    elif [ "$conn" == "ipc" ]; then
+        echo "[INFO] Adding IPC connector"
+        OPTS+=" -DELOG_ENABLE_IPC=ON"
     elif [ "$conn" == "all" ]; then
         echo "[INFO] Enabling all connectors"
         OPTS+=" -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON"
@@ -235,6 +246,8 @@ do
         OPTS+=" -DELOG_ENABLE_GRAFANA_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_SENTRY_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_NET=ON"
+        OPTS+=" -DELOG_ENABLE_IPC=ON"
     else
         echo "[ERROR] Invalid connector name $conn, aborting"
         exit 1

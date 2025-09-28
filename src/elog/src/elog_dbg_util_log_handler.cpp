@@ -103,12 +103,12 @@ void ELogDbgUtilLogHandler::onMsg(dbgutil::LogSeverity severity, size_t loggerId
 
 void ELogDbgUtilLogHandler::applyLogLevelCfg() {
     // now we can apply log level propagation
-    for (const ELogLevelCfg& cfg : m_logLevelCfg) {
+    for (const ELogDbgLevelCfg& cfg : m_logLevelCfg) {
         ELOG_REPORT_TRACE("Setting %s log level to %s (propagate - %u)",
                           cfg.m_logSource->getQualifiedName(), elogLevelToStr(cfg.m_logLevel),
                           (uint32_t)cfg.m_propagationMode);
         cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
-        dbgutil::setLoggerSeverity(cfg.m_dbgUtilLoggerId, cfg.m_severity);
+        dbgutil::setLoggerSeverity(cfg.m_loggerId, cfg.m_severity);
     }
 }
 

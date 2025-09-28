@@ -1,4 +1,4 @@
-if(MSVC AND ELOG_ENABLE_GRPC_CONNECTOR)
+if(MSVC AND ELOG_USING_PROTOBUF)
     target_sources(
         elog
         PUBLIC
