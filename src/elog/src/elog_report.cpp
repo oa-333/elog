@@ -1,6 +1,7 @@
 #include "elog_report.h"
 
 #include <atomic>
+#include <cassert>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -25,8 +26,7 @@ static thread_local uint64_t sDisableReportCount = 0;
 
 static thread_local uint64_t sDefaultReportCount = 0;
 
-ELogLogger* ELogReportLogger::getLogger(bool& logSourceCreated) const {
-    logSourceCreated = false;
+bool ELogReportLogger::initialize() {
     if (m_logger == nullptr) {
         std::string qualifiedName = std::string("elog.") + m_name;
 
@@ -38,13 +38,35 @@ ELogLogger* ELogReportLogger::getLogger(bool& logSourceCreated) const {
         if (logSource == nullptr) {
             logSource = defineLogSource(qualifiedName.c_str());
             if (logSource == nullptr) {
-                return nullptr;
+                return false;
             }
-            logSourceCreated = true;
         }
         m_logger = logSource->createSharedLogger();
     }
+    return true;
+}
+
+ELogLogger* ELogReportLogger::getLogger() {
+    (void)initialize();
     return m_logger;
+}
+
+bool ELogReportLogger::startInit() {
+    InitState initState = m_initState.load(std::memory_order_acquire);
+    if (initState != InitState::IS_NO_INIT) {
+        return false;
+    }
+    return m_initState.compare_exchange_strong(initState, InitState::IS_DURING_INIT,
+                                               std::memory_order_seq_cst);
+}
+
+void ELogReportLogger::waitFinishInit() const {
+    InitState initState = m_initState.load(std::memory_order_acquire);
+    assert(initState != InitState::IS_NO_INIT);
+    while (initState != InitState::IS_INIT) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(0));
+        initState = m_initState.load(std::memory_order_acquire);
+    }
 }
 
 static thread_local bool sIsReporting = false;
@@ -162,28 +184,38 @@ public:
 
     void onReportV(const ELogReportLogger& reportLogger, ELogLevel logLevel, const char* file,
                    int line, const char* function, const char* fmt, va_list args) override {
-        ELogLogger* logger = getValidLogger(reportLogger);
-        logger->logFormatV(logLevel, file, line, function, fmt, args);
+        ELogLogger* logger = getValidLogger(const_cast<ELogReportLogger&>(reportLogger));
+        // TODO: this may have no effect due to the global report level
+        if (logger->canLog(logLevel)) {
+            logger->logFormatV(logLevel, file, line, function, fmt, args);
+        }
     }
 
     void onReport(const ELogReportLogger& reportLogger, ELogLevel logLevel, const char* file,
                   int line, const char* function, const char* msg) override {
-        ELogLogger* logger = getValidLogger(reportLogger);
-        logger->logFormat(logLevel, file, line, function, msg);
+        ELogLogger* logger = getValidLogger(const_cast<ELogReportLogger&>(reportLogger));
+        // TODO: this may have no effect due to the global report level
+        if (logger->canLog(logLevel)) {
+            logger->logFormat(logLevel, file, line, function, msg);
+        }
     }
 
 private:
     ELogTarget* m_logTarget;
     ELogLogger* m_logger;
 
-    ELogLogger* getValidLogger(const ELogReportLogger& reportLogger) {
-        bool logSourceCreated = false;
-        ELogLogger* logger = reportLogger.getLogger(logSourceCreated);
+    ELogLogger* getValidLogger(ELogReportLogger& reportLogger) {
+        ELogLogger* logger = reportLogger.getLogger();
         if (logger == nullptr) {
             return m_logger;
         }
-        if (logSourceCreated) {
-            restrictToStdErr(logger);
+        if (reportLogger.requiresInit()) {
+            if (reportLogger.startInit()) {
+                restrictToStdErr(logger);
+                reportLogger.finishInit();
+            } else {
+                reportLogger.waitFinishInit();
+            }
         }
         return logger;
     }
