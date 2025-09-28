@@ -156,6 +156,7 @@ bool ELogTarget::stopNoLock() {
             return false;
         }
     }
+    drainBacklog();
     flushLogTarget();
     bool res = stopLogTarget();
     if (res) {
@@ -169,12 +170,57 @@ bool ELogTarget::stopNoLock() {
 }
 
 void ELogTarget::log(const ELogRecord& logRecord) {
-    if (m_requiresLock) {
-        std::unique_lock<std::recursive_mutex> lock(m_lock);
+    if (!m_requiresLock) {
         logNoLock(logRecord);
-    } else {
-        logNoLock(logRecord);
+        return;
     }
+
+    // in order to avoid complex deadlocks, we first do a try-lock and if failed put the message in
+    // a backlog queue and back off. then occasionally someone checks the backlog queue and drains
+    // it under lock (another lock), and print the queued messages
+    if (m_lock.try_lock()) {
+        logNoLock(logRecord);
+
+        // check backlog - must be done under lock scope
+        if (m_backlogSize.load(std::memory_order_relaxed) > 0) {
+            drainBacklog();
+        }
+
+        m_lock.unlock();
+    } else {
+        pushBacklog(logRecord);
+    }
+}
+
+void ELogTarget::pushBacklog(const ELogRecord& logRecord) {
+    std::unique_lock<std::mutex> lock(m_backlogLock);
+    m_backlog.emplace_back(
+        std::make_pair(logRecord, std::string(logRecord.m_logMsg, logRecord.m_logMsgLen)));
+    m_backlogSize.fetch_add(1, std::memory_order_relaxed);
+}
+
+void ELogTarget::drainBacklog() {
+    // drain to local container
+    std::vector<std::pair<ELogRecord, std::string>> backlog;
+    {
+        std::unique_lock<std::mutex> lock(m_backlogLock);
+        if (!m_backlog.empty()) {
+            backlog.resize(m_backlog.size());
+            std::copy(m_backlog.begin(), m_backlog.end(), backlog.begin());
+            m_backlog.clear();
+        }
+    }
+
+    // now log outside backlog lock scope
+    for (std::pair<ELogRecord, std::string>& logItem : backlog) {
+        logItem.first.m_logMsg = logItem.second.data();
+        logNoLock(logItem.first);
+    }
+
+    // NOTE: other threads might be adding to this atomic var so we use atomic-sub instead of
+    // storing zero
+    m_backlogSize.fetch_add(backlog.size(), std::memory_order_relaxed);
+    backlog.clear();
 }
 
 void ELogTarget::logNoLock(const ELogRecord& logRecord) {

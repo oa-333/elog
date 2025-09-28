@@ -304,9 +304,17 @@ private:
 
     ELogPassKey generatePassKey();
 
+    // backlog for messages that could not be delivered due to possible deadlock
+    std::vector<std::pair<ELogRecord, std::string>> m_backlog;
+    std::mutex m_backlogLock;
+    std::atomic<uint64_t> m_backlogSize;
+
 protected:
     bool m_enableStats;
     ELogStats* m_stats;
+
+    void pushBacklog(const ELogRecord& logRecord);
+    void drainBacklog();
 };
 
 /** @class Combined log target. Dispatches to multiple log targets. */
