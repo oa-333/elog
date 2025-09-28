@@ -39,7 +39,7 @@ ELOG_DECLARE_REPORT_LOGGER(ELogTime)
 // #define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)
 // #define UNIXTIME_TO_FILETIME(ut, ft) (*(LONGLONG*)&(ft) = (ut) * 10000000LL +
 // 116444736000000000LL)
-#endif
+#endif  // ELOG_MSVC
 
 /** @brief Integer represented as string, stuffed into 8 bytes struct */
 struct IntStr {
@@ -56,7 +56,7 @@ static time_t getUnixTimeRef() {
     return ts.tv_sec;
 }
 const time_t sUnixTimeRef = getUnixTimeRef();
-#endif
+#endif  // ELOG_MSVC
 
 // initialize the date table
 bool initDateTable() {
@@ -103,9 +103,9 @@ static bool elogTimeFromStringChrono(const char* timeStr, ELogTime& logTime) {
     }
     logTime = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     return true;
-#endif
+#endif  // __cpp_lib_chrono >= 201907L
 }
-#endif
+#endif  // ELOG_TIME_USE_CHRONO
 
 #if !defined(ELOG_TIME_USE_CHRONO) && defined(ELOG_MSVC)
 static bool elogSystemTimeFromStringWindows(const char* timeStr, SYSTEMTIME& sysTime) {
@@ -118,7 +118,7 @@ static bool elogSystemTimeFromStringWindows(const char* timeStr, SYSTEMTIME& sys
 #else
     int ret = sscanf(timeStr, "%hu-%hu-%hu %hu:%hu:%hu", &sysTime.wYear, &sysTime.wMonth,
                      &sysTime.wDay, &sysTime.wHour, &sysTime.wMinute, &sysTime.wSecond);
-#endif
+#endif  // ELOG_SECURE
     if (ret == EOF) {
         ELOG_REPORT_ERROR("Invalid time specification: %s", timeStr);
         return false;
@@ -145,8 +145,8 @@ static bool elogTimeFromStringWindows(const char* timeStr, ELogTime& logTime) {
     }
     return true;
 }
-#endif
-#endif
+#endif  // ELOG_TIME_USE_SYSTEMTIME
+#endif  // !defined(ELOG_TIME_USE_CHRONO) && defined(ELOG_MSVC)
 
 #if !defined(ELOG_TIME_USE_CHRONO) && !defined(ELOG_MSVC)
 static bool elogTimeFromStringUnix(const char* timeStr, ELogTime& logTime) {
@@ -176,13 +176,13 @@ static bool elogTimeFromStringUnix(const char* timeStr, ELogTime& logTime) {
                           ret);
         return false;
     }
-#endif
+#endif  // ELOG_MINGW
     time_t tmVal = std::mktime(&tm);
     logTime.m_seconds = tmVal;
     logTime.m_100nanos = 0;
     return true;
 }
-#endif
+#endif  // !defined(ELOG_TIME_USE_CHRONO) && !defined(ELOG_MSVC)
 
 uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime, bool useLocalTime /* = false */) {
 #ifdef ELOG_TIME_USE_CHRONO
@@ -224,7 +224,7 @@ uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime, bool useLocalTime /* =
         uint64_t unixTimeNanos = (uint64_t)FILETIME_TO_UNIXTIME_NANOS(logTime);
         return unixTimeNanos;
     }
-#endif
+#endif  // ELOG_TIME_USE_SYSTEMTIME
 #else
     if (useLocalTime) {
         time_t timer = logTime.m_seconds + sUnixTimeRef;
@@ -233,7 +233,7 @@ uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime, bool useLocalTime /* =
         (void)localtime_s(&tmInfo, &timer);
 #else
         (void)localtime_r(&timer, &tmInfo);
-#endif
+#endif  // ELOG_WINDOWS
         time_t localTime = mktime(&tmInfo);
         uint64_t unixTimeNanos =
             (localTime + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
@@ -243,7 +243,7 @@ uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime, bool useLocalTime /* =
             (logTime.m_seconds + sUnixTimeRef) * 1000000000ULL + logTime.m_100nanos * 100;
         return unixTimeNanos;
     }
-#endif
+#endif  // ELOG_TIME_USE_CHRONO
     return 0;
 }
 

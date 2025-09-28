@@ -1,13 +1,12 @@
 #ifndef __ELOG_TIME_H__
 #define __ELOG_TIME_H__
 
+#include <chrono>
 #include <cstdint>
 
 #include "elog_def.h"
 
-#ifdef ELOG_TIME_USE_CHRONO
-#include <chrono>
-#else
+#ifndef ELOG_TIME_USE_CHRONO
 #include <time.h>
 #endif
 
@@ -167,6 +166,14 @@ extern ELOG_API bool elogTimeFromString(const char* timeStr, ELogTime& logTime);
  * normally be the constant value ELOG_TIME_STR_LEN.
  */
 extern ELOG_API size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer);
+
+/** @brief Retrieves a time stamp. */
+// TODO: change this name, it is too much similar to elogGetCurrentTime()
+inline uint64_t getCurrentTimeMillis() {
+    return (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
 
 }  // namespace elog
 

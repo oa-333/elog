@@ -101,12 +101,7 @@ bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {
         return true;
     }
 
-    tstamp_t currTstamp = getTstamp();
-    if (currTstamp.count() < 0) {
-        // something went bad, we have a negative timestamp, so we let the record be logged
-        return true;
-    }
-    uint64_t tstamp = (uint64_t)currTstamp.count();
+    uint64_t tstamp = getCurrentTimeMillis();
 
     // we are not expecting negative value here
     uint64_t wholeInterval = tstamp / m_intervalMillis;
@@ -149,11 +144,6 @@ bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {
         m_currIntervalCount.store(1, std::memory_order_release);
     }
     return true;
-}
-
-ELogRateLimiter::tstamp_t ELogRateLimiter::getTstamp() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch());
 }
 
 }  // namespace elog

@@ -1057,12 +1057,6 @@ void updateGuardedSegments(const std::unordered_set<DWORD>& pids, bool pidListFu
     }
 }
 
-inline int64_t getEpochTimeMilliseconds() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::system_clock::now().time_since_epoch())
-        .count();
-}
-
 void updateGuardedSegment(const std::string& segName, ShmSegmentData& segData,
                           const std::unordered_set<DWORD>& pids, bool pidListFullyValid) {
     // check init state
@@ -1093,7 +1087,7 @@ void updateGuardedSegment(const std::string& segName, ShmSegmentData& segData,
             }
         } else {
             segData.m_hdr->m_isProcessAlive = 1;
-            segData.m_hdr->m_lastProcessTimeEpochMillis = getEpochTimeMilliseconds();
+            segData.m_hdr->m_lastProcessTimeEpochMillis = elog::getCurrentTimeMillis();
             ELOG_TRACE_EX(sLogger, "Owning process of shared memory segment %s is still alive",
                           segName.c_str());
         }
@@ -1101,7 +1095,7 @@ void updateGuardedSegment(const std::string& segName, ShmSegmentData& segData,
 
     // sync and advance state
     if (syncSegment(segName, segData)) {
-        segData.m_hdr->m_lastSyncTimeEpochMillis = getEpochTimeMilliseconds();
+        segData.m_hdr->m_lastSyncTimeEpochMillis = elog::getCurrentTimeMillis();
         if (segData.m_state == SEG_DEAD) {
             segData.m_state = SEG_SYNCED;
             segData.m_hdr->m_isFullySynced = 1;

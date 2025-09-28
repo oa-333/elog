@@ -49,11 +49,6 @@ protected:
     std::atomic<uint64_t> m_currIntervalCount;
     std::atomic<uint64_t> m_prevIntervalCount;
 
-    // milliseconds precision is enough
-    typedef std::chrono::milliseconds tstamp_t;
-
-    tstamp_t getTstamp();
-
     ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limit)
 
 private:
