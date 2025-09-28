@@ -4,6 +4,8 @@
 
 namespace elog {
 
+ELOG_IMPLEMENT_LOG_FORMATTER(ELogDbFormatter)
+
 bool ELogDbFormatter::handleText(const std::string& text) {
     m_processedStatement += text;
     return true;
@@ -16,7 +18,7 @@ bool ELogDbFormatter::handleField(const ELogFieldSpec& fieldSpec) {
         m_processedStatement += "$";
         m_processedStatement += std::to_string(m_fieldNum++);
     }
-    return ELogBaseFormatter::handleField(fieldSpec);
+    return ELogFormatter::handleField(fieldSpec);
 }
 
 void ELogDbFormatter::getParamTypes(std::vector<ParamType>& paramTypes) const {

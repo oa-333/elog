@@ -81,8 +81,9 @@ ELogDbTarget::ELogDbTarget(const char* dbName, const char* rawInsertStatement,
                            uint64_t reconnectTimeoutMillis /* = ELOG_DB_RECONNECT_TIMEOUT_MILLIS */)
     : ELogTarget("db"),
       m_dbName(dbName),
-      m_formatter(queryStyle),
+      m_dbFormatter(nullptr),
       m_rawInsertStatement(rawInsertStatement),
+      m_queryStyle(queryStyle),
       m_threadModel(threadModel),
       m_maxThreads(maxThreads),
       m_reconnectTimeoutMillis(reconnectTimeoutMillis),
@@ -94,6 +95,13 @@ ELogDbTarget::ELogDbTarget(const char* dbName, const char* rawInsertStatement,
 }
 
 bool ELogDbTarget::startLogTarget() {
+    if (getLogFormatter() == nullptr) {
+        ELOG_REPORT_ERROR("Cannot start %s DB log target, missing log format", m_dbName.c_str());
+        return false;
+    }
+    // TODO: some type checking is needed here
+    m_dbFormatter = (ELogDbFormatter*)getLogFormatter();
+    m_dbFormatter->setQueryStyle(m_queryStyle);
     if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
         m_threadSlots.resize(m_maxThreads);
     } else {
@@ -108,7 +116,7 @@ bool ELogDbTarget::startLogTarget() {
     if (!parseInsertStatement(m_rawInsertStatement)) {
         ELOG_REPORT_ERROR("Failed to parse insert statement: %s", m_rawInsertStatement.c_str());
     }
-    m_formatter.getParamTypes(m_paramTypes);
+    m_dbFormatter->getParamTypes(m_paramTypes);
     initDbTarget();
 
     // in single slot mode we allocate slot, try to connect
@@ -188,7 +196,7 @@ uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
 }
 
 bool ELogDbTarget::parseInsertStatement(const std::string& insertStatement) {
-    if (!m_formatter.initialize(insertStatement.c_str())) {
+    if (!m_dbFormatter->initialize(insertStatement.c_str())) {
         ELOG_REPORT_ERROR("Failed to parse insert statement: %s", insertStatement.c_str());
         return false;
     }

@@ -21,6 +21,7 @@
 #include "elog_filter_internal.h"
 #include "elog_flush_policy.h"
 #include "elog_flush_policy_internal.h"
+#include "elog_formatter_internal.h"
 #include "elog_internal.h"
 #include "elog_level_cfg.h"
 #include "elog_pre_init_logger.h"
@@ -202,6 +203,13 @@ bool initGlobals() {
     }
     ELOG_REPORT_TRACE("Filters initialized");
 
+    if (!initLogFormatters()) {
+        ELOG_REPORT_ERROR("Failed to initialize log formatters");
+        termGlobals();
+        return false;
+    }
+    ELOG_REPORT_TRACE("Log formatters initialized");
+
     // root logger has no name
     // NOTE: this is the only place where we cannot use logging macros
     sRootLogSource = createLogSource(allocLogSourceId(), "");
@@ -370,6 +378,7 @@ void termGlobals() {
     sDefaultLogger = nullptr;
     sLogSourceMap.clear();
 
+    termLogFormatters();
     termFilters();
     termFlushPolicies();
     ELogSchemaManager::termSchemaHandlers();

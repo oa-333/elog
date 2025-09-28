@@ -5,7 +5,7 @@
 
 namespace elog {
 
-class ELOG_API ELogDbFormatter : public ELogBaseFormatter {
+class ELOG_API ELogDbFormatter : public ELogFormatter {
 public:
     /** @enum Prepared statement processing style. */
     enum class QueryStyle : uint32_t {
@@ -32,12 +32,15 @@ public:
         PT_LOG_LEVEL
     };
 
-    ELogDbFormatter(QueryStyle queryStyle) : m_queryStyle(queryStyle), m_fieldNum(1) {}
+    ELogDbFormatter(QueryStyle queryStyle = QueryStyle::QS_QMARK)
+        : m_queryStyle(queryStyle), m_fieldNum(1) {}
 
     ELogDbFormatter(const ELogDbFormatter&) = delete;
     ELogDbFormatter(ELogDbFormatter&&) = delete;
     ELogDbFormatter& operator=(const ELogDbFormatter&) = delete;
     ~ELogDbFormatter() final {}
+
+    inline void setQueryStyle(QueryStyle queryStyle) { m_queryStyle = queryStyle; }
 
     inline const std::string& getProcessedStatement() const { return m_processedStatement; }
 
@@ -57,6 +60,8 @@ private:
     QueryStyle m_queryStyle;
     uint32_t m_fieldNum;
     std::string m_processedStatement;
+
+    ELOG_DECLARE_LOG_FORMATTER(ELogDbFormatter, db)
 };
 
 }  // namespace elog

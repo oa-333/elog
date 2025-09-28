@@ -5,7 +5,7 @@
 
 namespace elog {
 
-class ELOG_API ELogRpcFormatter : public ELogBaseFormatter {
+class ELOG_API ELogRpcFormatter : public ELogFormatter {
 public:
     ELogRpcFormatter() : m_lastFieldType(FieldType::FT_NONE) {}
     ELogRpcFormatter(const ELogRpcFormatter&) = delete;
@@ -27,6 +27,8 @@ protected:
 private:
     enum class FieldType : uint32_t { FT_NONE, FT_COMMA, FT_FIELD };
     FieldType m_lastFieldType;
+
+    ELOG_DECLARE_LOG_FORMATTER(ELogRpcFormatter, rpc)
 };
 
 }  // namespace elog

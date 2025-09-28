@@ -9,6 +9,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogJsonFormatter)
 
+ELOG_IMPLEMENT_LOG_FORMATTER(ELogJsonFormatter)
+
 bool ELogJsonFormatter::parseJson(const std::string& jsonStr) {
     try {
         // parse json and iterate over all items

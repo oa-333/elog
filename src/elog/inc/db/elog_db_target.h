@@ -71,7 +71,7 @@ protected:
      * parseInsertStatement().
      */
     inline const std::string& getProcessedInsertStatement() const {
-        return m_formatter.getProcessedStatement();
+        return m_dbFormatter->getProcessedStatement();
     }
 
     /**
@@ -91,7 +91,7 @@ protected:
      */
     inline void fillInsertStatement(const elog::ELogRecord& logRecord,
                                     elog::ELogFieldReceptor* receptor) {
-        m_formatter.fillInsertStatement(logRecord, receptor);
+        m_dbFormatter->fillInsertStatement(logRecord, receptor);
     }
 
     /** @brief Performs target level initialization. */
@@ -117,8 +117,9 @@ private:
     std::string m_dbName;
 
     // insert statement parsing members
-    ELogDbFormatter m_formatter;
+    ELogDbFormatter* m_dbFormatter;
     std::string m_rawInsertStatement;
+    ELogDbFormatter::QueryStyle m_queryStyle;
     std::vector<ELogDbFormatter::ParamType> m_paramTypes;
 
     ThreadModel m_threadModel;

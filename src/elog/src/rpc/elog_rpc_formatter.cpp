@@ -7,6 +7,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogRpcFormatter)
 
+ELOG_IMPLEMENT_LOG_FORMATTER(ELogRpcFormatter)
+
 bool ELogRpcFormatter::handleText(const std::string& text) {
     // text must be a comma only, perhaps surrounded with whitespace
     // ignore all white space parts
@@ -29,7 +31,7 @@ bool ELogRpcFormatter::handleField(const ELogFieldSpec& fieldSpec) {
         return false;
     }
     m_lastFieldType = FieldType::FT_FIELD;
-    return ELogBaseFormatter::handleField(fieldSpec);
+    return ELogFormatter::handleField(fieldSpec);
 }
 
 }  // namespace elog

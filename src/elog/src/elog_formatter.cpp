@@ -7,6 +7,8 @@
 
 namespace elog {
 
+// TODO: remove when integration is done
+#if 0
 void ELogFormatter::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
     // unlike the string stream receptor, the string receptor formats directly the resulting log
     // message string, and so we save one or two string copies
@@ -18,5 +20,6 @@ void ELogFormatter::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& log
     ELogBufferReceptor receptor(logBuffer);
     applyFieldSelectors(logRecord, &receptor);
 }
+#endif
 
 }  // namespace elog

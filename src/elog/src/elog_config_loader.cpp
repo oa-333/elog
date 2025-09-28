@@ -873,13 +873,36 @@ bool ELogConfigLoader::applyTargetLogFormat(ELogTarget* logTarget,
     }
 
     if (found) {
-        ELogFormatter* logFormatter = new (std::nothrow) ELogFormatter();
-        if (logFormatter == nullptr) {
-            ELOG_REPORT_ERROR(
-                "Failed to allocate log formatter for log target, out of memory (context: %s)",
-                logTargetCfg->getFullContext());
-            return false;
+        ELogFormatter* logFormatter = nullptr;
+        // parse optional type
+        std::string::size_type colonPos = logFormat.find(':');
+        if (colonPos != std::string::npos) {
+            std::string type = logFormat.substr(0, colonPos);
+            logFormatter = constructLogFormatter(type.c_str());
+            if (logFormatter == nullptr) {
+                // NOTE: we do not have the ability to tell whether this is a real error, since user
+                // string may contain a colon, so we issue a warning and continue
+                ELOG_REPORT_WARN("Invalid log formatter type '%s', continuing as string formatter",
+                                 type.c_str());
+                // use entire string as log format
+            } else {
+                // skip to actual log format
+                logFormat = logFormat.substr(colonPos + 1);
+            }
         }
+
+        // create default formatter if needed
+        if (logFormatter == nullptr) {
+            logFormatter = new (std::nothrow) ELogFormatter();
+            if (logFormatter == nullptr) {
+                ELOG_REPORT_ERROR(
+                    "Failed to allocate log formatter for log target, out of memory (context: %s)",
+                    logTargetCfg->getFullContext());
+                return false;
+            }
+        }
+
+        // initialize the formatter (parse field selectors)
         if (!logFormatter->initialize(logFormat.c_str())) {
             ELOG_REPORT_ERROR("Invalid log format '%s' specified in log target (context: %s)",
                               logFormat.c_str(), logTargetCfg->getFullContext());

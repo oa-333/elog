@@ -2,31 +2,102 @@
 
 #include <cstring>
 
+#include "elog_buffer_receptor.h"
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_filter.h"
 #include "elog_report.h"
+#include "elog_string_receptor.h"
 #include "elog_string_stream_receptor.h"
 
 namespace elog {
 
-ELOG_DECLARE_REPORT_LOGGER(ELogBaseFormatter)
+ELOG_DECLARE_REPORT_LOGGER(ELogFormatter)
 
-ELogBaseFormatter::~ELogBaseFormatter() {
+/** @def The maximum number of log formatter types that can be defined in the system. */
+#define ELOG_MAX_LOG_FORMATTER_COUNT 100
+
+// implement log formatter factory by name with static registration
+struct ELogFormatterNameConstructor {
+    const char* m_name;
+    ELogFormatterConstructor* m_ctor;
+};
+
+static ELogFormatterNameConstructor sLogFormatterConstructors[ELOG_MAX_LOG_FORMATTER_COUNT] = {};
+static uint32_t sLogFormatterConstructorsCount = 0;
+
+typedef std::unordered_map<std::string, ELogFormatterConstructor*> ELogFormatterConstructorMap;
+
+static ELogFormatterConstructorMap sLogFormatterConstructorMap;
+
+void registerLogFormatterConstructor(const char* name, ELogFormatterConstructor* constructor) {
+    // due to c runtime issues on MinGW we delay access to unordered map
+    if (sLogFormatterConstructorsCount >= ELOG_MAX_LOG_FORMATTER_COUNT) {
+        ELOG_REPORT_ERROR("Cannot register log formatter constructor, no space: %s", name);
+        exit(1);
+    } else {
+        sLogFormatterConstructors[sLogFormatterConstructorsCount++] = {name, constructor};
+    }
+}
+
+static bool applyLogFormatterConstructorRegistration() {
+    for (uint32_t i = 0; i < sLogFormatterConstructorsCount; ++i) {
+        ELogFormatterNameConstructor& nameCtorPair = sLogFormatterConstructors[i];
+        if (!sLogFormatterConstructorMap
+                 .insert(ELogFormatterConstructorMap::value_type(nameCtorPair.m_name,
+                                                                 nameCtorPair.m_ctor))
+                 .second) {
+            ELOG_REPORT_ERROR("Duplicate log formatter identifier: %s", nameCtorPair.m_name);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool initLogFormatters() { return applyLogFormatterConstructorRegistration(); }
+
+void termLogFormatters() { sLogFormatterConstructorMap.clear(); }
+
+ELogFormatter* constructLogFormatter(const char* name) {
+    ELogFormatterConstructorMap::iterator itr = sLogFormatterConstructorMap.find(name);
+    if (itr == sLogFormatterConstructorMap.end()) {
+        ELOG_REPORT_ERROR("Invalid log formatter %s: not found", name);
+        return nullptr;
+    }
+
+    ELogFormatterConstructor* constructor = itr->second;
+    ELogFormatter* logFormatter = constructor->constructFormatter();
+    if (logFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to createlog formatter, out of memory");
+    }
+    return logFormatter;
+}
+
+ELogFormatter::~ELogFormatter() {
     for (ELogFieldSelector* fieldSelector : m_fieldSelectors) {
         delete fieldSelector;
     }
     m_fieldSelectors.clear();
 }
+void ELogFormatter::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
+    // unlike the string stream receptor, the string receptor formats directly the resulting log
+    // message string, and so we save one or two string copies
+    ELogStringReceptor receptor(logMsg);
+    applyFieldSelectors(logRecord, &receptor);
+}
 
-void ELogBaseFormatter::applyFieldSelectors(const ELogRecord& logRecord,
-                                            ELogFieldReceptor* receptor) {
+void ELogFormatter::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
+    ELogBufferReceptor receptor(logBuffer);
+    applyFieldSelectors(logRecord, &receptor);
+}
+
+void ELogFormatter::applyFieldSelectors(const ELogRecord& logRecord, ELogFieldReceptor* receptor) {
     for (ELogFieldSelector* fieldSelector : m_fieldSelectors) {
         fieldSelector->selectField(logRecord, receptor);
     }
 }
 
-bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
+bool ELogFormatter::parseFormatSpec(const std::string& formatSpec) {
     // repeatedly search for "${"
     std::string::size_type prevPos = 0;
     std::string::size_type pos = formatSpec.find("${");
@@ -59,7 +130,7 @@ bool ELogBaseFormatter::parseFormatSpec(const std::string& formatSpec) {
 }
 
 // TODO: support log level color configuration
-bool ELogBaseFormatter::parseFieldSpec(const std::string& fieldSpecStr) {
+bool ELogFormatter::parseFieldSpec(const std::string& fieldSpecStr) {
     // all functionality now delegated to ELogFieldSpec due to future needs (per-log-level text
     // formatting), except for conditional formatting:
     //
@@ -87,7 +158,7 @@ bool ELogBaseFormatter::parseFieldSpec(const std::string& fieldSpecStr) {
     }
 }
 
-bool ELogBaseFormatter::handleText(const std::string& text) {
+bool ELogFormatter::handleText(const std::string& text) {
     // by default we add a static text field selector
     ELogFieldSelector* fieldSelector = new (std::nothrow) ELogStaticTextSelector(text.c_str());
     if (fieldSelector == nullptr) {
@@ -99,7 +170,7 @@ bool ELogBaseFormatter::handleText(const std::string& text) {
     return true;
 }
 
-bool ELogBaseFormatter::handleField(const ELogFieldSpec& fieldSpec) {
+bool ELogFormatter::handleField(const ELogFieldSpec& fieldSpec) {
     ELogFieldSelector* fieldSelector = constructFieldSelector(fieldSpec);
     if (fieldSelector == nullptr) {
         return false;
@@ -108,7 +179,7 @@ bool ELogBaseFormatter::handleField(const ELogFieldSpec& fieldSpec) {
     return true;
 }
 
-bool ELogBaseFormatter::parseValue(const std::string& value) {
+bool ELogFormatter::parseValue(const std::string& value) {
     // check if this is a field reference
     if (value.find("${") == 0) {
         // verify field reference syntax
@@ -137,9 +208,8 @@ bool ELogBaseFormatter::parseValue(const std::string& value) {
 
 // TODO: should this entire loading/parsing code be moved to config loader/parser?
 
-bool ELogBaseFormatter::getFieldCloseBrace(const std::string& formatSpec,
-                                           std::string::size_type from,
-                                           std::string::size_type& closePos) {
+bool ELogFormatter::getFieldCloseBrace(const std::string& formatSpec, std::string::size_type from,
+                                       std::string::size_type& closePos) {
     // it is expected to have the first char as open brace
     int count = 0;
     bool countChanged = false;
@@ -170,9 +240,8 @@ bool ELogBaseFormatter::getFieldCloseBrace(const std::string& formatSpec,
     return false;
 }
 
-bool ELogBaseFormatter::getFieldCloseParen(const std::string& formatSpec,
-                                           std::string::size_type from,
-                                           std::string::size_type& closePos) {
+bool ELogFormatter::getFieldCloseParen(const std::string& formatSpec, std::string::size_type from,
+                                       std::string::size_type& closePos) {
     // it is expected to have the first char as open brace
     int count = 0;
     bool countChanged = false;
@@ -204,7 +273,7 @@ bool ELogBaseFormatter::getFieldCloseParen(const std::string& formatSpec,
     return false;
 }
 
-bool ELogBaseFormatter::parseSimpleField(const std::string& fieldSpecStr) {
+bool ELogFormatter::parseSimpleField(const std::string& fieldSpecStr) {
     // parse the field
     ELogFieldSpec fieldSpec;
     if (!fieldSpec.parse(fieldSpecStr)) {
@@ -215,7 +284,7 @@ bool ELogBaseFormatter::parseSimpleField(const std::string& fieldSpecStr) {
     return handleField(fieldSpec);
 }
 
-bool ELogBaseFormatter::parseCondField(const std::string& fieldSpecStr) {
+bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
     // expected format (stripped from enclosing ${}):
     // ${if: (filter-pred): ${name:<true format>} [: ${name:< false format>}] }
     std::string::size_type colonPos = fieldSpecStr.find(':');
@@ -328,7 +397,7 @@ bool ELogBaseFormatter::parseCondField(const std::string& fieldSpecStr) {
     return true;
 }
 
-bool ELogBaseFormatter::parseSwitchField(const std::string& fieldSpecStr) {
+bool ELogFormatter::parseSwitchField(const std::string& fieldSpecStr) {
     // expected format (stripped from enclosing ${}):
     // ${switch: (expr): ${case: (expr) : ${name:<format>}}, ..., ${default:${name: <format>}} }
     // the expr is ELogFieldSelector that yields int, string, level or time.
@@ -448,7 +517,7 @@ bool ELogBaseFormatter::parseSwitchField(const std::string& fieldSpecStr) {
 // TODO: reset format automatically at the end of formatted log line in case at least one format
 // escape code was used
 
-bool ELogBaseFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
+bool ELogFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
     // expected format:
     // ${expr-switch: ${case: (pred) : ${name:<format>}}, ..., ${default:${name: <format>}} }
     // the pred is ELogFilter.
@@ -550,9 +619,8 @@ bool ELogBaseFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
     return true;
 }
 
-bool ELogBaseFormatter::parseCaseOrDefaultClause(ELogSwitchSelector* switchSelector,
-                                                 const std::string& caseSpec,
-                                                 bool& isDefaultClause) {
+bool ELogFormatter::parseCaseOrDefaultClause(ELogSwitchSelector* switchSelector,
+                                             const std::string& caseSpec, bool& isDefaultClause) {
     // expected format is (enclosing ${} stripped):
     // ${case: ${const-level:TRACE} : ${fmt:text=faint}}
     // or:
@@ -580,8 +648,8 @@ bool ELogBaseFormatter::parseCaseOrDefaultClause(ELogSwitchSelector* switchSelec
     }
 }
 
-bool ELogBaseFormatter::parseCaseClause(ELogSwitchSelector* switchSelector,
-                                        const std::string& caseSpec) {
+bool ELogFormatter::parseCaseClause(ELogSwitchSelector* switchSelector,
+                                    const std::string& caseSpec) {
     // expected format is (enclosing ${} stripped):
     // ${const-level:TRACE} : ${fmt:text=faint}
     if (!caseSpec.starts_with("${")) {
@@ -636,8 +704,8 @@ bool ELogBaseFormatter::parseCaseClause(ELogSwitchSelector* switchSelector,
     return true;
 }
 
-bool ELogBaseFormatter::parseDefaultClause(ELogSwitchSelector* switchSelector,
-                                           const std::string& defaultSpec) {
+bool ELogFormatter::parseDefaultClause(ELogSwitchSelector* switchSelector,
+                                       const std::string& defaultSpec) {
     // expected format is (enclosing ${} stripped):
     // ${fmt:fg-color=green}
     ELogFieldSelector* defaultSelector = loadSelector(defaultSpec);
@@ -649,9 +717,9 @@ bool ELogBaseFormatter::parseDefaultClause(ELogSwitchSelector* switchSelector,
     return true;
 }
 
-bool ELogBaseFormatter::parseExprCaseOrDefaultClause(ELogExprSwitchSelector* switchSelector,
-                                                     const std::string& caseSpec,
-                                                     bool& isDefaultClause) {
+bool ELogFormatter::parseExprCaseOrDefaultClause(ELogExprSwitchSelector* switchSelector,
+                                                 const std::string& caseSpec,
+                                                 bool& isDefaultClause) {
     // expected format is (enclosing ${} stripped):
     //      ${case: (${src} == ${const-string: "core.files"}) : ${fmt:fg-color=red}}
     // or:
@@ -679,8 +747,8 @@ bool ELogBaseFormatter::parseExprCaseOrDefaultClause(ELogExprSwitchSelector* swi
     }
 }
 
-bool ELogBaseFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelector,
-                                            const std::string& caseSpec) {
+bool ELogFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelector,
+                                        const std::string& caseSpec) {
     // expected format is (enclosing ${} stripped):
     //      ${case: (${src} == ${const-string: "core.files"}) : ${fmt:fg-color=red}}
     if (!caseSpec.starts_with("(")) {
@@ -737,8 +805,8 @@ bool ELogBaseFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelect
     return true;
 }
 
-bool ELogBaseFormatter::parseExprDefaultClause(ELogExprSwitchSelector* switchSelector,
-                                               const std::string& defaultSpec) {
+bool ELogFormatter::parseExprDefaultClause(ELogExprSwitchSelector* switchSelector,
+                                           const std::string& defaultSpec) {
     // expected format is (enclosing ${} stripped):
     // ${fmt:fg-color=green}
     ELogFieldSelector* defaultSelector = loadSelector(defaultSpec);
@@ -750,7 +818,7 @@ bool ELogBaseFormatter::parseExprDefaultClause(ELogExprSwitchSelector* switchSel
     return true;
 }
 
-ELogFieldSelector* ELogBaseFormatter::loadSelector(const std::string& selectorSpecStr) {
+ELogFieldSelector* ELogFormatter::loadSelector(const std::string& selectorSpecStr) {
     if (!selectorSpecStr.starts_with("${")) {
         ELOG_REPORT_ERROR("Invalid field selector specification, missing initial '${': %s",
                           selectorSpecStr.c_str());
@@ -793,7 +861,7 @@ ELogFieldSelector* ELogBaseFormatter::loadSelector(const std::string& selectorSp
     return selector;
 }
 
-ELogFieldSelector* ELogBaseFormatter::loadConstSelector(const std::string& fieldSpecStr) {
+ELogFieldSelector* ELogFormatter::loadConstSelector(const std::string& fieldSpecStr) {
     std::string::size_type colonPos = fieldSpecStr.find(':');
     if (colonPos == std::string::npos) {
         ELOG_REPORT_ERROR("Invalid const field selector specification, missing ':' separator: %s",

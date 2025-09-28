@@ -14,7 +14,7 @@ namespace elog {
  * @class A JSON formatter, which takes input as json map, and parses property names and values as
  * field selectors.
  */
-class ELOG_API ELogJsonFormatter final : public ELogBaseFormatter {
+class ELOG_API ELogJsonFormatter final : public ELogFormatter {
 public:
     ELogJsonFormatter() {}
     ELogJsonFormatter(const ELogJsonFormatter&) = delete;
@@ -37,6 +37,8 @@ public:
 private:
     nlohmann::json m_jsonField;
     std::vector<std::string> m_propNames;
+
+    ELOG_DECLARE_LOG_FORMATTER(ELogJsonFormatter, json)
 };
 
 }  // namespace elog

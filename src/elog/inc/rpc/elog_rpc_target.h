@@ -18,7 +18,10 @@ protected:
           m_server(server),
           m_host(host),
           m_port(port),
-          m_functionName(functionName) {}
+          m_functionName(functionName),
+          m_rpcFormatter(nullptr) {
+        m_rpcFormatter = (ELogRpcFormatter*)getLogFormatter();
+    }
     ELogRpcTarget(const ELogRpcTarget&) = delete;
     ELogRpcTarget(ELogRpcTarget&&) = delete;
     ELogRpcTarget& operator=(const ELogRpcTarget&) = delete;
@@ -34,7 +37,7 @@ protected:
      * @return true If succeeded, otherwise false.
      */
     inline bool parseParams(const std::string& params) {
-        return m_rpcFormatter.parseParams(params);
+        return m_rpcFormatter->parseParams(params);
     }
 
     /**
@@ -44,7 +47,7 @@ protected:
      * message headers.
      */
     inline void fillInParams(const elog::ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {
-        m_rpcFormatter.fillInParams(logRecord, receptor);
+        m_rpcFormatter->fillInParams(logRecord, receptor);
     }
 
 protected:
@@ -53,10 +56,10 @@ protected:
     int m_port;
     std::string m_functionName;
 
-    inline ELogRpcFormatter* getRpcFormatter() { return &m_rpcFormatter; }
+    inline ELogRpcFormatter* getRpcFormatter() { return m_rpcFormatter; }
 
 private:
-    ELogRpcFormatter m_rpcFormatter;
+    ELogRpcFormatter* m_rpcFormatter;
 };
 
 }  // namespace elog

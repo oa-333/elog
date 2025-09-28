@@ -5,7 +5,7 @@
 
 namespace elog {
 
-class ELOG_API ELogPropsFormatter final : public ELogBaseFormatter {
+class ELOG_API ELogPropsFormatter final : public ELogFormatter {
 public:
     ELogPropsFormatter() {}
     ELogPropsFormatter(const ELogPropsFormatter&) = delete;
@@ -27,6 +27,8 @@ public:
 
 private:
     std::vector<std::string> m_propNames;
+
+    ELOG_DECLARE_LOG_FORMATTER(ELogPropsFormatter, props)
 };
 
 }  // namespace elog
