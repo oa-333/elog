@@ -1947,6 +1947,7 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
             const std::string& key = prop.first;
             // shave off trailing ".log_level/_log_level" (that includes dot/underscore)
             std::string sourceName = key.substr(0, key.size() - logLevelSuffixLen);
+            std::replace(sourceName.begin(), sourceName.end(), '_', '.');
             ELogSource* logSource = defineLogSources
                                         ? defineLogSource(sourceName.c_str(), defineMissingPath)
                                         : getLogSource(sourceName.c_str());
