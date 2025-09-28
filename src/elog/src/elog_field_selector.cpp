@@ -515,6 +515,8 @@ extern const char* getAppName() { return sAppName; }
 
 const char* getProgramName() { return sProgName; }
 
+uint32_t getProcessIdField() { return (uint32_t)pid; }
+
 void setAppNameField(const char* appName) {
     elog_strncpy(sAppName, appName, APP_NAME_MAX);
 #ifdef ELOG_ENABLE_LIFE_SIGN
@@ -573,7 +575,7 @@ bool setCurrentThreadNameField(const char* threadName) {
 #ifdef ELOG_ENABLE_LIFE_SIGN
     reportCurrentThreadNameLifeSign(threadId, threadName);
 #endif
-    ELOG_REPORT_TRACE("Thread name set to %s at entry id %u", threadName, entryId);
+    ELOG_REPORT_DEBUG("Thread name set to %s at entry id %u", threadName, entryId);
     return true;
 }
 
@@ -581,7 +583,7 @@ const char* getThreadNameField(uint32_t threadId) {
     const char* threadName = "";
     // if failed it will remain empty, so we don't need to check return value
     if (sThreadNameMap.getItem((uint64_t)threadId, threadName) == ELOG_INVALID_CHT_ENTRY_ID) {
-        ELOG_REPORT_TRACE("Could not find thread name by id %u", threadId);
+        ELOG_REPORT_DEBUG("Could not find thread name by id %u", threadId);
     }
     return threadName;
 }

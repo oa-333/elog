@@ -38,6 +38,9 @@ extern const char* getAppName();
 /** @brief Retrieves program name (for internal use only). */
 extern const char* getProgramName();
 
+/** @brief Retrieves the process id field (for internal use only). */
+extern uint32_t getProcessIdField();
+
 /** @brief Installs the application's name (for internal use only). */
 extern void setAppNameField(const char* appName);
 

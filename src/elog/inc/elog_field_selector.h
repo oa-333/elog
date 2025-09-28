@@ -34,8 +34,7 @@ enum class ELogFieldType : uint32_t {
 
 /**
  * @brief Parent interface for all field selectors. Custom selectors may be added by deriving from
- * this interface and deriving from @ref ELogFormatter, so that the field can be parsed by
- * overriding the virtual function @ref createFieldSelector().
+ * this interface.
  */
 class ELOG_API ELogFieldSelector {
 public:
