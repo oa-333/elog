@@ -2482,8 +2482,10 @@ void removeLogTarget(ELogTargetId targetId) {
 
     // delete the log target and put null
     // we cannot shrink the vector because that will change log target indices
-    sLogTargets[targetId]->stop();
-    delete sLogTargets[targetId];
+    ELogTarget* logTarget = sLogTargets[targetId];
+    ELOG_REPORT_TRACE("Removing log target %s at %p", logTarget->getName(), logTarget);
+    logTarget->stop();
+    delete logTarget;
     sLogTargets[targetId] = nullptr;
 
     // if suffix entries contain nulls we can reduce array size
@@ -2507,17 +2509,12 @@ void clearAllLogTargets() {
             sLogTargets[i] = nullptr;
         }
     }
-    compactLogTargets();
-}
-
-void removeLogTarget(ELogTarget* target) {
-    // find log target and remove it
-    for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
-        if (sLogTargets[i] == target) {
-            removeLogTarget(i);
-        }
+    if (!sLogTargets.empty()) {
+        compactLogTargets();
     }
 }
+
+void removeLogTarget(ELogTarget* target) { removeLogTarget(target->getId()); }
 
 static void parseSourceName(const std::string& qualifiedName, std::vector<std::string>& namePath) {
     std::string::size_type prevDotPos = 0;
