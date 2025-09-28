@@ -75,6 +75,12 @@ if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR)
     set(ELOG_ENABLE_JSON ON)
 endif()
 
+# figure out whether gzip support is required (currently only when http is also used)
+set(ELOG_USING_GZIP OFF)
+if (ELOG_ENABLE_HTTP)
+    set(ELOG_USING_GZIP ON)
+endif()
+
 # ELog post-mortem cli (and Windows shared memory guardian)
 if (ELOG_ENABLE_LIFE_SIGN)
     add_executable(elog_pm)
@@ -181,27 +187,16 @@ if (ELOG_ENABLE_HTTP)
 
         target_link_libraries(elog httplib)
     endif()
-    
-    # get gzip headers path (for HTTP clients requiring compression)
-    # NOTE: on Linux/MingW we need to get gzip-hpp explicitly (not sure why)
-    if (NOT MSVC)
-        message(STATUS "Getting gzip-hpp")
-        FetchContent_Declare(gzip-hpp
-            SYSTEM 
-            EXCLUDE_FROM_ALL # NOTE: without this, gzip-hpp benchmark gets compiled into the project
-            GIT_REPOSITORY https://github.com/mapbox/gzip-hpp
-            GIT_TAG v0.1.0
-            GIT_SHALLOW TRUE)
-        FetchContent_MakeAvailable(gzip-hpp)
-    endif()
+endif()
 
-    # now we can get gzip headers path
-    find_path(GZIP_HPP_INCLUDE_DIRS gzip/compress.hpp)
-    if (NOT GZIP_HPP_INCLUDE_DIRS)
-        # This is a temporary workaround, not sure why find_path() fails on Linux/MinGW
-        #set(GZIP_HPP_INCLUDE_DIRS ${gzp-hpp_SOURCE_DIR}/include)
-        set(GZIP_HPP_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/_deps/gzip-hpp-src/include)
-    endif()
+#############################################################
+# get gzip if needed (header-only)
+#############################################################
+if (ELOG_USING_GZIP)
+    # get gzip headers path
+    # NOTE: due to cmake fetch content problems, the gzip-hpp project is made part of elog
+    # as a third-party module (not git submodule)
+    set(GZIP_HPP_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/third_party/gzip-hpp/include")
     message(STATUS "Adding gzip include path: ${GZIP_HPP_INCLUDE_DIRS}")
     target_include_directories(elog PRIVATE ${GZIP_HPP_INCLUDE_DIRS})
 
