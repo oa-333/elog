@@ -188,6 +188,9 @@ extern ELOG_API bool setReloadConfigPeriodMillis(uint64_t reloadPeriodMillis);
  */
 extern ELOG_API ELogLogger* getPreInitLogger();
 
+/** @brief Queries whether there are any accumulated log messages. */
+extern ELOG_API bool hasAccumulatedLogMessages();
+
 /**
  * @brief Discards all accumulated log messages. This will prevent from log targets added in
  * the future to receive all log messages that were accumulated before the ELog library was

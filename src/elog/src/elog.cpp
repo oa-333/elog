@@ -643,6 +643,8 @@ uint64_t getFileModifyTime(const char* filePath) {
 
 ELogLogger* getPreInitLogger() { return &sPreInitLogger; }
 
+bool hasAccumulatedLogMessages() { return sPreInitLogger.hasAccumulatedLogMessages(); }
+
 void discardAccumulatedLogMessages() { sPreInitLogger.discardAccumulatedLogMessages(); }
 
 void setReportLevelFromEnv() {

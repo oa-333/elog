@@ -21,6 +21,9 @@ public:
     /** @brief Writes all accumulated log messages to the given log target. */
     void writeAccumulatedLogMessages(ELogTarget* logTarget);
 
+    /** @brief Queries whether there are any accumulated log messages. */
+    inline bool hasAccumulatedLogMessages() { return !m_accumulatedRecordBuilders.empty(); }
+
     /** @brief Discards all accumulated log messages. */
     void discardAccumulatedLogMessages();
 
