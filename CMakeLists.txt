@@ -293,7 +293,7 @@ if (ELOG_USING_COMM_UTIL)
         message(STATUS "Fetching commutil from github")
         FetchContent_Declare(commutil
             GIT_REPOSITORY https://github.com/oa-333/commutil.git
-            GIT_TAG v0.1.0)
+            GIT_TAG v0.1.1)
     endif()
     FetchContent_MakeAvailable(commutil)
     message(STATUS "Adding commutil include directory: ${commutil_SOURCE_DIR}/inc")
