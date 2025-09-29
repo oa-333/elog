@@ -9,13 +9,36 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogMsgServer)
 
+commutil::ErrorCode ELogMsgServer::initialize(commutil::DataServer* dataServer,
+                                              uint32_t maxConnections, uint32_t concurrency,
+                                              uint32_t bufferSize) {
+    // delegate to message server
+    return m_msgServer.initialize(dataServer, maxConnections, concurrency, bufferSize, this,
+                                  nullptr, &m_sessionFactory);
+}
+
+commutil::ErrorCode ELogMsgServer::terminate() {
+    // delegate to message server
+    return m_msgServer.terminate();
+}
+
+commutil::ErrorCode ELogMsgServer::start() {
+    // delegate to message server
+    return m_msgServer.start();
+}
+
+commutil::ErrorCode ELogMsgServer::stop() {
+    // delegate to message server
+    return m_msgServer.stop();
+}
+
 commutil::ErrorCode ELogMsgServer::handleMsg(const commutil::ConnectionDetails& connDetails,
                                              const commutil::MsgHeader& msgHeader,
                                              const char* buffer, uint32_t length, bool lastInBatch,
                                              uint32_t batchSize) {
     // get the session object
-    commutil::MsgServer::Session* session = nullptr;
-    commutil::ErrorCode rc = getSession(connDetails, &session);
+    commutil::MsgSession* session = nullptr;
+    commutil::ErrorCode rc = m_msgServer.getSession(connDetails, &session);
     if (rc != commutil::ErrorCode::E_OK) {
         ELOG_REPORT_ERROR("Rejecting log record message, invalid session: %s",
                           commutil::errorCodeToString(rc));
@@ -86,7 +109,7 @@ void ELogMsgServer::sendStatus(const commutil::ConnectionDetails& connectionDeta
             ELOG_REPORT_ERROR("Failed to allocate status response message");
         } else {
             memcpy(response->modifyPayload(), &msgBuffer[0], msgBuffer.size());
-            commutil::ErrorCode rc = replyMsg(connectionDetails, response);
+            commutil::ErrorCode rc = m_msgServer.replyMsg(connectionDetails, response);
             if (rc != commutil::ErrorCode::E_OK)
                 ELOG_REPORT_ERROR("Failed to send status response to client: %s",
                                   commutil::errorCodeToString(rc));
@@ -95,7 +118,7 @@ void ELogMsgServer::sendStatus(const commutil::ConnectionDetails& connectionDeta
     }
 }
 
-commutil::MsgServer::Session* ELogMsgServer::createSession(
+commutil::MsgSession* ELogMsgServer::ELogSessionFactory::createMsgSession(
     uint64_t sessionId, const commutil::ConnectionDetails& connectionDetails) {
     return new (std::nothrow) ELogSession(sessionId, connectionDetails, m_maxDelayMsgSpan);
 }

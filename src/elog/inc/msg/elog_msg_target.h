@@ -18,14 +18,13 @@ namespace elog {
 
 /** @brief Abstract parent class for messaging log targets. */
 class ELOG_API ELogMsgTarget : public ELogTarget,
-                               public commutil::MsgStatListener,
-                               public commutil::MsgResponseHandler {
+                               public commutil::MsgFrameListener,
+                               public commutil::MsgStatListener {
 public:
     ELogMsgTarget(const char* name, const commutil::MsgConfig& msgConfig,
                   commutil::DataClient* dataClient, ELogBinaryFormatProvider* binaryFormatProvider,
                   bool syncMode, bool compress, uint32_t maxConcurrentRequests)
         : ELogTarget(name),
-          commutil::MsgResponseHandler(name),
           m_msgConfig(msgConfig),
           m_dataClient(dataClient),
           m_binaryFormatProvider(binaryFormatProvider),
@@ -57,17 +56,34 @@ public:
     void onRecvMsgStats(uint32_t msgSizeBytes, uint32_t compressedMsgSizeBytes) override;
 
     /**
-     * @brief Handles message response.
+     * @brief Handles incoming message buffer. Subclasses are responsible for actual
+     * deserialization. The messaging layer provides only framing services.
+     * @param connectionDetails The client's connection details.
      * @param msgHeader The header of the incoming meta-message frame.
-     * @param responseBuffer The response message buffer.
+     * @param msgBuffer The message buffer.
      * @param bufferSize The buffer length.
-     * @param status Deserialization error status. Zero denotes success.
-     * @return E_OK If the transaction was successful, otherwise an error code, in which case the
-     * message will be stored in a backlog for future attempt to resend to the server.
+     * @param lastInBatch Designates whether this is the last message within a message batch. In
+     * case of a single message this is always true.
+     * @param batchSize The number of messages in the message batch. In case of a single message
+     * this is always 1.
+     * @return Message handling result. If message handling within a batch should continue then
+     * return @ref E_OK, otherwise deriving sub-classes should return error code (e.g. irrecoverable
+     * deserialization error), in which case @ref handleMsgError() is NOT called, and if some error
+     * status needs to be sent to the client, then deriving sub-classes are responsible for that.
      */
-    commutil::ErrorCode handleResponse(const commutil::MsgHeader& msgHeader,
-                                       const char* responseBuffer, uint32_t bufferSize,
-                                       int status) override;
+    commutil::ErrorCode handleMsg(const commutil::ConnectionDetails& connectionDetails,
+                                  const commutil::MsgHeader& msgHeader, const char* msgBuffer,
+                                  uint32_t bufferSize, bool lastInBatch,
+                                  uint32_t batchSize) override;
+
+    /**
+     * @brief Handle errors during message unpacking.
+     * @param connectionDetails The client's connection details.
+     * @param msgHeader The header of the incoming meta-message.
+     * @param status Deserialization error status.
+     */
+    void handleMsgError(const commutil::ConnectionDetails& connectionDetails,
+                        const commutil::MsgHeader& msgHeader, int status) override;
 
     /**
      * @brief Retrieves the number of messages that were fully processed by the log target. This

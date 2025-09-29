@@ -29,17 +29,10 @@ uint64_t ELogMsgTarget::getProcessedMsgCount() {
     return m_msgStats->getProcessedMsgCount().getSum();
 }
 
-commutil::ErrorCode ELogMsgTarget::handleResponse(const commutil::MsgHeader& msgHeader,
-                                                  const char* responseBuffer, uint32_t bufferSize,
-                                                  int status) {
-    // check status
-    if (status != 0) {
-        if (m_enableStats && m_msgStats != nullptr) {
-            m_msgStats->incrementRecvFailCount();
-        }
-        return commutil::ErrorCode::E_OK;
-    }
-
+commutil::ErrorCode ELogMsgTarget::handleMsg(const commutil::ConnectionDetails& connectionDetails,
+                                             const commutil::MsgHeader& msgHeader,
+                                             const char* msgBuffer, uint32_t bufferSize,
+                                             bool lastInBatch, uint32_t batchSize) {
     // check message id expected according to protocol
     uint32_t msgId = msgHeader.getMsgId();
     if (msgId != ELOG_STATUS_MSG_ID) {
@@ -49,7 +42,7 @@ commutil::ErrorCode ELogMsgTarget::handleResponse(const commutil::MsgHeader& msg
 
     // deserialize status message
     ELogStatusMsg statusMsg;
-    if (!m_binaryFormatProvider->logStatusFromBuffer(statusMsg, responseBuffer, bufferSize)) {
+    if (!m_binaryFormatProvider->logStatusFromBuffer(statusMsg, msgBuffer, bufferSize)) {
         ELOG_REPORT_ERROR("Failed to deserialize status response message");
         return commutil::ErrorCode::E_DATA_CORRUPT;
     }
@@ -68,6 +61,13 @@ commutil::ErrorCode ELogMsgTarget::handleResponse(const commutil::MsgHeader& msg
     return commutil::ErrorCode::E_OK;
 }
 
+void ELogMsgTarget::handleMsgError(const commutil::ConnectionDetails& connectionDetails,
+                                   const commutil::MsgHeader& msgHeader, int status) {
+    if (m_enableStats && m_msgStats != nullptr) {
+        m_msgStats->incrementRecvFailCount();
+    }
+}
+
 bool ELogMsgTarget::startLogTarget() {
     commutil::ErrorCode rc = m_msgClient.initialize(m_dataClient, m_maxConcurrentRequests);
     if (rc != commutil::ErrorCode::E_OK) {
@@ -75,8 +75,7 @@ bool ELogMsgTarget::startLogTarget() {
                           commutil::errorCodeToString(rc));
         return false;
     }
-    rc = m_msgSender.initialize(&m_msgClient, m_msgConfig, getName(),
-                                m_enableStats ? this : nullptr, this);
+    rc = m_msgSender.initialize(&m_msgClient, m_msgConfig, this, m_enableStats ? this : nullptr);
     if (rc != commutil::ErrorCode::E_OK) {
         ELOG_REPORT_ERROR("Failed to initialize message sender: %s",
                           commutil::errorCodeToString(rc));
@@ -131,19 +130,18 @@ bool ELogMsgTarget::flushLogTarget() {
     // send message
     bool res = true;
     if (!m_msgBufferArray.empty()) {
-        commutil::MsgBufferArrayWriter writer(m_msgBufferArray, m_dataClient->getByteOrder());
         if (m_syncMode) {
-            commutil::ErrorCode rc =
-                m_msgSender.transactMsg(ELOG_RECORD_MSG_ID, &writer, m_compress,
-                                        COMMUTIL_MSG_FLAG_BATCH, m_msgConfig.m_sendTimeoutMillis);
+            commutil::ErrorCode rc = m_msgSender.transactMsgBatch(
+                ELOG_RECORD_MSG_ID, m_msgBufferArray, m_compress, COMMUTIL_MSG_FLAG_BATCH,
+                m_msgConfig.m_sendTimeoutMillis);
             if (rc != commutil::ErrorCode::E_OK) {
                 ELOG_REPORT_ERROR("Failed to transact message: %s",
                                   commutil::errorCodeToString(rc));
                 res = false;
             }
         } else {
-            commutil::ErrorCode rc = m_msgSender.sendMsg(ELOG_RECORD_MSG_ID, &writer, m_compress,
-                                                         COMMUTIL_MSG_FLAG_BATCH);
+            commutil::ErrorCode rc = m_msgSender.sendMsgBatch(ELOG_RECORD_MSG_ID, m_msgBufferArray,
+                                                              m_compress, COMMUTIL_MSG_FLAG_BATCH);
             if (rc != commutil::ErrorCode::E_OK) {
                 ELOG_REPORT_ERROR("Failed to transact message: %s",
                                   commutil::errorCodeToString(rc));

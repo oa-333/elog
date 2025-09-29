@@ -29,7 +29,7 @@ namespace elog {
  * @brief Abstract class for implementing server-side of ELog log record reporting protocol.
  * Sub-classes should implement the message handling pure virtual method @ref handleLogRecordMsg().
  */
-class ELOG_API ELogMsgServer : public commutil::MsgServer {
+class ELOG_API ELogMsgServer : public commutil::MsgFrameListener {
 public:
     /**
      * @brief Construct a new ELogMsgServer object.
@@ -41,15 +41,42 @@ public:
      */
     ELogMsgServer(const char* name, commutil::ByteOrder byteOrder,
                   uint32_t maxDelayMsgSpan = ELOG_MSG_DEFAULT_MAX_DELAY_SPAN)
-        : m_name(name), m_byteOrder(byteOrder), m_maxDelayMsgSpan(maxDelayMsgSpan) {}
+        : m_name(name), m_byteOrder(byteOrder), m_sessionFactory(maxDelayMsgSpan) {}
     ELogMsgServer(const ELogMsgServer&) = delete;
     ELogMsgServer(ELogMsgServer&&) = delete;
     ELogMsgServer& operator=(const ELogMsgServer&) = delete;
     ~ELogMsgServer() override {}
 
+    /**
+     * @brief Initializes the ELog message server.
+     * @param dataServer The transport layer's data server.
+     * @param maxConnections The maximum number of connections the server can handle concurrently.
+     * This holds true also for datagram server, in which case there is a limit to the number of
+     * different servers sending datagrams to the server, along with some expiry control. @see
+     * UdpServer for more information.
+     * @param concurrency The level of concurrency to enforce. Determines the number of worker
+     * threads.
+     * @param bufferSize The buffer size used for each server connection I/O. Specify a buffer size
+     * large enough to hold both incoming and outgoing messages, in order to avoid message
+     * segmentation and reassembly at the application level.
+     * @return The operation result.
+     */
+    commutil::ErrorCode initialize(commutil::DataServer* dataServer, uint32_t maxConnections,
+                                   uint32_t concurrency, uint32_t bufferSize);
+
+    /** @brief Releases all resources allocated for recovery. */
+    commutil::ErrorCode terminate();
+
+    /** @brief Starts the message server. */
+    commutil::ErrorCode start();
+
+    /** @brief Stops the message server. */
+    commutil::ErrorCode stop();
+
 protected:
     /**
-     * @brief Handles incoming message buffer provided by the framing protocol.
+     * @brief Implements MsgFrameListener interface. Handles incoming message buffer provided by the
+     * framing protocol.
      * @param connectionDetails The client's connection details.
      * @param msgHeader The header of the incoming meta-message.
      * @param msgBuffer The message buffer. Valid only if status is zero.
@@ -68,7 +95,7 @@ protected:
                                   uint32_t length, bool lastInBatch, uint32_t batchSize) override;
 
     /**
-     * @brief Handle errors during message unpacking.
+     * @brief Implements MsgFrameListener interface. Handle errors during message unpacking.
      * @param connectionDetails The client's connection details.
      * @param msgHeader The header of the incoming meta-message.
      * @param status Deserialization error status.
@@ -76,7 +103,6 @@ protected:
     void handleMsgError(const commutil::ConnectionDetails& connDetails,
                         const commutil::MsgHeader& msgHeader, int status) override;
 
-protected:
     /**
      * @brief Helper method for sending status back to a logging process.
      * @param connectionDetails The client's connection details.
@@ -90,20 +116,20 @@ protected:
                     const commutil::MsgHeader& msgHeader, int status, uint64_t recordsProcessed);
 
     /**
-     * @brief Handle an incoming log record. The return code will be used as the status code in the
+     * @brief Handles an incoming log record. The return code will be used as the status code in the
      * reply to the logging process (zero denotes success).
      */
     virtual int handleLogRecordMsg(elog_grpc::ELogRecordMsg* logRecordMsg) = 0;
 
-protected:
-    struct ELogSession : public commutil::MsgServer::Session {
+    /** @brief ELog session. Contains a rolling bit set for detecting duplicate messages. */
+    struct ELogSession : public commutil::MsgSession {
         ELogRollingBitset m_rollingBitset;
         int m_status;
 
         ELogSession() {}
         ELogSession(uint64_t sessionId, const commutil::ConnectionDetails& connectionDetails,
                     uint32_t maxDelayMsgSpan)
-            : commutil::MsgServer::Session(sessionId, connectionDetails),
+            : commutil::MsgSession(sessionId, connectionDetails),
               m_rollingBitset(ELogRollingBitset::computeWordCount(maxDelayMsgSpan)),
               m_status(0) {}
 
@@ -113,19 +139,27 @@ protected:
         ~ELogSession() override {}
     };
 
-    /**
-     * @brief Override this factory method to create custom session object with additional fields.
-     * @param sessionId The session's unique id.
-     * @param connectionDetails The incoming connection details.
-     * @return Session* The resulting session object or null if failed or request denied.
-     */
-    commutil::MsgServer::Session* createSession(
-        uint64_t sessionId, const commutil::ConnectionDetails& connectionDetails) override;
+    /** @brief ELog session factory. */
+    class ELogSessionFactory : public commutil::MsgSessionFactory {
+    public:
+        ELogSessionFactory(uint32_t maxDelayMsgSpan) : m_maxDelayMsgSpan(maxDelayMsgSpan) {}
+        ELogSessionFactory(const ELogSessionFactory&) = delete;
+        ELogSessionFactory(ELogSessionFactory&&) = delete;
+        ELogSessionFactory& operator=(const ELogSessionFactory&) = delete;
+        ~ELogSessionFactory() override {}
+
+        commutil::MsgSession* createMsgSession(
+            uint64_t sessionId, const commutil::ConnectionDetails& connectionDetails) override;
+
+    private:
+        uint32_t m_maxDelayMsgSpan;
+    };
 
 private:
+    commutil::MsgServer m_msgServer;
     std::string m_name;
     commutil::ByteOrder m_byteOrder;
-    uint32_t m_maxDelayMsgSpan;
+    ELogSessionFactory m_sessionFactory;
 };
 
 }  // namespace elog
