@@ -165,6 +165,8 @@ The ELog library provides the following notable features:
     - message queues ([Kafka](#connecting-to-kafka-topic))
     - RPC endpoints ([gRPC](#connecting-to-grpc-endpoint))
     - monitoring tools ([Grafana Loki](#connecting-to-grafana-loki), [Datadog](#connecting-to-datadog), [Sentry](#connecting-to-sentry))
+    - Network targets (TCP/UDP)
+    - IPC targets (Windows pipes, Unix domain sockets)
 - Flexible and rich in features
     - User can define multiple log targets
     - Combine with complex filtering schemes and flush policies
@@ -209,7 +211,6 @@ The ELog library provides the following notable features:
 
 ### Planned/considered future features:
 
-- Connectivity to external TCP/UDP receiver
 - Inverse connector with TCP/UDP server and multicast publish beacon (for embedded systems with no IP known in advance)
 - Shared memory log target with separate child logging process (for instrumentation scenarios where opening log file is not allowed)
 - Logging hub framework for log pre-processing before shipping to server analysis (offload to edge compute)
