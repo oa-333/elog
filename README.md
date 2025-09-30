@@ -357,6 +357,10 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Connecting to Grafana-Loki](#connecting-to-grafana-loki)
     - [Connecting to Datadog](#connecting-to-datadog)
     - [Connecting to Sentry](#connecting-to-sentry)
+    - [Common HTTP timeouts](#common-http-timeouts)
+    - [Message-based Connectors](#message-based-connectors)
+    - [Connecting to TCP/UDP Server](#connecting-to-tcpudp-server)
+    - [Connecting to Pipe/Unix-Domain-Socket Server](#connecting-to-pipeunix-domain-socket-server)
     - [Nested Specification Style](#nested-specification-style)
     - [Terminal Text Formatting](#terminal-text-formatting)
     - [Terminal Text Formatting Syntax](#terminal-formatting-formal-syntax-specification)
@@ -1718,6 +1722,101 @@ The following table summarizes the default values for these configuration parame
 | resend_timeout  | 5 seconds  |
 | backlog_limit  | 1MB  |
 | shutdown_timeout  | 5 seconds  |
+
+### Message-based Connectors
+
+All message-based connectors, namely TCP/UDP, Windows pipes, and Unix domain sockets, use common configuration parameters.  
+The following tables summarizes these parameters, their allowed and default values:
+
+| Parameter  | Possible Values | Default Value |
+| ------------- | ------------- | ------------- |
+| mode  | sync/async | sync |
+| log_format | valid log format spec | global log format |
+| binary_format | protobuf, thrift*, avro* | protobuf |
+| compress | yes, no | no |
+| max_concurrent_request | 1-4096 | 32 |
+| connect_timeout | 50 milliseconds - 30 seconds | 5 seconds |
+| send_timeout  | 50 milliseconds - 30 seconds | 1 second |
+| resend_timeout  | 50 milliseconds - 1 minute | 5 seconds |
+| expire_timeout  | 50 milliseconds - 5 minutes | 30 seconds |
+| backlog_limit  | 1 KB - 64 MB | 1MB |
+| shutdown_timeout  | 50 milliseconds - 30 seconds | 5 seconds  |
+| shutdown_polling_timeout  | 10 milliseconds - 1 second | 50 milliseconds  |
+
+All message-based connectors accumulate log records in serialized buffers, and once the call to flush the log target arrives, the batch of serialized log records is being sent to the target server. If the 'mode' is 'sync', then the flush call will block until the server replies that it has received the log record batch. If the 'mode' is 'async', then the flush call will not block waiting for the server's reply. Therefore, the flush policy affects greatly the behavior and performance of message-based log targets.
+
+The log_format parameter is no different then other log targets, only that the log format is only used to determine which members of the log record will be sent to the server. For the sake of order, the 'msg' format was added, with the following syntax:
+
+    log_format=msg:<comma-based log record field list>
+
+The 'binary_format' parameter determines how log records are serialized into buffers. Currently only protobuf format is supported. Future versions may support thrift and/or avro.
+
+The 'max_concurrent_requests' parameter determines the maximum allowed amount of outstanding requests pending for server replies at any given moment. This is relevant only for 'async' mode.
+
+The next two parameters relate to the transport layer: connect and send timeouts.  
+The 'resend_timeout' determines how much to wait before resending a failed message. Message sending could be declared as failed due to transport layer error, or due to server not responding.  
+The 'expire_timeout' parameter determines when should a failed message expires, and and attempt to resend it will no longer take place. In effect the message is discarded.  
+
+The 'backlog_limit' determines the maximum amount of space allowed for failed messages. If this space limit is exceeded, pending messages will be discarded, starting from the oldest. Future versions may support other discard policy (e.g. largest first).
+
+The last two parameters control the shutdown phase. The 'shutdown_timeout' determines how much grace time is given for failed messages in last attempt to be sent to the server. The 'shutdown_polling_time' can be used to configure a faster polling rate while checking if server responded.
+
+### Connecting to TCP/UDP Server
+
+The following example demonstrates how to configure a TCP log target:
+
+    log_target = net://tcp?
+        address=127.0.0.1:7070&
+        mode=async&
+        log_format=msg:${rid}, ${time}, ${level}, ${msg}&
+        binary_format=protobuf&
+        compress=yes&
+        max_concurrent_requests=32&
+        connect_timeout=5 seconds&
+        send_timeout=1 second&
+        resend_period=5 seconds&
+        expire_timeout=30 seconds&
+        backlog_limit=1 MB&
+        shutdown_timeout=3 seconds&
+        shutdown_polling_timeout=50 millis&
+        flush_policy=count&
+        flush_count=1024
+
+The TCP log target uses the 'net' scheme (for network).  
+Only the 'address' parameter is mandatory, and the rest have defaults as explained in [Message-based Connectors](#message-based-connectors).
+
+The log target uses asynchronous messaging (mode=async), sending batches of 1024 log records (flush_policy=count, flush_count=1024) to the TCP server at 127.0.0.1:7070. Log records are serialized into protobuf messages (binary_format=protobuf), and each batch is compressed with gzip (compress=yes) before being sent to the server. The log target allows no more than 32 outstanding pending requests (max_concurrent_requests=32) that cannot surpass total space of 1 MB (backlog_limit=1 MB) at any given time.
+
+In order to connect to a UDP server, the log target specification should start with "net://udp?...".
+
+### Connecting to Pipe/Unix Domain Socket Server
+
+The following example demonstrates how to configure a TCP log target:
+
+    log_target = ipc://pipe?
+        address=test_pipe&
+        mode=async&
+        log_format=msg:${rid}, ${time}, ${level}, ${msg}&
+        binary_format=protobuf&
+        compress=yes&
+        max_concurrent_requests=32&
+        connect_timeout=5 seconds&
+        send_timeout=1 second&
+        resend_period=5 seconds&
+        expire_timeout=30 seconds&
+        backlog_limit=1 MB&
+        shutdown_timeout=3 seconds&
+        shutdown_polling_timeout=50 millis&
+        flush_policy=count&
+        flush_count=1024
+
+This configuration specification is almost identical to TCP/UDP configuration, with the following changes:
+
+- scheme is 'ipc' instead of 'net'
+- type is 'pipe' (instead of 'tcp' or 'udp')
+- address is a name string (pipe name), rather than host:port pair
+
+Except for that, pipe target configuration is identical to TCP/UDP log target, since all are message-based log targets.
 
 ### Nested Specification Style
 
