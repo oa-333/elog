@@ -1,6 +1,7 @@
 #include "elog_common.h"
 
 #include <cassert>
+#include <cinttypes>
 
 #include "elog_config_parser.h"
 #include "elog_report.h"
@@ -390,6 +391,47 @@ bool convertTimeUnit(uint64_t value, ELogTimeUnits sourceUnits, ELogTimeUnits ta
 
     // now convert to target units
     return fromNanos(res, targetUnits, res, issueError);
+}
+
+bool verifyUInt64PropRange(const char* targetName, const char* propName, uint64_t& value,
+                           uint64_t minValue, uint64_t maxValue,
+                           bool allowDefaultValue /* = false */, uint64_t defaultValue /* = 0 */) {
+    if (value < minValue || value > maxValue) {
+        if (allowDefaultValue) {
+            ELOG_REPORT_WARN("Log target %s property %s value %" PRIu64
+                             " exceeds allowed range [%" PRIu64 ",%" PRIu64
+                             "] and will be reset to default value %" PRIu64,
+                             targetName, propName, value, minValue, maxValue, defaultValue);
+            value = defaultValue;
+            return true;
+        } else {
+            ELOG_REPORT_ERROR("Log target %s property %s value %" PRIu64
+                              " exceeds allowed range [%" PRIu64 ",%" PRIu64 "]",
+                              targetName, propName, value, minValue, maxValue);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool verifyUInt32PropRange(const char* targetName, const char* propName, uint32_t& value,
+                           uint32_t minValue, uint32_t maxValue,
+                           bool allowDefaultValue /* = false */, uint32_t defaultValue /* = 0 */) {
+    if (value < minValue || value > maxValue) {
+        if (allowDefaultValue) {
+            ELOG_REPORT_WARN(
+                "Log target %s property %s value %u exceeds allowed range [%u,%u] and will be "
+                "reset to default value %u",
+                targetName, propName, value, minValue, maxValue, defaultValue);
+            value = defaultValue;
+            return true;
+        } else {
+            ELOG_REPORT_ERROR("Log target %s property %s value %u exceeds allowed range [%u,%u]",
+                              targetName, propName, value, minValue, maxValue);
+            return false;
+        }
+    }
+    return true;
 }
 
 #ifdef ELOG_ENABLE_LIFE_SIGN

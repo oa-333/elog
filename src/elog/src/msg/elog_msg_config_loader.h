@@ -6,7 +6,7 @@
 #ifdef ELOG_ENABLE_MSG
 
 #include "elog_config.h"
-#include "msg/msg_config.h"
+#include "msg/elog_msg_config.h"
 
 namespace elog {
 
@@ -21,7 +21,7 @@ public:
      * @return The operation result.
      */
     static bool loadMsgConfig(const ELogConfigMapNode* logTargetCfg, const char* targetName,
-                              commutil::MsgConfig& msgConfig);
+                              ELogMsgConfig& msgConfig);
 
 private:
     ELogMsgConfigLoader() {}

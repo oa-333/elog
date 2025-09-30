@@ -35,16 +35,16 @@ ELogTarget* ELogNetTargetProvider::loadTarget(const ELogConfigMapNode* logTarget
     // expected url is as follows:
     // net://[tcp/udp]?mode=[sync/async]&
     //  address=host:port&
-    //  log_format=rpc:{<log record field list>}& (temporary syntax, pending refactor)
+    //  log_format=msg:<comma-based log record field list>&
     //  binary_format={protobuf/thrift/avro}&
     //  compress=value&
     //  max_concurrent_requests=value&
     //  connect_timeout=value&
-    //  write_timeout=value&
-    //  read_timeout=value&
+    //  send_timeout=value&
     //  resend_period=value&
+    //  expire_timeout=value&
     //  backlog_limit=value&
-    //  shutdown_timeout=value
+    //  shutdown_timeout=value&
     //  shutdown_polling_timeout=value
 
     // first verify self type
@@ -54,98 +54,56 @@ ELogTarget* ELogNetTargetProvider::loadTarget(const ELogConfigMapNode* logTarget
         return nullptr;
     }
 
-    // we expect at most 9 properties, of which only mode, address and log_format are mandatory
-    // log record aggregation may be controlled by flush policy
-    std::string mode;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "net", "mode", mode)) {
-        return nullptr;
-    }
-
-    bool sync = false;
-    if (mode.compare("sync") == 0) {
-        sync = true;
-    } else if (mode.compare("async") != 0) {
-        ELOG_REPORT_ERROR(
-            "Invalid net log target specification, unsupported property 'mode' value '%s' "
-            "(context: %s)",
-            mode.c_str(), logTargetCfg->getFullContext());
-        return nullptr;
-    }
-
-    // compression flag
-    bool compress = false;
-    if (!ELogConfigLoader::getOptionalLogTargetBoolProperty(logTargetCfg, "net", "compress",
-                                                            compress)) {
-        return nullptr;
-    }
-
-    // maximum concurrent requests
-    uint32_t maxConcurrentRequests = 0;
-    if (!ELogConfigLoader::getLogTargetUInt32Property(
-            logTargetCfg, "net", "max_concurrent_requests", maxConcurrentRequests)) {
-        return nullptr;
-    }
-    // TODO: verify legal range for this value
-
-    // binary format
-    std::string binaryFormat = ELOG_DEFAULT_MSG_BINARY_FORMAT;
-    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "net", "binary_format",
-                                                              binaryFormat)) {
-        return nullptr;
-    }
-    ELogBinaryFormatProvider* binaryFormatProvider =
-        constructBinaryFormatProvider(binaryFormat.c_str(), commutil::ByteOrder::NETWORK_ORDER);
-    if (binaryFormatProvider == nullptr) {
-        ELOG_REPORT_ERROR(
-            "Invalid net log target specification, unsupported binary format '%s' (context: %s)",
-            binaryFormat.c_str(), logTargetCfg->getFullContext());
-        return nullptr;
-    }
-
-    // load common transport configuration (use defaults, see ELogMsgConfig default constructor)
-    commutil::MsgConfig msgConfig;
+    // load common messaging configuration
+    ELogMsgConfig msgConfig;
     if (!ELogMsgConfigLoader::loadMsgConfig(logTargetCfg, "net", msgConfig)) {
-        ELOG_REPORT_ERROR(
-            "Invalid net log target specification, invalid transport properties (context: %s)",
-            logTargetCfg->getFullContext());
-        delete binaryFormatProvider;
+        ELOG_REPORT_ERROR("Failed to load net target configuration");
         return nullptr;
     }
 
+    // load address
     std::string address;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "net", "address", address)) {
-        delete binaryFormatProvider;
+        delete msgConfig.m_binaryFormatProvider;
         return nullptr;
     }
 
+    // parse address to host port
     std::string host;
     int port = 0;
     if (!ELogConfigParser::parseHostPort(address, host, port)) {
         ELOG_REPORT_ERROR(
             "Invalid net log target specification, failed to parse address %s (context: %s)",
             address.c_str(), logTargetCfg->getFullContext());
-        delete binaryFormatProvider;
+        delete msgConfig.m_binaryFormatProvider;
         return nullptr;
     }
 
+    // create the data client
     commutil::DataClient* dataClient = nullptr;
     if (m_type.compare("tcp") == 0) {
         dataClient = new (std::nothrow)
-            commutil::TcpClient(host.c_str(), port, msgConfig.m_connectTimeoutMillis);
+            commutil::TcpClient(host.c_str(), port, msgConfig.m_commConfig.m_connectTimeoutMillis);
     } else if (m_type.compare("udp") == 0) {
         dataClient = new (std::nothrow) commutil::UdpClient(host.c_str(), port);
     } else {
         ELOG_REPORT_ERROR(
             "Failed to load net log target, invalid transport type '%s' (internal error)",
             m_type.c_str());
-        delete binaryFormatProvider;
+        delete msgConfig.m_binaryFormatProvider;
+        return nullptr;
+    }
+    if (dataClient == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate data client, out of memory");
+        delete msgConfig.m_binaryFormatProvider;
         return nullptr;
     }
 
-    ELogMsgTarget* target = new (std::nothrow) ELogMsgTarget(
-        "net", msgConfig, dataClient, binaryFormatProvider, sync, compress, maxConcurrentRequests);
+    ELogMsgTarget* target = new (std::nothrow) ELogMsgTarget("net", msgConfig, dataClient);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate net log target, out of memory");
+        delete dataClient;
+        delete msgConfig.m_binaryFormatProvider;
     }
     return target;
 }

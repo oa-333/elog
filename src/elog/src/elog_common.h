@@ -138,6 +138,22 @@ extern bool parseSizeProp(const char* propName, const std::string& logTargetCfg,
 extern bool convertTimeUnit(uint64_t value, ELogTimeUnits sourceUnits, ELogTimeUnits targetUnits,
                             uint64_t& res, bool issueError = true);
 
+/**
+ * @brief Verifies a configuration value range and possibly rectifies to a default value, in which
+ * case a warning will be issued.
+ */
+extern bool verifyUInt64PropRange(const char* targetName, const char* propName, uint64_t& value,
+                                  uint64_t minValue, uint64_t maxValue,
+                                  bool allowDefaultValue = false, uint64_t defaultValue = 0);
+
+/**
+ * @brief Verifies a configuration value range and possibly rectifies to a default value, in which
+ * case a warning will be issued.
+ */
+extern bool verifyUInt32PropRange(const char* targetName, const char* propName, uint32_t& value,
+                                  uint32_t minValue, uint32_t maxValue,
+                                  bool allowDefaultValue = false, uint32_t defaultValue = 0);
+
 #ifdef ELOG_ENABLE_LIFE_SIGN
 /** @brief Parses life-sign scope string. */
 extern bool parseLifeSignScope(const char* lifeSignScopeStr, ELogLifeSignScope& scope);

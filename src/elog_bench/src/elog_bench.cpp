@@ -2313,11 +2313,11 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
     //  prepare log target URL and test name
     std::string cfg = std::string(schema) + "://" + serverType + "?mode=" + mode +
                       "&address=" + address + "&" +
-                      "log_format=rpc:${rid}, ${time}, ${level}, ${msg}&"
+                      "log_format=msg:${rid}, ${time}, ${level}, ${msg}&"
                       "binary_format=protobuf&compress=" +
                       (compress ? "yes" : "no") +
                       "&max_concurrent_requests=1024&"
-                      "flush_policy=count&flush_count=1024&";
+                      "flush_policy=count&flush_count=1024";
     std::string testName = std::string(mode) + " " + serverType;
     std::string mtResultFileName = std::string("elog_bench_") + mode + "_" + serverType;
 

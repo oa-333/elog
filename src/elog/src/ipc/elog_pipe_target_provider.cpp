@@ -35,16 +35,16 @@ ELogTarget* ELogPipeTargetProvider::loadTarget(const ELogConfigMapNode* logTarge
     // expected url is as follows:
     // ipc://pipe?mode=[sync/async]&
     //  address=pipeName&
-    //  log_format=rpc:{<log record field list>}& (temporary syntax, pending refactor)
+    //  log_format=msg:<comma-based log record field list>&
     //  binary_format={protobuf/thrift/avro}&
     //  compress=value&
     //  max_concurrent_requests=value&
     //  connect_timeout=value&
-    //  write_timeout=value&
-    //  read_timeout=value&
+    //  send_timeout=value&
     //  resend_period=value&
+    //  expire_timeout=value&
     //  backlog_limit=value&
-    //  shutdown_timeout=value
+    //  shutdown_timeout=value&
     //  shutdown_polling_timeout=value
 
     // first verify self type
@@ -54,77 +54,32 @@ ELogTarget* ELogPipeTargetProvider::loadTarget(const ELogConfigMapNode* logTarge
         return nullptr;
     }
 
-    // we expect at most 9 properties, of which only mode, address and log_format are mandatory
-    // log record aggregation may be controlled by flush policy
-    std::string mode;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "ipc", "mode", mode)) {
-        return nullptr;
-    }
-
-    bool sync = false;
-    if (mode.compare("sync") == 0) {
-        sync = true;
-    } else if (mode.compare("async") != 0) {
-        ELOG_REPORT_ERROR(
-            "Invalid net log target specification, unsupported property 'mode' value '%s' "
-            "(context: %s)",
-            mode.c_str(), logTargetCfg->getFullContext());
-        return nullptr;
-    }
-
-    // compression flag
-    bool compress = false;
-    if (!ELogConfigLoader::getOptionalLogTargetBoolProperty(logTargetCfg, "ipc", "compress",
-                                                            compress)) {
-        return nullptr;
-    }
-
-    // maximum concurrent requests
-    uint32_t maxConcurrentRequests = 0;
-    if (!ELogConfigLoader::getLogTargetUInt32Property(
-            logTargetCfg, "ipc", "max_concurrent_requests", maxConcurrentRequests)) {
-        return nullptr;
-    }
-    // TODO: verify legal range for this value
-
-    // binary format
-    std::string binaryFormat = ELOG_DEFAULT_MSG_BINARY_FORMAT;
-    if (!ELogConfigLoader::getOptionalLogTargetStringProperty(logTargetCfg, "ipc", "binary_format",
-                                                              binaryFormat)) {
-        return nullptr;
-    }
-    ELogBinaryFormatProvider* binaryFormatProvider =
-        constructBinaryFormatProvider(binaryFormat.c_str(), commutil::ByteOrder::HOST_ORDER);
-    if (binaryFormatProvider == nullptr) {
-        ELOG_REPORT_ERROR(
-            "Invalid net log target specification, unsupported binary format '%s' (context: %s)",
-            binaryFormat.c_str(), logTargetCfg->getFullContext());
-        return nullptr;
-    }
-
-    // load common transport configuration (use defaults, see ELogMsgConfig default constructor)
-    commutil::MsgConfig msgConfig;
+    // load common messaging configuration
+    ELogMsgConfig msgConfig;
     if (!ELogMsgConfigLoader::loadMsgConfig(logTargetCfg, "ipc", msgConfig)) {
-        ELOG_REPORT_ERROR(
-            "Invalid net log target specification, invalid transport properties (context: %s)",
-            logTargetCfg->getFullContext());
-        delete binaryFormatProvider;
+        ELOG_REPORT_ERROR("Failed to load pipe target configuration");
         return nullptr;
     }
 
     std::string pipeName;
     if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "ipc", "address", pipeName)) {
-        delete binaryFormatProvider;
+        delete msgConfig.m_binaryFormatProvider;
         return nullptr;
     }
 
-    commutil::DataClient* dataClient =
-        new (std::nothrow) commutil::PipeClient(pipeName.c_str(), msgConfig.m_connectTimeoutMillis);
+    commutil::DataClient* dataClient = new (std::nothrow)
+        commutil::PipeClient(pipeName.c_str(), msgConfig.m_commConfig.m_connectTimeoutMillis);
+    if (dataClient == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate data client, out of memory");
+        delete msgConfig.m_binaryFormatProvider;
+        return nullptr;
+    }
 
-    ELogMsgTarget* target = new (std::nothrow) ELogMsgTarget(
-        "pipe", msgConfig, dataClient, binaryFormatProvider, sync, compress, maxConcurrentRequests);
+    ELogMsgTarget* target = new (std::nothrow) ELogMsgTarget("pipe", msgConfig, dataClient);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate pipe log target, out of memory");
+        delete dataClient;
+        delete msgConfig.m_binaryFormatProvider;
     }
     return target;
 }

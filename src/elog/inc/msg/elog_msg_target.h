@@ -12,6 +12,7 @@
 #include "elog_target.h"
 #include "msg/elog_binary_format_provider.h"
 #include "msg/elog_msg.h"
+#include "msg/elog_msg_config.h"
 #include "msg/elog_msg_stats.h"
 
 namespace elog {
@@ -21,17 +22,16 @@ class ELOG_API ELogMsgTarget : public ELogTarget,
                                public commutil::MsgFrameListener,
                                public commutil::MsgStatListener {
 public:
-    ELogMsgTarget(const char* name, const commutil::MsgConfig& msgConfig,
-                  commutil::DataClient* dataClient, ELogBinaryFormatProvider* binaryFormatProvider,
-                  bool syncMode, bool compress, uint32_t maxConcurrentRequests)
+    ELogMsgTarget(const char* name, const ELogMsgConfig& msgConfig,
+                  commutil::DataClient* dataClient)
         : ELogTarget(name),
-          m_msgConfig(msgConfig),
+          m_msgConfig(msgConfig.m_commConfig),
           m_dataClient(dataClient),
-          m_binaryFormatProvider(binaryFormatProvider),
+          m_binaryFormatProvider(msgConfig.m_binaryFormatProvider),
           m_msgStats(nullptr),
-          m_syncMode(syncMode),
-          m_compress(compress),
-          m_maxConcurrentRequests(maxConcurrentRequests) {}
+          m_syncMode(msgConfig.m_syncMode),
+          m_compress(msgConfig.m_compress),
+          m_maxConcurrentRequests(msgConfig.m_maxConcurrentRequests) {}
     ELogMsgTarget(const ELogMsgTarget&) = delete;
     ELogMsgTarget(ELogMsgTarget&&) = delete;
     ELogMsgTarget& operator=(const ELogMsgTarget&) = delete;
