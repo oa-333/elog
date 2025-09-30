@@ -20,7 +20,7 @@ target_sources(
             elog_field_spec.h
             elog_filter.h
             elog_flush_policy.h
-            elog_formatter.h
+            #elog_formatter.h
             elog_gc.h
             elog_http_client.h
             elog_json_formatter.h

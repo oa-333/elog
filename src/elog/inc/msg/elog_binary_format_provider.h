@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "elog.pb.h"
+#include "elog_base_formatter.h"
 #include "elog_def.h"
-#include "elog_formatter.h"
 #include "elog_record.h"
 #include "msg/elog_msg.h"
 
