@@ -1,5 +1,4 @@
 target_sources(elog PRIVATE
-    elog_base_formatter.cpp
     elog_buffer_receptor.cpp
     elog_buffer.cpp
     elog_cache.cpp
@@ -15,7 +14,7 @@ target_sources(elog PRIVATE
     elog_field_spec.cpp
     elog_filter.cpp
     elog_flush_policy.cpp
-    #elog_formatter.cpp
+    elog_formatter.cpp
     elog_gc.cpp
     elog_http_client.cpp
     elog_http_config_loader.cpp

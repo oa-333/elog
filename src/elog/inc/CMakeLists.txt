@@ -7,7 +7,6 @@ target_sources(
         FILES
             elog_aligned_alloc.h
             elog_atomic.h
-            elog_base_formatter.h
             elog_buffer_receptor.h
             elog_buffer.h
             elog_common_def.h
@@ -20,7 +19,7 @@ target_sources(
             elog_field_spec.h
             elog_filter.h
             elog_flush_policy.h
-            #elog_formatter.h
+            elog_formatter.h
             elog_gc.h
             elog_http_client.h
             elog_json_formatter.h

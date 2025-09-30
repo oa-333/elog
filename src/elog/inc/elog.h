@@ -1,9 +1,9 @@
 #ifndef __ELOG_SYSTEM_H__
 #define __ELOG_SYSTEM_H__
 
-#include "elog_base_formatter.h"
 #include "elog_config.h"
 #include "elog_filter.h"
+#include "elog_formatter.h"
 #include "elog_level.h"
 #include "elog_logger.h"
 #include "elog_props.h"

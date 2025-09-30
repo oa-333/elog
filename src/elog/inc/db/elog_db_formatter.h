@@ -1,7 +1,7 @@
 #ifndef __ELOG_DB_FORMATTER_H__
 #define __ELOG_DB_FORMATTER_H__
 
-#include "elog_base_formatter.h"
+#include "elog_formatter.h"
 
 namespace elog {
 

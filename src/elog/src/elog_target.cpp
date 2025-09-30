@@ -4,10 +4,10 @@
 
 #include "elog.h"
 #include "elog_aligned_alloc.h"
-#include "elog_base_formatter.h"
 #include "elog_common.h"
 #include "elog_filter.h"
 #include "elog_flush_policy.h"
+#include "elog_formatter.h"
 #include "elog_internal.h"
 #include "elog_report.h"
 #include "elog_tls.h"
