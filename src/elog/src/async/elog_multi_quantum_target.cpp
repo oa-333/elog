@@ -515,7 +515,7 @@ void ELogMultiQuantumTarget::sortFunnel(uint64_t readPos, uint64_t endPos) {
         SortingFunnelIterator itr1(&m_sortingFunnel, m_sortingFunnelSize, readPos);
         SortingFunnelIterator itr2(&m_sortingFunnel, m_sortingFunnelSize, endPos);
         // do stable sort so that records from the same thread will keep their order
-        std::stable_sort(itr1, itr2, [](const ELogRecordData* lhs, const ELogRecordData* rhs) {
+        std::stable_sort(itr1, itr2, [](ELogRecordData* const& lhs, ELogRecordData* const& rhs) {
             return isRecordDataLess(lhs, rhs);
         });
     }

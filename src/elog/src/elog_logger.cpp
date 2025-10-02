@@ -218,18 +218,6 @@ bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBu
 
     // prepare argument list for fmtlib
     fmt::dynamic_format_arg_store<fmt::format_context> store;
-
-#define ELOG_COLLECT_ARG(argType)                                          \
-    {                                                                      \
-        argType argValue = (argType)0;                                     \
-        if (!readBuffer.read(argValue)) {                                  \
-            ELOG_REPORT_ERROR("Failed to read parameter of type " #argType \
-                              " in binary log buffer, end of stream");     \
-        }                                                                  \
-        store.push_back(argValue);                                         \
-        break;                                                             \
-    }
-
     for (uint8_t i = 0; i < paramCount; ++i) {
         uint8_t code = 0;
         if (!readBuffer.read(code)) {

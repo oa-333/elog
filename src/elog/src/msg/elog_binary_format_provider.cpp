@@ -11,6 +11,7 @@
 #include "elog_field_selector_internal.h"
 #include "elog_logger.h"
 #include "elog_report.h"
+#include "msg/elog_msg_internal.h"
 #include "msg/elog_proto_receptor.h"
 
 namespace elog {

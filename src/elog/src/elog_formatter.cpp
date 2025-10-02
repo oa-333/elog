@@ -6,6 +6,7 @@
 #include "elog_common.h"
 #include "elog_config_loader.h"
 #include "elog_filter.h"
+#include "elog_formatter_internal.h"
 #include "elog_report.h"
 #include "elog_string_receptor.h"
 #include "elog_string_stream_receptor.h"
@@ -58,16 +59,21 @@ bool initLogFormatters() { return applyLogFormatterConstructorRegistration(); }
 
 void termLogFormatters() { sLogFormatterConstructorMap.clear(); }
 
-ELogFormatter* constructLogFormatter(const char* name) {
+ELogFormatter* constructLogFormatter(const char* name, bool issueErrors /* = true */) {
     ELogFormatterConstructorMap::iterator itr = sLogFormatterConstructorMap.find(name);
     if (itr == sLogFormatterConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid log formatter %s: not found", name);
+        if (issueErrors) {
+            ELOG_REPORT_ERROR("Invalid log formatter %s: not found", name);
+        } else {
+            ELOG_REPORT_TRACE("Invalid log formatter %s: not found", name);
+        }
         return nullptr;
     }
 
     ELogFormatterConstructor* constructor = itr->second;
     ELogFormatter* logFormatter = constructor->constructFormatter();
     if (logFormatter == nullptr) {
+        // this error will always be issued
         ELOG_REPORT_ERROR("Failed to createlog formatter, out of memory");
     }
     return logFormatter;

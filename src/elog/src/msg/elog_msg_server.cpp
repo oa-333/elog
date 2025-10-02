@@ -4,6 +4,7 @@
 
 #include "elog_report.h"
 #include "msg/elog_binary_format_provider.h"
+#include "msg/elog_msg_server.h"
 
 namespace elog {
 

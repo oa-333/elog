@@ -204,6 +204,12 @@ private:
         using pointer = ELogRecordData**;
         using reference = ELogRecordData*&;
 
+        SortingFunnelIterator() : m_sortingFunnel(nullptr), m_sortingFunnelSize(0), m_pos(0) {}
+        SortingFunnelIterator(const SortingFunnelIterator& itr)
+            : m_sortingFunnel(itr.m_sortingFunnel),
+              m_sortingFunnelSize(itr.m_sortingFunnelSize),
+              m_pos(itr.m_pos) {}
+
         SortingFunnelIterator(SortingFunnel* sortingFunnel, uint64_t ringBufferSize, uint64_t pos)
             : m_sortingFunnel(sortingFunnel), m_sortingFunnelSize(ringBufferSize), m_pos(pos) {}
 
@@ -213,7 +219,7 @@ private:
         pointer operator->() {
             return &m_sortingFunnel->m_recordArray[m_pos % m_sortingFunnelSize];
         }
-        const reference operator*() const {
+        reference operator*() const {
             return m_sortingFunnel->m_recordArray[m_pos % m_sortingFunnelSize];
         }
         pointer operator->() const {
@@ -244,24 +250,28 @@ private:
         bool operator>(const SortingFunnelIterator& other) const { return m_pos > other.m_pos; }
         bool operator>=(const SortingFunnelIterator& other) const { return m_pos >= other.m_pos; }
         SortingFunnelIterator operator+(std::ptrdiff_t distance) const {
-            return SortingFunnelIterator(m_sortingFunnel, m_sortingFunnelSize, m_pos + distance);
+            return SortingFunnelIterator(m_sortingFunnel, m_sortingFunnelSize,
+                                         addDistance(m_pos, distance));
         }
         SortingFunnelIterator operator-(std::ptrdiff_t distance) const {
-            return SortingFunnelIterator(m_sortingFunnel, m_sortingFunnelSize, m_pos - distance);
+            return SortingFunnelIterator(m_sortingFunnel, m_sortingFunnelSize,
+                                         subDistance(m_pos, distance));
         }
         SortingFunnelIterator& operator+=(std::ptrdiff_t distance) {
-            m_pos += distance;
+            m_pos = addDistance(m_pos, distance);
             return *this;
         }
         SortingFunnelIterator& operator-=(std::ptrdiff_t distance) {
-            m_pos -= distance;
+            m_pos = subDistance(m_pos, distance);
             return *this;
         }
         reference operator[](std::ptrdiff_t distance) {
-            return m_sortingFunnel->m_recordArray[(m_pos + distance) % m_sortingFunnelSize];
+            return m_sortingFunnel
+                ->m_recordArray[addDistance(m_pos, distance) % m_sortingFunnelSize];
         }
-        const reference operator[](std::ptrdiff_t distance) const {
-            return m_sortingFunnel->m_recordArray[(m_pos + distance) % m_sortingFunnelSize];
+        reference operator[](std::ptrdiff_t distance) const {
+            return m_sortingFunnel
+                ->m_recordArray[addDistance(m_pos, distance) % m_sortingFunnelSize];
         }
         std::ptrdiff_t operator-(SortingFunnelIterator rhs) const {
             return ((std::ptrdiff_t)m_pos) - ((std::ptrdiff_t)rhs.m_pos);
@@ -271,6 +281,20 @@ private:
         SortingFunnel* m_sortingFunnel;
         uint64_t m_sortingFunnelSize;
         uint64_t m_pos;
+
+        static uint64_t addDistance(uint64_t pos, std::ptrdiff_t distance) {
+            if (distance >= 0) {
+                assert(UINT64_MAX - (uint64_t)distance > pos);
+                return pos + (uint64_t)distance;
+            } else {
+                assert(pos >= (uint64_t)-distance);
+                return pos - (uint64_t)-distance;
+            }
+        }
+
+        static uint64_t subDistance(uint64_t pos, std::ptrdiff_t distance) {
+            return addDistance(pos, -distance);
+        }
     };
 
     ELOG_CACHE_ALIGN RingBuffer* m_ringBuffers;

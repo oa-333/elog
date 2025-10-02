@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <cstdlib>
+#include <new>
 
 namespace elog {
 
@@ -150,6 +151,14 @@ public:
 
     // retrieves a value by index
     inline const ValueType& getAt(uint32_t idx) const { return m_entries[idx].m_value; }
+
+#if 0
+    // sets a value by index
+    inline void setAt(uint32_t idx, const ValueType& value) { m_entries[idx].m_value = value; }
+
+    // removes a mapping by index
+    inline void removeAt(uint32_t idx) { m_entries[idx].m_key.store(0, std::memory_order_relaxed); }
+#endif
 
     // removes a mapping
     inline uint32_t removeItem(uint64_t key) {

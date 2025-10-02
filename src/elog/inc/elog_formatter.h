@@ -131,9 +131,11 @@ extern ELOG_API void registerLogFormatterConstructor(const char* name,
 /**
  * @brief Utility helper for constructing a log formatter from type name identifier.
  * @param name The log formatter identifier.
+ * @param issueErrors Optionally specifies whether to issue errors when encountered or not (will
+ * still be issues as trace reports).
  * @return ELogFormatter* The resulting log formatter, or null if failed.
  */
-extern ELOG_API ELogFormatter* constructLogFormatter(const char* name);
+extern ELOG_API ELogFormatter* constructLogFormatter(const char* name, bool issueErrors = true);
 
 /** @brief Utility helper class for log formatter construction. */
 class ELOG_API ELogFormatterConstructor {

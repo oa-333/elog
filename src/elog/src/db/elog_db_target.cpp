@@ -143,8 +143,8 @@ bool ELogDbTarget::stopLogTarget() {
     // now disconnect all clients and cleanup
     for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
         ThreadSlot& slot = m_threadSlots[i];
-        if (slot.m_isUsed.load(std::memory_order_relaxed)) {
-            if (slot.m_isConnected.load(std::memory_order_relaxed)) {
+        if (slot.m_isUsed.m_atomicValue.load(std::memory_order_relaxed)) {
+            if (slot.m_isConnected.m_atomicValue.load(std::memory_order_relaxed)) {
                 if (slot.m_dbData != nullptr) {
                     if (!disconnectDb(slot.m_dbData)) {
                         ELOG_REPORT_ERROR("Failed to cleanup database object at slot %u", i);
@@ -205,8 +205,8 @@ bool ELogDbTarget::parseInsertStatement(const std::string& insertStatement) {
 
 uint32_t ELogDbTarget::allocSlot() {
     for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
-        bool isUsed = m_threadSlots[i].m_isUsed.load(std::memory_order_relaxed);
-        if (!isUsed && m_threadSlots[i].m_isUsed.compare_exchange_strong(
+        bool isUsed = m_threadSlots[i].m_isUsed.m_atomicValue.load(std::memory_order_relaxed);
+        if (!isUsed && m_threadSlots[i].m_isUsed.m_atomicValue.compare_exchange_strong(
                            isUsed, true, std::memory_order_seq_cst)) {
             return i;
         }
@@ -215,7 +215,7 @@ uint32_t ELogDbTarget::allocSlot() {
 }
 
 void ELogDbTarget::freeSlot(uint32_t slot) {
-    m_threadSlots[slot].m_isUsed.store(false, std::memory_order_relaxed);
+    m_threadSlots[slot].m_isUsed.m_atomicValue.store(false, std::memory_order_relaxed);
 }
 
 bool ELogDbTarget::initConnection(uint32_t& slotId) {
@@ -266,10 +266,10 @@ void ELogDbTarget::reconnectTask() {
     while (!shouldStop()) {
         for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
             ThreadSlot& slot = m_threadSlots[i];
-            if (slot.m_isUsed.load(std::memory_order_relaxed) &&
-                !slot.m_isConnected.load(std::memory_order_relaxed)) {
+            if (slot.m_isUsed.m_atomicValue.load(std::memory_order_relaxed) &&
+                !slot.m_isConnected.m_atomicValue.load(std::memory_order_relaxed)) {
                 if (connectDb(slot.m_dbData)) {
-                    slot.m_isConnected.store(true, std::memory_order_relaxed);
+                    slot.m_isConnected.m_atomicValue.store(true, std::memory_order_relaxed);
                 }
             }
         }

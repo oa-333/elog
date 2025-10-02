@@ -56,10 +56,10 @@ public:
     ~ELogStatusMsg() override {}
 
     /** @brief Serializes the message header. */
-    commutil::ErrorCode serialize(commutil::OutputStream& os) const;
+    commutil::ErrorCode serialize(commutil::OutputStream& os) const override;
 
     /** @brief Deserializes the message header. */
-    commutil::ErrorCode deserialize(commutil::InputStream& is);
+    commutil::ErrorCode deserialize(commutil::InputStream& is) override;
 
     inline int32_t getStatus() const { return m_status; }
     inline uint64_t getRecordsProcessed() const { return m_recordsProcessed; }

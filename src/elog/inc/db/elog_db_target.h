@@ -5,6 +5,7 @@
 #include <mutex>
 #include <thread>
 
+#include "elog_atomic.h"
 #include "elog_db_formatter.h"
 #include "elog_target.h"
 
@@ -128,26 +129,38 @@ private:
 
     // single thread slot
     struct ThreadSlot {
-        std::atomic<bool> m_isUsed;
-        std::atomic<bool> m_isConnected;
+        ELogAtomic<bool> m_isUsed;
+        ELogAtomic<bool> m_isConnected;
         void* m_dbData;
 
         ThreadSlot() : m_isUsed(false), m_isConnected(false), m_dbData(nullptr) {}
         ThreadSlot(const ThreadSlot& slot) {
-            m_isUsed.store(slot.m_isUsed.load(std::memory_order_relaxed));
-            m_isConnected.store(slot.m_isConnected.load(std::memory_order_relaxed));
+            m_isUsed.m_atomicValue.store(
+                slot.m_isUsed.m_atomicValue.load(std::memory_order_relaxed));
+            m_isConnected.m_atomicValue.store(
+                slot.m_isConnected.m_atomicValue.load(std::memory_order_relaxed));
             m_dbData = slot.m_dbData;
         }
-        ThreadSlot(ThreadSlot&&) = delete;
+        ThreadSlot(ThreadSlot&& slot) {
+            m_isUsed.m_atomicValue.store(
+                slot.m_isUsed.m_atomicValue.load(std::memory_order_relaxed));
+            m_isConnected.m_atomicValue.store(
+                slot.m_isConnected.m_atomicValue.load(std::memory_order_relaxed));
+            m_dbData = slot.m_dbData;
+            slot.m_dbData = nullptr;
+        }
 
         inline ThreadSlot& operator=(const ThreadSlot& slot) {
-            m_isUsed.store(slot.m_isUsed.load(std::memory_order_relaxed),
-                           std::memory_order_relaxed);
-            m_isConnected.store(slot.m_isConnected.load(std::memory_order_relaxed),
-                                std::memory_order_relaxed);
+            m_isUsed.m_atomicValue.store(
+                slot.m_isUsed.m_atomicValue.load(std::memory_order_relaxed),
+                std::memory_order_relaxed);
+            m_isConnected.m_atomicValue.store(
+                slot.m_isConnected.m_atomicValue.load(std::memory_order_relaxed),
+                std::memory_order_relaxed);
             m_dbData = slot.m_dbData;
             return *this;
         }
+        ~ThreadSlot() {}
     };
 
     std::vector<ThreadSlot> m_threadSlots;
@@ -175,12 +188,12 @@ private:
 
     /** @brief Queries whether that database connection has been restored. */
     inline bool isConnected(uint32_t slotId) {
-        return m_threadSlots[slotId].m_isConnected.load(std::memory_order_relaxed);
+        return m_threadSlots[slotId].m_isConnected.m_atomicValue.load(std::memory_order_relaxed);
     }
 
     /** @brief Sets the database connection as connected. */
     inline void setConnected(uint32_t slotId) {
-        m_threadSlots[slotId].m_isConnected.store(true, std::memory_order_relaxed);
+        m_threadSlots[slotId].m_isConnected.m_atomicValue.store(true, std::memory_order_relaxed);
     }
 
     /** @brief Helper method for derived classes to reconnect to database. */

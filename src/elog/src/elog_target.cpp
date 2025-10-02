@@ -109,7 +109,6 @@ bool ELogTarget::startNoLock() {
             m_stats = nullptr;
             return false;
         }
-        m_stats->initialize(elog::getMaxThreads());
     }
     if (m_flushPolicy != nullptr) {
         if (!m_flushPolicy->start()) {

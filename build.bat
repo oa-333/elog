@@ -242,6 +242,33 @@ REM echo [DEBUG] Parsed connections
 REM echo [DEBUG] Current options: %OPTS%
 REM echo [DEBUG] MYSQL_ROOT=%MYSQL_ROOT%
 
+REM Special case - clang and mem-check (ASAN) on Windows
+IF %CLANG% EQU 1 (
+    IF %MEM_CHECK% EQU 1 (
+        REM find clang directory
+        echo [DEBUG] Searching for clang folder...
+        FOR /F "usebackq delims=" %%I IN (`where clang`) DO (
+            SET CLANG_PATH=%%I
+            echo [DEBUG] Found clang folder at: !CLANG_PATH!
+            REM ascend up to directories
+            FOR %%J IN ("!CLANG_PATH!\..\..") DO (
+                REM get absolute path
+                SET CLANG_HOME=%%~fJ
+                echo [DEBUG] Search for clang ASAN libraries starting at root folder: !CLANG_HOME!\lib\clang
+                REM now search for asan libs dir
+                FOR /F "usebackq delims=" %%K IN (`where /r "!CLANG_HOME!\lib\clang" clang_rt.asan*.dll`) DO (
+                    SET CLANG_ASAN_PATH=%%K
+                    REM get absolute path
+                    FOR %%L IN ("!CLANG_ASAN_DLL!\..") DO (
+                        SET CLANG_ASAN_HOME=%%~fL
+                        echo [DEBUG] Setting CLANG_ASAN_HOME=!CLANG_ASAN_HOME!
+                    )
+                )
+            )
+        )
+    )
+)
+
 REM prepare build directory
 SET BUILD_DIR=cmake_build\%PLATFORM%-%BUILD_TYPE%
 echo [INFO]  Using build directory: %BUILD_DIR%

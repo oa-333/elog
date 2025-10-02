@@ -135,7 +135,7 @@ bool ELogMsgConfigLoader::loadMsgConfig(const ELogConfigMapNode* logTargetCfg,
     }
 
     if (!loadTimeoutConfig(logTargetCfg, targetName, "shutdown_polling_timeout",
-                           msgConfig.m_commConfig.m_shutdownTimeoutMillis,
+                           msgConfig.m_commConfig.m_shutdownPollingTimeoutMillis,
                            ELogTimeUnits::TU_MILLI_SECONDS, ELOG_MSG_MIN_SHUTDOWN_POLLING_TIMEOUT,
                            ELOG_MSG_MAX_SHUTDOWN_POLLING_TIMEOUT,
                            ELOG_MSG_DEFAULT_SHUTDOWN_POLLING_TIMEOUT)) {

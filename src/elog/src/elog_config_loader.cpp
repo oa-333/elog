@@ -876,9 +876,9 @@ bool ELogConfigLoader::applyTargetLogFormat(ELogTarget* logTarget,
         ELogFormatter* logFormatter = nullptr;
         // parse optional type
         std::string::size_type colonPos = logFormat.find(':');
-        if (colonPos != std::string::npos) {
+        if (colonPos != std::string::npos && logFormat[0] != '$') {
             std::string type = logFormat.substr(0, colonPos);
-            logFormatter = constructLogFormatter(type.c_str());
+            logFormatter = constructLogFormatter(type.c_str(), false);
             if (logFormatter == nullptr) {
                 // NOTE: we do not have the ability to tell whether this is a real error, since user
                 // string may contain a colon, so we issue a warning and continue

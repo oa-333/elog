@@ -90,9 +90,10 @@ protected:
      * deserialization error), in which case @ref handleMsgError() is NOT called, and if some error
      * status needs to be sent to the client, then deriving sub-classes are responsible for that.
      */
-    commutil::ErrorCode handleMsg(const commutil::ConnectionDetails& connDetails,
-                                  const commutil::MsgHeader& msgHeader, const char* buffer,
-                                  uint32_t length, bool lastInBatch, uint32_t batchSize) override;
+    commutil::ErrorCode handleMsg(const commutil::ConnectionDetails& connectionDetails,
+                                  const commutil::MsgHeader& msgHeader, const char* msgBuffer,
+                                  uint32_t bufferSize, bool lastInBatch,
+                                  uint32_t batchSize) override;
 
     /**
      * @brief Implements MsgFrameListener interface. Handle errors during message unpacking.

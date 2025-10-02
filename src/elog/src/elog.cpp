@@ -2525,12 +2525,12 @@ static void compactLogTargets() {
 void removeLogTarget(ELogTargetId targetId) {
     // be careful, if this is the last log target, we must put back stderr
     if (targetId >= sLogTargets.size()) {
-        // silently ignore invalid request
+        ELOG_REPORT_ERROR("Cannot remove log target %u, id out of range", targetId);
         return;
     }
 
     if (sLogTargets[targetId] == nullptr) {
-        // silently ignore repeated request
+        ELOG_REPORT_ERROR("Cannot remove log target %u, not found", targetId);
         return;
     }
 
