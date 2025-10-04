@@ -367,12 +367,12 @@ bool ELogConfigParser::parseLogTargetUrl(const std::string& logTargetUrl,
             // take care of pre-defined properties: user, password, host port
             if ((key.compare("user") == 0) || (key.compare("userName") == 0) ||
                 (key.compare("user_name") == 0)) {
-                logTargetUrlSpec.m_user.m_value = {value, keyPos, valuePos};
+                logTargetUrlSpec.m_user = {value.c_str(), keyPos, valuePos};
             } else if ((key.compare("password") == 0) || (key.compare("passwd") == 0)) {
-                logTargetUrlSpec.m_passwd.m_value = {value, keyPos, valuePos};
+                logTargetUrlSpec.m_passwd = {value.c_str(), keyPos, valuePos};
             } else if ((key.compare("host") == 0) || (key.compare("hostName") == 0) ||
                        (key.compare("host_name") == 0)) {
-                logTargetUrlSpec.m_host.m_value = {value, keyPos, valuePos};
+                logTargetUrlSpec.m_host = {value.c_str(), keyPos, valuePos};
             } else if ((key.compare("port") == 0) || (key.compare("portNumber") == 0) ||
                        (key.compare("port_number") == 0)) {
                 if (!parseIntProp(key.c_str(), logTargetUrl, value, logTargetUrlSpec.m_port.m_value,
@@ -591,9 +591,11 @@ ELogConfigMapNode* ELogConfigParser::logTargetUrlToConfig(ELogTargetUrlSpec* url
     for (const auto& entry : urlSpec->m_props.m_map) {
         const char* key = entry.first.c_str();
         const ELogPropertyPos* prop = entry.second;
-        if (!addConfigProperty(mapNode, key, prop)) {
-            delete mapNode;
-            return nullptr;
+        if (!mapNode->containsEntry(key)) {
+            if (!addConfigProperty(mapNode, key, prop)) {
+                delete mapNode;
+                return nullptr;
+            }
         }
     }
     return mapNode;

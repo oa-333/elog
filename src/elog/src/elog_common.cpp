@@ -496,6 +496,18 @@ bool parseFrequencySpec(const char* freqSpecStr, ELogFrequencySpec& freqSpec) {
 }
 #endif
 
+void tokenize(const char* str, std::vector<std::string>& tokens,
+              const char* delims /* = " \t\r\n" */) {
+    std::string s = str;
+    std::string::size_type start = 0, end = 0;
+    while ((start = s.find_first_not_of(delims, end)) != std::string::npos) {
+        // start points to first non-delim char
+        // now search for first delim char
+        end = s.find_first_of(delims, start);
+        tokens.push_back(s.substr(start, end - start));
+    }
+}
+
 size_t elog_strncpy(char* dest, const char* src, size_t destLen, size_t srcLen /* = 0 */) {
     assert(destLen > 0);
     if (srcLen == 0) {

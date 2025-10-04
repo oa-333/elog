@@ -39,9 +39,9 @@ struct ELOG_API ELogPropertyPos {
 
     ELogPropertyPos(ELogPropertyType type, size_t keyPos = 0, size_t valuePos = 0)
         : m_type(type), m_keyPos(keyPos), m_valuePos(valuePos) {}
-    ELogPropertyPos(const ELogPropertyPos&) = delete;
+    ELogPropertyPos(const ELogPropertyPos&) = default;
     ELogPropertyPos(ELogPropertyPos&&) = delete;
-    ELogPropertyPos& operator=(const ELogPropertyPos&) = delete;
+    ELogPropertyPos& operator=(const ELogPropertyPos&) = default;
     virtual ~ELogPropertyPos() {}
 };
 
@@ -51,9 +51,9 @@ struct ELOG_API ELogStringPropertyPos final : public ELogPropertyPos {
 
     ELogStringPropertyPos(const char* value = "", size_t keyPos = 0, size_t valuePos = 0)
         : ELogPropertyPos(ELogPropertyType::PT_STRING, keyPos, valuePos), m_value(value) {}
-    ELogStringPropertyPos(const ELogStringPropertyPos&) = delete;
+    ELogStringPropertyPos(const ELogStringPropertyPos&) = default;
     ELogStringPropertyPos(ELogStringPropertyPos&&) = delete;
-    ELogStringPropertyPos& operator=(const ELogStringPropertyPos&) = delete;
+    ELogStringPropertyPos& operator=(const ELogStringPropertyPos&) = default;
     ~ELogStringPropertyPos() final {}
 };
 
@@ -63,9 +63,9 @@ struct ELOG_API ELogIntPropertyPos final : public ELogPropertyPos {
 
     ELogIntPropertyPos(int64_t value = 0, size_t keyPos = 0, size_t valuePos = 0)
         : ELogPropertyPos(ELogPropertyType::PT_INT, keyPos, valuePos), m_value(value) {}
-    ELogIntPropertyPos(const ELogIntPropertyPos&) = delete;
+    ELogIntPropertyPos(const ELogIntPropertyPos&) = default;
     ELogIntPropertyPos(ELogIntPropertyPos&&) = delete;
-    ELogIntPropertyPos& operator=(const ELogIntPropertyPos&) = delete;
+    ELogIntPropertyPos& operator=(const ELogIntPropertyPos&) = default;
     ~ELogIntPropertyPos() final {}
 };
 
@@ -75,9 +75,9 @@ struct ELOG_API ELogBoolPropertyPos final : public ELogPropertyPos {
 
     ELogBoolPropertyPos(bool value = false, size_t keyPos = 0, size_t valuePos = 0)
         : ELogPropertyPos(ELogPropertyType::PT_BOOL, keyPos, valuePos), m_value(value) {}
-    ELogBoolPropertyPos(const ELogBoolPropertyPos&) = delete;
+    ELogBoolPropertyPos(const ELogBoolPropertyPos&) = default;
     ELogBoolPropertyPos(ELogBoolPropertyPos&&) = delete;
-    ELogBoolPropertyPos& operator=(const ELogBoolPropertyPos&) = delete;
+    ELogBoolPropertyPos& operator=(const ELogBoolPropertyPos&) = default;
     ~ELogBoolPropertyPos() final {}
 };
 

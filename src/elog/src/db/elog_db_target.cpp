@@ -77,7 +77,7 @@ static thread_local uint32_t sThreadSlotId = ELOG_DB_INVALID_SLOT_ID;
 ELogDbTarget::ELogDbTarget(const char* dbName, const char* rawInsertStatement,
                            ELogDbFormatter::QueryStyle queryStyle,
                            ThreadModel threadModel /* = ThreadModel::TM_LOCK */,
-                           uint32_t maxThreads /* = 0 */,
+                           uint32_t poolSize /* = 0 */,
                            uint64_t reconnectTimeoutMillis /* = ELOG_DB_RECONNECT_TIMEOUT_MILLIS */)
     : ELogTarget("db"),
       m_dbName(dbName),
@@ -85,28 +85,39 @@ ELogDbTarget::ELogDbTarget(const char* dbName, const char* rawInsertStatement,
       m_rawInsertStatement(rawInsertStatement),
       m_queryStyle(queryStyle),
       m_threadModel(threadModel),
-      m_maxThreads(maxThreads),
+      m_poolSize(poolSize),
       m_reconnectTimeoutMillis(reconnectTimeoutMillis),
       m_shouldStop(false),
       m_shouldWakeUp(false) {
-    if (m_maxThreads == 0) {
-        m_maxThreads = elog::getMaxThreads();
+    // fix pool size according to thread model
+    if (threadModel == ThreadModel::TM_CONN_PER_THREAD) {
+        m_poolSize = elog::getMaxThreads();
+    } else if (threadModel == ThreadModel::TM_LOCK) {
+        m_poolSize = 1;
     }
 }
 
 bool ELogDbTarget::startLogTarget() {
-    if (getLogFormatter() == nullptr) {
-        ELOG_REPORT_ERROR("Cannot start %s DB log target, missing log format", m_dbName.c_str());
+    // a log formatter is NOT expected to be installed, since the insert query is used to build the
+    // log formatter, and the expected type is ELogDbFormatter
+    if (getLogFormatter() != nullptr) {
+        ELOG_REPORT_ERROR(
+            "Unexpected log format specified for %s DB log target, cannot start log target",
+            m_dbName.c_str());
         return false;
     }
-    // TODO: some type checking is needed here
-    m_dbFormatter = (ELogDbFormatter*)getLogFormatter();
-    m_dbFormatter->setQueryStyle(m_queryStyle);
-    if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
-        m_threadSlots.resize(m_maxThreads);
-    } else {
-        m_threadSlots.resize(1);
+
+    // create the DB formatter and install it
+    m_dbFormatter = new (std::nothrow) ELogDbFormatter();
+    if (m_dbFormatter == nullptr) {
+        ELOG_REPORT_ERROR(
+            "Cannot start log target, failed to allocate DB formatter, out of memory");
+        return false;
     }
+    setLogFormatter(m_dbFormatter);
+
+    // configure the DB formatter
+    m_dbFormatter->setQueryStyle(m_queryStyle);
 
     // parse the statement with log record field selector tokens
     // this builds a processed statement text with questions dollars instead of log record field
@@ -115,18 +126,18 @@ bool ELogDbTarget::startLogTarget() {
     // repeatedly by the reconnect task, and this needs to be done only once
     if (!parseInsertStatement(m_rawInsertStatement)) {
         ELOG_REPORT_ERROR("Failed to parse insert statement: %s", m_rawInsertStatement.c_str());
+        return false;
     }
     m_dbFormatter->getParamTypes(m_paramTypes);
-    initDbTarget();
+    if (!initDbTarget()) {
+        ELOG_REPORT_ERROR("Failed to initialize database log target");
+        return false;
+    }
 
-    // in single slot mode we allocate slot, try to connect
+    // in lock mode and connection pool mode we allocate connections and try to connect
+    m_connectionPool.resize(m_poolSize);
     if (m_threadModel != ThreadModel::TM_CONN_PER_THREAD) {
-        uint32_t slotId = ELOG_DB_INVALID_SLOT_ID;
-        if (!initConnection(slotId)) {
-            return false;
-        }
-        if (slotId != 0) {
-            ELOG_REPORT_ERROR("Internal error, expected slot id 0, got instead %d", slotId);
+        if (!initConnectionPool()) {
             return false;
         }
     }
@@ -141,56 +152,74 @@ bool ELogDbTarget::stopLogTarget() {
     stopReconnect();
 
     // now disconnect all clients and cleanup
-    for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
-        ThreadSlot& slot = m_threadSlots[i];
-        if (slot.m_isUsed.m_atomicValue.load(std::memory_order_relaxed)) {
-            if (slot.m_isConnected.m_atomicValue.load(std::memory_order_relaxed)) {
-                if (slot.m_dbData != nullptr) {
-                    if (!disconnectDb(slot.m_dbData)) {
-                        ELOG_REPORT_ERROR("Failed to cleanup database object at slot %u", i);
-                    } else {
-                        freeDbData(slot.m_dbData);
-                        slot.m_dbData = nullptr;
-                    }
-                }
-            }
-        }
+    if (!termConnectionPool()) {
+        ELOG_REPORT_ERROR("Failed to terminate the connection pool");
+        return false;
     }
-    m_threadSlots.clear();
+
+    termDbTarget();
     return true;
 }
 
 uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
-    uint32_t slotId = 0;
+    uint32_t slotId = ELOG_DB_INVALID_SLOT_ID;
     if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
         slotId = sThreadSlotId;
         if (slotId == ELOG_DB_INVALID_SLOT_ID) {
+            // do a full initialize/connect
             if (!initConnection(slotId)) {
                 ELOG_REPORT_ERROR("Failed to initialize DB connection for current thread");
                 return 0;
+            } else {
+                // save slot id
+                sThreadSlotId = slotId;
             }
         }
+    } else if (m_threadModel == ThreadModel::TM_CONN_POOL) {
+        // grab a free connection or give up
+        for (uint32_t i = 0; i < m_connectionPool.size(); ++i) {
+            if (m_connectionPool[i].isConnected() && m_connectionPool[i].setExecuting()) {
+                slotId = i;
+                break;
+            }
+        }
+    } else {
+        slotId = 0;
+    }
+
+    if (slotId == ELOG_DB_INVALID_SLOT_ID) {
+        ELOG_REPORT_TRACE("Failed to obtain valid slot id");
+        return 0;
     }
 
     // check if connected to database, otherwise discard log record
     // (wait until reconnected in the background)
     if (!isConnected(slotId)) {
+        ELOG_REPORT_TRACE("Log record dropped, not connected");
         return 0;
     }
-    ThreadSlot& slot = m_threadSlots[slotId];
+    ConnectionData& connData = m_connectionPool[slotId];
 
     bool res = true;
     if (m_threadModel == ThreadModel::TM_LOCK) {
         std::unique_lock<std::mutex> lock(m_lock);
-        res = execInsert(logRecord, slot.m_dbData);
+        res = execInsert(logRecord, connData.getDbData());
+        if (!res) {
+            // must be done while lock is still held
+            termConnection(slotId);
+        }
     } else {
-        res = execInsert(logRecord, slot.m_dbData);
+        res = execInsert(logRecord, connData.getDbData());
+        if (!res) {
+            termConnection(slotId);
+        }
     }
 
-    if (!res) {
-        disconnectDb(slot.m_dbData);
-        wakeUpReconnect();
+    // reset executing flag in connection pool
+    if (res && m_threadModel == ThreadModel::TM_CONN_POOL) {
+        connData.setNotExecuting();
     }
+
     // NOTE: DB log target does not flush, so the byte count is meaningless
     return 0;
 }
@@ -204,45 +233,104 @@ bool ELogDbTarget::parseInsertStatement(const std::string& insertStatement) {
 }
 
 uint32_t ELogDbTarget::allocSlot() {
-    for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
-        bool isUsed = m_threadSlots[i].m_isUsed.m_atomicValue.load(std::memory_order_relaxed);
-        if (!isUsed && m_threadSlots[i].m_isUsed.m_atomicValue.compare_exchange_strong(
-                           isUsed, true, std::memory_order_seq_cst)) {
+    for (uint32_t i = 0; i < m_connectionPool.size(); ++i) {
+        if (m_connectionPool[i].setUsed()) {
             return i;
         }
     }
     return ELOG_DB_INVALID_SLOT_ID;
 }
 
-void ELogDbTarget::freeSlot(uint32_t slot) {
-    m_threadSlots[slot].m_isUsed.m_atomicValue.store(false, std::memory_order_relaxed);
-}
+void ELogDbTarget::freeSlot(uint32_t slot) { m_connectionPool[slot].setUnused(); }
 
 bool ELogDbTarget::initConnection(uint32_t& slotId) {
-    slotId = allocSlot();
+    if (slotId == ELOG_DB_INVALID_SLOT_ID) {
+        slotId = allocSlot();
+    }
     if (slotId == ELOG_DB_INVALID_SLOT_ID) {
         ELOG_REPORT_ERROR("No available thread slot");
         return false;
     }
-    // assert(slotId == 0);
 
-    ThreadSlot& slot = m_threadSlots[slotId];
-    slot.m_dbData = allocDbData();
-    if (slot.m_dbData == nullptr) {
-        ELOG_REPORT_ERROR("Failed to allocate DB data, out of memory");
+    ConnectionData& connData = m_connectionPool[slotId];
+
+    // NOTE: we have a race with the reconnect task, so be careful
+    if (connData.setConnecting()) {
+        void* dbData = allocDbData();
+        if (dbData == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate DB data, out of memory");
+            connData.setDisconnected();
+            freeSlot(slotId);
+            return false;
+        }
+        if (!connectDb(dbData)) {
+            ELOG_REPORT_ERROR("Failed to connect to %s", m_dbName.c_str());
+            freeDbData(dbData);
+            connData.setDisconnected();
+            freeSlot(slotId);
+            return false;
+        }
+        connData.setDbData(dbData);
+        setConnected(slotId);
+    } else if (!connData.waitConnect()) {
+        ELOG_REPORT_ERROR("Failed to wait for connect to %s", m_dbName.c_str());
         freeSlot(slotId);
         return false;
     }
 
-    if (!connectDb(slot.m_dbData)) {
-        ELOG_REPORT_ERROR("Failed to connect to %s", m_dbName.c_str());
-        freeDbData(slot.m_dbData);
-        slot.m_dbData = nullptr;
-        freeSlot(slotId);
-        return false;
-    }
+    return true;
+}
 
-    setConnected(slotId);
+void ELogDbTarget::termConnection(uint32_t slotId) {
+    // order of operations is important, we do not want the reconnect task to crash, so we first
+    // clear the db data, and only after that we announce the connection data is disconnected
+    // also in the case of connection pool, we reset the executing flag last, to avoid races
+    ConnectionData& connData = m_connectionPool[slotId];
+    void* dbData = connData.getDbData();
+    disconnectDb(dbData);
+    connData.setDisconnected();
+    // from this point onward the reconnect task can operate on the connection
+    if (m_threadModel == ThreadModel::TM_CONN_POOL) {
+        connData.setNotExecuting();
+    }
+    // from this point onward, in connection pool mode, other thread can try to grab this connection
+    // slot, but only if it got reconnected by the reconnect task
+    wakeUpReconnect();
+}
+
+bool ELogDbTarget::initConnectionPool() {
+    // there is no race here, reconnect task has not started yet
+    // we only create the db data object and mark the slot as used but not connected yet
+    for (uint32_t i = 0; i < m_connectionPool.size(); ++i) {
+        ConnectionData& connData = m_connectionPool[i];
+        void* dbData = allocDbData();
+        if (dbData == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate DB data, out of memory");
+            return false;
+        }
+        connData.setDbData(dbData);
+        connData.setUsed();
+    }
+    return true;
+}
+
+bool ELogDbTarget::termConnectionPool() {
+    for (uint32_t i = 0; i < m_connectionPool.size(); ++i) {
+        ConnectionData& connData = m_connectionPool[i];
+        if (connData.isUsed() && connData.isConnected()) {
+            void* dbData = connData.getDbData();
+            if (dbData != nullptr) {
+                if (!disconnectDb(dbData)) {
+                    ELOG_REPORT_ERROR("Failed to cleanup database object at connection %u", i);
+                    return false;
+                }
+                freeDbData(dbData);
+                connData.clearDbData();
+            }
+            connData.setUnused();
+        }
+    }
+    m_connectionPool.clear();
     return true;
 }
 
@@ -264,12 +352,15 @@ void ELogDbTarget::reconnectTask() {
     std::string threadName = std::string(getName()) + "-reconnect-db";
     setCurrentThreadNameField(threadName.c_str());
     while (!shouldStop()) {
-        for (uint32_t i = 0; i < m_threadSlots.size(); ++i) {
-            ThreadSlot& slot = m_threadSlots[i];
-            if (slot.m_isUsed.m_atomicValue.load(std::memory_order_relaxed) &&
-                !slot.m_isConnected.m_atomicValue.load(std::memory_order_relaxed)) {
-                if (connectDb(slot.m_dbData)) {
-                    slot.m_isConnected.m_atomicValue.store(true, std::memory_order_relaxed);
+        for (uint32_t i = 0; i < m_connectionPool.size(); ++i) {
+            ConnectionData& connData = m_connectionPool[i];
+            if (connData.isUsed() && connData.isDisconnected()) {
+                if (connData.setConnecting()) {
+                    if (connectDb(connData.getDbData())) {
+                        connData.setConnected();
+                    } else {
+                        connData.setDisconnected();
+                    }
                 }
             }
         }

@@ -184,6 +184,10 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_PGSQL_DB_CONNECTOR=ON
         vcpkg add port libpqxx
     )
+    IF "!conn!" == "redis" (
+        SET OPTS=!OPTS! -DELOG_ENABLE_REDIS_DB_CONNECTOR=ON
+        vcpkg add port hiredis
+    )
     IF "!conn!" == "kafka" (
         SET OPTS=!OPTS! -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON
         vcpkg add port librdkafka
@@ -220,6 +224,7 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_SQLITE_DB_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_MYSQL_DB_CONNECTOR=ON -DMYSQL_ROOT=!MYSQL_ROOT!
         SET OPTS=!OPTS! -DELOG_ENABLE_PGSQL_DB_CONNECTOR=ON
+        SET OPTS=!OPTS! -DELOG_ENABLE_REDIS_DB_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_GRPC_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_GRAFANA_CONNECTOR=ON
@@ -229,6 +234,7 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_IPC=ON
         vcpkg add port sqlite3
         vcpkg add port libpqxx
+        vcpkg add port hiredis
         vcpkg add port librdkafka
         vcpkg add port grpc
         vcpkg add port cpp-httplib
@@ -387,6 +393,7 @@ echo   datadog         Datadog connector
 echo   sqlite          SQLite database connector
 echo   mysql           MySQL database connector (experimental)
 echo   postgresql      PostgreSQL database connector
+echo   redis           Redis database connector
 echo   kafka           Kafka topic connector
 echo   grpc            gRPC connector
 echo   net             Network (TCP/UDP) connector

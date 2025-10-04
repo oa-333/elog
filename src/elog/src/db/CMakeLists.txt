@@ -6,5 +6,7 @@ target_sources(elog PRIVATE
     elog_mysql_db_target_provider.cpp
     elog_pgsql_db_target_provider.cpp
     elog_pgsql_db_target.cpp
+    elog_redis_db_target.cpp
+    elog_redis_db_target_provider.cpp
     elog_sqlite_db_target.cpp
     elog_sqlite_db_target_provider.cpp)

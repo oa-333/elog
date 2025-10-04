@@ -274,6 +274,10 @@ public:
 
     inline size_t getEntryCount() const { return m_entries.size(); }
 
+    inline bool containsEntry(const char* key) const {
+        return m_entryMap.find(key) != m_entryMap.end();
+    }
+
     inline const EntryType& getEntryAt(size_t index) const {
         if (index >= m_entries.size()) {
             return sNullEntry;

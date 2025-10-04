@@ -30,7 +30,7 @@ public:
     ~ELogPGSQLDbTarget() final {}
 
 protected:
-    void initDbTarget() final;
+    bool initDbTarget() final;
 
     /** @brief Allocates database access object. */
     void* allocDbData() final { return new (std::nothrow) PGSQLDbData(); }

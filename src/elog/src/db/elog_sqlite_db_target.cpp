@@ -39,16 +39,24 @@ public:
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
                             size_t length) final {
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, field, (int)length, SQLITE_TRANSIENT);
-        if (m_res == 0) {
-            m_res = res;
+        if (res != 0) {
+            ELOG_REPORT_ERROR("Failed to bind sqlite %uth string field %s='%s': %s", m_fieldNum,
+                              fieldSpec.m_name.c_str(), field, sqlite3_errstr(res));
+            if (m_res == 0) {
+                m_res = res;
+            }
         }
     }
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint32_t typeId, uint64_t field, const ELogFieldSpec& fieldSpec) final {
         int res = sqlite3_bind_int64(m_stmt, m_fieldNum++, (sqlite3_int64)field);
-        if (m_res == 0) {
-            m_res = res;
+        if (res != 0) {
+            ELOG_REPORT_ERROR("Failed to bind sqlite %uth int field %s='%" PRIu64 "': %s",
+                              m_fieldNum, fieldSpec.m_name.c_str(), field, sqlite3_errstr(res));
+            if (m_res == 0) {
+                m_res = res;
+            }
         }
     }
 
@@ -56,8 +64,12 @@ public:
     void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
                           const ELogFieldSpec& fieldSpec, size_t length) final {
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, timeStr, -1, SQLITE_TRANSIENT);
-        if (m_res == 0) {
-            m_res = res;
+        if (res != 0) {
+            ELOG_REPORT_ERROR("Failed to bind sqlite %uth time field %s='%s': %s", m_fieldNum,
+                              fieldSpec.m_name.c_str(), timeStr, sqlite3_errstr(res));
+            if (m_res == 0) {
+                m_res = res;
+            }
         }
     }
 
@@ -67,8 +79,12 @@ public:
         const char* logLevelStr = elogLevelToStr(logLevel);
         int res = sqlite3_bind_text(m_stmt, m_fieldNum++, logLevelStr, (int)strlen(logLevelStr),
                                     SQLITE_TRANSIENT);
-        if (m_res == 0) {
-            m_res = res;
+        if (res != 0) {
+            ELOG_REPORT_ERROR("Failed to bind sqlite %uth log-level field %s='%s': %s", m_fieldNum,
+                              fieldSpec.m_name.c_str(), logLevelStr, sqlite3_errstr(res));
+            if (m_res == 0) {
+                m_res = res;
+            }
         }
     }
 

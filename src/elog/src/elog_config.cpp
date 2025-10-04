@@ -455,8 +455,15 @@ ELogConfigValue* ELogConfig::loadValueFromProp(ELogConfigContext* context, const
                                                const ELogPropertyPos* prop) {
     ELogConfigValue* value = nullptr;
     if (prop->m_type == ELogPropertyType::PT_STRING) {
-        value = new (std::nothrow)
-            ELogConfigStringValue(context, ((const ELogStringPropertyPos*)prop)->m_value.c_str());
+        // NOTE: value may be surrounded with single or double quotes
+        const std::string& strValue = ((const ELogStringPropertyPos*)prop)->m_value;
+        if ((strValue.front() == '"' && strValue.back() == '"') ||
+            (strValue.front() == '\'' && strValue.back() == '\'')) {
+            value = new (std::nothrow)
+                ELogConfigStringValue(context, strValue.substr(1, strValue.size() - 2).c_str());
+        } else {
+            value = new (std::nothrow) ELogConfigStringValue(context, strValue.c_str());
+        }
     } else if (prop->m_type == ELogPropertyType::PT_INT) {
         value = new (std::nothrow)
             ELogConfigIntValue(context, ((const ELogIntPropertyPos*)prop)->m_value);

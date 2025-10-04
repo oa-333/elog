@@ -114,6 +114,7 @@ if [ "$HELP" -eq "1" ]; then
     echo "  sqlite          SQLite database connector"
     echo "  mysql           MySQL database connector (experimental)"
     echo "  postgresql      PostgreSQL database connector"
+    echo "  redis           Redis database connector"
     echo "  kafka           Kafka topic connector"
     echo "  grpc            gRPC connector"
     echo "  net             Network (TCP/UDP) connector"
@@ -216,6 +217,9 @@ do
     elif [ "$conn" == "postgresql" ]; then
         echo "[INFO] Adding PostgreSQL connector"
         OPTS+=" -DELOG_ENABLE_PGSQL_DB_CONNECTOR=ON"
+    elif [ "$conn" == "redis" ]; then
+        echo "[INFO] Adding Redis connector"
+        OPTS+=" -DELOG_ENABLE_REDIS_DB_CONNECTOR=ON"
     elif [ "$conn" == "kafka" ]; then
         echo "[INFO] Adding Kafka connector"
         OPTS+=" -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON"

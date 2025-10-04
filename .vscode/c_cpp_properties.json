@@ -19,7 +19,9 @@
                 "ELOG_ENABLE_IPC",
                 "ELOG_ENABLE_MSG",
                 "ELOG_USING_DBG_UTIL",
-                "ELOG_USING_COMM_UTIL"
+                "ELOG_USING_COMM_UTIL",
+                "ELOG_ENABLE_REDIS_DB_CONNECTOR",
+                "ELOG_ENABLE_SQLITE_DB_CONNECTOR"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "cStandard": "c23",

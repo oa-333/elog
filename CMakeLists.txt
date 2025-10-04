@@ -74,6 +74,7 @@ option(ELOG_ENABLE_RELOAD_CONFIG "ELog periodic configuration reloading support"
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
 option(ELOG_ENABLE_PGSQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
+option(ELOG_ENABLE_REDIS_DB_CONNECTOR "ELog Redis database connector" OFF)
 option(ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR "ELog Kafka message queue connector" OFF)
 option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
 option(ELOG_ENABLE_GRAFANA_CONNECTOR "ELog Grafana connector" OFF)
@@ -675,6 +676,23 @@ if (ELOG_ENABLE_MYSQL_DB_CONNECTOR)
             target_link_directories(elog_bench PRIVATE "${MYSQL_ROOT}\\lib64\\vs14")
             target_link_libraries(elog_bench mysqlcppconn)
         endif()
+    endif()
+endif()
+
+#############################################################
+# Redis connector
+#############################################################
+if (ELOG_ENABLE_REDIS_DB_CONNECTOR)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_REDIS_DB_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_REDIS_DB_CONNECTOR)
+    endif()
+    # NOTE: find_package works only for Windows/MinGW
+    if (MSVC)
+        find_package(hiredis CONFIG REQUIRED)
+        target_link_libraries(elog hiredis::hiredis)
+    else()
+        target_link_libraries(elog hiredis)
     endif()
 endif()
 

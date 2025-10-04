@@ -12,9 +12,22 @@ public:
         /** @var Specifies to replace each log record field reference token with a question mark. */
         QS_QMARK,
 
-        /** @var Specifies to replace each log record field reference token with a dollar sign and
-           ordinal field number. */
-        QS_DOLLAR_ORDINAL
+        /**
+         * @var Specifies to replace each log record field reference token with a dollar sign and
+         * ordinal field number.
+         */
+        QS_DOLLAR_ORDINAL,
+
+        /**
+         * @var Specifies to replace each log record field reference token with a printf format
+         * specifier. Currently this is used specifically for Redis, but the processed statement is
+         * not used due to difficulties in Redis API. Only the static text is collected in this mode
+         * so the Redis commands can be formatted.
+         */
+        QS_PRINTF,
+
+        /** @var Specifies no replacements should take place at all.  */
+        QS_NONE
     };
 
     /** @enum Constants for prepared query parameter types (generic). */

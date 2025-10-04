@@ -184,6 +184,13 @@ inline std::string toLower(const std::string& s) {
 }
 
 /**
+ * @brief Break a string into tokens by whitespace.
+ * @param str The input string.
+ * @param tokens The output token array.
+ */
+void tokenize(const char* str, std::vector<std::string>& tokens, const char* delims = " \t\r\n");
+
+/**
  * @brief Safer and possibly/hopefully faster version of strncpy() (not benchmarked yet). Unlike
  * strncpy(), this implementation has three notable differences:
  * (1) The resulting destination always has a terminating null

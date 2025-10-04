@@ -104,7 +104,8 @@
         "timer": "cpp",
         "xmemory": "cpp",
         "*.save": "cpp",
-        "xtree": "cpp"
+        "xtree": "cpp",
+        "stdfloat": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",
@@ -144,10 +145,12 @@
         "GRPCPP",
         "grpcpublicheaders",
         "hexa",
+        "hiredis",
         "httplib",
         "interruptible",
         "jdbc",
         "libasan",
+        "libdbgutil",
         "libpqxx",
         "libprotobuf",
         "libzstd",

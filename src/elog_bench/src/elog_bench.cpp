@@ -151,6 +151,7 @@ static SyncMode sTestSyncMode = SM_BOTH;
 static bool sTestMySQL = false;
 static bool sTestSQLite = false;
 static bool sTestPostgreSQL = false;
+static bool sTestRedis = false;
 static bool sTestKafka = false;
 static bool sTestGrafana = false;
 static bool sTestSentry = false;
@@ -195,6 +196,9 @@ static void testSQLite();
 #endif
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 static void testPostgreSQL();
+#endif
+#ifdef ELOG_ENABLE_REDIS_DB_CONNECTOR
+static void testRedis();
 #endif
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
 static void testKafka();
@@ -814,6 +818,11 @@ static int testConnectors() {
         testPostgreSQL();
     }
 #endif
+#ifdef ELOG_ENABLE_REDIS_DB_CONNECTOR
+    if (sTestRedis) {
+        testRedis();
+    }
+#endif
 #ifdef ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR
     if (sTestKafka) {
         testKafka();
@@ -1113,6 +1122,8 @@ static bool getConnParam(int argc, char* argv[]) {
             sTestSQLite = true;
         } else if (strcmp(argv[i], "--postgresql") == 0) {
             sTestPostgreSQL = true;
+        } else if (strcmp(argv[i], "--redis") == 0) {
+            sTestRedis = true;
         } else if (strcmp(argv[i], "--kafka") == 0) {
             sTestKafka = true;
         } else if (strcmp(argv[i], "--grafana") == 0) {
@@ -2588,7 +2599,7 @@ void testSQLite() {
 #ifdef ELOG_ENABLE_PGSQL_DB_CONNECTOR
 void testPostgreSQL() {
     std::string cfg = std::string("db://postgresql?conn_string=") + sServerAddr +
-                      "&port=5432&db=mydb&user=oren&passwd=1234&"
+                      "&port=5432&db=mydb&user=oren&passwd=\"1234\"&"
                       "insert_query=INSERT INTO log_records VALUES(${rid}, ${time}, ${level}, "
                       "${host}, ${user},"
                       "${prog}, ${pid}, ${tid}, ${mod}, ${src}, ${msg})&"
@@ -2597,6 +2608,23 @@ void testPostgreSQL() {
     double ioPerf = 0.0f;
     StatData statData;
     runSingleThreadedTest("PostgreSQL", cfg.c_str(), msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_REDIS_DB_CONNECTOR
+void testRedis() {
+    std::string cfg =
+        std::string("db://redis?conn_string=") + sServerAddr +
+        ":6379&passwd=\"1234\"&"
+        "insert_query=HSET log_records:${rid} time \"${time}\" level \"${level}\" "
+        "host \"${host}\" user \"${user}\" prog \"${prog}\" pid \"${pid}\" tid \"${tid}\" "
+        "mod \"${mod}\" src \"${src}\" msg \"${msg}\"&"
+        "index_insert=SADD log_records_all ${rid};ZADD log_records_by_time ${time_epoch} ${rid}&"
+        "db_thread_model=conn-per-thread";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Redis", cfg.c_str(), msgPerf, ioPerf, statData, 10);
 }
 #endif
 

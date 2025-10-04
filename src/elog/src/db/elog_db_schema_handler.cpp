@@ -4,6 +4,7 @@
 
 #include "db/elog_mysql_db_target_provider.h"
 #include "db/elog_pgsql_db_target_provider.h"
+#include "db/elog_redis_db_target_provider.h"
 #include "db/elog_sqlite_db_target_provider.h"
 #include "elog_common.h"
 #include "elog_config_loader.h"
@@ -58,8 +59,8 @@ bool ELogDbSchemaHandler::registerPredefinedProviders() {
         return false;
     }
 #endif
-#ifdef ELOG_ENABLE_SQLSERVER_DB_CONNECTOR
-    if (!initDbTargetProvider<ELogSqlServerDbTargetProvider>(this, "sqlserver")) {
+#ifdef ELOG_ENABLE_REDIS_DB_CONNECTOR
+    if (!initDbTargetProvider<ELogRedisDbTargetProvider>(this, "redis")) {
         return false;
     }
 #endif
@@ -77,8 +78,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
     // mysql
     // sqlite
     // postgresql
-    // oracle
-    // sqlserver
+    // redis
 
     // get mandatory properties
     std::string dbType;
@@ -117,6 +117,8 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
             threadModel = ELogDbTarget::ThreadModel::TM_LOCK;
         } else if (threadModelStr.compare("conn-per-thread") == 0) {
             threadModel = ELogDbTarget::ThreadModel::TM_CONN_PER_THREAD;
+        } else if (threadModelStr.compare("conn-pool") == 0) {
+            threadModel = ELogDbTarget::ThreadModel::TM_CONN_POOL;
         } else {
             ELOG_REPORT_ERROR(
                 "Invalid database log target specification, invalid thread model '%s' (context: "
@@ -126,10 +128,10 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
         }
     }
 
-    // check for optional db_max_threads
-    uint32_t maxThreads = elog::getMaxThreads();
+    // check for optional db_poll_size
+    uint32_t poolSize = ELOG_DB_DEFAULT_CONN_POOL_SIZE;
     if (!ELogConfigLoader::getOptionalLogTargetUInt32Property(logTargetCfg, "database",
-                                                              "db_max_threads", maxThreads)) {
+                                                              "db_pool_size", poolSize)) {
         return nullptr;
     }
 
@@ -144,7 +146,7 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
     ProviderMap::iterator providerItr = m_providerMap.find(dbType);
     if (providerItr != m_providerMap.end()) {
         ELogDbTargetProvider* provider = providerItr->second;
-        return provider->loadTarget(logTargetCfg, connString, insertQuery, threadModel, maxThreads,
+        return provider->loadTarget(logTargetCfg, connString, insertQuery, threadModel, poolSize,
                                     reconnectTimeoutMillis);
     }
 

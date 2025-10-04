@@ -59,9 +59,10 @@ private:
     std::vector<int> m_paramLengths;
 };
 
-void ELogPGSQLDbTarget::initDbTarget() {
+bool ELogPGSQLDbTarget::initDbTarget() {
     m_stmtName = "elog_pgsql_insert_stmt";
     m_paramFormats.resize(getInsertStatementParamTypes().size(), 0);
+    return true;
 }
 
 bool ELogPGSQLDbTarget::connectDb(void* dbData) {
@@ -178,8 +179,7 @@ void ELogPGSQLDbTarget::formatConnString(const std::string& host, uint32_t port,
                                          const std::string& db, const std::string& user,
                                          const std::string& passwd) {
     std::stringstream s;
-    s << "postgresql://postgres@" << host << "?port=" << port << "&dbname=" << db
-      << "&user=" << user << "&password=" << passwd;
+    s << "postgresql://" << user << ":" << passwd << "@" << host << ":" << port << "/" << db;
     m_connString = s.str();
 }
 

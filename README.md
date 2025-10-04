@@ -352,6 +352,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Connecting to PostgreSQL](#connecting-to-postgresql)
     - [Connecting to SQLite](#connecting-to-sqlite)
     - [Connecting to MySQL (experimental)](#connecting-to-mysql-experimental)
+    - [Connecting to Redis](#connecting-to-redis)
     - [Connecting to Kafka Topic](#connecting-to-kafka-topic)
     - [Connecting to gRPC Endpoint](#connecting-to-grpc-endpoint)
     - [Connecting to Grafana-Loki](#connecting-to-grafana-loki)
@@ -1441,10 +1442,11 @@ The following parameters are optional for database target configuration:
     - lock: A single lock is used to serialize all access to db log target.  
         This is thread-safe but will not scale well, and may be suitable for simple multi-threaded scenarios.
     - conn-per-thread: Each thread is allocated a separate connection, and no lock is used.
-        This is a thread-safe and scalable.
-- db_max_threads: When specifying db_thread_model=conn-per-thread it is possible also to configure the maximum  
-    number of threads expected to concurrently send log messages to the database log target.  
-    If not specified, then a default value of 4096 is used.
+        This is thread-safe and scalable.
+    - conn-pool: A fixed size connection pool (thread-safe) is used to access the database.
+- db_pool_size: When specifying db_thread_model=conn-pool the user should also to configure the maximum  
+    number of database connections expected to concurrently send log messages to the database log target.  
+    If not specified, then a default value of 4 is used.
 - db_reconnect_timeout: When using database log target, a background thread is used to reconnect to the  
     database after disconnect. This value determines the timeout between any two consecutive reconnect attempts.
 
@@ -1496,6 +1498,41 @@ Here are the relevant components:
     - user: the user name used to login to the database
     - passwd: the password used to login to the database
     - insert_query: The query used to insert a log record into the database
+
+### Connecting to Redis
+
+Following is a sample configuration for MySQL connector:
+
+    db://redis?conn_string=127.0.0.1:5432&
+    passwd=1234&
+    insert_query=HSET log_records:${rid} time "${time}" level "${level}"
+    host "${host}" user "${user}" prog "${prog}" pid "${pid}" tid "{tid}"
+    "mod "${mod}" src "${src}" msg "${msg}"&
+    index_insert=SADD log_records_all ${rid};ZADD log_records_by_time ${time} ${rid}&
+    db_thread_model=conn-per-thread
+
+Here are the relevant components:
+
+    - scheme: db
+    - path: redis
+    - conn_string: denotes the server address (host and port)
+    - passwd: optional password
+    - insert_query: The query used to insert a log record into a redis data structure
+    - index_insert: optional comma-separated list of additional queries.
+
+It is important to note that the index_insert string is composed of several Redis commands, separated by comma, so that a table with indices logic can be implemented.
+
+In the example above, each row is saved as a hash map, where the name of the map contains the log record id:
+
+    HSET log_records:${rid} time "${time}" level "${level}" ...
+
+Next an index is defined, named log_records_all, such that all record ids are saved in a hash set:
+
+    SADD log_records_all ${rid}
+
+Finally, another index is defined, where all records are saved in a set, sorted by log record time:
+
+    ZADD log_records_by_time ${time} ${rid}
 
 ### Connecting to Kafka Topic
 
