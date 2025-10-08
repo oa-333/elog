@@ -7,15 +7,19 @@
 #include "elog_report.h"
 
 #ifdef ELOG_ENABLE_GRAFANA_CONNECTOR
-#include "elog_grafana_target_provider.h"
+#include "mon/elog_grafana_target_provider.h"
 #endif
 
 #ifdef ELOG_ENABLE_SENTRY_CONNECTOR
-#include "elog_sentry_target_provider.h"
+#include "mon/elog_sentry_target_provider.h"
 #endif
 
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
-#include "elog_datadog_target_provider.h"
+#include "mon/elog_datadog_target_provider.h"
+#endif
+
+#ifdef ELOG_ENABLE_OTEL_CONNECTOR
+#include "mon/elog_otel_target_provider.h"
 #endif
 
 namespace elog {
@@ -60,6 +64,11 @@ bool ELogMonSchemaHandler::registerPredefinedProviders() {
 #endif
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
     if (!initMonTargetProvider<ELogDatadogTargetProvider>(this, "datadog")) {
+        return false;
+    }
+#endif
+#ifdef ELOG_ENABLE_OTEL_CONNECTOR
+    if (!initMonTargetProvider<ELogOtelTargetProvider>(this, "otel")) {
         return false;
     }
 #endif

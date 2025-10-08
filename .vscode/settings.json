@@ -105,7 +105,9 @@
         "xmemory": "cpp",
         "*.save": "cpp",
         "xtree": "cpp",
-        "stdfloat": "cpp"
+        "stdfloat": "cpp",
+        "pointers": "cpp",
+        "scoped_allocator": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

@@ -46,12 +46,14 @@ public:
     };
 
     ELogDbFormatter(QueryStyle queryStyle = QueryStyle::QS_QMARK)
-        : m_queryStyle(queryStyle), m_fieldNum(1) {}
+        : ELogFormatter(TYPE_NAME), m_queryStyle(queryStyle), m_fieldNum(1) {}
 
     ELogDbFormatter(const ELogDbFormatter&) = delete;
     ELogDbFormatter(ELogDbFormatter&&) = delete;
     ELogDbFormatter& operator=(const ELogDbFormatter&) = delete;
     ~ELogDbFormatter() final {}
+
+    static constexpr const char* TYPE_NAME = "db";
 
     inline void setQueryStyle(QueryStyle queryStyle) { m_queryStyle = queryStyle; }
 

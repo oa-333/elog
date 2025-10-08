@@ -17,7 +17,7 @@ namespace elog {
 /** @class Utility class for formatting log messages. */
 class ELOG_API ELogFormatter : public ELogManagedObject {
 public:
-    ELogFormatter() {}
+    ELogFormatter(const char* typeName = "") : m_typeName(typeName) {}
     ELogFormatter(const ELogFormatter&) = delete;
     ELogFormatter(ELogFormatter&&) = delete;
     ELogFormatter& operator=(const ELogFormatter&) = delete;
@@ -57,6 +57,9 @@ public:
      * @param receptor The receiving end of the selector log record fields.
      */
     void applyFieldSelectors(const ELogRecord& logRecord, ELogFieldReceptor* receptor);
+
+    /** @brief Retrieves the type name of the formatter. */
+    inline const char* getTypeName() const { return m_typeName.c_str(); }
 
 protected:
     bool parseFormatSpec(const std::string& formatSpec);
@@ -115,6 +118,8 @@ private:
                                 const std::string& defaultSpec);
     ELogFieldSelector* loadSelector(const std::string& selectorSpecStr);
     ELogFieldSelector* loadConstSelector(const std::string& fieldSpecStr);
+
+    std::string m_typeName;
 };
 
 // forward declaration

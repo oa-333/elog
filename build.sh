@@ -111,6 +111,7 @@ if [ "$HELP" -eq "1" ]; then
     echo "  grafana         Grafana-Loki connector"
     echo "  sentry          Sentry connector"
     echo "  datadog         Datadog connector"
+    echo "  otel            Open Telemetry connector"
     echo "  sqlite          SQLite database connector"
     echo "  mysql           MySQL database connector (experimental)"
     echo "  postgresql      PostgreSQL database connector"
@@ -235,6 +236,9 @@ do
     elif [ "$conn" == "datadog" ]; then
         echo "[INFO] Adding Datadog connector"
         OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
+    elif [ "$conn" == "otel" ]; then
+        echo "[INFO] Adding Open Telemetry connector"
+        OPTS+=" -DELOG_ENABLE_OTEL_CONNECTOR=ON"
     elif [ "$conn" == "net" ]; then
         echo "[INFO] Adding Network connector"
         OPTS+=" -DELOG_ENABLE_NET=ON"
@@ -250,6 +254,7 @@ do
         OPTS+=" -DELOG_ENABLE_GRAFANA_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_SENTRY_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
+        OPTS+=" -DELOG_ENABLE_OTEL_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_NET=ON"
         OPTS+=" -DELOG_ENABLE_IPC=ON"
     else

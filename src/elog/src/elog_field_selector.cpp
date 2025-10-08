@@ -660,11 +660,11 @@ void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* 
 }
 
 void ELogTimeEpochSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
-    uint64_t unixTimeMillis = elogTimeToUnixTimeNanos(record.m_logTime) / 1000000ull;
+    uint64_t unixTimeMicros = elogTimeToUnixTimeNanos(record.m_logTime) / 1000ull;
     if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
-        receptor->receiveTimeEpoch(getTypeId(), unixTimeMillis, m_fieldSpec);
+        receptor->receiveTimeEpoch(getTypeId(), unixTimeMicros, m_fieldSpec);
     } else {
-        receptor->receiveIntField(getTypeId(), unixTimeMillis, m_fieldSpec);
+        receptor->receiveIntField(getTypeId(), unixTimeMicros, m_fieldSpec);
     }
 }
 

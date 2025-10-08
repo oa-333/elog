@@ -358,6 +358,8 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Connecting to Grafana-Loki](#connecting-to-grafana-loki)
     - [Connecting to Datadog](#connecting-to-datadog)
     - [Connecting to Sentry](#connecting-to-sentry)
+    - [Connecting to Open Telemetry Collector](#connecting-to-open-telemetry-collector)
+    - [Open Telemetry Build Issues](#open-telemetry-build-issues)
     - [Common HTTP timeouts](#common-http-timeouts)
     - [Message-based Connectors](#message-based-connectors)
     - [Connecting to TCP/UDP Server](#connecting-to-tcpudp-server)
@@ -1722,10 +1724,60 @@ The 'logger_level' parameter controls the level of Sentry native SDK message bei
 Pay attention that in the example above, the global log format is used as the message payload.  
 If a more specialized message pay load is required, then add a 'log_format' parameter to the log target configuration.
 
-// TODO: add adding new log target type and new schema handler
-// TODO: address problem of deallocating extended types (requires destroy function, which must be overridden, and we might provide a utility macro for that) - they must be deallocated at the same module where they were allocated
+// TODO: address problem of deallocating extended types (requires destroy function, which must be overridden, and we might provide a utility  macro for that) - they must be deallocated at the same module where they were allocated
 // conversely this can be solved by the factory class - let it also delete (because being a macro it is defined
 // in the user's module)
+
+### Connecting to Open Telemetry Collector
+
+ELog supports connecting to [Open Telemetry Collector](https://opentelemetry.io/docs/collector/) via the OTel Log Target.
+
+The following example demonstrates how to configure an OTel log target:
+
+    log_target = mon://otel?
+        method=http&
+        endpoint=192.168.1.163:4318&
+        log_format=msg:${rid}, ${time}, ${src}, ${mod}, ${tid}, ${pid}, ${file}, ${line}, ${level}, ${msg}&
+        headers=props:{os.name=${os.name}, os.ver=${os.ver}, prog.name=${prog}}
+
+The Open Telemetry log target uses the mon schema, with 'otel' type, and in addition to common attributes, it supports the following attributes:
+
+| Attribute | Meaning | Type |
+| --- | --- | --- |
+| method | The Open Telemetry exporting method, either http or grpc | mandatory |
+| endpoint | The Open Telemetry Collector address, expected format is host:port | mandatory |
+| headers | HTTP headers to be sent with each Open Telemetry Log Record | optional |
+| compression | Compression type (string) | optional |
+| batching | Specifies whether to use log record batching (boolean) | optional |
+| batch_queue_size | Specifies the maximum queue size when batching | optional |
+| batch_export_size | Specifies the maximum number of log records in each export | optional |
+| batch_export_timeout | Specifies the timeout before sending log record batch | optional |
+| flush_timeout | Specifies the timeout to wait while flushing pending records during log target flush | optional |
+| shutdown_timeout | Specifies the timeout to wait while flushing pending records during shutdown | optional |
+| content_type | The HTTP content type, either json or binary | optional, HTTP exporter only |
+| binary_encoding | If content type is binary, specifies the binary encoding (hex, hexid, base64) | optional, HTTP exporter only |
+| debug | Enables debugging of the HTTP exporter | optional, HTTP exporter only |
+
+### Open Telemetry Build Issues
+
+When building ELog with the Open Telemetry Connector enabled, it is possible that the build process will fail or get stuck, especially when building on Linux platforms. In this case it may be required to build manually the [opentelemetry-cpp](https://github.com/open-telemetry/opentelemetry-cpp) Client. Please refer to the instructions found at the project's github page [here](https://github.com/open-telemetry/opentelemetry-cpp/blob/main/INSTALL.md) for up to date details.
+
+In any case, at the time of this writing (opentelemetry-cpp v1.24.0), the following works, and can be used as a reference:
+
+    git clone --recurse-submodules https://github.com/open-telemetry/opentelemetry-cpp
+    cd opentelemetry-cpp
+    mkdir build
+    cd build
+    make -DWITH_OTLP_HTTP=ON -DWITH_OTLP_GRPC=ON -DWITH_OTLP_HTTP_COMPRESSION=ON -DWITH_BENCHMARK=OFF -DWITH_EXAMPLES=OFF -DWITH_FUNC_TESTS=OFF -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=ON ..
+    cmake --build . -j
+    mkdir <YOUR_INSTALL_DIR>
+    cmake --install . --prefix <YOUR_INSTALL_DIR>
+
+Finally, let the ELog library's cmake script know about the install location as follows:
+
+    export CMAKE_OTEL_CPP_PATH=<YOUR_INSTALL_DIR>
+
+When running your application linked against ELog with Open Telemetry Connector enabled, make sure to include YOUR_INSTALL_DIR/lib in LD_LIBRARY_PATH.
 
 ### Common HTTP Timeouts
 

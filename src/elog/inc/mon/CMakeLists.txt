@@ -11,4 +11,5 @@ target_sources(
             elog_mon_schema_handler.h
             elog_mon_target_provider.h
             elog_mon_target.h
+            elog_otel_target.h
             elog_sentry_target.h)

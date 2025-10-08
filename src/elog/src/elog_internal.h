@@ -7,6 +7,7 @@
 #include "elog_common.h"
 #include "elog_common_def.h"
 #include "elog_def.h"
+#include "elog_formatter.h"
 #include "elog_record.h"
 
 namespace elog {
@@ -30,6 +31,9 @@ extern void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg);
  * @param[out] logBuffer The resulting formatted log buffer.
  */
 extern void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
+
+/** @brief Retrieves the default global log formatter. */
+extern ELogFormatter* getDefaultLogFormatter();
 
 /**
  * @brief Logs a log record. In essence to log record is sent to all registered log targets.

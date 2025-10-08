@@ -156,6 +156,7 @@ static bool sTestKafka = false;
 static bool sTestGrafana = false;
 static bool sTestSentry = false;
 static bool sTestDatadog = false;
+static bool sTestOtel = false;
 
 struct StatData {
     double p50;
@@ -211,6 +212,9 @@ static void testSentry();
 #endif
 #ifdef ELOG_ENABLE_DATADOG_CONNECTOR
 static void testDatadog();
+#endif
+#ifdef ELOG_ENABLE_OTEL_CONNECTOR
+static void testOtel();
 #endif
 
 static void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroughput,
@@ -843,6 +847,11 @@ static int testConnectors() {
         testDatadog();
     }
 #endif
+#ifdef ELOG_ENABLE_OTEL_CONNECTOR
+    if (sTestOtel) {
+        testOtel();
+    }
+#endif
     return 0;
 }
 static int testColors();
@@ -1132,6 +1141,8 @@ static bool getConnParam(int argc, char* argv[]) {
             sTestSentry = true;
         } else if (strcmp(argv[i], "--datadog") == 0) {
             sTestDatadog = true;
+        } else if (strcmp(argv[i], "--otel") == 0) {
+            sTestOtel = true;
         } else {
             fprintf(stderr, "Invalid --test-conn option: %s\n", argv[i]);
             return false;
@@ -2703,6 +2714,32 @@ void testDatadog() {
     double ioPerf = 0.0f;
     StatData statData;
     runSingleThreadedTest("Datadog", cfg.c_str(), msgPerf, ioPerf, statData, 10);
+}
+#endif
+
+#ifdef ELOG_ENABLE_OTEL_CONNECTOR
+void testOtel() {
+    std::string cfg =
+        "mon://"
+        "otel?method=http&endpoint=192.168.1.163:4318&debug=true&batching=yes&batch_export_size=25&"
+        "log_format=msg:${rid}, ${time}, ${src}, ${mod}, ${tid}, ${pid}, ${file}, ${line}, "
+        "${level}, ${msg}&"
+        "flush_policy=count&flush_count=10";
+    double msgPerf = 0.0f;
+    double ioPerf = 0.0f;
+    StatData statData;
+    runSingleThreadedTest("Open-Telemetry", cfg.c_str(), msgPerf, ioPerf, statData, 10);
+
+    // NOTE: grpc method works, but it cannot be run after http (process stuck with some lock) so
+    // for unit tests we must do two separate runs
+    /*cfg =
+        "mon://otel?method=grpc&endpoint=192.168.1.163:4317&debug=true&"
+        "log_format=msg:${rid}, ${time}, ${src}, ${mod}, ${tid}, ${pid}, ${file}, ${line}, "
+        "${level}, ${msg}";
+    runSingleThreadedTest("Open-Telemetry", cfg.c_str(), msgPerf, ioPerf, statData, 10);*/
+
+    // TODO: regression test will launch a local otel collector and have it write records to file
+    // then we can parse the log file and verify all records and attributes are there
 }
 #endif
 

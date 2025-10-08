@@ -212,6 +212,11 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         vcpkg add port gzip-hpp
         vcpkg add port zlib
     )
+    IF "!conn!" == "otel" (
+        SET OPTS=!OPTS! -DELOG_ENABLE_OTEL_CONNECTOR=ON
+        vcpkg add port opentelemetry-cpp[otlp-grpc]
+        vcpkg add port opentelemetry-cpp[otlp-http]
+    )
     IF "!conn!" == "net" (
         SET OPTS=!OPTS! -DELOG_ENABLE_NET=ON
     )
@@ -230,6 +235,7 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_GRAFANA_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_SENTRY_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_DATADOG_CONNECTOR=ON
+        SET OPTS=!OPTS! -DELOG_ENABLE_OTEL_CONNECTOR=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_NET=ON
         SET OPTS=!OPTS! -DELOG_ENABLE_IPC=ON
         vcpkg add port sqlite3
@@ -242,6 +248,8 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         vcpkg add port sentry-native
         vcpkg add port gzip-hpp
         vcpkg add port zlib
+        vcpkg add port opentelemetry-cpp[otlp-grpc]
+        vcpkg add port opentelemetry-cpp[otlp-http]
     )
 )
 REM echo [DEBUG] Parsed connections

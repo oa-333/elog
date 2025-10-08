@@ -7,11 +7,13 @@ namespace elog {
 
 class ELOG_API ELogPropsFormatter final : public ELogFormatter {
 public:
-    ELogPropsFormatter() {}
+    ELogPropsFormatter() : ELogFormatter(TYPE_NAME) {}
     ELogPropsFormatter(const ELogPropsFormatter&) = delete;
     ELogPropsFormatter(ELogPropsFormatter&&) = delete;
     ELogPropsFormatter& operator=(const ELogPropsFormatter&) = delete;
     ~ELogPropsFormatter() final {}
+
+    static constexpr const char* TYPE_NAME = "props";
 
     bool parseProps(const std::string& props);
 

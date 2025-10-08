@@ -16,11 +16,13 @@ namespace elog {
  */
 class ELOG_API ELogJsonFormatter final : public ELogFormatter {
 public:
-    ELogJsonFormatter() {}
+    ELogJsonFormatter() : ELogFormatter(TYPE_NAME) {}
     ELogJsonFormatter(const ELogJsonFormatter&) = delete;
     ELogJsonFormatter(ELogJsonFormatter&&) = delete;
     ELogJsonFormatter& operator=(const ELogJsonFormatter&) = delete;
     ~ELogJsonFormatter() final {}
+
+    static constexpr const char* TYPE_NAME = "json";
 
     bool parseJson(const std::string& jsonStr);
 

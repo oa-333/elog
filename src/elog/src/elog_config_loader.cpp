@@ -795,6 +795,45 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* filterCfg,
     return filter;
 }
 
+ELogFormatter* ELogConfigLoader::loadLogFormatter(const char* logFormat) {
+    ELogFormatter* logFormatter = nullptr;
+    std::string logFormatStr = logFormat;
+    // parse optional type
+    std::string::size_type colonPos = logFormatStr.find(':');
+    if (colonPos != std::string::npos && logFormatStr[0] != '$') {
+        std::string type = logFormatStr.substr(0, colonPos);
+        logFormatter = constructLogFormatter(type.c_str(), false);
+        if (logFormatter == nullptr) {
+            // NOTE: we do not have the ability to tell whether this is a real error, since user
+            // string may contain a colon, so we issue a warning and continue
+            ELOG_REPORT_WARN("Invalid log formatter type '%s', continuing as string formatter",
+                             type.c_str());
+            // use entire string as log format
+        } else {
+            // skip to actual log format
+            logFormatStr = logFormatStr.substr(colonPos + 1);
+        }
+    }
+
+    // create default formatter if needed
+    if (logFormatter == nullptr) {
+        logFormatter = new (std::nothrow) ELogFormatter();
+        if (logFormatter == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate log formatter for log target, out of memory");
+            return nullptr;
+        }
+    }
+
+    // initialize the formatter (parse field selectors)
+    if (!logFormatter->initialize(logFormatStr.c_str())) {
+        ELOG_REPORT_ERROR("Invalid log format '%s' specified in log target", logFormat);
+        delete logFormatter;
+        return nullptr;
+    }
+
+    return logFormatter;
+}
+
 bool ELogConfigLoader::configureLogTargetCommon(ELogTarget* logTarget,
                                                 const ELogConfigMapNode* logTargetCfg) {
     // apply target name if any
@@ -873,40 +912,10 @@ bool ELogConfigLoader::applyTargetLogFormat(ELogTarget* logTarget,
     }
 
     if (found) {
-        ELogFormatter* logFormatter = nullptr;
-        // parse optional type
-        std::string::size_type colonPos = logFormat.find(':');
-        if (colonPos != std::string::npos && logFormat[0] != '$') {
-            std::string type = logFormat.substr(0, colonPos);
-            logFormatter = constructLogFormatter(type.c_str(), false);
-            if (logFormatter == nullptr) {
-                // NOTE: we do not have the ability to tell whether this is a real error, since user
-                // string may contain a colon, so we issue a warning and continue
-                ELOG_REPORT_WARN("Invalid log formatter type '%s', continuing as string formatter",
-                                 type.c_str());
-                // use entire string as log format
-            } else {
-                // skip to actual log format
-                logFormat = logFormat.substr(colonPos + 1);
-            }
-        }
-
-        // create default formatter if needed
+        ELogFormatter* logFormatter = loadLogFormatter(logFormat.c_str());
         if (logFormatter == nullptr) {
-            logFormatter = new (std::nothrow) ELogFormatter();
-            if (logFormatter == nullptr) {
-                ELOG_REPORT_ERROR(
-                    "Failed to allocate log formatter for log target, out of memory (context: %s)",
-                    logTargetCfg->getFullContext());
-                return false;
-            }
-        }
-
-        // initialize the formatter (parse field selectors)
-        if (!logFormatter->initialize(logFormat.c_str())) {
-            ELOG_REPORT_ERROR("Invalid log format '%s' specified in log target (context: %s)",
+            ELOG_REPORT_ERROR("Failed to load log formatter from string: %s (context: %s)",
                               logFormat.c_str(), logTargetCfg->getFullContext());
-            delete logFormatter;
             return false;
         }
         logTarget->setLogFormatter(logFormatter);

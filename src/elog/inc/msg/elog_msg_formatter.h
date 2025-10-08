@@ -7,11 +7,13 @@ namespace elog {
 
 class ELOG_API ELogMsgFormatter : public ELogFormatter {
 public:
-    ELogMsgFormatter() : m_lastFieldType(FieldType::FT_NONE) {}
+    ELogMsgFormatter() : ELogFormatter(TYPE_NAME), m_lastFieldType(FieldType::FT_NONE) {}
     ELogMsgFormatter(const ELogMsgFormatter&) = delete;
     ELogMsgFormatter(ELogMsgFormatter&&) = delete;
     ELogMsgFormatter& operator=(const ELogMsgFormatter&) = delete;
     ~ELogMsgFormatter() final {}
+
+    static constexpr const char* TYPE_NAME = "msg";
 
     inline bool parseParams(const std::string& params) { return initialize(params.c_str()); }
 

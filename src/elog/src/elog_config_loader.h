@@ -58,6 +58,9 @@ public:
      */
     static ELogFilter* loadLogFilterExprStr(const char* filterExpr);
 
+    /** @brief Loads a log formatter form a string. */
+    static ELogFormatter* loadLogFormatter(const char* logFormat);
+
     static bool getLogTargetStringProperty(const ELogConfigMapNode* logTargetCfg,
                                            const char* scheme, const char* propName,
                                            std::string& propValue);

@@ -5,5 +5,7 @@ target_sources(elog PRIVATE
     elog_grafana_target_provider.cpp
     elog_grafana_target.cpp
     elog_mon_schema_handler.cpp
+    elog_otel_target_provider.cpp
+    elog_otel_target.cpp
     elog_sentry_target_provider.cpp
     elog_sentry_target.cpp)

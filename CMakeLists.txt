@@ -80,6 +80,7 @@ option(ELOG_ENABLE_GRPC_CONNECTOR "ELog gRPC connector" OFF)
 option(ELOG_ENABLE_GRAFANA_CONNECTOR "ELog Grafana connector" OFF)
 option(ELOG_ENABLE_SENTRY_CONNECTOR "ELog Sentry connector" OFF)
 option(ELOG_ENABLE_DATADOG_CONNECTOR "ELog Datadog connector" OFF)
+option(ELOG_ENABLE_OTEL_CONNECTOR "ELog Open Telemetry connector" OFF)
 option(ELOG_ENABLE_NET "ELog Network connector" OFF)
 option(ELOG_ENABLE_IPC "ELog IPC connector" OFF)
 
@@ -90,7 +91,7 @@ option(ELOG_ENABLE_GROUP_FLUSH_GC_TRACE "Enable debug trace group flush garbage 
 # figure out whether HTTP client and JSON support is required
 set(ELOG_ENABLE_HTTP OFF)
 set(ELOG_ENABLE_JSON OFF)
-if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR)
+if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR OR ELOG_ENABLE_OTEL_CONNECTOR)
     set(ELOG_ENABLE_HTTP ON)
     set(ELOG_ENABLE_JSON ON)
 endif()
@@ -614,6 +615,57 @@ if (ELOG_ENABLE_DATADOG_CONNECTOR)
 endif()
 
 #############################################################
+# Open Telemetry connector
+#############################################################
+if (ELOG_ENABLE_OTEL_CONNECTOR)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_OTEL_CONNECTOR)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_OTEL_CONNECTOR)
+    endif()
+    # Open Telemetry requires HTTP connection and JSON support, which is already handled above
+    if(MSVC)
+        find_package(opentelemetry-cpp CONFIG REQUIRED)
+    else()
+        # FetchContent has problems on Linux (build fails or sometimes gets stuck)
+        # so we allow user to override by specifying CMAKE_OTEL_CPP_PATH and import include/lib from there
+        if (DEFINED ENV{CMAKE_OTEL_CPP_PATH})
+            message(STATUS "Using opentelemetry-cpp defined by user at: $ENV{CMAKE_OTEL_CPP_PATH}")
+            message(STATUS "Setting opentelemetry-cpp DIR at: $ENV{CMAKE_OTEL_CPP_PATH}/lib/cmake/opentelemetry-cpp")
+            set(opentelemetry-cpp_DIR $ENV{CMAKE_OTEL_CPP_PATH}/lib/cmake/opentelemetry-cpp)
+            find_package(opentelemetry-cpp CONFIG REQUIRED NO_DEFAULT_PATH)
+        else()
+            FetchContent_Declare(opentelemetry-cpp
+                GIT_REPOSITORY https://github.com/open-telemetry/opentelemetry-cpp.git
+                GIT_TAG v1.23.0)
+
+            # configure before build
+            # see here for explanation: https://discourse.cmake.org/t/fetchcontent-declare-with-cmake-args-does-not-work/11227/6
+            set(WITH_OTLP_HTTP ON)
+            set(WITH_OTLP_GRPC ON)
+            set(WITH_OTLP_HTTP_COMPRESSION ON)
+            set(WITH_BENCHMARK OFF)
+            set(WITH_EXAMPLES OFF)
+            set(WITH_FUNC_TESTS OFF)
+            set(BUILD_TESTING OFF)
+
+            FetchContent_MakeAvailable(opentelemetry-cpp)
+        endif()
+    endif()
+
+    target_link_libraries(elog 
+        opentelemetry-cpp::api 
+        opentelemetry-cpp::ext 
+        opentelemetry-cpp::sdk 
+        opentelemetry-cpp::logs 
+        opentelemetry-cpp::trace
+        opentelemetry-cpp::ostream_span_exporter
+        opentelemetry-cpp::otlp_http_exporter
+        opentelemetry-cpp::otlp_http_log_record_exporter
+        opentelemetry-cpp::otlp_grpc_exporter
+        opentelemetry-cpp::otlp_grpc_log_record_exporter)
+endif()
+
+#############################################################
 # SQLite connector - supported on all platforms
 #############################################################
 if (ELOG_ENABLE_SQLITE_DB_CONNECTOR)
@@ -851,6 +903,11 @@ if (MSVC)
     # get rid of annoying gzip warnings
     if (ELOG_USING_GZIP)
         target_compile_options(elog PRIVATE /wd4068)
+    endif()
+
+    # get rid of annoying Open Telemetry warnings
+    if (ELOG_ENABLE_OTEL_CONNECTOR)
+        target_compile_options(elog PRIVATE /wd4996)
     endif()
 else()
     target_compile_options(elog PRIVATE -Wall)

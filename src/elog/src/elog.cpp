@@ -2811,6 +2811,8 @@ void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
     sGlobalFormatter->formatLogBuffer(logRecord, logBuffer);
 }
 
+ELogFormatter* getDefaultLogFormatter() { return sGlobalFormatter; }
+
 ELogCacheEntryId cacheFormatMsg(const char* fmt) { return ELogCache::cacheFormatMsg(fmt); }
 
 const char* getCachedFormatMsg(ELogCacheEntryId entryId) {
