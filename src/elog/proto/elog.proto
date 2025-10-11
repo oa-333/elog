@@ -44,3 +44,73 @@ message ELogStatusMsg {
     optional int32 status = 1;
     optional uint64 recordsProcessed = 2;
 }
+
+// remote control protocol
+
+// Log level constants
+enum ELogLevel {
+    ELEVEL_FATAL = 0;
+    ELEVEL_ERROR = 1;
+    ELEVEL_WARN = 2;
+    ELEVEL_NOTICE = 3;
+    ELEVEL_INFO = 4;
+    ELEVEL_TRACE = 5;
+    ELEVEL_DEBUG = 6;
+    ELEVEL_DIAG = 7;
+}
+
+// Log level propagation mode constants
+enum ELogPropagateMode {
+    // Designates that log level should not be propagated to child log sources
+    PM_NONE = 0;
+
+    // @brief Designates that log level should be propagated to child log sources as is
+    PM_SET = 1;
+
+    // Designates that log level should be propagated to child log sources in restrictive manner
+    PM_RESTRICT = 2;
+
+    // Designates that log level should be propagated to child log sources in loosening manner
+    PM_LOOSE = 3;
+};
+
+message ELogConfigLevelQueryMsg {
+    // regular expression inclusion filter for log source names
+    optional string includeRegEx = 1;
+
+    // regular expression exclusion filter for log source names
+    optional string excludeRegEx = 2;
+}
+
+// configuration message sent as reply to query or as command for change
+message ELogConfigLevelReportMsg {
+    // log levels of all log-sources/loggers
+    map<string, ELogLevel> logLevels = 1;
+
+    // internal ELog report level
+    optional ELogLevel reportLevel = 2;
+}
+
+// configuration message sent as reply to query or as command for change
+message ELogConfigLevelUpdateMsg {
+    // nested type
+    message ELogLevelConfig {
+        ELogLevel logLevel = 1;
+        ELogPropagateMode propagateMode = 2;
+    }
+
+    // log levels of all log-sources/loggers
+    map<string, ELogLevelConfig> logLevels = 1;
+
+    // internal ELog report level
+    optional ELogLevel reportLevel = 2;
+}
+
+// reply to configuration command message
+message ELogConfigLevelReplyMsg {
+    // operation status, zero is success
+    int32 status = 1;
+
+    // any error message
+    string errorMsg = 2;
+}

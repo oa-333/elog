@@ -14,7 +14,11 @@
 #include "elog_life_sign_filter.h"
 #endif
 
-#ifdef ELOG_ENABLE_RELOAD_CONFIG
+#if defined(ELOG_ENABLE_RELOAD_CONFIG) || defined(ELOG_ENABLE_CONFIG_SERVICE)
+#define ELOG_SOURCE_ATOMIC
+#endif
+
+#ifdef ELOG_SOURCE_ATOMIC
 #include <atomic>
 #endif
 
@@ -88,7 +92,7 @@ public:
 
     /** @brief Retrieves the log level associated with the log source. */
     inline ELogLevel getLogLevel() const {
-#ifdef ELOG_ENABLE_RELOAD_CONFIG
+#ifdef ELOG_SOURCE_ATOMIC
         return m_logLevel.load(std::memory_order_relaxed);
 #else
         return m_logLevel;
@@ -175,7 +179,7 @@ private:
     std::string m_qname;
     std::string m_moduleName;
     ELogSource* m_parent;
-#ifdef ELOG_ENABLE_RELOAD_CONFIG
+#ifdef ELOG_SOURCE_ATOMIC
     std::atomic<ELogLevel> m_logLevel;
 #else
     ELogLevel m_logLevel;

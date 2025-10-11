@@ -36,6 +36,10 @@
 #endif
 #endif
 
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+#include "elog_config_service_publisher.h"
+#endif
+
 /** @file The elog module facade. */
 
 namespace elog {
@@ -107,6 +111,39 @@ struct ELOG_API ELogParams {
     uint32_t m_lifeSignGCTaskCount;
 #endif
 
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    /**
+     * @brief Specifies whether the remote configuration service is to be used.
+     * This member is valid only when building ELog with ELOG_ENABLE_LIFE_SIGN.
+     * By default, if ELOG_ENABLE_LIFE_SIGN is enabled, then life-sign reports are enabled.
+     * This flag exists so that users of ELog library that was compiled with ELOG_ENABLE_LIFE_SIGN,
+     * would still have the ability to disable life-sign reports.
+     */
+    bool m_enableConfigService;
+
+    /**
+     * @brief The host network interface to listen on for incoming remote configuration service
+     * connections. If left empty, then the remote configuration service will listen on all
+     * available interfaces. The special values 'localhost' (127.0.0.1), 'primary' (the first
+     * non-loopback interface) and 'any'/'all' are accepted. Finally the special format
+     * 'name:<interface name>' is also accepted.
+     */
+    std::string m_hostInterface;
+
+    /**
+     * @brief The port to listen on for incoming remote configuration service connections. If left
+     * zero, then any available port will be used, and a publisher will be required to be installed
+     * for registering the IP/port in a service registry.
+     */
+    int m_port;
+
+    /**
+     * @brief A custom publisher that will be notified when the service is up or down, and on which
+     * interface/port it is listening for incoming connections.
+     */
+    ELogConfigServicePublisher* m_publisher;
+#endif
+
     ELogParams()
         : m_configFilePath(""),
 #ifdef ELOG_ENABLE_RELOAD_CONFIG
@@ -120,6 +157,12 @@ struct ELOG_API ELogParams {
           m_enableLifeSignReport(ELOG_DEFAULT_ENABLE_LIFE_SIGN),
           m_lifeSignGCPeriodMillis(ELOG_DEFAULT_LIFE_SIGN_GC_PERIOD_MILLIS),
           m_lifeSignGCTaskCount(ELOG_DEFAULT_LIFE_SIGN_GC_TASK_COUNT)
+#endif
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+          ,
+          m_enableConfigService(ELOG_DEFAULT_ENABLE_CONFIG_SERVICE),
+          m_port(0),
+          m_publisher(nullptr)
 #endif
     {
     }

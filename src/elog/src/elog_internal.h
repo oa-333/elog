@@ -9,6 +9,7 @@
 #include "elog_def.h"
 #include "elog_formatter.h"
 #include "elog_record.h"
+#include "elog_source.h"
 
 namespace elog {
 
@@ -51,6 +52,52 @@ extern void reportAppNameLifeSign(const char* appName);
 /** @brief Writes a life-sign context record for the current thread's name. */
 extern void reportCurrentThreadNameLifeSign(elog_thread_id_t threadId, const char* threadName);
 #endif
+
+/** @brief Retrieve log sources matching a regular expression */
+extern void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources);
+
+/** @brief Retrieve log sources matching inclusion/exclusion regular expressions. */
+extern void getLogSourcesEx(const char* includeRegEx, const char* excludeRegEx,
+                            std::vector<ELogSource*>& logSources);
+
+// log source visitor
+class ELogSourceVisitor {
+public:
+    virtual ~ELogSourceVisitor() {}
+    virtual void onLogSource(ELogSource* lgoSource) = 0;
+
+protected:
+    ELogSourceVisitor() {}
+    ELogSourceVisitor(const ELogSourceVisitor&) = delete;
+    ELogSourceVisitor(ELogSourceVisitor&&) = delete;
+    ELogSourceVisitor& operator=(const ELogSourceVisitor&) = delete;
+};
+
+/** @brief Traverse all log sources. */
+extern void visitLogSources(const char* includeRegEx, const char* excludeRegEx,
+                            ELogSourceVisitor* visitor);
+
+/** @brief Visit all log sources, possibly filtered by inclusion/exclusion regular expressions. */
+template <typename F>
+inline void forEachLogSource(const char* includeRegEx, const char* excludeRegEx, F f) {
+    class Visitor : public ELogSourceVisitor {
+    public:
+        Visitor(F f) : m_f(f) {}
+        Visitor() = delete;
+        Visitor(const Visitor&) = delete;
+        Visitor(Visitor&&) = delete;
+        Visitor& operator=(const Visitor&) = delete;
+        ~Visitor() {}
+
+        void onLogSource(ELogSource* logSource) { m_f(logSource); }
+
+    private:
+        F m_f;
+    };
+
+    Visitor v(f);
+    visitLogSources(includeRegEx, excludeRegEx, &v);
+}
 
 }  // namespace elog
 

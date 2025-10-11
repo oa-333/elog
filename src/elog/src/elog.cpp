@@ -63,6 +63,10 @@
 #endif
 #endif
 
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+#include "elog_config_service.h"
+#endif
+
 // #include "elog_props_formatter.h"
 namespace elog {
 
@@ -124,7 +128,6 @@ static bool initLifeSignReport();
 static bool termLifeSignReport();
 static void cleanupThreadLifeSignFilter(void* key);
 static void sendLifeSignReport(const ELogRecord& logRecord);
-static void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources);
 #endif
 
 // these functions are defined as external because they are friends of some classes
@@ -358,6 +361,26 @@ bool initGlobals() {
 #endif
     }
 
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    if (sParams.m_enableConfigService) {
+        if (!ELogConfigService::createInstance()) {
+            termGlobals();
+            return false;
+        }
+        ELogConfigService* configService = ELogConfigService::getInstance();
+        if (configService->initialize(sParams.m_hostInterface.c_str(), sParams.m_port,
+                                      sParams.m_publisher) != commutil::ErrorCode::E_OK) {
+            ELogConfigService::destroyInstance();
+            return false;
+        }
+        if (configService->start() != commutil::ErrorCode::E_OK) {
+            configService->terminate();
+            ELogConfigService::destroyInstance();
+            return false;
+        }
+    }
+#endif
+
     // now we can enable elog's self logger
     // any error up until now will be printed into stderr with no special formatting
     ELOG_REPORT_TRACE("Setting up ELog internal logger");
@@ -369,6 +392,18 @@ bool initGlobals() {
 
 void termGlobals() {
     sIsTerminating = true;
+
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    if (sParams.m_enableConfigService) {
+        ELogConfigService* configService = ELogConfigService::getInstance();
+        if (configService != nullptr) {
+            configService->stop();
+            configService->terminate();
+            ELogConfigService::destroyInstance();
+        }
+    }
+#endif
+
 #ifdef ELOG_ENABLE_RELOAD_CONFIG
     if (!sParams.m_configFilePath.empty() && sParams.m_reloadPeriodMillis > 0) {
         stopReloadConfigThread();
@@ -1459,18 +1494,6 @@ void reportCurrentThreadNameLifeSign(elog_thread_id_t threadId, const char* thre
     }
     delete[] buf;
 }
-
-void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources) {
-    std::regex pattern(logSourceRegEx);
-    std::unique_lock<std::mutex> lock(sSourceTreeLock);
-    ELogSourceMap::iterator itr = sLogSourceMap.begin();
-    while (itr != sLogSourceMap.end()) {
-        if (std::regex_match(itr->second->getQualifiedName(), pattern)) {
-            logSources.emplace_back(itr->second);
-        }
-        ++itr;
-    }
-}
 #endif
 
 bool configureRateLimit(const char* rateLimitCfg, bool replaceGlobalFilter /* = true */) {
@@ -1750,6 +1773,31 @@ bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /
     }
 #endif
 
+// configure configuration service and restart it
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    std::string configServiceInterface;
+    if (getProp(props, ELOG_CONFIG_SERVICE_INTERFACE_NAME, configServiceInterface)) {
+        int configServicePort = 0;
+        std::string configServicePortStr;
+        if (getProp(props, ELOG_CONFIG_SERVICE_PORT_NAME, configServicePortStr)) {
+            if (!parseIntProp(ELOG_CONFIG_SERVICE_PORT_NAME, "", configServicePortStr,
+                              configServicePort)) {
+                ELOG_REPORT_ERROR("Invalid configuration service port: %s",
+                                  configServicePortStr.c_str());
+                return false;
+            }
+        }
+        commutil::ErrorCode rc = ELogConfigService::getInstance()->restart(
+            configServiceInterface.c_str(), configServicePort);
+        if (rc != commutil::ErrorCode::E_OK) {
+            ELOG_REPORT_ERROR("Failed to restart the configuration service on %s:%d: %s",
+                              configServiceInterface.c_str(), configServicePort,
+                              commutil::errorCodeToString(rc));
+            return false;
+        }
+    }
+#endif
+
     return true;
 }
 
@@ -1879,6 +1927,117 @@ inline bool validateConfigValueStringType(const ELogConfigValue* value, const ch
 inline bool validateConfigValueIntType(const ELogConfigValue* value, const char* key) {
     return validateConfigValueType(value, ELogConfigValueType::ELOG_CONFIG_INT_VALUE, key);
 }
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+static bool configLifeSignBasic(const ELogConfigMapNode* cfgMap) {
+    const ELogConfigValue* cfgValue = cfgMap->getValue(ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
+    if (cfgValue != nullptr) {
+        if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE) {
+            ELOG_REPORT_ERROR("Invalid type for %s, expecting array",
+                              ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
+            return false;
+        }
+        const ELogConfigArrayNode* arrayNode =
+            ((const ELogConfigArrayValue*)cfgValue)->getArrayNode();
+        for (uint32_t i = 0; i < arrayNode->getValueCount(); ++i) {
+            const ELogConfigValue* subValue = arrayNode->getValueAt(i);
+            if (subValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
+                ELOG_REPORT_ERROR(
+                    "Invalid type for %uth sub-element in life-sign report array, expecting "
+                    "string, "
+                    "got instead %s",
+                    i, configValueTypeToString(subValue->getValueType()));
+                return false;
+            }
+            const char* lifeSignCfg = ((const ELogConfigStringValue*)subValue)->getStringValue();
+            if (!configureLifeSign(lifeSignCfg)) {
+                return false;
+            }
+        }
+    }
+}
+
+static bool configLifeSign(const ELogConfigMapNode* cfgMap) {
+    if (!configLifeSignBasic(cfgMap)) {
+        return false;
+    }
+
+    std::string lifeSignLogFormat;
+    bool found = false;
+    if (!cfgMap->getStringValue(ELOG_LIFE_SIGN_LOG_FORMAT_CONFIG_NAME, found, lifeSignLogFormat)) {
+        return false;
+    }
+    if (found && !setLifeSignLogFormat(lifeSignLogFormat.c_str())) {
+        return false;
+    }
+
+    std::string lifeSignSyncPeriodStr;
+    if (!cfgMap->getStringValue(ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, found,
+                                lifeSignSyncPeriodStr)) {
+        return false;
+    }
+    if (found) {
+        uint64_t syncPeriodMillis = 0;
+        ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
+        if (!parseTimeValueProp(ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, "", lifeSignSyncPeriodStr,
+                                syncPeriodMillis, origUnits, ELogTimeUnits::TU_MILLI_SECONDS)) {
+            ELOG_REPORT_ERROR("Invalid life-sign synchronization period configuration: %s",
+                              lifeSignSyncPeriodStr.c_str());
+            return false;
+        }
+        setLifeSignSyncPeriod(syncPeriodMillis);
+    }
+    return true;
+}
+#endif
+
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+static bool configConfigService(const ELogConfigMapNode* cfgMap) {
+    const ELogConfigValue* configServiceInterfaceValue =
+        cfgMap->getValue(ELOG_CONFIG_SERVICE_INTERFACE_NAME);
+    const ELogConfigValue* configServicePortValue = cfgMap->getValue(ELOG_CONFIG_SERVICE_PORT_NAME);
+    if (configServiceInterfaceValue != nullptr || configServicePortValue != nullptr) {
+        std::string configServiceInterface;
+        int configServicePort = 0;
+        if (configServiceInterfaceValue != nullptr) {
+            if (configServiceInterfaceValue->getValueType() !=
+                ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
+                ELOG_REPORT_ERROR("Invalid type for %s, expecting string",
+                                  ELOG_CONFIG_SERVICE_INTERFACE_NAME);
+                return false;
+            }
+            configServiceInterface =
+                ((const ELogConfigStringValue*)configServiceInterfaceValue)->getStringValue();
+        }
+        if (configServicePortValue != nullptr) {
+            if (configServicePortValue->getValueType() !=
+                ELogConfigValueType::ELOG_CONFIG_INT_VALUE) {
+                ELOG_REPORT_ERROR("Invalid type for %s, expecting integer",
+                                  ELOG_CONFIG_SERVICE_PORT_NAME);
+                return false;
+            }
+            int64_t intValue = ((const ELogConfigIntValue*)configServicePortValue)->getIntValue();
+            if (intValue < 0 || intValue > INT_MAX) {
+                ELOG_REPORT_ERROR("Invalid port value %" PRId64
+                                  " specified for %s, out of valid range [0, %d]",
+                                  intValue, ELOG_CONFIG_SERVICE_PORT_NAME, (int)INT_MAX);
+                return false;
+            }
+            configServicePort = (int)intValue;
+        }
+
+        commutil::ErrorCode rc = ELogConfigService::getInstance()->restart(
+            configServiceInterface.c_str(), configServicePort);
+        if (rc != commutil::ErrorCode::E_OK) {
+            ELOG_REPORT_ERROR("Failed to restart the configuration service on %s:%d: %s",
+                              configServiceInterface.c_str(), configServicePort,
+                              commutil::errorCodeToString(rc));
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 
 bool configure(ELogConfig* config, bool defineLogSources /* = true */,
                bool defineMissingPath /* = true */) {
@@ -2060,55 +2219,14 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
 
 // configure life-sign report settings
 #ifdef ELOG_ENABLE_LIFE_SIGN
-    const ELogConfigValue* cfgValue = cfgMap->getValue(ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
-    if (cfgValue != nullptr) {
-        if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE) {
-            ELOG_REPORT_ERROR("Invalid type for %s, expecting array",
-                              ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
-            return false;
-        }
-        const ELogConfigArrayNode* arrayNode =
-            ((const ELogConfigArrayValue*)cfgValue)->getArrayNode();
-        for (uint32_t i = 0; i < arrayNode->getValueCount(); ++i) {
-            const ELogConfigValue* subValue = arrayNode->getValueAt(i);
-            if (subValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
-                ELOG_REPORT_ERROR(
-                    "Invalid type for %uth sub-element in life-sign report array, expecting "
-                    "string, "
-                    "got instead %s",
-                    i, configValueTypeToString(subValue->getValueType()));
-                return false;
-            }
-            const char* lifeSignCfg = ((const ELogConfigStringValue*)subValue)->getStringValue();
-            if (!configureLifeSign(lifeSignCfg)) {
-                return false;
-            }
-        }
+    if (!configLifeSign(cfgMap)) {
+        return false;
     }
+#endif
 
-    std::string lifeSignLogFormat;
-    if (!cfgMap->getStringValue(ELOG_LIFE_SIGN_LOG_FORMAT_CONFIG_NAME, found, lifeSignLogFormat)) {
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    if (!configConfigService(cfgMap)) {
         return false;
-    }
-    if (found && !setLifeSignLogFormat(lifeSignLogFormat.c_str())) {
-        return false;
-    }
-
-    std::string lifeSignSyncPeriodStr;
-    if (!cfgMap->getStringValue(ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, found,
-                                lifeSignSyncPeriodStr)) {
-        return false;
-    }
-    if (found) {
-        uint64_t syncPeriodMillis = 0;
-        ELogTimeUnits origUnits = ELogTimeUnits::TU_NONE;
-        if (!parseTimeValueProp(ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME, "", lifeSignSyncPeriodStr,
-                                syncPeriodMillis, origUnits, ELogTimeUnits::TU_MILLI_SECONDS)) {
-            ELOG_REPORT_ERROR("Invalid life-sign synchronization period configuration: %s",
-                              lifeSignSyncPeriodStr.c_str());
-            return false;
-        }
-        setLifeSignSyncPeriod(syncPeriodMillis);
     }
 #endif
 
@@ -2187,30 +2305,14 @@ static bool reconfigure(ELogConfig* config) {
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
     // configure life-sign report settings
-    const ELogConfigValue* cfgValue = cfgMap->getValue(ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
-    if (cfgValue != nullptr) {
-        if (cfgValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_ARRAY_VALUE) {
-            ELOG_REPORT_ERROR("Invalid type for %s, expecting array",
-                              ELOG_LIFE_SIGN_REPORT_CONFIG_NAME);
-            return false;
-        }
-        const ELogConfigArrayNode* arrayNode =
-            ((const ELogConfigArrayValue*)cfgValue)->getArrayNode();
-        for (uint32_t i = 0; i < arrayNode->getValueCount(); ++i) {
-            const ELogConfigValue* subValue = arrayNode->getValueAt(i);
-            if (subValue->getValueType() != ELogConfigValueType::ELOG_CONFIG_STRING_VALUE) {
-                ELOG_REPORT_ERROR(
-                    "Invalid type for %uth sub-element in life-sign report array, expecting "
-                    "string, "
-                    "got instead %s",
-                    i, configValueTypeToString(subValue->getValueType()));
-                return false;
-            }
-            const char* lifeSignCfg = ((const ELogConfigStringValue*)subValue)->getStringValue();
-            if (!configureLifeSign(lifeSignCfg)) {
-                return false;
-            }
-        }
+    if (!configLifeSignBasic(cfgMap)) {
+        return false;
+    }
+#endif
+
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    if (!configConfigService(cfgMap)) {
+        return false;
     }
 #endif
 
@@ -2710,6 +2812,52 @@ ELogSource* getLogSource(ELogSourceId logSourceId) {
 }
 
 ELogSource* getRootLogSource() { return sRootLogSource; }
+
+void getLogSources(const char* logSourceRegEx, std::vector<ELogSource*>& logSources) {
+    std::regex pattern(logSourceRegEx);
+    std::unique_lock<std::mutex> lock(sSourceTreeLock);
+    ELogSourceMap::iterator itr = sLogSourceMap.begin();
+    while (itr != sLogSourceMap.end()) {
+        if (std::regex_match(itr->second->getQualifiedName(), pattern)) {
+            logSources.emplace_back(itr->second);
+        }
+        ++itr;
+    }
+}
+
+void getLogSourcesEx(const char* includeRegEx, const char* excludeRegEx,
+                     std::vector<ELogSource*>& logSources) {
+    std::regex includePattern(includeRegEx);
+    std::regex excludePattern(excludeRegEx);
+    std::unique_lock<std::mutex> lock(sSourceTreeLock);
+    ELogSourceMap::iterator itr = sLogSourceMap.begin();
+    while (itr != sLogSourceMap.end()) {
+        if (std::regex_match(itr->second->getQualifiedName(), includePattern) &&
+            !std::regex_match(itr->second->getQualifiedName(), excludePattern)) {
+            logSources.emplace_back(itr->second);
+        }
+        ++itr;
+    }
+}
+
+void visitLogSources(const char* includeRegEx, const char* excludeRegEx,
+                     ELogSourceVisitor* visitor) {
+    bool hasIncludeRegEx = (includeRegEx != nullptr && *includeRegEx != 0);
+    bool hasExcludeRegEx = (excludeRegEx != nullptr && *excludeRegEx != 0);
+    std::regex includePattern(hasIncludeRegEx ? includeRegEx : ".*");
+    std::regex excludePattern(hasExcludeRegEx ? excludeRegEx : "");
+    std::unique_lock<std::mutex> lock(sSourceTreeLock);
+    for (auto& entry : sLogSourceMap) {
+        // check log source name qualifies by inclusion filter
+        // AND NOT disqualified by exclusion filter
+        if ((!hasIncludeRegEx ||
+             std::regex_match(entry.second->getQualifiedName(), includePattern)) &&
+            (!hasExcludeRegEx ||
+             !std::regex_match(entry.second->getQualifiedName(), excludePattern))) {
+            visitor->onLogSource(entry.second);
+        }
+    }
+}
 
 // void configureLogSourceLevel(const char* qualifiedName, ELogLevel logLevel);
 

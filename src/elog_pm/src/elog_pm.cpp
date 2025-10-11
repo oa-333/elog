@@ -395,7 +395,7 @@ int execDumpShm(const std::string& shmName) {
 }
 
 static bool execCommand(const std::string& cmd) {
-    if (cmd.compare(CMD_EXIT) == 0 || cmd.compare(CMD_EXIT) == 0 || cmd.compare("q") == 0) {
+    if (cmd.compare(CMD_EXIT) == 0 || cmd.compare("quit") == 0 || cmd.compare("q") == 0) {
         return false;
     }
     printf("\n");

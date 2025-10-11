@@ -6,6 +6,7 @@
 #include <msg/msg.h>
 
 #include <cstdint>
+#include <vector>
 
 #include "elog_def.h"
 
@@ -17,7 +18,22 @@
 /** @def Response status message id. */
 #define ELOG_STATUS_MSG_ID 2
 
+/** @def Config level query message id. */
+#define ELOG_CONFIG_LEVEL_QUERY_MSG_ID 3
+
+/** @def Config level report message id. */
+#define ELOG_CONFIG_LEVEL_REPORT_MSG_ID 4
+
+/** @def Config level update message id. */
+#define ELOG_CONFIG_LEVEL_UPDATE_MSG_ID 5
+
+/** @def Config level reply message id. */
+#define ELOG_CONFIG_LEVEL_REPLY_MSG_ID 6
+
 namespace elog {
+
+/** @typedef Message buffer type. */
+typedef std::vector<char> ELogMsgBuffer;
 
 /**
  * Internal ELog protocol messages.

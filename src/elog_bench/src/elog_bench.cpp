@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cinttypes>
 #include <condition_variable>
+#include <cstdio>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -102,6 +103,7 @@ static bool sTestException = false;
 static bool sTestEventLog = false;
 static bool sTestRegression = false;
 static bool sTestLifeSign = false;
+static bool sTestConfigService = false;
 static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
 static int sMsgCnt = -1;
@@ -859,6 +861,7 @@ static int testException();
 static int testEventLog();
 static int testRegression();
 static int testLifeSign();
+static int testConfigService();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -1201,6 +1204,15 @@ static bool parseArgs(int argc, char* argv[]) {
             return true;
 #else
             fprintf(stderr, "Cannot test life-sign, must compile with ELOG_ENABLE_LIFE_SIGN\n");
+            return false;
+#endif
+        } else if (strcmp(argv[1], "--test-config-service") == 0) {
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+            sTestConfigService = true;
+            return true;
+#else
+            fprintf(stderr,
+                    "Cannot test config-service, must compile with ELOG_ENABLE_CONFIG_SERVICE\n");
             return false;
 #endif
         }
@@ -1568,7 +1580,24 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (!elog::initialize()) {
+    elog::ELogParams params;
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    struct Publisher : public elog::ELogConfigServicePublisher {
+        void onConfigServiceStart(const char* host, int port) override {
+            fprintf(stderr, "ELog remote configuration service is ready at: %s:%d\n", host, port);
+            fflush(stderr);
+        }
+        void onConfigServiceStop(const char* host, int port) {
+            fprintf(stderr, "ELog remote configuration service at %s:%d is down\n", host, port);
+            fflush(stderr);
+        }
+    };
+    Publisher publisher;
+    params.m_hostInterface = "localhost";
+    params.m_port = 6789;
+    params.m_publisher = &publisher;
+#endif
+    if (!elog::initialize(params)) {
         fprintf(stderr, "Failed to initialize elog system\n");
         return 1;
     }
@@ -1589,6 +1618,8 @@ int main(int argc, char* argv[]) {
         res = testRegression();
     } else if (sTestLifeSign) {
         res = testLifeSign();
+    } else if (sTestConfigService) {
+        res = testConfigService();
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
 
@@ -2079,6 +2110,50 @@ static int testLifeSign() {
 #else
     return -1;
 #endif
+}
+
+static int testConfigService() {
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    // baseline test - no filter used, direct life sign report
+    fprintf(stderr, "Running basic config-service test\n");
+    elog::ELogTarget* logTarget = initElog();
+    if (logTarget == nullptr) {
+        fprintf(stderr, "Failed to init config-service test, aborting\n");
+        return 1;
+    }
+    fprintf(stderr, "initElog() OK\n");
+
+    // just print every second with two loggers
+    elog::ELogLogger* logger1 = elog::getPrivateLogger("test.logger1");
+    elog::ELogLogger* logger2 = elog::getPrivateLogger("test.logger2");
+    logger1->getLogSource()->setLogLevel(elog::ELEVEL_INFO, elog::ELogPropagateMode::PM_NONE);
+    logger2->getLogSource()->setLogLevel(elog::ELEVEL_TRACE, elog::ELogPropagateMode::PM_NONE);
+
+    volatile bool stopTest = false;
+    std::thread t1 = std::thread([logger1, &stopTest]() {
+        while (!stopTest) {
+            ELOG_INFO_EX(logger1, "test message from logger 1");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+
+    std::thread t2 = std::thread([logger2, &stopTest]() {
+        while (!stopTest) {
+            ELOG_TRACE_EX(logger2, "test message from logger 2");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+
+    printf("press any key to stop...");
+    fflush(stdout);
+    getchar();
+    stopTest = true;
+    t1.join();
+    t2.join();
+
+    termELog();
+#endif
+    return 0;
 }
 
 void testPerfPrivateLog() {

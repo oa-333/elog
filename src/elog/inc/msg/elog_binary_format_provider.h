@@ -5,7 +5,6 @@
 
 #include <list>
 #include <string>
-#include <vector>
 
 #include "elog.pb.h"
 #include "elog_def.h"
@@ -14,9 +13,6 @@
 #include "msg/elog_msg.h"
 
 namespace elog {
-
-/** @typedef Message buffer type. */
-typedef std::vector<char> ELogMsgBuffer;
 
 /**
  * @class Base class of all binary format provider with default implementation of ELog's internal

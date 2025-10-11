@@ -186,6 +186,9 @@ struct ELogFrequencySpec {
     ELogTimeUnits m_timeoutUnits;
 };
 
+/** @def Default value of remote configuration service usage. */
+#define ELOG_DEFAULT_ENABLE_CONFIG_SERVICE true
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

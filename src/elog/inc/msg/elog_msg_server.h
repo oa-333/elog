@@ -35,13 +35,13 @@ public:
      * @brief Construct a new ELogMsgServer object.
      *
      * @param name The server's name (for logging purposes).
-     * @param byteOrder The byte order used to communicate with clients.
      * @param maxDelayMsgSpan The maximum message delay span per-client (see @ref
      * ELOG_MSG_DEFAULT_MAX_DELAY_SPAN for more details).
      */
-    ELogMsgServer(const char* name, commutil::ByteOrder byteOrder,
-                  uint32_t maxDelayMsgSpan = ELOG_MSG_DEFAULT_MAX_DELAY_SPAN)
-        : m_name(name), m_byteOrder(byteOrder), m_sessionFactory(maxDelayMsgSpan) {}
+    ELogMsgServer(const char* name, uint32_t maxDelayMsgSpan = ELOG_MSG_DEFAULT_MAX_DELAY_SPAN)
+        : m_name(name),
+          m_byteOrder(commutil::ByteOrder::HOST_ORDER),
+          m_sessionFactory(maxDelayMsgSpan) {}
     ELogMsgServer(const ELogMsgServer&) = delete;
     ELogMsgServer(ELogMsgServer&&) = delete;
     ELogMsgServer& operator=(const ELogMsgServer&) = delete;

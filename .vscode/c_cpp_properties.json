@@ -22,7 +22,8 @@
                 "ELOG_USING_COMM_UTIL",
                 "ELOG_ENABLE_REDIS_DB_CONNECTOR",
                 "ELOG_ENABLE_SQLITE_DB_CONNECTOR",
-                "ELOG_ENABLE_OTEL_CONNECTOR"
+                "ELOG_ENABLE_OTEL_CONNECTOR",
+                "ELOG_ENABLE_CONFIG_SERVICE"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "cStandard": "c23",

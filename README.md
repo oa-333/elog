@@ -6,6 +6,22 @@ The library has predefined connectors for various widely-used external systems, 
 
 The project is still in pre-Beta phase, and more is expected to come.
 
+## Feature Summary
+
+The following table summarizes the main features of the ELog Logging Framework:
+
+| Category  | Features | Description |
+| ------------- | ------------- | ------------- |
+| Multiple Platform Support | - Windows</br>- Linux</br>- MinGW | ELog supports several platforms and toolchains (MSVC++, gcc, clang). Future versions may support also MacOS. |
+| [Logging Macros](#logging-macros) | - [Per-level macros](#log-levels)</br>- [Binary logging](#binary-logging)</br>- [Cached logging](#cached-logging)</br>- [Log sampling](#every-n-logging)</br>- [Log once](#once-logging)</br>- [Rate limiting](#moderated-logging)</br> | ELog provides a wide variety of logging macros for different situations, providing developers the ability to execute complex functionality within a one liner macro. Both printf and fmtlib styles are supported. Future versions may support insertion operator style for legacy systems. |
+| [Log Targets (Appenders)](#log-targets) | - [File Targets](#configuring-file-log-targets) ([Buffered File Target](#configuring-buffered-file-log-targets), [Segmented File Target](#configuring-segmented-file-log-targets), [Rotating File Target](#configuring-rotating-file-log-target))</br>- [System Log Targets](#configuring-system-log-targets) ([Syslog Target](#configuring-syslog-log-target), [Windows Event Log Target](#configuring-windows-event-log-target), [Standard Error/Output Stream Target](#configuring-terminal-log-target))</br>- [Database Log Targets](#configuring-database-log-targets) ([PostgreSQL Log Target](#connecting-to-postgresql), [MySQL Log Target (experimental, Windows only)](#connecting-to-mysql-experimental), [Redis Log Target](#connecting-to-redis), [SQLite Log Target](#connecting-to-sqlite))</br>- Message Queue Log Targets ([Kafka Log Target](#connecting-to-kafka-topic))</br>-  RPC Log Targets ([gRPC Log Target](#connecting-to-grpc-endpoint))</br>- Network Log Targets ([TCP/UDP Log Target](#connecting-to-tcpudp-server))</br>- IPC Log Targets ([Pipe Log Target](#connecting-to-pipeunix-domain-socket-server))<br>- Monitoring Tools Log Targets ([Grafana-Loki Log Target](#connecting-to-grafana-loki), [Datadog Log Target](#connecting-to-datadog), [Sentry Log Target](#connecting-to-sentry), [Open Telemetry Log Target](#connecting-to-open-telemetry-collector))</br>- [Asynchronous Logging](#configuring-asynchronous-log-targets) (Deferred Log Target, Queued Log Target, Quantum Log Target, Multi-Quantum Log Target)</br> | ELog provides a wide range of predefined log targets (appenders) ready to use out of the box, fully configurable from file. This includes lock-free scalable asynchronous log targets that can be composed with regular log targets to achieve minimum latency at the logging application.|
+| Debugging | - [Call Stack Dumping Macros](#call-stack-logging)</br>- [Crash Handling](#crash-handling)</br>- [Life Signs](#life-sign-management)</br>- [Post Mortem](#post-mortem) | ELog supports out of the box various debugging scenarios, starting from dumping call stack (with file/line information) for the current thread or the entire application (as in pstack), continuing with crash handling and exception reporting to log, and in addition supports emitting periodic life-signs to a post-mortem shared memory segment. An additional tool is provided that can inspect shared memory segments of crashed and live applications. |
+| Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. |
+| Configurability | - [Loggers Log level](#configuring-log-level)</br>- [Log targets](#configuring-log-targets)</br>- [Asynchronous logging schemes](#configuring-asynchronous-log-targets)</br>- [Log formatting](#log-line-format)</br>- [Log filters](#configuring-log-filters)</br>- [Flush Policies](#configuring-flush-policy)<br>- [Logger hierarchy](#log-sources-and-loggers)</br>- [Rate limiting](#limiting-log-rate) | The entire library is **fully configurable** from file or string, including very complex scenarios (see [basic examples](#basic-examples)). All configurable parameters can be set either globally and/or per log target. |
+| [Extendibility](#extending-the-library) | The following entities can be extended:</br>- [Log targets](#adding-new-log-target-types)</br>- [Flush policies](#adding-new-flush-policy-types)</br>- [Filters](#adding-new-log-filter-types)</br>- [Formatters](#adding-new-log-formatter-types)</br>- [Log Record Fields](#extending-the-formatting-scheme) | All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file). This requires static registration, which is normally achieved through helper macros. |
+| Misc. | - [Pre-initialization log queueing](#pre-initialization-log-queueing)</br>- [Structured Logging](#structured-logging)<br> | |
+| [High-Performance](#benchmark-highlights) | - 130 nano-seconds latency (async logging)</br>- Up to 10M log/sec throughput</br>- Scalable in multi-threaded scenario</br>- Scalable with long log messages</br>- Scalable with many log format parameters | Optimized to minimize impact on logging application, via lock-free asynchronous logging, binary logging, and cached format messages - all combined may result in just copying a message id to a lock-free ring buffer. No message files are required. |
+
 ## Basic Examples
 
 Simple [logging macros](#logging-macros):
@@ -112,7 +128,7 @@ Each log line is accompanied by:
 - Log line metadata, containing the log source and thread name issuing the log message
 - Logging thread's fully resolved call stack with function/file/line data for each frame
 
-## Features
+## Features (Elaborate)
 
 The ELog library provides the following notable features:
 
@@ -192,6 +208,9 @@ The ELog library provides the following notable features:
     - All configurable parameters can be set either globally and/or per log target
 - Periodic Configuration Loading
     - Periodically check and update all log levels according to changes in a specified configuration file
+- Live Remote Configuration
+    - Can connect from remote machines and update log levels of log sources
+    - Utility CLI tool also provided (elog_cli)
 - Extendibility
     - All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file)
         - log targets
@@ -333,12 +352,16 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Filtering Log Messages](#filtering-log-messages)
     - [Limiting Log Rate](#limiting-log-rate)
     - [Enabling ELog Internal Trace Messages](#enabling-elog-internal-trace-messages)
+    - [Pre-initialization Log Queueing](#pre-initialization-log-queueing)
     - [Binary Logging](#binary-logging)
     - [Cached Logging](#cached-logging)
     - [Once Logging](#once-logging)
     - [Moderated Logging](#moderated-logging)
     - [Every-N Logging](#every-n-logging)
+    - [Call Stack Logging](#call-stack-logging)
     - [Configuration Reloading](#configuration-reloading)
+    - [Life Remote Configuration](#live-remote-configuration)
+    - [Crash Handling](#crash-handling)
     - [Life Sign Management](#life-sign-management)
 - [Configuration](#configuration)
     - [Configuration Units](#configuration-units)
@@ -348,6 +371,15 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Configuring Flush Policy](#configuring-flush-policy)
     - [Configuring Log Filters](#configuring-log-filters)
     - [Configuring Asynchronous Log Targets](#configuring-asynchronous-log-targets)
+    - [Configuring File Log Targets](#configuring-file-log-targets)
+    - [Configuring Buffered File Log Targets](#configuring-buffered-file-log-targets)
+    - [Configuring Segmented File Log Targets](#configuring-segmented-file-log-targets)
+    - [Configuring Rotating File Log Targets](#configuring-rotating-file-log-targets)
+    - [File Log Targets and Locking](#file-log-targets-and-locking)
+    - [Configuring System Log Targets](#configuring-system-log-targets)
+    - [Configuring syslog Log Target](#configuring-syslog-log-target)
+    - [Configuring Windows Event Log Target](#configuring-windows-event-log-target)
+    - [Configuring Terminal (stdout/stderr) Log Target](#configuring-terminal-log-target)
     - [Configuring Database Log Targets](#configuring-database-log-targets)
     - [Connecting to PostgreSQL](#connecting-to-postgresql)
     - [Connecting to SQLite](#connecting-to-sqlite)
@@ -476,14 +508,18 @@ ELog utilizes logging macros for efficient logging, such that when the logged me
 
 All Elog logging macros start with the prefix "ELOG_", followed by logging method designator (see below), followed by log level, and an optional "_EX" suffix when a logger is used.
 
-The ELog framework defines 5 groups of utility macros, each for a different method of logging:
+The ELog framework defines several groups of utility macros, each for a different method of logging:
 
 - Normal logging macros (starts with "ELOG_")
     - Initial formatting takes place on caller's context (even when using asynchronous logging)
 - fmtlib-style logging macros (starts with "ELOG_FMT_")
-- [binary logging macros](#binary-logging) (starts with "ELOG_BIN_")
-- [binary auto-cached logging macros](#cached-logging) (starts with "ELOG_CACHE_")
-- [binary pre-cached logging macros](#cached-logging) (start with "ELOG_ID_")
+- [Binary logging macros](#binary-logging) (starts with "ELOG_BIN_")
+- [Binary auto-cached logging macros](#cached-logging) (starts with "ELOG_CACHE_")
+- [Binary pre-cached logging macros](#cached-logging) (start with "ELOG_ID_")
+- [Logging sampling macros](#once-logging)
+- [Moderated logging macros](#moderated-logging)
+- [Every-N logging macros](#every-n-logging)
+- [Call Stack logging macros](#call-stack-logging)
 
 The easiest form of logging is without any logger defined (no "_EX" suffix):
 
@@ -881,6 +917,16 @@ If report level is set to INFO, then while stopping a log target, its internal s
             Buffer write count: 76
             Average buffer size: 1048559 bytes
 
+### Pre-initialization Log Queueing
+
+ELog by default puts in a backlog queue all log messages issued before the ELog framework was initialized. By default, these pre-initialization log messages will be emitted to any newly registered log target. The user can query if there are such messages, and discard them, if desired, with the following API:
+
+    // Queries whether there are any accumulated log messages.
+    extern ELOG_API bool hasAccumulatedLogMessages();
+
+    // Discards all accumulated log messages.
+    extern ELOG_API void discardAccumulatedLogMessages();
+
 ### Binary Logging
 
 Normally, when a log message is issued, only partial log formatting takes place at the caller's context (just the log message, without formatting any time, logger name, module, thread id, etc.), and the rest of the formatting takes place at a later phase, according to the log line format of each target. This means that in case of asynchronous logging, part of the formatting takes place on another context. This can be optimized with binary logging.
@@ -958,12 +1004,174 @@ As in other common logging frameworks, another way of limiting the rate of log m
 
     ELOG_EVERY_N_INFO_EX(logger, 20, "Passing through here many times, but logging is restricted to only once per 20 messages");
 
+### Call Stack Logging
+
+When enabled (build with ELOG_ENABLE_STACK_TRACE), ELog supports call stack logging using the following macro:
+
+    ELOG_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing current thread stack trace");
+
+This will prepare the current thread's call stack and send it to all registered log targets. The call stack includes full file and line information on all platforms (Windows/Linux/MinGW).
+
+It is also possible to send to log call stack of all active threads, but be aware that this is an experimental feature:
+
+    ELOG_APP_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing application stack trace");
+    
+The output will be similar to pstack, listing all active threads and their respective call stack information, including file and line.
+
 ### Configuration Reloading
 
 ELog supports manual and periodic configuration reloading when built with ELOG_ENABLE_CONFIG_RELOAD=ON. Configuration reloading refers to the ability to reload log levels of all log sources (and life-sign filters) while ELog is in full multi-threaded operation. There is a measurable performance degradation of around 5% when enabling configuration reloading, so the feature is turned off by default.
 
 All configuration reloading API is thread safe.  
 All log level updates are lock-free.
+
+### Live Remote Configuration
+
+ELog supports remotely querying and updating log levels of log sources when built with ELOG_ENABLE_CONFIG_SERVICE. The support also includes registration of a listener for publishing the service details in a global service registry. 
+
+The remote configuration service can be configured via ELogParams during ELog's initialization, with the following parameters:
+
+- m_enableConfigService
+    - The entire remote configuration service can be disabled if required (e.g. due to issues in production)
+- m_hostInterface
+    - Configures the network interface of the remote configuration service, to listen on for incoming connections
+    - Special values are accepted: localhost, any/all, primary, name:<interface-name>
+- m_port
+    - Configures the port of the remote configuration service to listen on for incoming connections
+    - Zero can be specified, in which case the publisher (if registered) will be notified of the real port number that was used
+- m_publisher
+    - A custom publisher that will be notified when the service is up or down, and on which interface/port it is listening for incoming connections
+    - The publisher is used to register the service in a global service registry
+
+The remote configuration service is configurable from file/string and has the following configuration items:
+
+- config_service_interface
+    - Configures the network interface of the remote configuration service, to listen on for incoming connections
+    - Special values are accepted: localhost, any/all, primary, name:<interface-name>
+- config_service_port
+    - Configures the port of the remote configuration service to listen on for incoming connections
+    - Zero can be specified, in which case the publisher (if registered) will be notified of the real port number that was used
+
+The remote configuration service can be automatically reconfigured when [configuration reloading](#configuration-reloading) is enabled. When configuration changed, the configuration service is restarted to listen on the new interface/port. The registered publisher will be notified of these changes.
+
+### Live Remote Configuration CLI
+
+In addition a command line interface was added to connect to live processes, query log levels (with regular expression inclusion/exclusion filters), and update log filters. This also includes the internal report level of ELog. The CLI tool can be invoked by the command "elog_cli" for interactive operation, and is part of the build artifacts when building with ELOG_ENABLE_CONFIG_SERVICE=ON. It also support command line options for non-interactive modes, so it can be embedded in scripts.
+
+On Linux and MinGW platforms, the CLI tool supports auto-complete of commands and log source names.
+
+Following is an example run of the CLI tool, which performs the following operations:
+
+    - Calls help to print the help screen
+    - Connects to a process that uses ELog
+    - Queries the log level of log sources, using a regular expression filter
+    - Updates the log level of test.logger2 to INFO (more restrictive than its previous value TRACE)
+    - Queries again for the log levels to make the change took place
+    - Quits
+
+Comments were added below for each step:
+
+    > elog_cli.exe
+    ELog Configuration CLI, version 0.1
+
+    // print help screen
+    <elog_cli> $ help
+
+    ELog Configuration CLI:
+
+    q/quit/exit:     exit from the cli
+    connect:         connect to an ELog configuration service
+    disconnect:      disconnect from an ELog configuration service
+    query-log-level: queries for the log levels in the connected target process
+    set-log-level:   configures the log levels for the connected target process
+    help:            prints this help screen
+
+    // connect to a process on the local host that uses ELog
+    // the host/port details are of the ELog's remote configuration service
+    <elog-cli> $ connect 127.0.0.1:6789
+
+    // query for log levels, restrict query result by regular expression
+    <elog-cli> $ query-log-level test.logger.*
+
+    test.logger2: TRACE
+    test.logger1: INFO
+    ELOG_REPORT_LEVEL = ERROR
+
+    // update the log level of test.logger2 from TRACE to INFO (more restrictive)
+    <elog-cli> $ update-log-level test.logger2=INFO
+
+    // query again to make sure the configuration change took place
+    <elog-cli> $ query-log-level test.logger.*
+
+    test.logger1: INFO
+    test.logger2: INFO
+    ELOG_REPORT_LEVEL = ERROR
+
+    // quit
+    <elog-cli> $ q
+
+When run in non-interactive mode the following command line parameters must be specified:
+
+    - -h|--host The host name or address of the target ELog process's configuration service
+    - -p|--port The port of the target ELog process's configuration service
+
+Next one of the query or update commands must be specified:
+
+    - -q|--query
+    - -i|--include Include query filter (regular expression)
+    - -e|--exclude Exclude query filter (regular expression)
+    - -u|--update Update log levels, following by update specification string
+
+The update specification string is a semicolon separated list of log levels pairs, without spaces, where each pair has the following format:
+
+    - <log-source-name>=<log-level><propagation-specifier>
+
+The optional propagation specifier is one of the:
+
+    - asterisk (*): propagate log level to all descendants
+    - plus (+): permissive propagation to all descendants (make log level more permissive when appropriate)
+    - minus (-): restrictive propagation to all descendants (make log level more restrictive when appropriate)
+
+Following is the non-interactive equivalent of the example above:
+
+    > elog_cli.exe -h 127.0.0.1 -p 6789 -q -i test.logger.*
+
+    test.logger2: TRACE
+    test.logger1: INFO
+    ELOG_REPORT_LEVEL = ERROR
+
+    > elog_cli.exe -h 127.0.0.1 -p 6789 -u test.logger2=INFO
+
+    > elog_cli.exe -h 127.0.0.1 -p 6789 -q -i test.logger.*
+
+    test.logger1: INFO
+    test.logger2: INFO
+    ELOG_REPORT_LEVEL = ERROR
+
+As it can be seen, the log level of test.logger2 was changed from TRACE to INFO.
+
+### Crash Handling
+
+When configured (either through ELOG_ENABLE_STACK_TRACE or ELOG_ENABLE_LIFE_SIGN), ELOg supports out of the box sending crash reports to log targets. The following is a sample output of such a report:
+
+    Exception test
+    2025-10-08 17:18:53.621 FATAL  [280626] dbgutil.linux_exception_handler Received signal 11: Segmentation fault
+    Faulting address: (nil)
+    Extended exception information: Address not mapped to object
+
+    2025-10-08 17:18:53.621 FATAL  [280626] dbgutil.linux_exception_handler [Thread 44832 stack trace]
+    5# 0x7b1965e45330 N/A                                      at <N/A>  (libc.so.6)
+    6# 0x59385398f7fd runSingleThreadedTest() +376             at elog_bench.cpp:2979 (elog_bench)
+    7# 0x593853992d33 testPerfSTQuantumCount4096() +148        at elog_bench.cpp:4493 (elog_bench)
+    8# 0x593853992307 testPerfAllSingleThread() +754           at elog_bench.cpp:4214 (elog_bench)
+    9# 0x59385398f66f testException() +27                      at elog_bench.cpp:2819 (elog_bench)
+    10# 0x59385398dc36 main() +529                              at elog_bench.cpp:1585 (elog_bench)
+    11# 0x7b1965e2a1ca N/A                                      at <N/A>  (libc.so.6)
+    12# 0x7b1965e2a28b __libc_start_main()                      at <N/A>  (libc.so.6)
+    13# 0x59385398ba85 _start() +37                             at <N/A>  (elog_bench)
+
+    2025-10-08 17:18:53.621 FATAL  [280626] dbgutil.linux_exception_handler Aborting after fatal exception, see details above.
+    Aborted (core dumped)
 
 #### Configure Periodic Reloading During Initialization
 
@@ -1049,6 +1257,43 @@ Configuring life-sign reports from string is supported with the following API:
     bool configureLifeSign(const char* lifeSignCfg);
 
 Refer to [Configuring Life-Sign Reports](#configuring-life-sign-reports) for more details.
+
+### Post-Mortem Utility
+
+The ELog framework also contain a command line utility, namely elog_pm, for inspecting the shared memory of active and dead processes that were built with ELOG_ENABLE_LIFE_SIGN=ON. Following is an example inspection of a crashed process:
+
+    <elog_pm> $ ls-shm
+
+    Shared memory segment list:
+    Name                                                         Size
+    dbgutil.life-sign.elog_bench.2025-10-08_17-27-55.283746.shm  71303464 bytes
+
+    <elog_pm> $ dump-shm dbgutil.life-sign.elog_bench.2025-10-08_17-27-55.283746.shm
+
+    Shared memory segment details:
+    --------------------------------------------
+    Image path:          ./elog_bench
+    Application name:    elog_bench_app
+    Start of run:        2025-10-08 17:27:55.524
+    Process id:          283746
+    Context area size:   4194304 bytes
+    Life-sign area size: 4194304 bytes
+    --------------------------------------------
+    Thread id:         283746
+    Thread name:       elog_bench_main
+    Thread state:      running
+    Thread start time: 2025-10-08 17:27:56.527
+    Thread life-sign records:
+    1. Test life sign
+    --------------------------------------------
+    Thread id:         283771
+    Thread name:       test-thread-app-0
+    Thread state:      terminated
+    Thread start time: 2025-10-08 17:27:59.529
+    Thread end time:   2025-10-08 17:28:05.534
+    Thread life-sign records:
+    1. 2025-10-08 17:27:59.529 INFO   [283771] elog_root This is a life sign log (count 1) from thread 0, with APP filter freq 1
+    2. 2025-10-08 17:28:00.530 INFO   [283771] elog_root This is a life sign log (count 2) from thread 0, with APP filter freq 1
 
 #### Initializing Life-Sign Reporting
 
@@ -1388,11 +1633,12 @@ When using asynchronous logging schemes, it is required to specify two log targe
 
 So one URL is piped into another URL. The outer URL results in a log target that is added to the global list of log targets, while the inner URL generates a private log target that is managed by the outer log target.
 
-ELog has 3 predefined asynchronous log targets:
+ELog has 4 predefined asynchronous log targets:
 
 - Deferred (mutex, condition variable, logging thread)
 - Queued (deferred + periodic wake-up due to timeout/queue-size)
 - Quantum (lock free ring buffer)
+- Multi-Quantum (lock free ring buffer per thread, experimental)
 
 The deferred log target uses a simple logging thread with a queue guarded by a mutex. The logging thread is woken up for each logged message. The deferred log target has no special parameters.
 
@@ -1410,6 +1656,104 @@ All asynchronous log target may be configured with log format, log level, filter
 Here is an example for a deferred log target that uses count flush policy and passes logged message to a segmented file log target:
 
     log_target = async://deferred?flush_policy=count&flush_count=4096 | file://logs/app.log?file_segment_size=4mb
+
+### Configuring File Log Targets
+
+Following is the most basic example of configuring a file log target:
+
+    log_target = file://logs/app.log
+
+It appends log records to the file found at the relative path "logs/app.log". If the file does not exists it will be created. If the file already exists, then log records will be appended to it.
+
+When configuring file log targets there are several factors that should be considered:
+
+- buffering
+- segmentation
+- rotation
+- locking
+
+In the following section each shall be examined in detail.
+
+### Configuring Buffered File Log Targets
+
+Buffered file writing yields better latency results, and only occasionally, when the buffer gets full, buffer contents are written to file and flushed. The following example demonstrates how to add buffering to the previous example:
+
+    log_target = file://logs/app.log?file_buffer_size=4k
+
+This will cause the log target to use an internal 4KB buffer for log messages, that will be written in one call to the underlying disk file. Pay attention that file flushing is still governed by the configured flush policy.
+
+### Configuring Segmented File Log Targets
+
+As log file tend to grow to unmanageable sizes, it makes sense to split large log files into smaller segments. For this purpose the segmented log file target exists. It allows configuring the size of each segments. Following is a typical segmented log file target configuration:
+
+    log_target = file://logs/app.log?file_segment_size=20MB
+
+This will cause the log file to be split into segments, each approximately 20 MB in size. The first log file segment will have the original log file name, and the rest will be numbered, starting from 1.
+
+Pay attention, that file buffering can be configured in addition to segmentation, as follows:
+
+    log_target = file://logs/app.log?file_segment_size=20MB&file_buffer_size=4k
+
+### Configuring Rotating File Log Targets
+
+Segmented file log targets do not limit the amount of log segment files. This may cause disk space to be used up, or in some other scenarios, result in costly storage usage. For this reason the rotating file log target is defined. In addition to breaking log files to segment, it limits the number of allowed segments, and when reaching the segment limit, it starts overwriting the first segment.
+
+In order to configure rotating file log target, the file_segment_count should be added:
+
+    log_target = file://logs/app.log?file_segment_size=20MB&file_segment_count=10
+
+The configuration above limits the log file segment count to 10, each having 20 MB of data, totalling in at most 200 MB of log file data.
+
+### File Log Targets and Locking
+
+File log targets are thread-safe by nature, since the underlying system API is thread-safe (according to POSIX). Therefore no additional lock is required when sending log records to a file log target.
+
+The same is NOT true when dealing with buffered log target, since the buffering mechanism is not thread safe (although with some effort it could be made lock-free, but the performance gain is marginal). For this reason, by default, when buffering is configured, a lock is used. If it is known that the context of sending log records to the buffered file log target is thread-safe, then the lock may be omitted, with the following configuration option:
+
+    log_target = file://logs/app.log?file_buffer_size=4k&file_lock=no
+
+By specifying file_lock=no, the internal file buffer lock will not be used.
+
+Segmented and rotating file log targets can use file buffering, and the lock usage is determined automatically, depending on the thread-safety context information (provided by the parent ELogTarget class). When the segmented/rotating file log target is called by an asynchronous logging pipeline, then the execution context is thread-safe and therefore no lock is needed.
+
+Future versions may remove the file_lock option and determine automatically whether there is a need for a lock.
+
+### Configuring System Log Targets
+
+ELog provides out of the box the following system log targets:
+
+- syslog (Unix systems only)
+- Event log (Windows only)
+- Stdout/stderr (with coloring and formatting)
+
+### Configuring syslog Log target
+
+The following example demonstrates how to configure syslog log target:
+
+    log_target = sys://syslog?log_level=FATAL&log_format=${level:6} ${prog} ${pid} [${tid}] <${src}> ${msg}
+
+The syslog log target uses the 'sys' schema, and supports all common attributes.
+
+### Configuring Windows Event Log Target
+
+The following example demonstrates how to configure Windows Event Log target:
+
+    log_target = sys://eventlog?event_source_name=test_source&event_id=1234
+
+The schema being used is 'sys', with the following additional mandatory attributes:
+
+- event_source_name: the event source name that is associated with the event log entries generated by ELog
+- event_id: the event id that is associated with the event log entries generated by ELog
+
+### Configuring Terminal Log Target
+
+ELog supports sending log messages to the standard output or error stream of the active terminal window:
+
+    log_target = sys://stderr?log_level=ERROR&log_format=${time} ${level:6} [${tid:5}] [${tname}] ${src} ${msg}
+
+In the above configuration, messages with error log level and above will be send to the standard error stream, with the given log format. Configuring the standard output stream log target is similar:
+
+    log_target = sys://stdout?log_format=${time} ${level:6} [${tid:5}] [${tname}] ${src} ${msg}
 
 ### Configuring Database Log Targets
 
@@ -2550,6 +2894,10 @@ Notice that the flush policy must be surrounded by parenthesis, so that it gets 
 Finally, the flush policy needs to get registered in the global flush policy registry, so add this in the source file:
 
     ELOG_IMPLEMENT_FLUSH_POLICY(SystemStateFlushPolicy)
+
+### Adding New Log Formatter Types
+
+TBD
 
 ### Adding New Log Target Types
 

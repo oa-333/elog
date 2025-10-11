@@ -37,6 +37,10 @@
 #define ELOG_LIFE_SIGN_LOG_FORMAT_CONFIG_NAME "life_sign_log_format"
 #define ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME "life_sign_sync_period"
 #endif
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+#define ELOG_CONFIG_SERVICE_INTERFACE_NAME "config_service_interface"
+#define ELOG_CONFIG_SERVICE_PORT_NAME "config_service_port"
+#endif
 
 // simple colors for internal use
 #define RED "\x1B[31m"

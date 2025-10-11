@@ -11,6 +11,7 @@ target_sources(
             elog_buffer.h
             elog_common_def.h
             elog_concurrent_ring_buffer.h
+            elog_config_service_publisher.h
             elog_config.h
             elog_def.h
             elog_expression.h

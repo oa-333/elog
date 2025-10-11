@@ -107,7 +107,10 @@
         "xtree": "cpp",
         "stdfloat": "cpp",
         "pointers": "cpp",
-        "scoped_allocator": "cpp"
+        "scoped_allocator": "cpp",
+        "gsl_assert": "cpp",
+        "multi_span": "cpp",
+        "string_span": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",
@@ -140,6 +143,7 @@
         "COMDAT",
         "commutil",
         "dbgutil",
+        "DELOG",
         "dllexport",
         "fmtlib",
         "fsanitize",

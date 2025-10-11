@@ -4,7 +4,6 @@
 
 #include "elog_report.h"
 #include "msg/elog_binary_format_provider.h"
-#include "msg/elog_msg_server.h"
 
 namespace elog {
 
@@ -14,6 +13,7 @@ commutil::ErrorCode ELogMsgServer::initialize(commutil::DataServer* dataServer,
                                               uint32_t maxConnections, uint32_t concurrency,
                                               uint32_t bufferSize) {
     // delegate to message server
+    m_byteOrder = dataServer->getByteOrder();
     return m_msgServer.initialize(dataServer, maxConnections, concurrency, bufferSize, this,
                                   nullptr, &m_sessionFactory);
 }

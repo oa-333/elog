@@ -6,6 +6,8 @@ target_sources(elog PRIVATE
     elog_common.cpp
     elog_config_loader.cpp
     elog_config_parser.cpp
+    elog_config_service.cpp
+    elog_config_service_client.cpp
     elog_config.cpp
     elog_dbg_util_log_handler.cpp
     elog_expression_parser.cpp
