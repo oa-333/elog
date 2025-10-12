@@ -117,6 +117,9 @@ public:
                                                  uint64_t& propValue, ELogSizeUnits targetUnits,
                                                  bool* found = nullptr);
 
+    static bool validateConfigValueType(const ELogConfigValue* value, ELogConfigValueType type,
+                                        const char* key);
+
 private:
     static ELogFlushPolicy* loadFlushPolicyExprStr(const char* flushPolicyExpr, bool& result);
     static ELogFlushPolicy* loadFlushPolicy(const ELogConfigMapNode* flushPolicyCfg,
@@ -135,6 +138,16 @@ private:
                                        const ELogConfigMapNode* logTargetCfg);
     static bool applyTargetFilter(ELogTarget* logTarget, const ELogConfigMapNode* logTargetCfg);
 };
+
+inline bool validateConfigValueStringType(const ELogConfigValue* value, const char* key) {
+    return ELogConfigLoader::validateConfigValueType(
+        value, ELogConfigValueType::ELOG_CONFIG_STRING_VALUE, key);
+}
+
+inline bool validateConfigValueIntType(const ELogConfigValue* value, const char* key) {
+    return ELogConfigLoader::validateConfigValueType(
+        value, ELogConfigValueType::ELOG_CONFIG_INT_VALUE, key);
+}
 
 }  // namespace elog
 

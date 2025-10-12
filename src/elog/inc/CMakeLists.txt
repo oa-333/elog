@@ -32,6 +32,7 @@ target_sources(
             elog_life_sign_filter.h
             elog_logger.h
             elog_managed_object.h
+            elog_params.h
             elog_private_logger.h
             elog_props_formatter.h
             elog_props.h

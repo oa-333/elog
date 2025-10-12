@@ -587,6 +587,19 @@ bool ELogConfigLoader::getOptionalLogTargetSizeProperty(const ELogConfigMapNode*
     return parseSizeProp(propName, "", value, propValue, targetUnits);
 }
 
+bool ELogConfigLoader::validateConfigValueType(const ELogConfigValue* value,
+                                               ELogConfigValueType type, const char* key) {
+    if (value->getValueType() != type) {
+        ELOG_REPORT_ERROR(
+            "Invalid configuration value type for %s, expecting %s, seeing instead %s (context: "
+            "%s)",
+            key, configValueTypeToString(type), configValueTypeToString(value->getValueType()),
+            value->getFullContext());
+        return false;
+    }
+    return true;
+}
+
 ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExprStr(const char* flushPolicyExpr,
                                                           bool& result) {
     ELogExpression* expr = ELogExpressionParser::parseExpressionString(flushPolicyExpr);

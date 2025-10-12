@@ -8,10 +8,17 @@
 #include "elog_common_def.h"
 #include "elog_def.h"
 #include "elog_formatter.h"
+#include "elog_params.h"
 #include "elog_record.h"
 #include "elog_source.h"
 
 namespace elog {
+
+/** @brief Retrieves a reference to the ELog's configured parameters. */
+extern const ELogParams& getParams();
+
+/** @brief Retrieves a reference to the ELog's configured parameters for modification purposes. */
+extern ELogParams& modifyParams();
 
 /** @brief Retrieves the maximum number of threads configured for ELog. */
 extern uint32_t getMaxThreads();
