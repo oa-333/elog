@@ -9,7 +9,7 @@
 
 // TODO: this is temporary until a decision is made - currently protobuf is the default binary
 // format for the elog protocol (unless an internal protocol is set up, which is currently unlikely)
-#include "elog.pb.h"
+#include "elog_proto.h"
 
 /**
  * @def The default value used for specifying how much space the message server should reserve for

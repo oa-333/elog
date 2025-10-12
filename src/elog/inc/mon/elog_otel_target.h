@@ -5,10 +5,8 @@
 
 #ifdef ELOG_ENABLE_OTEL_CONNECTOR
 
-#include <opentelemetry/exporters/otlp/otlp_http.h>
-#include <opentelemetry/logs/logger.h>
-
 #include "elog_mon_target.h"
+#include "elog_otel.h"
 #include "elog_props_formatter.h"
 
 namespace logs_api = opentelemetry::logs;

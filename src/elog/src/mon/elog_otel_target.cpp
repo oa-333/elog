@@ -2,23 +2,6 @@
 
 #ifdef ELOG_ENABLE_OTEL_CONNECTOR
 
-#include <opentelemetry/exporters/ostream/span_exporter_factory.h>
-#include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_factory.h>
-#include <opentelemetry/exporters/otlp/otlp_grpc_log_record_exporter_options.h>
-#include <opentelemetry/exporters/otlp/otlp_http_log_record_exporter_factory.h>
-#include <opentelemetry/exporters/otlp/otlp_http_log_record_exporter_options.h>
-#include <opentelemetry/logs/provider.h>
-#include <opentelemetry/sdk/logs/batch_log_record_processor_factory.h>
-#include <opentelemetry/sdk/logs/batch_log_record_processor_options.h>
-#include <opentelemetry/sdk/logs/logger_provider_factory.h>
-#include <opentelemetry/sdk/logs/processor.h>
-#include <opentelemetry/sdk/logs/simple_log_record_processor_factory.h>
-#include <opentelemetry/sdk/trace/exporter.h>
-#include <opentelemetry/sdk/trace/processor.h>
-#include <opentelemetry/sdk/trace/simple_processor_factory.h>
-#include <opentelemetry/sdk/trace/tracer_provider_factory.h>
-#include <opentelemetry/trace/provider.h>
-
 #include "elog.h"
 #include "elog_common.h"
 #include "elog_config_loader.h"
@@ -26,6 +9,7 @@
 #include "elog_internal.h"
 #include "elog_logger.h"
 #include "elog_report.h"
+#include "mon/elog_otel.h"
 
 namespace trace_api = opentelemetry::trace;
 namespace trace_sdk = opentelemetry::sdk::trace;

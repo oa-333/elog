@@ -1955,6 +1955,7 @@ static bool configLifeSignBasic(const ELogConfigMapNode* cfgMap) {
             }
         }
     }
+    return true;
 }
 
 static bool configLifeSign(const ELogConfigMapNode* cfgMap) {

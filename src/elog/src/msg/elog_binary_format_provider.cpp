@@ -7,7 +7,6 @@
 
 #include <unordered_map>
 
-#include "elog.pb.h"
 #include "elog_field_selector_internal.h"
 #include "elog_logger.h"
 #include "elog_report.h"

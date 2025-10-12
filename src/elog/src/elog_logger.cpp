@@ -21,17 +21,9 @@
 #include <unistd.h>
 #endif
 
-// reduce noise coming from fmt lib
-#ifdef ELOG_MSVC
-#pragma warning(push)
-#pragma warning(disable : 4582 4623 4625 4626 5027 5026)
-#endif
-
 #ifdef ELOG_ENABLE_FMT_LIB
-#include <fmt/args.h>
-#include <fmt/core.h>
-
 #include "elog_cache.h"
+#include "elog_fmt_lib.h"
 #endif
 
 namespace elog {
@@ -247,7 +239,3 @@ bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBu
 #endif
 
 }  // namespace elog
-
-#ifdef ELOG_MSVC
-#pragma warning(pop)
-#endif

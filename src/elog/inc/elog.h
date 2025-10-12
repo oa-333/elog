@@ -23,17 +23,7 @@
 
 // include fmtlib main header
 #ifdef ELOG_ENABLE_FMT_LIB
-// reduce noise coming from fmt lib
-#ifdef ELOG_MSVC
-#pragma warning(push)
-#pragma warning(disable : 4582 4623 4625 4626 5027 5026)
-#endif
-
-#include <fmt/format.h>
-
-#ifdef ELOG_MSVC
-#pragma warning(pop)
-#endif
+#include "elog_fmt_lib.h"
 #endif
 
 #ifdef ELOG_ENABLE_CONFIG_SERVICE

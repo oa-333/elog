@@ -708,8 +708,7 @@ static void handleNetLogRecord(const elog_grpc::ELogRecordMsg* msg) {
 
 class TestServer : public elog::ELogMsgServer {
 public:
-    TestServer(const char* name, commutil::ByteOrder byteOrder)
-        : elog::ELogMsgServer(name, byteOrder), m_dataServer(nullptr) {}
+    TestServer(const char* name) : elog::ELogMsgServer(name), m_dataServer(nullptr) {}
     ~TestServer() override {}
 
     bool initTestServer() {
@@ -733,7 +732,7 @@ protected:
 class TestTcpServer final : public TestServer {
 public:
     TestTcpServer(const char* iface, int port)
-        : TestServer("TCP", commutil::ByteOrder::NETWORK_ORDER), m_tcpServer(iface, port, 5, 10) {
+        : TestServer("TCP"), m_tcpServer(iface, port, 5, 10) {
         m_dataServer = &m_tcpServer;
     }
     ~TestTcpServer() override {}
@@ -744,8 +743,7 @@ private:
 
 class TestUdpServer : public TestServer {
 public:
-    TestUdpServer(const char* iface, int port)
-        : TestServer("UDP", commutil::ByteOrder::NETWORK_ORDER), m_udpServer(iface, port, 60) {
+    TestUdpServer(const char* iface, int port) : TestServer("UDP"), m_udpServer(iface, port, 60) {
         m_dataServer = &m_udpServer;
     }
     ~TestUdpServer() override {}
@@ -758,8 +756,7 @@ private:
 #ifdef ELOG_ENABLE_IPC
 class TestPipeServer : public TestServer {
 public:
-    TestPipeServer(const char* pipeName)
-        : TestServer("Pipe", commutil::ByteOrder::HOST_ORDER), m_pipeServer(pipeName, 5, 10) {
+    TestPipeServer(const char* pipeName) : TestServer("Pipe"), m_pipeServer(pipeName, 5, 10) {
         m_dataServer = &m_pipeServer;
     }
     ~TestPipeServer() override {}

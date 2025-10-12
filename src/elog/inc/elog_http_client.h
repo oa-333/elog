@@ -5,9 +5,8 @@
 
 #include <httplib.h>
 
-#include <gzip/compress.hpp>
-
 #include "elog_def.h"
+#include "elog_gzip.h"
 #include "elog_http_config.h"
 
 namespace elog {

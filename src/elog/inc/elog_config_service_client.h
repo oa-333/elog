@@ -9,7 +9,7 @@
 #include <msg/msg_def.h>
 #include <transport/tcp_client.h>
 
-#include "elog.pb.h"
+#include "elog_proto.h"
 #include "elog_target.h"
 #include "msg/elog_msg.h"
 

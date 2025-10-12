@@ -955,35 +955,6 @@ if (MSVC)
     if (ELOG_BUILD_BENCH)
         target_compile_options(elog_bench PRIVATE /wd4251)
     endif()
-
-    # get rid of annoying fmtlib warnings
-    if (ELOG_ENABLE_FMT_LIB)
-        target_compile_options(elog PRIVATE /wd4582)
-        target_compile_options(elog PRIVATE /wd4623)
-        target_compile_options(elog PRIVATE /wd4625)
-        target_compile_options(elog PRIVATE /wd4626)
-        target_compile_options(elog PRIVATE /wd5026)
-        target_compile_options(elog PRIVATE /wd5027)
-    endif()
-    
-    # get rid of annoying protobuf warnings
-    if (ELOG_USING_PROTOBUF)
-        target_compile_options(elog PRIVATE /wd4625)
-        target_compile_options(elog PRIVATE /wd4626)
-        target_compile_options(elog PRIVATE /wd4868)
-        target_compile_options(elog PRIVATE /wd5026)
-        target_compile_options(elog PRIVATE /wd5027)
-    endif()
-
-    # get rid of annoying gzip warnings
-    if (ELOG_USING_GZIP)
-        target_compile_options(elog PRIVATE /wd4068)
-    endif()
-
-    # get rid of annoying Open Telemetry warnings
-    if (ELOG_ENABLE_OTEL_CONNECTOR)
-        target_compile_options(elog PRIVATE /wd4996)
-    endif()
 else()
     target_compile_options(elog PRIVATE -Wall)
     # -Wno-interference-size - don't warn about using std::hardware_destructive_interference_size

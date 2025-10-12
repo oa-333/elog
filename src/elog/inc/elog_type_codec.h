@@ -3,10 +3,9 @@
 
 #ifdef ELOG_ENABLE_FMT_LIB
 
-#include <fmt/args.h>
-
 #include "elog_buffer.h"
 #include "elog_def.h"
+#include "elog_fmt_lib.h"
 #include "elog_read_buffer.h"
 
 namespace elog {

@@ -20,8 +20,10 @@ target_sources(
             elog_field_spec.h
             elog_filter.h
             elog_flush_policy.h
+            elog_fmt_lib.h
             elog_formatter.h
             elog_gc.h
+            elog_gzip.h
             elog_http_client.h
             elog_json_formatter.h
             elog_json_receptor.h
@@ -32,6 +34,7 @@ target_sources(
             elog_private_logger.h
             elog_props_formatter.h
             elog_props.h
+            elog_proto.h
             elog_rate_limiter.h
             elog_read_buffer.h
             elog_record.h

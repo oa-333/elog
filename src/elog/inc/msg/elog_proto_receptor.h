@@ -3,9 +3,9 @@
 
 #ifdef ELOG_ENABLE_MSG
 
-#include "elog.pb.h"
 #include "elog_def.h"
 #include "elog_field_receptor.h"
+#include "elog_proto.h"
 
 namespace elog {
 

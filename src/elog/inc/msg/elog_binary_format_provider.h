@@ -6,9 +6,9 @@
 #include <list>
 #include <string>
 
-#include "elog.pb.h"
 #include "elog_def.h"
 #include "elog_formatter.h"
+#include "elog_proto.h"
 #include "elog_record.h"
 #include "msg/elog_msg.h"
 

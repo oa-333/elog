@@ -209,9 +209,15 @@ private:
             : m_sortingFunnel(itr.m_sortingFunnel),
               m_sortingFunnelSize(itr.m_sortingFunnelSize),
               m_pos(itr.m_pos) {}
-
+        SortingFunnelIterator& operator=(const SortingFunnelIterator& itr) {
+            m_sortingFunnel = itr.m_sortingFunnel;
+            m_sortingFunnelSize = itr.m_sortingFunnelSize;
+            m_pos = itr.m_pos;
+            return *this;
+        }
         SortingFunnelIterator(SortingFunnel* sortingFunnel, uint64_t ringBufferSize, uint64_t pos)
             : m_sortingFunnel(sortingFunnel), m_sortingFunnelSize(ringBufferSize), m_pos(pos) {}
+        ~SortingFunnelIterator() {}
 
         reference operator*() {
             return m_sortingFunnel->m_recordArray[m_pos % m_sortingFunnelSize];

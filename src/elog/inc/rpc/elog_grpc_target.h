@@ -14,8 +14,7 @@
 #pragma warning(disable : 4626 5027)
 #endif
 
-#include "elog.grpc.pb.h"
-#include "elog.pb.h"
+#include "elog_proto.h"
 
 #ifdef ELOG_MSVC
 #pragma warning(pop)
