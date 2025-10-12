@@ -1,7 +1,7 @@
 #include "elog_pre_init_logger.h"
 
-#include "elog.h"
 #include "elog_aligned_alloc.h"
+#include "elog_api.h"
 #include "elog_report.h"
 #include "elog_target.h"
 

@@ -1,6 +1,6 @@
 
 #include "dbg_util.h"
-#include "elog.h"
+#include "elog_api.h"
 #include "life_sign_manager.h"
 
 #ifdef ELOG_WINDOWS

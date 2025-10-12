@@ -425,7 +425,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
 
 The ELog library can be used out of box as follows:
 
-    #include "elog.h"
+    #include "elog_api.h"
     ...
 
     int main(int argc, char* argv[]) {
@@ -454,7 +454,7 @@ The example exhibits the main parts of the ELog library:
 There are several initialization functions, which can all be found in the ELogSystem facade.
 In this example a synchronous segmented log file is used, with 4MB segment size:
 
-    #include "elog.h"
+    #include "elog_api.h"
     ...
     
     #define MB (1024 * 1024)

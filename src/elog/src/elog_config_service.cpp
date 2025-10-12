@@ -4,7 +4,7 @@
 
 #include <cassert>
 
-#include "elog.h"
+#include "elog_api.h"
 #include "elog_internal.h"
 #include "elog_report.h"
 #include "msg/elog_msg.h"

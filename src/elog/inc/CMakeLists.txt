@@ -6,6 +6,7 @@ target_sources(
         TYPE HEADERS
         FILES
             elog_aligned_alloc.h
+            elog_api.h
             elog_atomic.h
             elog_buffer_receptor.h
             elog_buffer.h
@@ -51,8 +52,7 @@ target_sources(
             elog_target.h
             elog_time.h
             elog_tls.h
-            elog_type_codec.h
-            elog.h)
+            elog_type_codec.h)
             
 add_subdirectory(mon)
 add_subdirectory(db)

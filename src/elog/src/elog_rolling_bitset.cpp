@@ -3,8 +3,10 @@
 #include <cassert>
 #include <cinttypes>
 
-#include "elog.h"
+#include "elog_api.h"
 #include "elog_spin_ebo.h"
+
+// TODO: check how to avoid including elog.h when using trace logger (also in GC)
 
 namespace elog {
 

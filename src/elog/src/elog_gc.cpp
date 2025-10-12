@@ -2,7 +2,7 @@
 
 #include <bit>
 
-#include "elog.h"
+#include "elog_api.h"
 #include "elog_common.h"
 #include "elog_field_selector_internal.h"
 #include "elog_report.h"

@@ -4,7 +4,7 @@
 #include <cstring>
 #include <list>
 
-#include "elog.h"
+#include "elog_api.h"
 #include "elog_common.h"
 #include "elog_report.h"
 #include "elog_schema_manager.h"

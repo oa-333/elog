@@ -1,5 +1,3 @@
-#include "elog.h"
-
 #include <algorithm>
 #include <atomic>
 #include <cinttypes>
@@ -11,6 +9,7 @@
 #include <regex>
 #include <unordered_map>
 
+#include "elog_api.h"
 #include "elog_cache.h"
 #include "elog_comm_util_log_handler.h"
 #include "elog_common.h"

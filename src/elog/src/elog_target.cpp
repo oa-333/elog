@@ -2,8 +2,8 @@
 
 #include <random>
 
-#include "elog.h"
 #include "elog_aligned_alloc.h"
+#include "elog_api.h"
 #include "elog_common.h"
 #include "elog_filter.h"
 #include "elog_flush_policy.h"

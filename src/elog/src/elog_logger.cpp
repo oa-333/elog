@@ -9,7 +9,7 @@
 
 #include <cstring>
 
-#include "elog.h"
+#include "elog_api.h"
 #include "elog_common.h"
 #include "elog_internal.h"
 #include "elog_read_buffer.h"
