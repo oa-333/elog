@@ -9,8 +9,11 @@ target_sources(elog PRIVATE
     elog_common.cpp
     elog_config_loader.cpp
     elog_config_parser.cpp
-    elog_config_service.cpp
     elog_config_service_client.cpp
+    elog_config_service_publisher.cpp
+    elog_config_service_redis_publisher.cpp
+    elog_config_service_redis_reader.cpp
+    elog_config_service.cpp
     elog_config.cpp
     elog_dbg_util_log_handler.cpp
     elog_expression_parser.cpp
@@ -33,6 +36,7 @@ target_sources(elog PRIVATE
     elog_props_formatter.cpp
     elog_rate_limiter.cpp
     elog_record.cpp
+    elog_redis_client.cpp
     elog_report.cpp
     elog_report.h
     elog_rolling_bitset.cpp

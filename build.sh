@@ -12,8 +12,9 @@
 # -n|--life-sign
 # -p|--reload-config
 # -q|--config-service
+# -u|--config-publish redis
 # -f|--full
-# -c|--conn sqlite|mysql|postgresql|kafka
+# -c|--conn sqlite|mysql|postgresql|redis|kafka|grafana|sentry|datadog|otel|grpc|net|ipc
 # -i|--install-dir <INSTALL_DIR>
 # -l|--clean
 # -r|--rebuild (no reconfigure)
@@ -39,6 +40,7 @@ FMT_LIB=0
 LIFE_SIGN=0
 RELOAD_CONFIG=0
 CONFIG_SERVICE=0
+CONFIG_PUBLISH=
 VERBOSE=0
 FULL=0
 CLEAN=0
@@ -50,7 +52,7 @@ TRACE=0
 HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwexsbnpqfc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,reload-config,config-service,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
+TEMP=$(getopt -o vdrwexsbnpqufc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,reload-config,config-service,config-publish:,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -67,6 +69,7 @@ while true; do
     -n | --life-sign ) LIFE_SIGN=1; shift ;;
     -p | --reload-config ) RELOAD_CONFIG=1; shift ;;
     -q | --config-service ) CONFIG_SERVICE=1; shift ;;
+    -u | --config-publish ) CONFIG_PUBLISH=$2; shift 2 ;;
     -f | --full ) FULL=1; shift;;
     -c | --conn ) CONNS+=($2); shift 2 ;;
     -i | --install-dir) INSTALL_DIR="$2"; shift 2 ;;
@@ -106,10 +109,13 @@ if [ "$HELP" -eq "1" ]; then
     echo "      -n|--life-sign              Enables periodic life-sign reports."
     echo "      -p|--reload-config          Enables periodic configuration reloading."
     echo "      -q|--config-service         Enables configuring ELog via TCP/pipe channel."
+    echo "      -u|--config-publish PLUGIN  Uses the specified plugin to publish the configuration service details."
     echo "      -f|--full                   Enables all connectors and stack trace logging API."
     echo ""
     echo "By default no connector is enabled, and stack trace logging is disabled."
+    echo ""
     echo "The following connectors are currently supported:"
+    echo ""
     echo "  Name            Connector"
     echo "  ----            ---------"
     echo "  grafana         Grafana-Loki connector"
@@ -125,6 +131,12 @@ if [ "$HELP" -eq "1" ]; then
     echo "  net             Network (TCP/UDP) connector"
     echo "  ipc             IPC (Unix Domain Sockets/Windows Pipes) connector"
     echo "  all             Enables all connectors"
+    echo ""
+    echo "The following configuration service publishers are currently supported:"
+    echo ""
+    echo "  Name            Publisher"
+    echo "  ----            ---------"
+    echo "  redis           Redis publisher"
     echo ""
     echo ""
     echo "BUILD OPTIONS"
@@ -158,6 +170,7 @@ echo "[INFO] fmtlib: $FMT_LIB"
 echo "[INFO] Life sign: $LIFE_SIGN"
 echo "[INFO] Reload config: $RELOAD_CONFIG"
 echo "[INFO] Config service: $CONFIG_SERVICE"
+echo "[INFO] Config publish plugin: $CONFIG_PUBLISH"
 echo "[INFO] Verbose: $VERBOSE"
 echo "[INFO] Full: $FULL"
 echo "[INFO] Clean: $CLEAN"
@@ -200,6 +213,14 @@ if [ "$RELOAD_CONFIG" == "1" ]; then
 fi
 if [ "$CONFIG_SERVICE" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_CONFIG_SERVICE=ON"
+fi
+if [ -n "$CONFIG_PUBLISH" ]; then
+    if  [ "$CONFIG_PUBLISH" == "redis" ]; then
+        OPTS+=" -DELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON"
+    else
+        echo "[ERROR] Unsupported configuration service publisher '$CONFIG_PUBLISH', aborting"
+        exit 1
+    fi
 fi
 if [ "$MEM_CHECK" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_MEM_CHECK=ON"

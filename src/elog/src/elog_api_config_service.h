@@ -10,9 +10,16 @@
 
 namespace elog {
 
+// initializes the configuration service and start it running
 extern bool initConfigService();
+
+// stops the configuration service and terminates it
 extern void termConfigService();
+
+// loads configuration service from properties, restarts service if required
 extern bool configConfigServiceProps(const ELogPropertySequence& props);
+
+// loads configuration service from configuration node, restarts service if required
 extern bool configConfigService(const ELogConfigMapNode* cfgMap);
 
 }  // namespace elog

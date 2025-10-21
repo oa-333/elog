@@ -7,6 +7,10 @@ option objc_class_prefix = "ELOG";
 
 package elog_grpc;
 
+////////////////////////////////////////////////////
+//            gRPC Target Protocol
+////////////////////////////////////////////////////
+
 // Interface exported by the server.
 service ELogService {
 
@@ -45,7 +49,9 @@ message ELogStatusMsg {
     optional uint64 recordsProcessed = 2;
 }
 
-// remote control protocol
+////////////////////////////////////////////////////
+//            Remote Control Protocol
+////////////////////////////////////////////////////
 
 // Log level constants
 enum ELogLevel {

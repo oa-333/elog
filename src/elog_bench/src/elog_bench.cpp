@@ -23,6 +23,10 @@
 #include "rpc/elog_grpc_target.h"
 #endif
 
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+#include "elog_config_service_redis_publisher.h"
+#endif
+
 #if defined(ELOG_MSVC) || defined(ELOG_MINGW)
 #ifdef __clang__
 #include <x86intrin.h>
@@ -1580,6 +1584,11 @@ int main(int argc, char* argv[]) {
     elog::ELogParams params;
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
     struct Publisher : public elog::ELogConfigServicePublisher {
+        Publisher() : elog::ELogConfigServicePublisher("elog_bench_test_publisher") {}
+        bool load(const elog::ELogConfigMapNode* cfg) override { return true; }
+        bool load(const elog::ELogPropertySequence& props) override { return true; }
+        bool initialize() override { return true; }
+        bool terminate() override { return true; }
         void onConfigServiceStart(const char* host, int port) override {
             fprintf(stderr, "ELog remote configuration service is ready at: %s:%d\n", host, port);
             fflush(stderr);
@@ -1590,9 +1599,11 @@ int main(int argc, char* argv[]) {
         }
     };
     Publisher publisher;
-    params.m_hostInterface = "localhost";
-    params.m_port = 6789;
-    params.m_publisher = &publisher;
+    if (sTestConfigService) {
+        params.m_configServiceParams.m_configServiceHost = "localhost";
+        params.m_configServiceParams.m_configServicePort = 6789;
+        params.m_configServiceParams.m_publisher = &publisher;
+    }
 #endif
     if (!elog::initialize(params)) {
         fprintf(stderr, "Failed to initialize elog system\n");
@@ -2120,6 +2131,28 @@ static int testConfigService() {
     }
     fprintf(stderr, "initElog() OK\n");
 
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+    elog::ELogConfigServiceRedisPublisher redisPublisher;
+    redisPublisher.addServer(sServerAddr.c_str(), 6379);
+    if (!redisPublisher.initialize()) {
+        fprintf(stderr, "Failed to initialize redis publisher\n");
+        return 2;
+    }
+    if (!elog::stopConfigService()) {
+        fprintf(stderr, "Failed to stop configuration service\n");
+        redisPublisher.terminate();
+        return 2;
+    }
+    elog::setConfigServiceDetails("subnet:192.168.1.0", 0);
+    elog::setConfigServicePublisher(&redisPublisher);
+    if (!elog::startConfigService()) {
+        fprintf(stderr, "Failed to restart configuration service\n");
+        elog::setConfigServicePublisher(nullptr);
+        redisPublisher.terminate();
+        return 2;
+    }
+#endif
+
     // just print every second with two loggers
     elog::ELogLogger* logger1 = elog::getPrivateLogger("test.logger1");
     elog::ELogLogger* logger2 = elog::getPrivateLogger("test.logger2");
@@ -2149,6 +2182,13 @@ static int testConfigService() {
     t2.join();
 
     termELog();
+    // must stop config ser
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+    if (!elog::setConfigServicePublisher(nullptr, true)) {
+        fprintf(stderr, "Failed to remove redis publisher\n");
+    }
+    redisPublisher.terminate();
+#endif
 #endif
     return 0;
 }

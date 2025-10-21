@@ -13,8 +13,9 @@ REM -b|--fmt-lib
 REM -n|--life-sign
 REM -p|--reload-config
 REM -q|--config-service
+REM -u|--config-publish redis
 REM -f|--full
-REM -c|--conn sqlite|mysql|postgresql|kafka
+REM -c|--conn sqlite|mysql|postgresql|redis|kafka|grafana|sentry|datadog|otel|grpc|net|ipc
 REM -i|--install-dir <INSTALL_DIR>
 REM -l|--clean
 REM -r|--rebuild (no reconfigure)
@@ -35,6 +36,7 @@ SET FMT_LIB=0
 SET LIFE_SIGN=0
 SET RELOAD_CONFIG=0
 SET CONFIG_SERVICE=0
+SET CONFIG_PUBLISH=
 SET VERBOSE=0
 SET FULL=0
 SET CLEAN=0
@@ -77,6 +79,8 @@ IF /I "%ARG1%" == "-p" SET RELOAD_CONFIG=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--reload-config" SET RELOAD_CONFIG=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-q" SET CONFIG_SERVICE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--config-service" SET CONFIG_SERVICE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-u" SET CONFIG_PUBLISH=%ARG2% & shift & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--config-publish" SET CONFIG_PUBLISH=%ARG2% & shift & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-f" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--full" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-c" SET CONNS[!CONN_INDEX!]=%ARG2% & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
@@ -113,6 +117,8 @@ IF NOT "%1" == "" GOTO GET_OPTS
 IF %HELP% EQU 1 GOTO PRINT_HELP
 
 :SET_OPTS
+REM Remove any extra space
+SET CONFIG_PUBLISH=%CONFIG_PUBLISH: =%
 echo [DEBUG] Parsed args:
 echo [DEBUG] BUILD_TYPE=%BUILD_TYPE%
 echo [DEBUG] INSTALL_DIR=%INSTALL_DIR%
@@ -123,6 +129,7 @@ echo [DEBUG] FMT_LIB=%FMT_LIB%
 echo [DEBUG] LIFE_SIGN=%LIFE_SIGN%
 echo [DEBUG] RELOAD_CONFIG=%RELOAD_CONFIG%
 echo [DEBUG] CONFIG_SERVICE=%CONFIG_SERVICE%
+echo [DEBUG] CONFIG_PUBLISH=%CONFIG_PUBLISH%
 echo [DEBUG] VERBOSE=%VERBOSE%
 echo [DEBUG] FULL=%FULL%
 echo [DEBUG] CLEAN=%CLEAN%
@@ -157,6 +164,16 @@ IF %FMT_LIB% EQU 1 (
 IF %LIFE_SIGN% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_LIFE_SIGN=ON
 IF %RELOAD_CONFIG% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_RELOAD_CONFIG=ON
 IF %CONFIG_SERVICE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_CONFIG_SERVICE=ON
+IF %CONFIG_PUBLISH% NEQ "" (
+    IF "%CONFIG_PUBLISH%" == "redis" (
+        SET OPTS=%OPTS% -DELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON
+        vcpkg add port hiredis[ssl]
+        GOTO CONFIG_PUBLISH_SET
+    )
+    echo [ERROR] Unsupported configuration service publisher '%CONFIG_PUBLISH%', aborting
+    GOTO HANDLE_ERROR
+)
+:CONFIG_PUBLISH_SET
 IF %MEM_CHECK% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_MEM_CHECK=ON
 IF %TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_GROUP_FLUSH_GC_TRACE=ON
 IF %CLANG% EQU 1 (
@@ -193,7 +210,7 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
     )
     IF "!conn!" == "redis" (
         SET OPTS=!OPTS! -DELOG_ENABLE_REDIS_DB_CONNECTOR=ON
-        vcpkg add port hiredis
+        vcpkg add port hiredis[ssl]
     )
     IF "!conn!" == "kafka" (
         SET OPTS=!OPTS! -DELOG_ENABLE_KAFKA_MSGQ_CONNECTOR=ON
@@ -247,7 +264,7 @@ for /l %%n in (0,1,%CONN_COUNT%) do (
         SET OPTS=!OPTS! -DELOG_ENABLE_IPC=ON
         vcpkg add port sqlite3
         vcpkg add port libpqxx
-        vcpkg add port hiredis
+        vcpkg add port hiredis[ssl]
         vcpkg add port librdkafka
         vcpkg add port grpc
         vcpkg add port cpp-httplib
@@ -396,9 +413,11 @@ echo       -b^|--fmt-lib                Enables fmtlib formatting style support.
 echo       -n^|--life-sign              Enables periodic life-sign reports.
 echo       -p^|--reload-config          Enables periodic configuration reloading.
 echo       -q^|--config-service         Enables configuring ELog via TCP/pipe channel.
+echo       -u^|--config-publish PLUGIN  Uses the specified plugin to publish the configuration service details.
 echo       -f^|--full                   Enables all connectors and stack trace logging API.
 echo.
 echo By default no connector is enabled, and stack trace logging is disabled.
+echo.
 echo The following connectors are currently supported:
 echo.
 echo   Name            Connector
@@ -415,6 +434,12 @@ echo   grpc            gRPC connector
 echo   net             Network (TCP/UDP) connector
 echo   ipc             IPC (Unix Domain Sockets/Windows Pipes) connector
 echo   all             Enables all connectors
+echo.
+echo The following configuration service publishers are currently supported:
+echo.
+echo   Name            Publisher
+echo   ----            ---------
+echo   redis           Redis publisher
 echo.
 echo.
 echo BUILD OPTIONS

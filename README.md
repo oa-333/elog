@@ -16,7 +16,7 @@ The following table summarizes the main features of the ELog Logging Framework:
 | [Logging Macros](#logging-macros) | - [Per-level macros](#log-levels)</br>- [Binary logging](#binary-logging)</br>- [Cached logging](#cached-logging)</br>- [Log sampling](#every-n-logging)</br>- [Log once](#once-logging)</br>- [Rate limiting](#moderated-logging)</br> | ELog provides a wide variety of logging macros for different situations, providing developers the ability to execute complex functionality within a one liner macro. Both printf and fmtlib styles are supported. Future versions may support insertion operator style for legacy systems. |
 | [Log Targets (Appenders)](#log-targets) | - [File Targets](#configuring-file-log-targets) ([Buffered File Target](#configuring-buffered-file-log-targets), [Segmented File Target](#configuring-segmented-file-log-targets), [Rotating File Target](#configuring-rotating-file-log-target))</br>- [System Log Targets](#configuring-system-log-targets) ([Syslog Target](#configuring-syslog-log-target), [Windows Event Log Target](#configuring-windows-event-log-target), [Standard Error/Output Stream Target](#configuring-terminal-log-target))</br>- [Database Log Targets](#configuring-database-log-targets) ([PostgreSQL Log Target](#connecting-to-postgresql), [MySQL Log Target (experimental, Windows only)](#connecting-to-mysql-experimental), [Redis Log Target](#connecting-to-redis), [SQLite Log Target](#connecting-to-sqlite))</br>- Message Queue Log Targets ([Kafka Log Target](#connecting-to-kafka-topic))</br>-  RPC Log Targets ([gRPC Log Target](#connecting-to-grpc-endpoint))</br>- Network Log Targets ([TCP/UDP Log Target](#connecting-to-tcpudp-server))</br>- IPC Log Targets ([Pipe Log Target](#connecting-to-pipeunix-domain-socket-server))<br>- Monitoring Tools Log Targets ([Grafana-Loki Log Target](#connecting-to-grafana-loki), [Datadog Log Target](#connecting-to-datadog), [Sentry Log Target](#connecting-to-sentry), [Open Telemetry Log Target](#connecting-to-open-telemetry-collector))</br>- [Asynchronous Logging](#configuring-asynchronous-log-targets) (Deferred Log Target, Queued Log Target, Quantum Log Target, Multi-Quantum Log Target)</br> | ELog provides a wide range of predefined log targets (appenders) ready to use out of the box, fully configurable from file. This includes lock-free scalable asynchronous log targets that can be composed with regular log targets to achieve minimum latency at the logging application.|
 | Debugging | - [Call Stack Dumping Macros](#call-stack-logging)</br>- [Crash Handling](#crash-handling)</br>- [Life Signs](#life-sign-management)</br>- [Post Mortem](#post-mortem) | ELog supports out of the box various debugging scenarios, starting from dumping call stack (with file/line information) for the current thread or the entire application (as in pstack), continuing with crash handling and exception reporting to log, and in addition supports emitting periodic life-signs to a post-mortem shared memory segment. An additional tool is provided that can inspect shared memory segments of crashed and live applications. |
-| Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. |
+| Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration)</br>- [Publishing to Redis cluster for service discovery](#configuration-service-redis-publishing) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. |
 | Configurability | - [Loggers Log level](#configuring-log-level)</br>- [Log targets](#configuring-log-targets)</br>- [Asynchronous logging schemes](#configuring-asynchronous-log-targets)</br>- [Log formatting](#log-line-format)</br>- [Log filters](#configuring-log-filters)</br>- [Flush Policies](#configuring-flush-policy)<br>- [Logger hierarchy](#log-sources-and-loggers)</br>- [Rate limiting](#limiting-log-rate) | The entire library is **fully configurable** from file or string, including very complex scenarios (see [basic examples](#basic-examples)). All configurable parameters can be set either globally and/or per log target. |
 | [Extendibility](#extending-the-library) | The following entities can be extended:</br>- [Log targets](#adding-new-log-target-types)</br>- [Flush policies](#adding-new-flush-policy-types)</br>- [Filters](#adding-new-log-filter-types)</br>- [Formatters](#adding-new-log-formatter-types)</br>- [Log Record Fields](#extending-the-formatting-scheme) | All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file). This requires static registration, which is normally achieved through helper macros. |
 | Misc. | - [Pre-initialization log queueing](#pre-initialization-log-queueing)</br>- [Structured Logging](#structured-logging)<br> | |
@@ -211,6 +211,7 @@ The ELog library provides the following notable features:
 - Live Remote Configuration
     - Can connect from remote machines and update log levels of log sources
     - Utility CLI tool also provided (elog_cli)
+    - Publish remote configuration service to a Redis cluster (for service discovery)
 - Extendibility
     - All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file)
         - log targets
@@ -235,6 +236,7 @@ The ELog library provides the following notable features:
 - Logging hub framework for log pre-processing before shipping to server analysis (offload to edge compute)
 - Support clang
 - Support on MacOS
+- Publish configuration service to etcd cluster (V2 API)
 
 
 ## Common Use Cases
@@ -360,7 +362,9 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Every-N Logging](#every-n-logging)
     - [Call Stack Logging](#call-stack-logging)
     - [Configuration Reloading](#configuration-reloading)
-    - [Life Remote Configuration](#live-remote-configuration)
+    - [Live Remote Configuration](#live-remote-configuration)
+    - [Configuration Service Redis Publishing](#configuration-service-redis-publishing)
+    - [Live Remote Configuration CLI](#live-remote-configuration-cli)
     - [Crash Handling](#crash-handling)
     - [Life Sign Management](#life-sign-management)
 - [Configuration](#configuration)
@@ -1029,6 +1033,13 @@ All log level updates are lock-free.
 
 ELog supports remotely querying and updating log levels of log sources when built with ELOG_ENABLE_CONFIG_SERVICE. The support also includes registration of a listener for publishing the service details in a global service registry. 
 
+The remote configuration service exposes an API for configuring and controlling it (see elog_api.h):
+
+- enable/disableConfigService/
+- start/stop/restartConfigService
+- setConfigServiceDetails
+- setConfigServicePublisher
+
 The remote configuration service can be configured via ELogParams during ELog's initialization, with the following parameters:
 
 - m_enableConfigService
@@ -1045,29 +1056,142 @@ The remote configuration service can be configured via ELogParams during ELog's 
 
 The remote configuration service is configurable from file/string and has the following configuration items:
 
+- enable_config_service
+    - The entire remote configuration service can be disabled if required (e.g. due to issues in production)
 - config_service_interface
     - Configures the network interface of the remote configuration service, to listen on for incoming connections
-    - Special values are accepted: localhost, any/all, primary, name:<interface-name>
+    - Special values are accepted: localhost, any/all, primary, name:<interface-name>, subnet:<subnet IP>
 - config_service_port
     - Configures the port of the remote configuration service to listen on for incoming connections
     - Zero can be specified, in which case the publisher (if registered) will be notified of the real port number that was used
+- config_service_publisher
+    - The name of a publisher type
+    - Currently only 'redis' is supported (See below for more details)
 
 The remote configuration service can be automatically reconfigured when [configuration reloading](#configuration-reloading) is enabled. When configuration changed, the configuration service is restarted to listen on the new interface/port. The registered publisher will be notified of these changes.
+
+In addition, the following environment variables (corresponding to the configuration items above) can be used to configure the remote configuration service:
+
+- ELOG_ENABLE_CONFIG_SERVICE (boolean value, yes/no, true/false)
+- ELOG_CONFIG_SERVICE_INTERFACE (string value, an IP address, but other special options can be specified, see below)
+- ELOG_CONFIG_SERVICE_PORT (integer value, can be zero for any available port)
+- ELOG_CONFIG_SERVICE_PUBLISHER (string, name of publisher, currently only 'redis' is supported)
+
+## Configuration Service Redis Publishing
+
+When building with ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON, ELog enables configuring a publisher that writes the configuration service contact details (host and port) to a Redis cluster, for the purpose of service discovery. The Redis publisher can be configured via configuration file/string, with the following configuration items:
+
+- redis_servers
+    - A comma or semicolon-separated list of host:port pairs, denoting Redis servers
+- redis_key
+    - The key prefix used to save remote configuration service details in Redis
+    - This is optional, and if not specified defaults to "elog_config_service"
+- redis_expire_seconds
+    - The number of seconds until the configuration service details expire in Redis
+- redis_renew_expire_seconds
+    - The Redis key expiry renewal timeout in seconds (in a background task)
+- redis_password
+    - Optional password for Redis login
+- SSL configuration items
+    - redis_ca_cert_file
+    - redis_ca_path
+    - redis_cert_file
+    - redis_private_key_file
+    - redis_server_name
+    - redis_verify_mode
+        - allowed values are: node, peer, fail_no_peer_cert, client_once, post_handshake
+
+The corresponding environment variables can be used to configure the Redis publisher from the command line:
+
+- ELOG_REDIS_SERVERS (A comma or semicolon-separated list of host:port pairs, denoting Redis servers)
+- ELOG_REDIS_KEY
+- ELOG_REDIS_EXPIRE_SECONDS
+- ELOG_REDIS_RENEW_EXPIRE_SECONDS
+- ELOG_REDIS_PASSWORD
+- ELOG_REDIS_CA_CERT_FILE
+- ELOG_REDIS_CA_PATH
+- ELOG_REDIS_CERT_FILE
+- ELOG_REDIS_PRIVATE_KEY_FILE
+- ELOG_REDIS_SERVER_NAME
+- ELOG_REDIS_VERIFY_MODE
+
+The publisher task repeatedly attempts to connect to the Redis cluster and publish the details of the remote configuration service. This allows other processes (e.g. ELog CLI) to discover the details of configuration services in ELog processes, so remote live configuration of log levels can take place (see next section).
+
+The redis publisher can be automatically reconfigured when [configuration reloading](#configuration-reloading) is enabled. When configuration changes, a redis publisher is constructed and installed at the configuration service.
+
+The redis publisher can be created and configured manually when using directly ELogConfigServiceRedisPublisher. Following is an example that demonstrates that:
+
+    // configure and initialize redis publisher
+    elog::ELogConfigServiceRedisPublisher publisher;
+
+    // have publisher connect to local host redis
+    publisher.addServer("localhost", 6379);
+    
+    // use default key prefix ("elog_config_service")
+    
+    // initialize the publisher
+    if (!publisher.initialize()) {
+        // report error
+    }
+
+    // hand over the publisher to the configuration service and trigger an immediate restart
+    // of the configuration service
+    if (!setConfigServicePublisher(&publisher, true /* restart configuration service */)) {
+        // report error
+    }
+
+    // NOTE: configuration publisher must be alive as long as being used
+    // if it goes out of scope, then first make sure to remove it
+
+    // NOTE: make sure to restart the configuration service so that changes will take effect immediately
+    if (!setConfigServicePublisher(null, true)) {
+        // report error
+    }
 
 ### Live Remote Configuration CLI
 
 In addition a command line interface was added to connect to live processes, query log levels (with regular expression inclusion/exclusion filters), and update log filters. This also includes the internal report level of ELog. The CLI tool can be invoked by the command "elog_cli" for interactive operation, and is part of the build artifacts when building with ELOG_ENABLE_CONFIG_SERVICE=ON. It also support command line options for non-interactive modes, so it can be embedded in scripts.
 
-On Linux and MinGW platforms, the CLI tool supports auto-complete of commands and log source names.
+Normally the CLI supports the following commands:
+
+- connect to the configuration service of an ELog process
+- query log levels of a connected ELog process
+- update log levels of a connected ELog process
+- disconnect from the configuration service of an ELog process
+
+If ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON is used during build, then the elog_cli also supports listing available services, as they are loaded from the redis servers configured by the environment variable ELOG_REDIS_SERVERS (comma or semicolon separated list of host:port pairs).
+
+NOTE: When configuring the CLI to connect to a Redis cluster, the following environment variables are recognized:
+
+- ELOG_REDIS_SERVERS (A comma or semicolon-separated list of host:port pairs, denoting Redis servers)
+- ELOG_REDIS_KEY
+- ELOG_REDIS_EXPIRE_SECONDS
+- ELOG_REDIS_RENEW_EXPIRE_SECONDS
+- ELOG_REDIS_PASSWORD
+- ELOG_REDIS_CA_CERT_FILE
+- ELOG_REDIS_CA_PATH
+- ELOG_REDIS_CERT_FILE
+- ELOG_REDIS_PRIVATE_KEY_FILE
+- ELOG_REDIS_SERVER_NAME
+- ELOG_REDIS_VERIFY_MODE
+
+See [Configuration Service Redis Publishing](#configuration-service-redis-publishing) for more details about allowed values for these environment variables.
+
+On Linux and MinGW platforms, the CLI tool supports auto-complete of commands and log source names. If service discovery is enabled, then the CLI also supports auto-complete of configuration service details.
 
 Following is an example run of the CLI tool, which performs the following operations:
 
     - Calls help to print the help screen
+    - Lists all configuration services of all connected ELog processes (available only when service publish is enabled)
     - Connects to a process that uses ELog
     - Queries the log level of log sources, using a regular expression filter
     - Updates the log level of test.logger2 to INFO (more restrictive than its previous value TRACE)
     - Queries again for the log levels to make the change took place
     - Quits
+
+The CLI was built with ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON for Redis service discovery support, and was run in a shell with the following environment variable defined:
+
+    export ELOG_REDIS_SERVERS=192.168.1.163:6379
 
 Comments were added below for each step:
 
@@ -1080,15 +1204,22 @@ Comments were added below for each step:
     ELog Configuration CLI:
 
     q/quit/exit:     exit from the cli
+    list:            lists all ELog services registered at redis cluster
     connect:         connect to an ELog configuration service
     disconnect:      disconnect from an ELog configuration service
     query-log-level: queries for the log levels in the connected target process
     set-log-level:   configures the log levels for the connected target process
     help:            prints this help screen
 
-    // connect to a process on the local host that uses ELog
+    // list all configuration services of all connected ELog processes
+    <elog_cli> $ list
+
+    192.168.1.163:45215 elog_bench_app
+    192.168.1.104:51394 elog_bench_app
+
+    // connect to a process that uses ELog
     // the host/port details are of the ELog's remote configuration service
-    <elog-cli> $ connect 127.0.0.1:6789
+    <elog-cli> $ connect 192.168.1.163:45215
 
     // query for log levels, restrict query result by regular expression
     <elog-cli> $ query-log-level test.logger.*
@@ -1112,8 +1243,8 @@ Comments were added below for each step:
 
 When run in non-interactive mode the following command line parameters must be specified:
 
-    - -h|--host The host name or address of the target ELog process's configuration service
-    - -p|--port The port of the target ELog process's configuration service
+    -h|--host The host name or address of the target ELog process's configuration service
+    -p|--port The port of the target ELog process's configuration service
 
 Next one of the query or update commands must be specified:
 
@@ -1122,7 +1253,7 @@ Next one of the query or update commands must be specified:
     - -e|--exclude Exclude query filter (regular expression)
     - -u|--update Update log levels, following by update specification string
 
-The update specification string is a semicolon separated list of log levels pairs, without spaces, where each pair has the following format:
+The update specification string is a white-space separated list of log levels pairs, where each pair has the following format (note there are no spaces):
 
     - <log-source-name>=<log-level><propagation-specifier>
 
@@ -1149,6 +1280,17 @@ Following is the non-interactive equivalent of the example above:
     ELOG_REPORT_LEVEL = ERROR
 
 As it can be seen, the log level of test.logger2 was changed from TRACE to INFO.
+
+NOTE: In case service discovery is enabled (i.e. when ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON), then the list command may be specified with non-interactive CLI, without any other parameters:
+
+    -l|--list Lists all connected processes, no parameter is required
+
+Here is an example output:
+
+    > elog_cli.exe --list
+
+    192.168.1.163:37801 elog_bench_app
+    192.168.1.104:50967 elog_bench_app
 
 ### Crash Handling
 

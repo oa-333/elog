@@ -94,6 +94,93 @@ extern ELOG_API bool setPeriodicReloadConfigFile(const char* configFilePath);
 extern ELOG_API bool setReloadConfigPeriodMillis(uint64_t reloadPeriodMillis);
 #endif
 
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+/**
+ * @brief Enables the remote configuration service. If it is already enabled nothing happens.
+ * Note that explicit call to start the remote configuration service is still required.
+ */
+extern ELOG_API bool enableConfigService();
+
+/**
+ * @brief Disables the remote configuration service. If it is running, then it will be stopped. If
+ * it is already disabled nothing happens.
+ */
+extern ELOG_API bool disableConfigService();
+
+/** @brief Starts the configuration service. If it is already started nothing happens. */
+extern ELOG_API bool startConfigService();
+
+/** @brief Stops the configuration service. If it is already stopped nothing happens. */
+extern ELOG_API bool stopConfigService();
+
+/**
+ * @brief Restarts the configuration service. If it is already stopped, it will only be started.
+ * @note Any configuration changes made to the configuration service up until to this point will be
+ * used.
+ */
+extern ELOG_API bool restartConfigService();
+
+/**
+ * @brief Sets the remote configuration service details.
+ *
+ * @param host The host name or address.
+ * @param port The listening port.
+ * @param restartConfigService Optionally specifies whether the configuration service should be
+ * restarted so the change may take effect.
+ * @return The operation's result.
+ *
+ * @note The remote configuration service needs to be restarted for this changes to take effect.
+ *
+ * @see also @ref ELogConfigServiceParams::m_configServiceHost.
+ * @see also @ref ELogConfigServiceParams::m_configServicePort.
+ */
+extern ELOG_API bool setConfigServiceDetails(const char* host, int port,
+                                             bool restartConfigService = false);
+
+/**
+ * @brief Enables the remote configuration service publisher. Restarts the configuration services
+ * if ordered to, and updates the publisher in use.
+ * @note If not ordered to restart, then the changes will take place only the next time the service
+ * is restarted.
+ * @note If the publisher was disabled before the call was made, and the currently installed
+ * publisher is not null, then it will be handed over to the configuration service for periodic
+ * service publishing. If configured to restart the changes will take effect immediately, otherwise
+ * they will take effect during the next time the configuration service is started. In any other
+ * case (except for a possible restart), nothing will happen.
+ */
+extern ELOG_API bool enableConfigServicePublisher(bool restartConfigService = false);
+
+/** @brief Disables the remote configuration service publisher. Restarts the configuration services
+ * if ordered to, and updates the publisher in use.
+ * @note If not ordered to restart, then the changes will take place only the next time the service
+ * is restarted.
+ * @note If the publisher was enabled before the call was made, and the currently installed
+ * publisher is not null, then a null publisher will be handed over to the configuration service so
+ * that periodic service publishing will not take place. If configured to restart the changes will
+ * take effect immediately, otherwise they will take effect during the next time the configuration
+ * service is started. In any other case (except for a possible restart), nothing will happen.
+ */
+extern ELOG_API bool disableConfigServicePublisher(bool restartConfigService = false);
+
+/**
+ * @brief Sets the configuration service publisher. May trigger a restart of the remote
+ * configuration service.
+ *
+ * @note Caller is responsible for managing the life-cycle of the publisher objects. Also the
+ * publisher must be already initialized (i.e. a successful call to
+ * ElogConfigServicePublisher::initialize() must have already taken place before this call is made).
+ *
+ * @param publisher The publisher to set. Could be null in order to disable publishing altogether.
+ * @param restartConfigService Optionally specifies whether the configuration service should be
+ * restarted so the change may take effect.
+ * @return The operation's result.
+ *
+ * @note The remote configuration service needs to be restarted for this change to take effect.
+ */
+extern ELOG_API bool setConfigServicePublisher(ELogConfigServicePublisher* publisher,
+                                               bool restartConfigService = false);
+#endif
+
 /**
  * @brief Retrieves the logger that is used to accumulate log messages while the ELog library
  * has not initialized yet.

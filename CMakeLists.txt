@@ -72,6 +72,7 @@ option(ELOG_ENABLE_FMT_LIB "ELog fmtlib formatting style support" OFF)
 option(ELOG_ENABLE_LIFE_SIGN "ELog periodic life-sign report support" OFF)
 option(ELOG_ENABLE_RELOAD_CONFIG "ELog periodic configuration reloading support" OFF)
 option(ELOG_ENABLE_CONFIG_SERVICE "ELog configuration via TCP/pipe channel support" OFF)
+option(ELOG_ENABLE_CONFIG_PUBLISH_REDIS "ELog publish configuration service via redis client" OFF)
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
 option(ELOG_ENABLE_PGSQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
@@ -84,6 +85,11 @@ option(ELOG_ENABLE_DATADOG_CONNECTOR "ELog Datadog connector" OFF)
 option(ELOG_ENABLE_OTEL_CONNECTOR "ELog Open Telemetry connector" OFF)
 option(ELOG_ENABLE_NET "ELog Network connector" OFF)
 option(ELOG_ENABLE_IPC "ELog IPC connector" OFF)
+
+# ensure options are correct
+if (ELOG_ENABLE_CONFIG_PUBLISH_REDIS AND NOT ELOG_ENABLE_CONFIG_SERVICE)
+    message(FATAL_ERROR "Must define ELOG_ENABLE_CONFIG_SERVICE=ON before using ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON")
+endif()
 
 # debug options
 option(ELOG_ENABLE_MEM_CHECK "Enables ELog memory check" OFF)
@@ -115,6 +121,12 @@ endif()
 set(ELOG_USING_GZIP OFF)
 if (ELOG_ENABLE_HTTP)
     set(ELOG_USING_GZIP ON)
+endif()
+
+# figure out whether redis support is required
+set(ELOG_USING_REDIS OFF)
+if (ELOG_ENABLE_REDIS_DB_CONNECTOR OR ELOG_ENABLE_CONFIG_PUBLISH_REDIS)
+    set(ELOG_USING_REDIS ON)
 endif()
 
 # ELog post-mortem cli (and Windows shared memory guardian)
@@ -160,6 +172,20 @@ if(ELOG_USING_COMM_UTIL)
     endif()
     if (ELOG_ENABLE_CONFIG_SERVICE)
         target_compile_definitions(elog_cli PRIVATE ELOG_USING_COMM_UTIL)
+    endif()
+endif()
+
+# Use a common flag for redis
+if(ELOG_USING_REDIS)
+    target_compile_definitions(elog PRIVATE ELOG_USING_REDIS)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_USING_REDIS)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_USING_REDIS)
+    endif()
+    if (ELOG_ENABLE_CONFIG_SERVICE)
+        target_compile_definitions(elog_cli PRIVATE ELOG_USING_REDIS)
     endif()
 endif()
 
@@ -300,6 +326,20 @@ if (ELOG_USING_GZIP)
 endif()
 
 #############################################################
+# get redis if needed
+#############################################################
+if (ELOG_USING_REDIS)
+    # NOTE: find_package works only for Windows (using vcpkg configuration manager)
+    if (MSVC)
+        find_package(hiredis CONFIG REQUIRED)
+        find_package(hiredis_ssl CONFIG REQUIRED)
+        target_link_libraries(elog hiredis::hiredis hiredis::hiredis_ssl)
+    else()
+        target_link_libraries(elog hiredis hiredis_ssl)
+    endif()
+endif()
+
+#############################################################
 # get JSON if needed (header-only)
 #############################################################
 if (ELOG_ENABLE_JSON)
@@ -357,7 +397,7 @@ if (ELOG_USING_COMM_UTIL)
         message(STATUS "Fetching commutil from github")
         FetchContent_Declare(commutil
             GIT_REPOSITORY https://github.com/oa-333/commutil.git
-            GIT_TAG v0.1.2)
+            GIT_TAG v0.1.3)
     endif()
     FetchContent_MakeAvailable(commutil)
     message(STATUS "Adding commutil include directory: ${commutil_SOURCE_DIR}/inc")
@@ -438,6 +478,28 @@ if (ELOG_ENABLE_CONFIG_SERVICE)
         target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_CONFIG_SERVICE)
     endif()
     target_compile_definitions(elog_cli PRIVATE ELOG_ENABLE_CONFIG_SERVICE)
+endif()
+
+#############################################################
+# config service publish via redis definitions
+#############################################################
+if (ELOG_ENABLE_CONFIG_PUBLISH_REDIS)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_REDIS)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_REDIS)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_REDIS)
+    endif()
+    target_compile_definitions(elog_cli PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_REDIS)
+
+    # NOTE: hiredis already obtained above
+    # cli needs redis too
+    if (MSVC)
+        target_link_libraries(elog_cli hiredis::hiredis hiredis::hiredis_ssl)
+    else()
+        target_link_libraries(elog_cli hiredis hiredis_ssl)
+    endif()
 endif()
 
 #############################################################
@@ -807,13 +869,7 @@ if (ELOG_ENABLE_REDIS_DB_CONNECTOR)
     if (ELOG_BUILD_BENCH)
         target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_REDIS_DB_CONNECTOR)
     endif()
-    # NOTE: find_package works only for Windows/MinGW
-    if (MSVC)
-        find_package(hiredis CONFIG REQUIRED)
-        target_link_libraries(elog hiredis::hiredis)
-    else()
-        target_link_libraries(elog hiredis)
-    endif()
+    # NOTE: hiredis already obtained above
 endif()
 
 #############################################################
@@ -1007,7 +1063,18 @@ if (MSVC)
     target_compile_definitions(elog PRIVATE ELOG_DLL)
     # /Zi - generate full debug information
     # /EHsc - catch(..) catches only C++ exceptions, extern "C" functions never throw C++ exception
-    add_compile_options(/Zi /EHsc)
+    #add_compile_options(/Zi /EHsc)
+    target_compile_options(elog PRIVATE /Zi)
+    target_compile_options(elog PRIVATE /EHsc)
+    if (ELOG_BUILD_BENCH)
+        target_compile_options(elog_bench PRIVATE /Zi /EHsc)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_options(elog_pm PRIVATE /Zi /EHsc)
+    endif()
+    if (ELOG_ENABLE_CONFIG_SERVICE)
+        target_compile_options(elog_cli PRIVATE /Zi /EHsc)
+    endif()
 endif()
 
 if (MSVC OR MINGW)
@@ -1075,7 +1142,9 @@ endif()
 
 # source folders
 add_subdirectory(src/elog/src)
-add_subdirectory(src/elog/proto)
+if(ELOG_USING_PROTOBUF)
+    add_subdirectory(src/elog/proto)
+endif()
 if (ELOG_BUILD_BENCH)
     add_subdirectory(src/elog_bench/src)
 endif()

@@ -16,12 +16,24 @@
 
 #include "elog_config_service_client.h"
 
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+#include "elog_config_service_redis_reader.h"
+#endif
+
 #define ELOG_CLI_VER_MAJOR 0
 #define ELOG_CLI_VER_MINOR 1
+
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+#define ELOG_CLI_HAS_SERVICE_DISCOVERY
+#define ELOG_CLI_SERVICE_DISCOVERY_NAME "redis"
+#endif
 
 // command names
 #define CMD_EXIT "exit"
 #define CMD_HELP "help"
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+#define CMD_LIST "list"
+#endif
 #define CMD_CONNECT "connect"
 #define CMD_DISCONNECT "disconnect"
 #define CMD_QUERY_LOG_LEVEL "query-log-level"
@@ -30,6 +42,9 @@
 #ifndef ELOG_MSVC
 static const char* sCommands[] = {
     CMD_EXIT, CMD_HELP, CMD_CONNECT, CMD_DISCONNECT, CMD_QUERY_LOG_LEVEL, CMD_UPDATE_LOG_LEVEL,
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+    CMD_LIST,
+#endif
     nullptr};
 #endif
 
@@ -51,7 +66,11 @@ static const char* sCommands[] = {
 #ifndef ELOG_MSVC
 static char** elog_cli_complete_func(const char* text, int start, int end);
 static char* elog_cli_cmd_generator_func(const char* text, int state);
+static char* elog_cli_completion_entry_func(const char* text, int state);
 static char* elog_cli_log_source_generator_func(const char* text, int state);
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+static char* elog_cli_config_service_generator_func(const char* text, int state);
+#endif
 #endif
 
 static elog::ELogLogger* sLogger = nullptr;
@@ -59,12 +78,25 @@ static elog::ELogConfigServiceClient sConfigServiceClient;
 static bool sConnected = false;
 static std::vector<std::string> sLogSources;
 
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+static elog::ELogConfigServiceRedisReader sConfigServiceReader;
+#endif
+
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+static std::vector<std::string> sServiceList;
+static elog::ELogConfigServiceMap sServiceMap;
+#endif
+
 // cli skeleton
 static int initELog();
 static void termELog();
 static void runCliLoop();
 
 // commands
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+static int listServices();
+static int printServices();
+#endif
 static int connectToELogProcess(const char* host, int port);
 static int disconnectFromELogProcess();
 static int queryLogLevel(const char* includeRegEx = ".*", const char* excludeRegEx = "");
@@ -78,6 +110,13 @@ static void tokenize(const char* str, std::vector<std::string>& tokens,
                      const char* delims = " \t\r\n");
 static bool listAllLogSources();
 
+static void getEnvVar(const char* name, std::string& value) {
+    char* envVarValueLocal = getenv(name);
+    if (envVarValueLocal != nullptr) {
+        value = envVarValueLocal;
+    }
+}
+
 static int execArgs(int argc, char* argv[]) {
     // invalid usage
     if (argc == 1) {
@@ -90,7 +129,13 @@ static int execArgs(int argc, char* argv[]) {
     std::string includeRegEx;
     std::string excludeRegEx;
     std::string updateCmd;
+
     for (int i = 1; i < argc; ++i) {
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+        if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--list") == 0) {
+            return printServices();
+        }
+#endif
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--host") == 0) {
             if (++i >= argc) {
                 ELOG_ERROR_EX(sLogger, "Missing host parameter\n");
@@ -181,7 +226,7 @@ static int initELog() {
     // need them anyway), otherwise life-sign manager would complain that shm segment is already
     // created (when trying to open any segment)
     elog::ELogParams params;
-    params.m_enableConfigService = false;
+    params.m_configServiceParams.m_enableConfigService = false;
     if (!elog::initialize(params)) {
         ELOG_ERROR_EX(sLogger, "Failed to initialize ELog library");
         return ERR_INIT;
@@ -226,6 +271,10 @@ static void printLogo() {
 static void printHelp() {
     printf("ELog Configuration CLI:\n\n");
     printf("q/quit/exit:     exit from the cli\n");
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+    printf("list:            lists all ELog services registered at %s cluster\n",
+           ELOG_CLI_SERVICE_DISCOVERY_NAME);
+#endif
     printf("connect:         connect to an ELog configuration service\n");
     printf("disconnect:      disconnect from an ELog configuration service\n");
     printf("query-log-level: queries for the log levels in the connected target process\n");
@@ -247,7 +296,81 @@ inline std::string trim(const std::string& s) {
     return res;
 }
 
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+static int listServices() {
+    std::string redisServerList;
+    std::string redisKey;
+    std::string redisPassword;
+
+    // first check in env
+    getEnvVar("ELOG_REDIS_SERVERS", redisServerList);
+    getEnvVar("ELOG_REDIS_KEY", redisKey);
+    getEnvVar("ELOG_REDIS_PASSWORD", redisPassword);
+
+    if (!sConfigServiceReader.setServerList(redisServerList.c_str())) {
+        return 1;
+    }
+    if (!sConfigServiceReader.initialize()) {
+        return 1;
+    }
+
+    // get raw service map
+    elog::ELogConfigServiceMap rawServiceMap;
+    if (!sConfigServiceReader.listServices(rawServiceMap)) {
+        return 2;
+    }
+
+    sServiceMap.clear();
+    sServiceList.clear();
+    for (const auto& pair : rawServiceMap) {
+        const std::string& service = pair.first;
+        const std::string& appName = pair.second;
+        std::vector<std::string> tokens;
+        tokenize(service.c_str(), tokens, ":");
+        if (tokens.size() != 3) {
+            ELOG_WARN_EX(sLogger,
+                         "Unexpected service name, expecting 3 tokens separated by colon: %s",
+                         service.c_str());
+            continue;
+        }
+        if (tokens[0].compare("elog_config_service") != 0) {
+            ELOG_WARN_EX(
+                sLogger,
+                "Invalid service name, first token expected to be 'elog_config_service': %s",
+                service.c_str());
+            continue;
+        }
+        char* endPtr = nullptr;
+        int port = std::strtol(tokens[2].c_str(), &endPtr, 10);
+        if (endPtr == tokens[2].c_str() || errno == ERANGE) {
+            ELOG_WARN_EX(sLogger, "Invalid port specification '%s' in service: %s",
+                         tokens[2].c_str(), service.c_str());
+            continue;
+        }
+        std::string serviceDetails = tokens[1] + ":" + tokens[2];
+        sServiceList.push_back(serviceDetails);
+        sServiceMap.insert(elog::ELogConfigServiceMap::value_type(serviceDetails, appName));
+    }
+    return 0;
+}
+
+static int printServices() {
+    int res = listServices();
+    if (res != 0) {
+        return res;
+    }
+    for (const auto& entry : sServiceMap) {
+        fprintf(stderr, "%s %s\n", entry.first.c_str(), entry.second.c_str());
+    }
+    return 0;
+}
+#endif
+
 int connectToELogProcess(const char* host, int port) {
+    if (sConnected) {
+        ELOG_ERROR("Cannot connect, already connected to ELog process");
+        return 1;
+    }
     if (!sConfigServiceClient.initialize(host, port)) {
         ELOG_ERROR_EX(sLogger, "Failed to initialize configuration service client");
         return ERR_INIT;
@@ -268,6 +391,11 @@ int connectToELogProcess(const char* host, int port) {
 }
 
 int disconnectFromELogProcess() {
+    if (!sConnected) {
+        ELOG_ERROR("Cannot disconnect, not connected to ELog process");
+        return 1;
+    }
+
     if (!sConfigServiceClient.stop()) {
         ELOG_ERROR_EX(sLogger, "Failed to stop configuration service client");
         return ERR_STOP;
@@ -282,6 +410,10 @@ int disconnectFromELogProcess() {
 }
 
 int queryLogLevel(const char* includeRegEx /* = ".*" */, const char* excludeRegEx /* = "" */) {
+    if (!sConnected) {
+        ELOG_ERROR("Cannot query log level, must connect first to ELog process");
+        return 1;
+    }
     std::unordered_map<std::string, elog::ELogLevel> logLevels;
     elog::ELogLevel reportLevel;
     if (!sConfigServiceClient.queryLogLevels(includeRegEx, excludeRegEx, logLevels, reportLevel)) {
@@ -296,12 +428,17 @@ int queryLogLevel(const char* includeRegEx /* = ".*" */, const char* excludeRegE
 }
 
 int updateLogLevels(const char* logLevelCfg) {
+    if (!sConnected) {
+        ELOG_ERROR("Cannot update log level, must connect first to ELog process");
+        return 1;
+    }
+
     // semicolon separated list without spaces of source=level*+-, with one additional
     // ELOG_REPORT_LEVEL=level
 
     // parse string into map
     std::vector<std::string> tokens;
-    tokenize(logLevelCfg, tokens, ";");
+    tokenize(logLevelCfg, tokens, " ");
     std::unordered_map<std::string, std::pair<elog::ELogLevel, elog::ELogPropagateMode>> logLevels;
     elog::ELogLevel reportLevel;
     bool hasReportLevel = false;
@@ -371,6 +508,8 @@ static bool execCommand(const std::string& cmd) {
     printf("\n");
     if (cmd.compare(CMD_HELP) == 0) {
         printHelp();
+    } else if (cmd.compare(CMD_LIST) == 0) {
+        printServices();
     } else if (cmd.starts_with(CMD_CONNECT)) {
         std::string addr = trim(cmd.substr(strlen(CMD_CONNECT)));
         std::string host;
@@ -412,13 +551,14 @@ static bool execCommand(const std::string& cmd) {
 #ifndef ELOG_MSVC
 void runCliLoop() {
     rl_attempted_completion_function = elog_cli_complete_func;
-    rl_completion_entry_function = elog_cli_log_source_generator_func;
+    rl_completion_entry_function = elog_cli_completion_entry_func;
     char* line = nullptr;
     printf("\n");
     while ((line = readline("<elog_cli> $ ")) != nullptr) {
-        if (line && *line) {
-            add_history(line);
+        if (line == nullptr || *line == 0) {
+            continue;
         }
+        add_history(line);
         bool shouldContinue = execCommand(trim(line));
         free(line);
         line = nullptr;
@@ -453,6 +593,33 @@ char** elog_cli_complete_func(const char* text, int start, int end) {
         return rl_completion_matches(text, elog_cli_cmd_generator_func);
     }
 
+    // check text buffer, if it ends with connect command, then list hosts
+    size_t cmdLen = 0;
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+    cmdLen = strlen(CMD_CONNECT);
+    if (end == cmdLen + 1) {
+        if (strncmp((char*)rl_line_buffer, CMD_CONNECT, cmdLen) == 0) {
+            return rl_completion_matches(text, elog_cli_config_service_generator_func);
+        }
+    }
+#endif
+
+    // check text buffer, if it ends with query command, then list log sources
+    cmdLen = strlen(CMD_QUERY_LOG_LEVEL);
+    if (end == cmdLen + 1) {
+        if (strncmp((char*)rl_line_buffer, CMD_QUERY_LOG_LEVEL, cmdLen) == 0) {
+            return rl_completion_matches(text, elog_cli_log_source_generator_func);
+        }
+    }
+
+    // check text buffer, if it ends with update command, then list log sources
+    cmdLen = strlen(CMD_UPDATE_LOG_LEVEL);
+    if (end == cmdLen + 1) {
+        if (strncmp((char*)rl_line_buffer, CMD_UPDATE_LOG_LEVEL, cmdLen) == 0) {
+            return rl_completion_matches(text, elog_cli_log_source_generator_func);
+        }
+    }
+
     return nullptr;
 }
 
@@ -471,6 +638,24 @@ char* elog_cli_cmd_generator_func(const char* text, int state) {
             return strdup(name);
         }
     }
+    return nullptr;
+}
+
+char* elog_cli_completion_entry_func(const char* text, int state) {
+    // this is a router function
+    const char* lineBuffer = (const char*)rl_line_buffer;
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+    if (strncmp(lineBuffer, CMD_CONNECT, strlen(CMD_CONNECT)) == 0) {
+        return elog_cli_config_service_generator_func(text, state);
+    }
+#endif
+    if (strncmp(lineBuffer, CMD_QUERY_LOG_LEVEL, strlen(CMD_QUERY_LOG_LEVEL)) == 0) {
+        return elog_cli_log_source_generator_func(text, state);
+    }
+    if (strncmp(lineBuffer, CMD_UPDATE_LOG_LEVEL, strlen(CMD_UPDATE_LOG_LEVEL)) == 0) {
+        return elog_cli_log_source_generator_func(text, state);
+    }
+
     return nullptr;
 }
 
@@ -494,6 +679,29 @@ char* elog_cli_log_source_generator_func(const char* text, int state) {
     }
     return nullptr;
 }
+
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+char* elog_cli_config_service_generator_func(const char* text, int state) {
+    static int listIndex = 0;
+    static int len = 0;
+
+    if (!state) {
+        listIndex = 0;
+        len = strlen(text);
+        if (listServices() != 0) {
+            return nullptr;
+        }
+    }
+
+    while (listIndex < sServiceList.size()) {
+        const char* name = sServiceList[listIndex++].c_str();
+        if (len == 0 || strncmp(name, text, len) == 0) {
+            return strdup(name);
+        }
+    }
+    return nullptr;
+}
+#endif
 #endif
 
 bool parseHostPort(const std::string& addr, std::string& host, int& port) {
@@ -569,6 +777,9 @@ bool parseLogLevel(const char* logLevelStr, elog::ELogLevel& logLevel,
 bool listAllLogSources() {
     if (!sLogSources.empty()) {
         return true;
+    }
+    if (!sConnected) {
+        return false;
     }
 
     std::unordered_map<std::string, elog::ELogLevel> logLevels;

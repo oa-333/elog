@@ -25,6 +25,7 @@ commutil::ErrorCode ELogMsgServer::terminate() {
 
 commutil::ErrorCode ELogMsgServer::start() {
     // delegate to message server
+    m_msgServer.setName(m_name.c_str());
     return m_msgServer.start();
 }
 

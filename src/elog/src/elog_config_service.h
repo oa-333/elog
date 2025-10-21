@@ -36,17 +36,42 @@ public:
     commutil::ErrorCode initialize(const char* iface, int port,
                                    ELogConfigServicePublisher* publisher = nullptr);
 
+    /**
+     * @brief Configures the listen address for the ELog configuration server.
+     *
+     * @note The caller is responsible for managing calls to start/stop or restart.
+     *
+     * @param iface The interface to listen on. Specify "0.0.0.0" to listen on all interfaces.
+     * @param port The port to listen on. Specify zero to choose any port.
+     */
+    void setListenAddress(const char* iface, int port);
+
+    /**
+     * @brief Sets the configuration service publisher.
+     *
+     * @note The caller is responsible for the life-cycle of the publisher. The configuration
+     * service will still call the publisher's @ref ELogConfigServicePublisher::terminate() method
+     * if it is still present during configuration service termination.
+     */
+    inline void setPublisher(ELogConfigServicePublisher* publisher) { m_publisher = publisher; }
+
     /** @brief Releases all resources allocated for recovery. */
     commutil::ErrorCode terminate();
 
-    /** @brief Starts the message server. */
+    /** @brief Starts the configuration service. */
     commutil::ErrorCode start();
 
-    /** @brief Stops the message server. */
+    /** @brief Stops the configuration service. */
     commutil::ErrorCode stop();
 
-    /** @brief Restart running on the specified interface/port. */
-    commutil::ErrorCode restart(const char* iface, int port);
+    /** @brief Restart the configuration service. */
+    commutil::ErrorCode restart();
+
+    /** @brief Queries whether the configuration service is running. */
+    bool isRunning() {
+        // delegate message server
+        return m_msgServer.isRunning();
+    }
 
 protected:
     /**

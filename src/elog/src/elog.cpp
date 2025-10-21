@@ -10,16 +10,11 @@
 #include <unordered_map>
 
 #include "elog_api.h"
-#include "elog_api_config_service.h"
-#include "elog_api_life_sign.h"
-#include "elog_api_reload_config.h"
 #include "elog_cache.h"
-#include "elog_comm_util_log_handler.h"
 #include "elog_common.h"
 #include "elog_config.h"
 #include "elog_config_loader.h"
 #include "elog_config_parser.h"
-#include "elog_dbg_util_log_handler.h"
 #include "elog_field_selector_internal.h"
 #include "elog_filter_internal.h"
 #include "elog_flush_policy.h"
@@ -32,7 +27,6 @@
 #include "elog_report.h"
 #include "elog_schema_manager.h"
 #include "elog_shared_logger.h"
-#include "elog_stack_trace.h"
 #include "elog_stats_internal.h"
 #include "elog_target_spec.h"
 #include "elog_time_internal.h"
@@ -45,6 +39,31 @@
 
 #ifdef ELOG_ENABLE_MSG
 #include "msg/elog_msg_internal.h"
+#endif
+
+#ifdef ELOG_ENABLE_LIFE_SIGN
+#include "elog_api_life_sign.h"
+#endif
+
+#ifdef ELOG_ENABLE_RELOAD_CONFIG
+#include "elog_api_reload_config.h"
+#endif
+
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+#include "elog_api_config_service.h"
+#include "elog_config_service_internal.h"
+#endif
+
+#ifdef ELOG_USING_DBG_UTIL
+#include "elog_dbg_util_log_handler.h"
+#endif
+
+#ifdef ELOG_USING_COMM_UTIL
+#include "elog_comm_util_log_handler.h"
+#endif
+
+#ifdef ELOG_ENABLE_STACK_TRACE
+#include "elog_stack_trace.h"
 #endif
 
 // #include "elog_props_formatter.h"
@@ -275,7 +294,7 @@ bool initGlobals() {
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
     // initialize life-sign report
-    if (sParams.m_enableLifeSignReport) {
+    if (sParams.m_lifeSignParams.m_enableLifeSignReport) {
         ELOG_REPORT_TRACE("Initializing life-sign reports");
         if (!initLifeSignReport()) {
             termGlobals();
@@ -294,6 +313,16 @@ bool initGlobals() {
     }
 #endif
 
+// must initialize static registration of config service publishers before loading configuration
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+    if (!initConfigServicePublishers()) {
+        ELOG_REPORT_ERROR("Failed to initialize configuration service publishers");
+        termGlobals();
+        return false;
+    }
+#endif
+
+    // load configuration from file
     if (!sParams.m_configFilePath.empty()) {
         ELOG_REPORT_TRACE("Loading configuration from: %s", sParams.m_configFilePath.c_str());
         if (!configureByFile(sParams.m_configFilePath.c_str())) {
@@ -310,8 +339,9 @@ bool initGlobals() {
 #endif
     }
 
+    // start the remote configuration service
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
-    if (sParams.m_enableConfigService) {
+    if (sParams.m_configServiceParams.m_enableConfigService) {
         if (!initConfigService()) {
             termGlobals();
             return false;
@@ -332,8 +362,9 @@ void termGlobals() {
     sIsTerminating = true;
 
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
-    if (sParams.m_enableConfigService) {
+    if (sParams.m_configServiceParams.m_enableConfigService) {
         termConfigService();
+        termConfigServicePublishers();
     }
 #endif
 
@@ -350,7 +381,7 @@ void termGlobals() {
 #endif
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
-    if (sParams.m_enableLifeSignReport) {
+    if (sParams.m_lifeSignParams.m_enableLifeSignReport) {
         if (!termLifeSignReport()) {
             ELOG_REPORT_ERROR("Failed to terminate life-sign reports");
             // continue anyway
@@ -1826,7 +1857,7 @@ void logAppStackTrace(ELogLogger* logger, ELogLevel logLevel, const char* title,
 void logMsg(const ELogRecord& logRecord,
             ELogTargetAffinityMask logTargetAffinityMask /* = ELOG_ALL_TARGET_AFFINITY_MASK */) {
 #ifdef ELOG_ENABLE_LIFE_SIGN
-    if (sParams.m_enableLifeSignReport) {
+    if (sParams.m_lifeSignParams.m_enableLifeSignReport) {
         sendLifeSignReport(logRecord);
     }
 #endif

@@ -12,7 +12,12 @@ target_sources(
             elog_buffer.h
             elog_common_def.h
             elog_concurrent_ring_buffer.h
+            elog_config_service_client.h
+            elog_config_service_params.h
             elog_config_service_publisher.h
+            elog_config_service_redis_params.h
+            elog_config_service_redis_publisher.h
+            elog_config_service_redis_reader.h
             elog_config.h
             elog_def.h
             elog_expression.h
@@ -30,6 +35,7 @@ target_sources(
             elog_json_receptor.h
             elog_level.h
             elog_life_sign_filter.h
+            elog_life_sign_params.h
             elog_logger.h
             elog_managed_object.h
             elog_params.h
@@ -40,6 +46,7 @@ target_sources(
             elog_rate_limiter.h
             elog_read_buffer.h
             elog_record.h
+            elog_redis_client.h
             elog_report_handler.h
             elog_rolling_bitset.h
             elog_record_builder.h

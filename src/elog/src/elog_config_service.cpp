@@ -67,13 +67,18 @@ commutil::ErrorCode ELogConfigService::initialize(
         m_msgServer.initialize(&m_tcpServer, ELOG_CONFIG_SERVICE_MAX_CONNECTIONS,
                                ELOG_CONFIG_SERVICE_MSG_CONCURRENCY, ELOG_CONFIG_BUFFER_SIZE, this);
     if (rc != commutil::ErrorCode::E_OK) {
-        ELOG_REPORT_ERROR("Failed to initialize message server over TCP/IP at %s:%d: %s", iface,
-                          port, commutil::errorCodeToString(rc));
+        return rc;
     }
     if (publisher != nullptr) {
         m_publisher = publisher;
     }
+    m_msgServer.setName("ELogConfigService");
     return rc;
+}
+
+void ELogConfigService::setListenAddress(const char* iface, int port) {
+    m_tcpServer.setInterface(iface);
+    m_tcpServer.setPort(port);
 }
 
 commutil::ErrorCode ELogConfigService::terminate() {
@@ -85,6 +90,8 @@ commutil::ErrorCode ELogConfigService::start() {
     // delegate to message server
     commutil::ErrorCode rc = m_msgServer.start();
     if (rc == commutil::ErrorCode::E_OK && m_publisher != nullptr) {
+        ELOG_REPORT_TRACE("Starting configuration service on %s:%d", m_tcpServer.getRealInterface(),
+                          m_tcpServer.getRealPort());
         m_publisher->onConfigServiceStart(m_tcpServer.getRealInterface(),
                                           m_tcpServer.getRealPort());
     }
@@ -100,32 +107,14 @@ commutil::ErrorCode ELogConfigService::stop() {
     return rc;
 }
 
-commutil::ErrorCode ELogConfigService::restart(const char* iface, int port) {
-    // we need first to verify that some detail has changed
-    if ((strcmp(m_tcpServer.getInterface(), iface) == 0) && m_tcpServer.getPort() == port) {
-        // nothing changed, silently ignore request
-        return commutil::ErrorCode::E_OK;
-    }
-
+commutil::ErrorCode ELogConfigService::restart() {
     commutil::ErrorCode rc = stop();
-    if (rc != commutil::ErrorCode::E_OK) {
+    if (rc != commutil::ErrorCode::E_OK && rc != commutil::ErrorCode::E_INVALID_STATE) {
         ELOG_REPORT_ERROR("Failed to restart configuration service, call to stop() failed: %s",
                           commutil::errorCodeToString(rc));
         return rc;
     }
-    rc = terminate();
-    if (rc != commutil::ErrorCode::E_OK) {
-        ELOG_REPORT_ERROR("Failed to restart configuration service, call to terminate() failed: %s",
-                          commutil::errorCodeToString(rc));
-        return rc;
-    }
-    rc = initialize(iface, port);
-    if (rc != commutil::ErrorCode::E_OK) {
-        ELOG_REPORT_ERROR(
-            "Failed to restart configuration service, call to initialize() failed: %s",
-            commutil::errorCodeToString(rc));
-        return rc;
-    }
+
     rc = start();
     if (rc != commutil::ErrorCode::E_OK) {
         ELOG_REPORT_ERROR("Failed to restart configuration service, call to start() failed: %s",
@@ -201,6 +190,7 @@ commutil::ErrorCode ELogConfigService::handleConfigLevelQueryMsg(
 
     // TODO: change namespace elog_grpc --> elog_proto
     // TODO: fix all protobuf member names to use underscore
+
     // get all levels of all log sources and put in response
     elog_grpc::ELogConfigLevelReportMsg configLevelReportMsg;
     forEachLogSource(includeRegEx.c_str(), excludeRegEx.c_str(),
@@ -232,20 +222,33 @@ commutil::ErrorCode ELogConfigService::handleConfigLevelUpdateMsg(
     elog_grpc::ELogConfigLevelReplyMsg configLevelReplyMsg;
     configLevelReplyMsg.set_status(0);
     configLevelReplyMsg.set_errormsg("No error");
+    bool hasError = false;
     for (auto& entry : configLevelUpdateMsg.loglevels()) {
-        ELogSource* logSource = getLogSource(entry.first.c_str());
-        if (logSource == nullptr) {
-            configLevelReplyMsg.set_status((int)commutil::ErrorCode::E_NOT_FOUND);
-            std::string errorMsg = std::string("log source ") + entry.first + " not found";
-            if (configLevelReplyMsg.errormsg().empty()) {
-                configLevelReplyMsg.set_errormsg(errorMsg);
-            } else {
-                configLevelReplyMsg.mutable_errormsg()->append(std::string("; ") + errorMsg);
+        // first attempt as regular expression
+        std::vector<ELogSource*> logSources;
+        getLogSourcesEx(entry.first.c_str(), "", logSources);
+        if (!logSources.empty()) {
+            for (ELogSource* logSource : logSources) {
+                logSource->setLogLevel((ELogLevel)entry.second.loglevel(),
+                                       (ELogPropagateMode)entry.second.propagatemode());
             }
         } else {
-            // set the log level with configured propagation
-            logSource->setLogLevel((ELogLevel)entry.second.loglevel(),
-                                   (ELogPropagateMode)entry.second.propagatemode());
+            ELogSource* logSource = getLogSource(entry.first.c_str());
+            if (logSource == nullptr) {
+                // report error
+                configLevelReplyMsg.set_status((int)commutil::ErrorCode::E_NOT_FOUND);
+                std::string errorMsg = std::string("log source(s) ") + entry.first + " not found";
+                if (!hasError) {
+                    configLevelReplyMsg.set_errormsg(errorMsg);
+                    hasError = true;
+                } else {
+                    configLevelReplyMsg.mutable_errormsg()->append(std::string("\n") + errorMsg);
+                }
+            } else {
+                // set the log level with configured propagation
+                logSource->setLogLevel((ELogLevel)entry.second.loglevel(),
+                                       (ELogPropagateMode)entry.second.propagatemode());
+            }
         }
     }
     if (configLevelUpdateMsg.has_reportlevel()) {

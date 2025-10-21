@@ -93,6 +93,7 @@ bool ELogMsgTarget::startLogTarget() {
         (void)m_msgClient.terminate();
         return false;
     }
+    m_msgClient.setName(getName());
     rc = m_msgSender.start();
     if (rc != commutil::ErrorCode::E_OK) {
         ELOG_REPORT_ERROR("Failed to start message sender: %s", commutil::errorCodeToString(rc));

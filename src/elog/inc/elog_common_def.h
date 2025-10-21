@@ -189,6 +189,32 @@ struct ELogFrequencySpec {
 /** @def Default value of remote configuration service usage. */
 #define ELOG_DEFAULT_ENABLE_CONFIG_SERVICE true
 
+/**
+ * @def Default remote configuration service network interface to listen on (first non-loopback
+ * Ipv4 interface).
+ */
+#define ELOG_DEFAULT_CONFIG_SERVICE_HOST "primary"
+
+/** @def Default remote configuration service port (zero, meaning any available). */
+#define ELOG_DEFAULT_CONFIG_SERVICE_PORT 0
+
+/** @def Default value of remote configuration service publisher usage. */
+#define ELOG_DEFAULT_ENABLE_CONFIG_SERVICE_PUBLISH true
+
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+/**
+ * @def Default value for the redis directory prefix used for remote configuration service
+ * publish/discovery.
+ */
+#define ELOG_DEFAULT_REDIS_KEY "elog_config_service"
+
+/** @brief Default value for key expiry in redis publisher. */
+#define ELOG_DEFAULT_REDIS_EXPIRY_SECONDS 10
+
+/** @brief Default value for key expiry renewal period in redis publisher. */
+#define ELOG_DEFAULT_REDIS_EXPIRY_RENEW_SECONDS 2
+#endif
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

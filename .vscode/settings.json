@@ -110,7 +110,9 @@
         "scoped_allocator": "cpp",
         "gsl_assert": "cpp",
         "multi_span": "cpp",
-        "string_span": "cpp"
+        "string_span": "cpp",
+        "csetjmp": "cpp",
+        "span_ext": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",

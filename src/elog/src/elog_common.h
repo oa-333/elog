@@ -38,8 +38,11 @@
 #define ELOG_LIFE_SIGN_SYNC_PERIOD_CONFIG_NAME "life_sign_sync_period"
 #endif
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
+#define ELOG_ENABLE_CONFIG_SERVICE_NAME "enable_config_service"
 #define ELOG_CONFIG_SERVICE_INTERFACE_NAME "config_service_interface"
 #define ELOG_CONFIG_SERVICE_PORT_NAME "config_service_port"
+#define ELOG_ENABLE_CONFIG_SERVICE_PUBLISHER_NAME "enable_config_service_publisher"
+#define ELOG_CONFIG_SERVICE_PUBLISHER_NAME "config_service_publisher"
 #endif
 
 // simple colors for internal use
@@ -119,6 +122,37 @@ extern bool parseIntProp(const char* propName, const std::string& logTargetCfg,
 /** @brief Helper function for parsing a boolean property */
 extern bool parseBoolProp(const char* propName, const std::string& logTargetCfg,
                           const std::string& prop, bool& value, bool issueError = true);
+
+/** @brief Helper function for getting an integer property. */
+template <typename T>
+inline bool getIntProp(const ELogPropertySequence& props, const char* propName, T& propValue,
+                       bool* found = nullptr) {
+    std::string propValueStr;
+    if (getProp(props, propName, propValueStr)) {
+        if (!parseIntProp(propName, "", propValueStr, propValue)) {
+            return false;
+        }
+        if (found) {
+            *found = true;
+        }
+    }
+    return true;
+}
+
+/** @brief Helper function for getting a boolean property. */
+inline bool getBoolProp(const ELogPropertySequence& props, const char* propName, bool& propValue,
+                        bool* found = nullptr) {
+    std::string propValueStr;
+    if (getProp(props, propName, propValueStr)) {
+        if (!parseBoolProp(propName, "", propValueStr, propValue)) {
+            return false;
+        }
+        if (found) {
+            *found = true;
+        }
+    }
+    return true;
+}
 
 /** @brief Parses time units string. */
 extern bool parseTimeUnits(const char* timeUnitsStr, ELogTimeUnits& timeUnits,
@@ -223,6 +257,60 @@ extern bool elog_getenv(const char* envVarName, std::string& envVarValue);
  * enabled).
  */
 extern FILE* elog_fopen(const char* path, const char* mode);
+
+/**
+ * @brief Prepares an environment variable name from configuration name. Essentially adds "ELOG_"
+ * prefix, and turns to uppercase.
+ */
+inline void prepareEnvVarName(const char* configName, std::string& envVarName) {
+    const std::string elogEnvPrefix = "ELOG_";
+    envVarName = elogEnvPrefix + configName;
+    std::transform(envVarName.begin(), envVarName.end(), envVarName.begin(),
+                   [](int c) { return (char)::toupper(c); });
+}
+
+/** @brief Retrieves an environment variable value by configuration value. */
+inline bool getStringEnv(const char* configName, std::string& value, bool normalizeEnvVar = true,
+                         bool* found = nullptr) {
+    std::string envVarName;
+    if (normalizeEnvVar) {
+        prepareEnvVarName(configName, envVarName);
+    } else {
+        envVarName = configName;
+    }
+    return elog_getenv(envVarName.c_str(), value);
+}
+
+/** @brief Retrieves an integer environment variable value by configuration value. */
+template <typename T>
+inline bool getIntEnv(const char* configName, T& value, bool normalizeEnvVar = true,
+                      bool* found = nullptr) {
+    std::string valueStr;
+    if (getStringEnv(configName, valueStr)) {
+        if (!parseIntProp(ELOG_ENABLE_CONFIG_SERVICE_NAME, "", valueStr, value)) {
+            return false;
+        }
+        if (found != nullptr) {
+            *found = true;
+        }
+    }
+    return true;
+}
+
+/** @brief Retrieves a boolean environment variable value by configuration value. */
+inline bool getBoolEnv(const char* configName, bool& value, bool normalizeEnvVar = true,
+                       bool* found = nullptr) {
+    std::string valueStr;
+    if (getStringEnv(configName, valueStr)) {
+        if (!parseBoolProp(ELOG_ENABLE_CONFIG_SERVICE_NAME, "", valueStr, value)) {
+            return false;
+        }
+        if (found != nullptr) {
+            *found = true;
+        }
+    }
+    return true;
+}
 
 }  // namespace elog
 
