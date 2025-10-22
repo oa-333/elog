@@ -1,4 +1,4 @@
-#include "elog_config_service.h"
+#include "cfg_srv/elog_config_service.h"
 
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
 

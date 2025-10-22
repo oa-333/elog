@@ -1,5 +1,4 @@
 target_sources(elog PRIVATE
-    elog_api_config_service.cpp
     elog_api_life_sign.cpp
     elog_api_reload_config.cpp
     elog_buffer_receptor.cpp
@@ -9,11 +8,6 @@ target_sources(elog PRIVATE
     elog_common.cpp
     elog_config_loader.cpp
     elog_config_parser.cpp
-    elog_config_service_client.cpp
-    elog_config_service_publisher.cpp
-    elog_config_service_redis_publisher.cpp
-    elog_config_service_redis_reader.cpp
-    elog_config_service.cpp
     elog_config.cpp
     elog_dbg_util_log_handler.cpp
     elog_expression_parser.cpp
@@ -54,14 +48,36 @@ target_sources(elog PRIVATE
     elog_type_codec.cpp
     elog_win32_dll_event.cpp
     elog.cpp)
-
-add_subdirectory(mon)
-add_subdirectory(db)
-add_subdirectory(msgq)
-add_subdirectory(rpc)
-add_subdirectory(sys)
+            
+# core sub-directories
 add_subdirectory(async)
 add_subdirectory(file)
-add_subdirectory(msg)
-add_subdirectory(net)
-add_subdirectory(ipc)
+add_subdirectory(sys)
+
+# optional sub-directories
+if (ELOG_ENABLE_DB)
+    add_subdirectory(db)
+endif()
+if (ELOG_ENABLE_MSGQ)
+    add_subdirectory(msgq)
+endif()
+if (ELOG_ENABLE_RPC)
+    add_subdirectory(rpc)
+endif()
+if (ELOG_ENABLE_MON)
+    add_subdirectory(mon)
+endif()
+if (ELOG_ENABLE_MSG)
+    add_subdirectory(msg)
+endif()
+if (ELOG_ENABLE_NET)
+    add_subdirectory(net)
+endif()
+if (ELOG_ENABLE_IPC)
+    add_subdirectory(ipc)
+endif()
+
+# other extensions
+if (ELOG_ENABLE_CONFIG_SERVICE)
+    add_subdirectory(cfg_srv)
+endif()

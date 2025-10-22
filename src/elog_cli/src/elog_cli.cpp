@@ -14,10 +14,10 @@
 #include <string>
 #include <vector>
 
-#include "elog_config_service_client.h"
+#include "cfg_srv/elog_config_service_client.h"
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
-#include "elog_config_service_redis_reader.h"
+#include "cfg_srv/elog_config_service_redis_reader.h"
 #endif
 
 #define ELOG_CLI_VER_MAJOR 0
@@ -508,9 +508,13 @@ static bool execCommand(const std::string& cmd) {
     printf("\n");
     if (cmd.compare(CMD_HELP) == 0) {
         printHelp();
-    } else if (cmd.compare(CMD_LIST) == 0) {
+    }
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+    else if (cmd.compare(CMD_LIST) == 0) {
         printServices();
-    } else if (cmd.starts_with(CMD_CONNECT)) {
+    }
+#endif
+    else if (cmd.starts_with(CMD_CONNECT)) {
         std::string addr = trim(cmd.substr(strlen(CMD_CONNECT)));
         std::string host;
         int port;

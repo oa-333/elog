@@ -282,7 +282,7 @@ static int initELog() {
     // need them anyway), otherwise life-sign manager would complain that shm segment is already
     // created (when trying to open any segment)
     elog::ELogParams params;
-    params.m_enableLifeSignReport = false;
+    params.m_lifeSignParams.m_enableLifeSignReport = false;
     if (!elog::initialize(params)) {
         ELOG_ERROR_EX(sLogger, "Failed to initialize ELog library");
         return ERR_INIT;

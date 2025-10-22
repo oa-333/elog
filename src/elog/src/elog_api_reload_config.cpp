@@ -7,7 +7,9 @@
 #include <thread>
 
 #include "elog_api.h"
-#include "elog_api_config_service.h"
+#ifdef ELOG_ENABLE_CONFIG_SERVICE
+#include "cfg_srv/elog_api_config_service.h"
+#endif
 #include "elog_api_life_sign.h"
 #include "elog_config_loader.h"
 #include "elog_config_parser.h"
@@ -255,6 +257,7 @@ uint64_t getFileModifyTime(const char* filePath) {
 #endif
 }
 
+// TODO: duplicate code - need to refactor
 bool reconfigure(ELogConfig* config) {
     // verify root node is of map type
     if (config->getRootNode()->getNodeType() != ELogConfigNodeType::ELOG_CONFIG_MAP_NODE) {

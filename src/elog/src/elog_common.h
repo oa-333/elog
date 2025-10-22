@@ -287,7 +287,7 @@ inline bool getIntEnv(const char* configName, T& value, bool normalizeEnvVar = t
                       bool* found = nullptr) {
     std::string valueStr;
     if (getStringEnv(configName, valueStr)) {
-        if (!parseIntProp(ELOG_ENABLE_CONFIG_SERVICE_NAME, "", valueStr, value)) {
+        if (!parseIntProp(configName, "", valueStr, value)) {
             return false;
         }
         if (found != nullptr) {
@@ -302,7 +302,7 @@ inline bool getBoolEnv(const char* configName, bool& value, bool normalizeEnvVar
                        bool* found = nullptr) {
     std::string valueStr;
     if (getStringEnv(configName, valueStr)) {
-        if (!parseBoolProp(ELOG_ENABLE_CONFIG_SERVICE_NAME, "", valueStr, value)) {
+        if (!parseBoolProp(configName, "", valueStr, value)) {
             return false;
         }
         if (found != nullptr) {

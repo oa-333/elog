@@ -1,18 +1,28 @@
 #include "elog_schema_manager.h"
 
-#include "async/elog_async_schema_handler.h"
-#include "db/elog_db_schema_handler.h"
 #include "elog_report.h"
+
+// core packages
+#include "async/elog_async_schema_handler.h"
 #include "file/elog_file_schema_handler.h"
-#include "mon/elog_mon_schema_handler.h"
-#include "msgq/elog_msgq_schema_handler.h"
-#include "rpc/elog_rpc_schema_handler.h"
 #include "sys/elog_sys_schema_handler.h"
 
+// optional packages
+#ifdef ELOG_ENABLE_DB
+#include "db/elog_db_schema_handler.h"
+#endif
+#ifdef ELOG_ENABLE_MSGQ
+#include "msgq/elog_msgq_schema_handler.h"
+#endif
+#ifdef ELOG_ENABLE_RPC
+#include "rpc/elog_rpc_schema_handler.h"
+#endif
+#ifdef ELOG_ENABLE_MON
+#include "mon/elog_mon_schema_handler.h"
+#endif
 #ifdef ELOG_ENABLE_NET
 #include "net/elog_net_schema_handler.h"
 #endif
-
 #ifdef ELOG_ENABLE_IPC
 #include "ipc/elog_ipc_schema_handler.h"
 #endif
@@ -46,15 +56,37 @@ static bool initSchemaHandler(const char* name) {
 }
 
 bool ELogSchemaManager::initSchemaHandlers() {
+    // core packages
     if (!initSchemaHandler<ELogSysSchemaHandler>("sys") ||
         !initSchemaHandler<ELogFileSchemaHandler>("file") ||
-        !initSchemaHandler<ELogDbSchemaHandler>("db") ||
-        !initSchemaHandler<ELogMsgQSchemaHandler>("msgq") ||
-        !initSchemaHandler<ELogAsyncSchemaHandler>("async") ||
-        !initSchemaHandler<ELogRpcSchemaHandler>("rpc") ||
-        !initSchemaHandler<ELogMonSchemaHandler>("mon")) {
+        !initSchemaHandler<ELogAsyncSchemaHandler>("async")) {
         return false;
     }
+
+    // optional packages
+#ifdef ELOG_ENABLE_DB
+    if (!initSchemaHandler<ELogNetSchemaHandler>("db")) {
+        return false;
+    }
+#endif
+
+#ifdef ELOG_ENABLE_MSGQ
+    if (!initSchemaHandler<ELogNetSchemaHandler>("msgq")) {
+        return false;
+    }
+#endif
+
+#ifdef ELOG_ENABLE_RPC
+    if (!initSchemaHandler<ELogNetSchemaHandler>("rpc")) {
+        return false;
+    }
+#endif
+
+#ifdef ELOG_ENABLE_MON
+    if (!initSchemaHandler<ELogNetSchemaHandler>("mon")) {
+        return false;
+    }
+#endif
 
 #ifdef ELOG_ENABLE_NET
     if (!initSchemaHandler<ELogNetSchemaHandler>("net")) {

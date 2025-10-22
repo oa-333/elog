@@ -6,7 +6,7 @@
 #include <msg/msg_server.h>
 #include <transport/tcp_server.h>
 
-#include "elog_config_service_publisher.h"
+#include "cfg_srv/elog_config_service_publisher.h"
 #include "elog_def.h"
 #include "elog_proto.h"
 #include "elog_rolling_bitset.h"

@@ -94,8 +94,8 @@ bool initLifeSignReport() {
 
     // initialize garbage collector
     if (!sLifeSignGC->initialize("elog_life_sign_gc", getMaxThreads(), 0,
-                                 getParams().m_lifeSignGCPeriodMillis,
-                                 getParams().m_lifeSignGCTaskCount)) {
+                                 getParams().m_lifeSignParams.m_lifeSignGCPeriodMillis,
+                                 getParams().m_lifeSignParams.m_lifeSignGCTaskCount)) {
         ELOG_REPORT_ERROR("Failed to initialize life-sign report garbage collector");
         termLifeSignReport();
         return false;

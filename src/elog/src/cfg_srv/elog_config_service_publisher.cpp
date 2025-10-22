@@ -1,10 +1,10 @@
-#include "elog_config_service_publisher.h"
+#include "cfg_srv/elog_config_service_publisher.h"
 
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
 
 #include <unordered_map>
 
-#include "elog_config_service_internal.h"
+#include "cfg_srv/elog_config_service_internal.h"
 #include "elog_report.h"
 
 /** @def The maximum number of flush policies types that can be defined in the system. */

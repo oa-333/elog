@@ -12,12 +12,6 @@ target_sources(
             elog_buffer.h
             elog_common_def.h
             elog_concurrent_ring_buffer.h
-            elog_config_service_client.h
-            elog_config_service_params.h
-            elog_config_service_publisher.h
-            elog_config_service_redis_params.h
-            elog_config_service_redis_publisher.h
-            elog_config_service_redis_reader.h
             elog_config.h
             elog_def.h
             elog_expression.h
@@ -62,13 +56,35 @@ target_sources(
             elog_tls.h
             elog_type_codec.h)
             
-add_subdirectory(mon)
-add_subdirectory(db)
-add_subdirectory(msgq)
-add_subdirectory(rpc)
-add_subdirectory(sys)
+# core sub-directories
 add_subdirectory(async)
 add_subdirectory(file)
-add_subdirectory(msg)
-add_subdirectory(net)
-add_subdirectory(ipc)
+add_subdirectory(sys)
+
+# optional sub-directories
+if (ELOG_ENABLE_DB)
+    add_subdirectory(db)
+endif()
+if (ELOG_ENABLE_MSGQ)
+    add_subdirectory(msgq)
+endif()
+if (ELOG_ENABLE_RPC)
+    add_subdirectory(rpc)
+endif()
+if (ELOG_ENABLE_MON)
+    add_subdirectory(mon)
+endif()
+if (ELOG_ENABLE_MSG)
+    add_subdirectory(msg)
+endif()
+if (ELOG_ENABLE_NET)
+    add_subdirectory(net)
+endif()
+if (ELOG_ENABLE_IPC)
+    add_subdirectory(ipc)
+endif()
+
+# other extensions
+if (ELOG_ENABLE_CONFIG_SERVICE)
+    add_subdirectory(cfg_srv)
+endif()

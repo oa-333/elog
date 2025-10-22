@@ -1,4 +1,4 @@
-#include "elog_config_service_redis_reader.h"
+#include "cfg_srv/elog_config_service_redis_reader.h"
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 

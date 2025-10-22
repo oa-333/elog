@@ -289,6 +289,31 @@ In particular the following compile/runtime dependencies exist in each case:
 - Sentry connector requires the Sentry native library
 - Stack trace logging and exception/crash handling requires [dbgutil](https://github.com/oa-333/dbgutil)
 - fmtlib formatting style requires [fmtlib](https://github.com/fmtlib/fmt)
+- Network/IPC connectors require [commutil](http://github.com/oa-333/commutil) and protobuf libraries
+- Open Telemetry connector requires Open Telemetry's C++ libraries
+
+### Limitations and Build Issues
+
+The following limitations are known:
+
+- Open Telemetry connector and configuration service cannot be built together on Linux (build fails)
+- Open Telemetry connector and gRPC connector cannot be built together on Linux (build fails)
+
+This limitation exists due to collision between Open Telemetry's protobuf version that differs from the one ELog uses. Other platforms do not share this limitation.
+
+In order to avoid these limitations, follow these guidelines:
+
+- Use one gRPC/protobuf installation for all components (i.e. ELog and Open Telemetry cpp client)
+- Make sure that the installed gRPC/protobuf package enables shared linking
+- Make sure that Open Telemetry cpp client uses the external gRPC/protobuf libraries instead of its own local version
+
+This most probably requires building both libraries locally.
+
+For building shared gRPC/protobuf, follow the instructions [here](https://grpc.io/docs/languages/cpp/quickstart/).  
+For building Open Telemetry cpp client with external shared gRPC/protobuf, follow the instructions [here](https://opentelemetry.io/docs/languages/cpp/getting-started/) and [here](https://github.com/open-telemetry/opentelemetry-cpp/discussions/1655).
+
+Currently no specific build instructions are given for this issue.  
+Future versions may specify here more details.
 
 ### Installing
 
@@ -311,7 +336,7 @@ For CMake builds it is possible to use FetchContent as follows:
 
     FetchContent_Declare(elog
         GIT_REPOSITORY https://github.com/oa-333/elog.git
-        GIT_TAG v0.1.0
+        GIT_TAG v0.1.9
     )
     FetchContent_MakeAvailable(elog)
     target_include_directories(

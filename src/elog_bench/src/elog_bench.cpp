@@ -24,7 +24,7 @@
 #endif
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
-#include "elog_config_service_redis_publisher.h"
+#include "cfg_srv/elog_config_service_redis_publisher.h"
 #endif
 
 #if defined(ELOG_MSVC) || defined(ELOG_MINGW)

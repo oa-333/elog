@@ -28,7 +28,7 @@
 #endif
 
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
-#include "elog_config_service_publisher.h"
+#include "cfg_srv/elog_config_service_publisher.h"
 #endif
 
 /** @file The elog module facade. */
