@@ -81,7 +81,7 @@ ELogFormatter* constructLogFormatter(const char* name, bool issueErrors /* = tru
 
 ELogFormatter::~ELogFormatter() {
     for (ELogFieldSelector* fieldSelector : m_fieldSelectors) {
-        delete fieldSelector;
+        destroyFieldSelector(fieldSelector);
     }
     m_fieldSelectors.clear();
 }
@@ -364,7 +364,7 @@ bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
                 "Invalid false-clause '%s' in conditional formatting specification (field parsing "
                 "failed): %s",
                 suffix.c_str(), fieldSpecStr.c_str());
-            delete trueSelector;
+            destroyFieldSelector(trueSelector);
             delete filter;
             return false;
         }
@@ -378,9 +378,9 @@ bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
         ELOG_REPORT_ERROR("Excess character '%s' in conditional formatting specification: %s",
                           suffix.c_str(), fieldSpecStr.c_str());
         if (falseSelector != nullptr) {
-            delete falseSelector;
+            destroyFieldSelector(falseSelector);
         }
-        delete trueSelector;
+        destroyFieldSelector(trueSelector);
         delete filter;
         return false;
     }
@@ -391,9 +391,9 @@ bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
     if (fieldSelector == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate conditional field selector, out of memory");
         if (falseSelector != nullptr) {
-            delete falseSelector;
+            destroyFieldSelector(falseSelector);
         }
-        delete trueSelector;
+        destroyFieldSelector(trueSelector);
         delete filter;
         return false;
     }
@@ -447,7 +447,7 @@ bool ELogFormatter::parseSwitchField(const std::string& fieldSpecStr) {
     ELogSwitchSelector* switchSelector = new (std::nothrow) ELogSwitchSelector(exprSelector);
     if (switchSelector == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate switch field selector, out of memory");
-        delete exprSelector;
+        destroyFieldSelector(exprSelector);
         return false;
     }
 
@@ -460,7 +460,7 @@ bool ELogFormatter::parseSwitchField(const std::string& fieldSpecStr) {
                 "Case expression expected after value expression in conditional formatting "
                 "specification: %s",
                 fieldSpecStr.c_str());
-            delete switchSelector;
+            destroyFieldSelector(switchSelector);
             return false;
         }
         std::string::size_type openBracePos = fieldSpecStr.find("${", nextColonPos + 1);
@@ -469,7 +469,7 @@ bool ELogFormatter::parseSwitchField(const std::string& fieldSpecStr) {
             ELOG_REPORT_ERROR(
                 "Invalid case expression syntax in conditional formatting specification: %s",
                 fieldSpecStr.c_str());
-            delete switchSelector;
+            destroyFieldSelector(switchSelector);
             return false;
         }
 
@@ -481,7 +481,7 @@ bool ELogFormatter::parseSwitchField(const std::string& fieldSpecStr) {
             ELOG_REPORT_ERROR(
                 "Failed to parse case clause in conditional formatting specification: %s",
                 fieldSpecStr.c_str());
-            delete switchSelector;
+            destroyFieldSelector(switchSelector);
             return false;
         }
 
@@ -492,7 +492,7 @@ bool ELogFormatter::parseSwitchField(const std::string& fieldSpecStr) {
                 ELOG_REPORT_ERROR(
                     "Excess characters '%s' found in conditional formatting specification: %s",
                     fieldSpecStr.c_str(), suffix.c_str());
-                delete switchSelector;
+                destroyFieldSelector(switchSelector);
                 return false;
             }
             done = true;
@@ -507,7 +507,7 @@ bool ELogFormatter::parseSwitchField(const std::string& fieldSpecStr) {
                     ELOG_REPORT_ERROR(
                         "Excess characters '%s' found in conditional formatting specification: %s",
                         fieldSpecStr.c_str(), suffix.c_str());
-                    delete switchSelector;
+                    destroyFieldSelector(switchSelector);
                     return false;
                 }
                 done = true;
@@ -565,7 +565,7 @@ bool ELogFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
                 "Case expression expected after value expression in expr-switch formatting "
                 "specification: %s",
                 fieldSpecStr.c_str());
-            delete switchSelector;
+            destroyFieldSelector(switchSelector);
             return false;
         }
         std::string::size_type openBracePos = fieldSpecStr.find("${", colonPos + 1);
@@ -574,7 +574,7 @@ bool ELogFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
             ELOG_REPORT_ERROR(
                 "Invalid case expression syntax in expr-switch formatting specification: %s",
                 fieldSpecStr.c_str());
-            delete switchSelector;
+            destroyFieldSelector(switchSelector);
             return false;
         }
 
@@ -586,7 +586,7 @@ bool ELogFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
             ELOG_REPORT_ERROR(
                 "Failed to parse case clause in expr-switch formatting specification: %s",
                 fieldSpecStr.c_str());
-            delete switchSelector;
+            destroyFieldSelector(switchSelector);
             return false;
         }
 
@@ -597,7 +597,7 @@ bool ELogFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
                 ELOG_REPORT_ERROR(
                     "Excess characters '%s' found in expr-switch formatting specification: %s",
                     fieldSpecStr.c_str(), suffix.c_str());
-                delete switchSelector;
+                destroyFieldSelector(switchSelector);
                 return false;
             }
             done = true;
@@ -612,7 +612,7 @@ bool ELogFormatter::parseExprSwitchField(const std::string& fieldSpecStr) {
                     ELOG_REPORT_ERROR(
                         "Excess characters '%s' found in expr-switch formatting specification: %s",
                         fieldSpecStr.c_str(), suffix.c_str());
-                    delete switchSelector;
+                    destroyFieldSelector(switchSelector);
                     return false;
                 }
                 done = true;
@@ -670,7 +670,7 @@ bool ELogFormatter::parseCaseClause(ELogSwitchSelector* switchSelector,
     if (!getFieldCloseBrace(caseSpec, 0, closeBracePos)) {
         ELOG_REPORT_ERROR("Invalid case value syntax in switch formatting specification: %s",
                           caseSpec.c_str());
-        delete switchSelector;
+        destroyFieldSelector(switchSelector);
         return false;
     }
 
@@ -680,7 +680,7 @@ bool ELogFormatter::parseCaseClause(ELogSwitchSelector* switchSelector,
         ELOG_REPORT_ERROR(
             "Failed to load value selector for switch format specification, invalid expression: %s",
             valueSpec.c_str());
-        delete switchSelector;
+        destroyFieldSelector(switchSelector);
         return false;
     }
 
@@ -690,7 +690,7 @@ bool ELogFormatter::parseCaseClause(ELogSwitchSelector* switchSelector,
         ELOG_REPORT_ERROR(
             "Invalid switch formatting specification, missing ':' after case value: %s",
             caseSpec.c_str());
-        delete switchSelector;
+        destroyFieldSelector(switchSelector);
         return false;
     }
 
@@ -701,8 +701,8 @@ bool ELogFormatter::parseCaseClause(ELogSwitchSelector* switchSelector,
             "Failed to load result selector for switch format specification, invalid expression: "
             "%s",
             resultSpec.c_str());
-        delete valueSelector;
-        delete switchSelector;
+        destroyFieldSelector(valueSelector);
+        destroyFieldSelector(switchSelector);
         return false;
     }
 
@@ -770,7 +770,7 @@ bool ELogFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelector,
         ELOG_REPORT_ERROR(
             "Invalid case predicate syntax in expr-switch formatting specification: %s",
             caseSpec.c_str());
-        delete switchSelector;
+        destroyFieldSelector(switchSelector);
         return false;
     }
 
@@ -781,7 +781,7 @@ bool ELogFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelector,
             "Failed to load value selector for expr-switch format specification, invalid "
             "predicate: %s",
             predSpec.c_str());
-        delete switchSelector;
+        destroyFieldSelector(switchSelector);
         return false;
     }
 
@@ -791,7 +791,7 @@ bool ELogFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelector,
         ELOG_REPORT_ERROR(
             "Invalid expr-switch formatting specification, missing ':' after case predicate: %s",
             caseSpec.c_str());
-        delete switchSelector;
+        destroyFieldSelector(switchSelector);
         return false;
     }
 
@@ -803,7 +803,7 @@ bool ELogFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelector,
             "%s",
             resultSpec.c_str());
         delete valueFilter;
-        delete switchSelector;
+        destroyFieldSelector(switchSelector);
         return false;
     }
 

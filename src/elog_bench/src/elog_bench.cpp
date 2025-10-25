@@ -113,6 +113,7 @@ static bool sTestLifeSign = false;
 static bool sTestConfigService = false;
 static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
+static bool sTestSelector = false;
 static int sMsgCnt = -1;
 static int sMinThreadCnt = -1;
 static int sMaxThreadCnt = -1;
@@ -866,6 +867,7 @@ static int testEventLog();
 static int testRegression();
 static int testLifeSign();
 static int testConfigService();
+static int testSelector();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -1219,6 +1221,9 @@ static bool parseArgs(int argc, char* argv[]) {
                     "Cannot test config-service, must compile with ELOG_ENABLE_CONFIG_SERVICE\n");
             return false;
 #endif
+        } else if (strcmp(argv[1], "--test-selector") == 0) {
+            sTestSelector = true;
+            return true;
         }
     }
 
@@ -1636,6 +1641,8 @@ int main(int argc, char* argv[]) {
         res = testLifeSign();
     } else if (sTestConfigService) {
         res = testConfigService();
+    } else if (sTestSelector) {
+        res = testSelector();
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
 
@@ -2228,6 +2235,40 @@ static int testConfigService() {
         publisher->terminate();
     }
 #endif
+    return 0;
+}
+
+class TestSelector : public elog::ELogFieldSelector {
+public:
+    TestSelector(const elog::ELogFieldSpec& fieldSpec)
+        : elog::ELogFieldSelector(elog::ELogFieldType::FT_TEXT, fieldSpec) {}
+    TestSelector(const TestSelector&) = delete;
+    TestSelector(TestSelector&&) = delete;
+    TestSelector& operator=(const TestSelector&) = delete;
+
+    void selectField(const elog::ELogRecord& record, elog::ELogFieldReceptor* receptor) final {
+        std::string fieldStr = "test-field";
+        receptor->receiveStringField(getTypeId(), fieldStr.c_str(), getFieldSpec(),
+                                     fieldStr.length());
+    }
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(TestSelector, test, ELOG_NO_EXPORT)
+};
+
+ELOG_IMPLEMENT_FIELD_SELECTOR(TestSelector)
+
+// TODO: define a string log target so we can examine the resulting text
+
+int testSelector() {
+    const char* cfg = "sys://stderr?log_format=${time} ${level:6} [${tid}] <${test}> ${src} ${msg}";
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        return 1;
+    }
+    elog::ELogLogger* logger = elog::getPrivateLogger("elog_bench_logger");
+    ELOG_INFO_EX(logger, "This is a test message");
+    termELog();
     return 0;
 }
 

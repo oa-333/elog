@@ -222,6 +222,26 @@ ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec) {
     return fieldSelector;
 }
 
+void destroyFieldSelector(ELogFieldSelector* fieldSelector) {
+    if (fieldSelector == nullptr) {
+        ELOG_REPORT_WARN("Attempting to delete null field selector, request ignored");
+        return;
+    }
+
+    // locate the constructor
+    ELogFieldSelectorConstructorMap::iterator itr =
+        sFieldSelectorConstructorMap.find(fieldSelector->getFieldSpec().m_name);
+    if (itr == sFieldSelectorConstructorMap.end()) {
+        ELOG_REPORT_ERROR("Invalid field selector %s: not found",
+                          fieldSelector->getFieldSpec().m_name.c_str());
+        return;
+    }
+
+    // delete the field selector at its origin module
+    ELogFieldSelectorConstructor* constructor = itr->second;
+    constructor->destroyFieldSelector(fieldSelector);
+}
+
 static void initHostName() {
 #ifdef ELOG_WINDOWS
     DWORD len = HOST_NAME_MAX;
@@ -827,17 +847,17 @@ void ELogFormatSelector::selectField(const ELogRecord& record, ELogFieldReceptor
     receptor->receiveStringField(getTypeId(), "", m_fieldSpec, 0);
 }
 
-ELogIfSelector::~ELogIfSelector() {
+void ELogIfSelector::destroy() {
     if (m_cond != nullptr) {
         delete m_cond;
         m_cond = nullptr;
     }
     if (m_trueSelector != nullptr) {
-        delete m_trueSelector;
+        destroyFieldSelector(m_trueSelector);
         m_trueSelector = nullptr;
     }
     if (m_falseSelector != nullptr) {
-        delete m_falseSelector;
+        destroyFieldSelector(m_falseSelector);
         m_falseSelector = nullptr;
     }
 }
@@ -929,18 +949,18 @@ private:
     ELogFieldType m_fieldType;
 };
 
-ELogSwitchSelector::~ELogSwitchSelector() {
+void ELogSwitchSelector::destroy() {
     if (m_valueExpr != nullptr) {
-        delete m_valueExpr;
+        destroyFieldSelector(m_valueExpr);
         m_valueExpr = nullptr;
     }
     for (auto& entry : m_cases) {
-        delete entry.first;
-        delete entry.second;
+        destroyFieldSelector(entry.first);
+        destroyFieldSelector(entry.second);
     }
     m_cases.clear();
     if (m_defaultFieldSelector != nullptr) {
-        delete m_defaultFieldSelector;
+        destroyFieldSelector(m_defaultFieldSelector);
         m_defaultFieldSelector = nullptr;
     }
 }
@@ -966,14 +986,14 @@ void ELogSwitchSelector::selectField(const ELogRecord& record, ELogFieldReceptor
     }
 }
 
-ELogExprSwitchSelector::~ELogExprSwitchSelector() {
+void ELogExprSwitchSelector::destroy() {
     for (auto& entry : m_cases) {
         delete entry.first;
-        delete entry.second;
+        destroyFieldSelector(entry.second);
     }
     m_cases.clear();
     if (m_defaultFieldSelector != nullptr) {
-        delete m_defaultFieldSelector;
+        destroyFieldSelector(m_defaultFieldSelector);
         m_defaultFieldSelector = nullptr;
     }
 }

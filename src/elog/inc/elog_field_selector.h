@@ -38,8 +38,6 @@ enum class ELogFieldType : uint32_t {
  */
 class ELOG_API ELogFieldSelector {
 public:
-    virtual ~ELogFieldSelector() {}
-
     /**
      * @brief Selects a field from the log record (or from external source) and appends it to the
      * message stream.
@@ -54,12 +52,19 @@ public:
     /** @brief Retrieves the specification of the selected field. */
     inline const ELogFieldSpec& getFieldSpec() const { return m_fieldSpec; }
 
+    /**
+     * @brief Allow for special cleanup, since field selector destruction is controlled (destructor
+     * not exposed).
+     */
+    virtual void destroy() {}
+
 protected:
     ELogFieldSelector(ELogFieldType fieldType, const ELogFieldSpec& fieldSpec = ELogFieldSpec())
         : m_fieldType(fieldType), m_fieldSpec(fieldSpec) {}
     ELogFieldSelector(const ELogFieldSelector&) = delete;
     ELogFieldSelector(ELogFieldSelector&&) = delete;
     ELogFieldSelector& operator=(const ELogFieldSelector&) = delete;
+    virtual ~ELogFieldSelector() {}
 
     ELogFieldType m_fieldType;
     ELogFieldSpec m_fieldSpec;
@@ -83,6 +88,9 @@ extern ELOG_API void registerFieldSelectorConstructor(const char* name,
  */
 extern ELOG_API ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec);
 
+/** @brief Destroys a field selector object. */
+extern ELOG_API void destroyFieldSelector(ELogFieldSelector* fieldSelector);
+
 /** @brief Utility helper class for field selector construction. */
 class ELOG_API ELogFieldSelectorConstructor {
 public:
@@ -94,6 +102,9 @@ public:
      * @return ELogFieldSelector* The resulting field selector, or null if failed.
      */
     virtual ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec) = 0;
+
+    /** @brief Destroys a field selector object. */
+    virtual void destroyFieldSelector(ELogFieldSelector* fieldSelector) = 0;
 
     /** @brief Installs field selector type id (for internal use only). */
     inline void setTypeId(uint32_t typeId) { m_typeId = typeId; }
@@ -114,16 +125,25 @@ private:
     uint32_t m_typeId;
 };
 
-/** @def Utility macro for declaring field selector factory method registration. */
-#define ELOG_DECLARE_FIELD_SELECTOR(FieldSelectorType, Name)                                       \
+/**
+ * @def Utility macro for declaring field selector factory method registration.
+ * @param FieldSelectorType Type name of field selector.
+ * @param Name Configuration name of field selector (for dynamic loading from configuration).
+ * @param ImportExportSpec Window import/export specification. If exporting from a library then
+ * specify a macro that will expand correctly within the library and from outside as well. If not
+ * relevant then pass ELOG_NO_EXPORT.
+ */
+#define ELOG_DECLARE_FIELD_SELECTOR(FieldSelectorType, Name, ImportExportSpec)                     \
 private:                                                                                           \
-    class ELOG_API FieldSelectorType##Constructor final                                            \
+    ~FieldSelectorType() final {}                                                                  \
+    friend class ImportExportSpec FieldSelectorType##Constructor;                                  \
+    class ImportExportSpec FieldSelectorType##Constructor final                                    \
         : public elog::ELogFieldSelectorConstructor {                                              \
     public:                                                                                        \
         FieldSelectorType##Constructor() : elog::ELogFieldSelectorConstructor(#Name) {}            \
-        elog::ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec) final {    \
-            return new (std::nothrow) FieldSelectorType(fieldSpec);                                \
-        }                                                                                          \
+        elog::ELogFieldSelector* constructFieldSelector(                                           \
+            const elog::ELogFieldSpec& fieldSpec) final;                                           \
+        void destroyFieldSelector(elog::ELogFieldSelector* fieldSelector) final;                   \
         ~FieldSelectorType##Constructor() final {}                                                 \
         FieldSelectorType##Constructor(const FieldSelectorType##Constructor&) = delete;            \
         FieldSelectorType##Constructor(FieldSelectorType##Constructor&&) = delete;                 \
@@ -135,8 +155,20 @@ public:                                                                         
     static uint32_t getTypeId() { return sConstructor.getTypeId(); }
 
 /** @def Utility macro for implementing field selector factory method registration. */
-#define ELOG_IMPLEMENT_FIELD_SELECTOR(FieldSelectorType) \
-    FieldSelectorType::FieldSelectorType##Constructor FieldSelectorType::sConstructor;
+#define ELOG_IMPLEMENT_FIELD_SELECTOR(FieldSelectorType)                               \
+    FieldSelectorType::FieldSelectorType##Constructor FieldSelectorType::sConstructor; \
+    elog::ELogFieldSelector*                                                           \
+        FieldSelectorType::FieldSelectorType##Constructor::constructFieldSelector(     \
+            const elog::ELogFieldSpec& fieldSpec) {                                    \
+        return new (std::nothrow) FieldSelectorType(fieldSpec);                        \
+    }                                                                                  \
+    void FieldSelectorType::FieldSelectorType##Constructor::destroyFieldSelector(      \
+        elog::ELogFieldSelector* fieldSelector) {                                      \
+        if (fieldSelector != nullptr) {                                                \
+            fieldSelector->destroy();                                                  \
+            delete (FieldSelectorType*)fieldSelector;                                  \
+        }                                                                              \
+    }
 
 /**
  * @brief Static text field selector, used for placing the strings between the fields in the log
@@ -145,13 +177,12 @@ public:                                                                         
 class ELOG_API ELogStaticTextSelector final : public ELogFieldSelector {
 public:
     ELogStaticTextSelector(const char* text = "")
-        : ELogFieldSelector(ELogFieldType::FT_TEXT), m_text(text) {}
+        : ELogFieldSelector(ELogFieldType::FT_TEXT, ELogFieldSpec("text")), m_text(text) {}
     ELogStaticTextSelector(const ELogFieldSpec& fieldSpec)
         : ELogFieldSelector(ELogFieldType::FT_TEXT, fieldSpec) {}
     ELogStaticTextSelector(const ELogStaticTextSelector&) = delete;
     ELogStaticTextSelector(ELogStaticTextSelector&&) = delete;
     ELogStaticTextSelector& operator=(const ELogStaticTextSelector&) = delete;
-    ~ELogStaticTextSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
@@ -160,7 +191,7 @@ private:
 
     // we allow having ${text} as a keyword with no text context, solely for the purpose of allowing
     // specify text font/color specification
-    ELOG_DECLARE_FIELD_SELECTOR(ELogStaticTextSelector, text)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogStaticTextSelector, text, ELOG_API)
 };
 
 class ELOG_API ELogRecordIdSelector final : public ELogFieldSelector {
@@ -170,12 +201,11 @@ public:
     ELogRecordIdSelector(const ELogRecordIdSelector&) = delete;
     ELogRecordIdSelector(ELogRecordIdSelector&&) = delete;
     ELogRecordIdSelector& operator=(const ELogRecordIdSelector&) = delete;
-    ~ELogRecordIdSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogRecordIdSelector, rid)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogRecordIdSelector, rid, ELOG_API)
 };
 
 class ELOG_API ELogTimeSelector final : public ELogFieldSelector {
@@ -185,12 +215,11 @@ public:
     ELogTimeSelector(const ELogTimeSelector&) = delete;
     ELogTimeSelector(ELogTimeSelector&&) = delete;
     ELogTimeSelector& operator=(const ELogTimeSelector&) = delete;
-    ~ELogTimeSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeSelector, time)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeSelector, time, ELOG_API)
 };
 
 class ELOG_API ELogTimeEpochSelector final : public ELogFieldSelector {
@@ -200,12 +229,11 @@ public:
     ELogTimeEpochSelector(const ELogTimeEpochSelector&) = delete;
     ELogTimeEpochSelector(ELogTimeEpochSelector&&) = delete;
     ELogTimeEpochSelector& operator=(const ELogTimeEpochSelector&) = delete;
-    ~ELogTimeEpochSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeEpochSelector, time_epoch)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogTimeEpochSelector, time_epoch, ELOG_API)
 };
 
 class ELOG_API ELogHostNameSelector final : public ELogFieldSelector {
@@ -215,12 +243,11 @@ public:
     ELogHostNameSelector(const ELogHostNameSelector&) = delete;
     ELogHostNameSelector(ELogHostNameSelector&&) = delete;
     ELogHostNameSelector& operator=(const ELogHostNameSelector&) = delete;
-    ~ELogHostNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogHostNameSelector, host)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogHostNameSelector, host, ELOG_API)
 };
 
 class ELOG_API ELogUserNameSelector final : public ELogFieldSelector {
@@ -230,12 +257,11 @@ public:
     ELogUserNameSelector(const ELogUserNameSelector&) = delete;
     ELogUserNameSelector(ELogUserNameSelector&&) = delete;
     ELogUserNameSelector& operator=(const ELogUserNameSelector&) = delete;
-    ~ELogUserNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogUserNameSelector, user)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogUserNameSelector, user, ELOG_API)
 };
 
 class ELOG_API ELogOsNameSelector final : public ELogFieldSelector {
@@ -245,12 +271,11 @@ public:
     ELogOsNameSelector(const ELogOsNameSelector&) = delete;
     ELogOsNameSelector(ELogOsNameSelector&&) = delete;
     ELogOsNameSelector& operator=(const ELogOsNameSelector&) = delete;
-    ~ELogOsNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogOsNameSelector, os_name)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogOsNameSelector, os_name, ELOG_API)
 };
 
 class ELOG_API ELogOsVersionSelector final : public ELogFieldSelector {
@@ -260,12 +285,11 @@ public:
     ELogOsVersionSelector(const ELogOsVersionSelector&) = delete;
     ELogOsVersionSelector(ELogOsVersionSelector&&) = delete;
     ELogOsVersionSelector& operator=(const ELogOsVersionSelector&) = delete;
-    ~ELogOsVersionSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogOsVersionSelector, os_ver)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogOsVersionSelector, os_ver, ELOG_API)
 };
 
 class ELOG_API ELogAppNameSelector final : public ELogFieldSelector {
@@ -275,12 +299,11 @@ public:
     ELogAppNameSelector(const ELogAppNameSelector&) = delete;
     ELogAppNameSelector(ELogAppNameSelector&&) = delete;
     ELogAppNameSelector& operator=(const ELogAppNameSelector&) = delete;
-    ~ELogAppNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogAppNameSelector, app)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogAppNameSelector, app, ELOG_API)
 };
 
 class ELOG_API ELogProgramNameSelector final : public ELogFieldSelector {
@@ -290,12 +313,11 @@ public:
     ELogProgramNameSelector(const ELogProgramNameSelector&) = delete;
     ELogProgramNameSelector(ELogProgramNameSelector&&) = delete;
     ELogProgramNameSelector& operator=(const ELogProgramNameSelector&) = delete;
-    ~ELogProgramNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogProgramNameSelector, prog)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogProgramNameSelector, prog, ELOG_API)
 };
 
 class ELOG_API ELogProcessIdSelector final : public ELogFieldSelector {
@@ -305,12 +327,11 @@ public:
     ELogProcessIdSelector(const ELogProcessIdSelector&) = delete;
     ELogProcessIdSelector(ELogProcessIdSelector&&) = delete;
     ELogProcessIdSelector& operator=(const ELogProcessIdSelector&) = delete;
-    ~ELogProcessIdSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogProcessIdSelector, pid)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogProcessIdSelector, pid, ELOG_API)
 };
 
 class ELOG_API ELogThreadIdSelector final : public ELogFieldSelector {
@@ -320,12 +341,11 @@ public:
     ELogThreadIdSelector(const ELogThreadIdSelector&) = delete;
     ELogThreadIdSelector(ELogThreadIdSelector&&) = delete;
     ELogThreadIdSelector& operator=(const ELogThreadIdSelector&) = delete;
-    ~ELogThreadIdSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadIdSelector, tid)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadIdSelector, tid, ELOG_API)
 };
 
 class ELOG_API ELogThreadNameSelector final : public ELogFieldSelector {
@@ -335,12 +355,11 @@ public:
     ELogThreadNameSelector(const ELogThreadNameSelector&) = delete;
     ELogThreadNameSelector(ELogThreadNameSelector&&) = delete;
     ELogThreadNameSelector& operator=(const ELogThreadNameSelector&) = delete;
-    ~ELogThreadNameSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadNameSelector, tname)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogThreadNameSelector, tname, ELOG_API)
 };
 
 class ELOG_API ELogSourceSelector final : public ELogFieldSelector {
@@ -350,12 +369,11 @@ public:
     ELogSourceSelector(const ELogSourceSelector&) = delete;
     ELogSourceSelector(ELogSourceSelector&&) = delete;
     ELogSourceSelector& operator=(const ELogSourceSelector&) = delete;
-    ~ELogSourceSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogSourceSelector, src)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogSourceSelector, src, ELOG_API)
 };
 
 class ELOG_API ELogModuleSelector final : public ELogFieldSelector {
@@ -365,12 +383,11 @@ public:
     ELogModuleSelector(const ELogModuleSelector&) = delete;
     ELogModuleSelector(ELogModuleSelector&&) = delete;
     ELogModuleSelector& operator=(const ELogModuleSelector&) = delete;
-    ~ELogModuleSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogModuleSelector, mod)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogModuleSelector, mod, ELOG_API)
 };
 
 class ELOG_API ELogFileSelector final : public ELogFieldSelector {
@@ -380,12 +397,11 @@ public:
     ELogFileSelector(const ELogFileSelector&) = delete;
     ELogFileSelector(ELogFileSelector&&) = delete;
     ELogFileSelector& operator=(const ELogFileSelector&) = delete;
-    ~ELogFileSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogFileSelector, file)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFileSelector, file, ELOG_API)
 };
 
 class ELOG_API ELogLineSelector final : public ELogFieldSelector {
@@ -395,12 +411,11 @@ public:
     ELogLineSelector(const ELogLineSelector&) = delete;
     ELogLineSelector(ELogLineSelector&&) = delete;
     ELogLineSelector& operator=(const ELogLineSelector&) = delete;
-    ~ELogLineSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogLineSelector, line)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogLineSelector, line, ELOG_API)
 };
 
 class ELOG_API ELogFunctionSelector final : public ELogFieldSelector {
@@ -410,12 +425,11 @@ public:
     ELogFunctionSelector(const ELogFunctionSelector&) = delete;
     ELogFunctionSelector(ELogFunctionSelector&&) = delete;
     ELogFunctionSelector& operator=(const ELogFunctionSelector&) = delete;
-    ~ELogFunctionSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogFunctionSelector, func)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFunctionSelector, func, ELOG_API)
 };
 
 class ELOG_API ELogLevelSelector final : public ELogFieldSelector {
@@ -425,12 +439,11 @@ public:
     ELogLevelSelector(const ELogLevelSelector&) = delete;
     ELogLevelSelector(ELogLevelSelector&&) = delete;
     ELogLevelSelector& operator=(const ELogLevelSelector&) = delete;
-    ~ELogLevelSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogLevelSelector, level)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogLevelSelector, level, ELOG_API)
 };
 
 class ELOG_API ELogMsgSelector final : public ELogFieldSelector {
@@ -440,12 +453,11 @@ public:
     ELogMsgSelector(const ELogMsgSelector&) = delete;
     ELogMsgSelector(ELogMsgSelector&&) = delete;
     ELogMsgSelector& operator=(const ELogMsgSelector&) = delete;
-    ~ELogMsgSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
-    ELOG_DECLARE_FIELD_SELECTOR(ELogMsgSelector, msg)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogMsgSelector, msg, ELOG_API)
 };
 
 /**
@@ -462,14 +474,13 @@ public:
     ELogFormatSelector(const ELogFormatSelector&) = delete;
     ELogFormatSelector(ELogFormatSelector&&) = delete;
     ELogFormatSelector& operator=(const ELogFormatSelector&) = delete;
-    ~ELogFormatSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
 private:
     // we allow having ${fmt} as a keyword, solely for the purpose of allowing specify text
     // font/color specification
-    ELOG_DECLARE_FIELD_SELECTOR(ELogFormatSelector, fmt)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogFormatSelector, fmt, ELOG_API)
 };
 
 /**
@@ -495,9 +506,9 @@ public:
     ELogIfSelector(ELogIfSelector&&) = delete;
     ELogIfSelector& operator=(const ELogIfSelector&) = delete;
 
-    ~ELogIfSelector() final;
-
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+    void destroy() final;
 
 private:
     // parent class's m_fieldSpec member holds all following 3 members (3rd optional)
@@ -505,7 +516,7 @@ private:
     ELogFieldSelector* m_trueSelector;
     ELogFieldSelector* m_falseSelector;
 
-    ELOG_DECLARE_FIELD_SELECTOR(ELogIfSelector, if)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogIfSelector, if, ELOG_API)
 };
 
 /** @brief Switch-case field selector. Can be used also for conditional formatting. */
@@ -525,8 +536,6 @@ public:
     ELogSwitchSelector(ELogSwitchSelector&&) = delete;
     ELogSwitchSelector& operator=(const ELogSwitchSelector&) = delete;
 
-    ~ELogSwitchSelector() final;
-
     inline void addCase(ELogFieldSelector* caseValueExpr, ELogFieldSelector* caseFieldSelector) {
         m_cases.push_back({caseValueExpr, caseFieldSelector});
     }
@@ -537,13 +546,15 @@ public:
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
+    void destroy() final;
+
 private:
     // parent class's m_fieldSpec member holds all following 3 members (3rd optional)
     ELogFieldSelector* m_valueExpr;
     std::vector<std::pair<ELogFieldSelector*, ELogFieldSelector*>> m_cases;
     ELogFieldSelector* m_defaultFieldSelector;
 
-    ELOG_DECLARE_FIELD_SELECTOR(ELogSwitchSelector, switch)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogSwitchSelector, switch, ELOG_API)
 };
 
 /** @brief Switch-case field selector. */
@@ -557,7 +568,6 @@ public:
     ELogExprSwitchSelector(const ELogExprSwitchSelector&) = delete;
     ELogExprSwitchSelector(ELogExprSwitchSelector&&) = delete;
     ELogExprSwitchSelector& operator=(const ELogExprSwitchSelector&) = delete;
-    ~ELogExprSwitchSelector() final;
 
     inline void addCase(ELogFilter* casePred, ELogFieldSelector* caseFieldSelector) {
         m_cases.push_back({casePred, caseFieldSelector});
@@ -569,13 +579,15 @@ public:
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
+    void destroy() final;
+
 private:
     std::vector<std::pair<ELogFilter*, ELogFieldSelector*>> m_cases;
     ELogFieldSelector* m_defaultFieldSelector;
 
     // turn off clang formatting due to "expr-switch" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogExprSwitchSelector, expr-switch)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogExprSwitchSelector, expr-switch, ELOG_API)
     // clang-format on
 };
 
@@ -590,7 +602,6 @@ public:
     ELogConstStringSelector(const ELogConstStringSelector&) = delete;
     ELogConstStringSelector(ELogConstStringSelector&&) = delete;
     ELogConstStringSelector& operator=(const ELogConstStringSelector&) = delete;
-    ~ELogConstStringSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
@@ -599,7 +610,7 @@ private:
 
     // turn off clang formatting due to "const-string" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstStringSelector, const-string)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstStringSelector, const-string, ELOG_API)
     // clang-format on
 };
 
@@ -613,7 +624,6 @@ public:
     ELogConstIntSelector(const ELogConstIntSelector&) = delete;
     ELogConstIntSelector(ELogConstIntSelector&&) = delete;
     ELogConstIntSelector& operator=(const ELogConstIntSelector&) = delete;
-    ~ELogConstIntSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
@@ -622,7 +632,7 @@ private:
 
     // turn off clang formatting due to "const-int" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstIntSelector, const-int)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstIntSelector, const-int, ELOG_API)
     // clang-format on
 };
 
@@ -638,7 +648,6 @@ public:
     ELogConstTimeSelector(const ELogConstTimeSelector&) = delete;
     ELogConstTimeSelector(ELogConstTimeSelector&&) = delete;
     ELogConstTimeSelector& operator=(const ELogConstTimeSelector&) = delete;
-    ~ELogConstTimeSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
@@ -648,7 +657,7 @@ private:
 
     // turn off clang formatting due to "const-time" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstTimeSelector, const-time)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstTimeSelector, const-time, ELOG_API)
     // clang-format on
 };
 
@@ -663,7 +672,6 @@ public:
     ELogConstLogLevelSelector(const ELogConstLogLevelSelector&) = delete;
     ELogConstLogLevelSelector(ELogConstLogLevelSelector&&) = delete;
     ELogConstLogLevelSelector& operator=(const ELogConstLogLevelSelector&) = delete;
-    ~ELogConstLogLevelSelector() final {}
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
@@ -672,7 +680,7 @@ private:
 
     // turn off clang formatting due to "const-level" below
     // clang-format off
-    ELOG_DECLARE_FIELD_SELECTOR(ELogConstLogLevelSelector, const-level)
+    ELOG_DECLARE_FIELD_SELECTOR(ELogConstLogLevelSelector, const-level, ELOG_API)
     // clang-format on
 };
 

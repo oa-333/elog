@@ -65,6 +65,9 @@
 #error "Unsupported platform"
 #endif
 
+// define empty no export for all platforms
+#define ELOG_NO_EXPORT
+
 #ifdef ELOG_GCC
 #define CPU_RELAX asm volatile("pause\n" : : : "memory")
 #elif defined(ELOG_MSVC)
