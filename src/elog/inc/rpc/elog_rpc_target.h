@@ -46,7 +46,7 @@ protected:
      * @param receptor The receptor that receives log record fields and transfers them to the
      * message headers.
      */
-    inline void fillInParams(const elog::ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {
+    inline void fillInParams(const ELogRecord& logRecord, ELogFieldReceptor* receptor) {
         m_rpcFormatter->fillInParams(logRecord, receptor);
     }
 

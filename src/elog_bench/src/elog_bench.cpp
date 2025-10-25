@@ -116,6 +116,7 @@ static bool sTestColors = false;
 static bool sTestSelector = false;
 static bool sTestFilter = false;
 static bool sTestFlushPolicy = false;
+static bool sTestLogFormatter = false;
 static int sMsgCnt = -1;
 static int sMinThreadCnt = -1;
 static int sMaxThreadCnt = -1;
@@ -872,6 +873,7 @@ static int testConfigService();
 static int testSelector();
 static int testFilter();
 static int testFlushPolicy();
+static int testLogFormatter();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -1233,6 +1235,9 @@ static bool parseArgs(int argc, char* argv[]) {
             return true;
         } else if (strcmp(argv[1], "--test-flush-policy") == 0) {
             sTestFlushPolicy = true;
+            return true;
+        } else if (strcmp(argv[1], "--test-log-formatter") == 0) {
+            sTestLogFormatter = true;
             return true;
         }
     }
@@ -1657,6 +1662,8 @@ int main(int argc, char* argv[]) {
         res = testFilter();
     } else if (sTestFlushPolicy) {
         res = testFlushPolicy();
+    } else if (sTestLogFormatter) {
+        res = testLogFormatter();
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
 
@@ -2378,6 +2385,55 @@ int testFlushPolicy() {
     for (int i = 0; i < 10; ++i) {
         ELOG_INFO_EX(logger, "This is a test message %d", i);
     }
+    termELog();
+    return 0;
+}
+
+// test formatter - prepends the message with "***"", and surrounds each field with "[]"
+class TestFormatter : public elog::ELogFormatter {
+public:
+    TestFormatter() : ELogFormatter(TYPE_NAME), m_firstField(true) {}
+    TestFormatter(const TestFormatter&) = delete;
+    TestFormatter(TestFormatter&&) = delete;
+    TestFormatter& operator=(const TestFormatter&) = delete;
+
+    static constexpr const char* TYPE_NAME = "test";
+
+protected:
+    bool handleText(const std::string& text) override {
+        if (m_firstField) {
+            m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("***"));
+            m_firstField = false;
+        }
+        m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector(text.c_str()));
+        return true;
+    }
+
+    bool handleField(const elog::ELogFieldSpec& fieldSpec) override {
+        m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("["));
+        bool res = ELogFormatter::handleField(fieldSpec);
+        if (res == true) {
+            m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("]"));
+        }
+        return res;
+    }
+
+private:
+    bool m_firstField;
+
+    ELOG_DECLARE_LOG_FORMATTER(TestFormatter, test, ELOG_NO_EXPORT)
+};
+
+ELOG_IMPLEMENT_LOG_FORMATTER(TestFormatter)
+
+int testLogFormatter() {
+    const char* cfg = "sys://stderr?log_format=test:${time} ${level:6} ${tid} ${src} ${msg}";
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        return 1;
+    }
+    elog::ELogLogger* logger = elog::getPrivateLogger("elog_bench_logger");
+    ELOG_INFO_EX(logger, "This is a test message");
     termELog();
     return 0;
 }

@@ -51,7 +51,6 @@ public:
     ELogDbFormatter(const ELogDbFormatter&) = delete;
     ELogDbFormatter(ELogDbFormatter&&) = delete;
     ELogDbFormatter& operator=(const ELogDbFormatter&) = delete;
-    ~ELogDbFormatter() final {}
 
     static constexpr const char* TYPE_NAME = "db";
 
@@ -76,7 +75,7 @@ private:
     uint32_t m_fieldNum;
     std::string m_processedStatement;
 
-    ELOG_DECLARE_LOG_FORMATTER(ELogDbFormatter, db)
+    ELOG_DECLARE_LOG_FORMATTER(ELogDbFormatter, db, ELOG_API)
 };
 
 }  // namespace elog

@@ -11,13 +11,12 @@ public:
     ELogRpcFormatter(const ELogRpcFormatter&) = delete;
     ELogRpcFormatter(ELogRpcFormatter&&) = delete;
     ELogRpcFormatter& operator=(const ELogRpcFormatter&) = delete;
-    ~ELogRpcFormatter() final {}
 
     static constexpr const char* TYPE_NAME = "msg";
 
     inline bool parseParams(const std::string& params) { return initialize(params.c_str()); }
 
-    inline void fillInParams(const ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {
+    inline void fillInParams(const ELogRecord& logRecord, ELogFieldReceptor* receptor) {
         applyFieldSelectors(logRecord, receptor);
     }
 
@@ -30,7 +29,7 @@ private:
     enum class FieldType : uint32_t { FT_NONE, FT_COMMA, FT_FIELD };
     FieldType m_lastFieldType;
 
-    ELOG_DECLARE_LOG_FORMATTER(ELogRpcFormatter, rpc)
+    ELOG_DECLARE_LOG_FORMATTER(ELogRpcFormatter, rpc, ELOG_API)
 };
 
 }  // namespace elog

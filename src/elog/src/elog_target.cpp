@@ -344,7 +344,7 @@ void ELogTarget::setLogFilter(ELogFilter* logFilter) {
 
 void ELogTarget::setLogFormatter(ELogFormatter* logFormatter) {
     if (m_logFormatter != nullptr) {
-        delete m_logFormatter;
+        destroyLogFormatter(m_logFormatter);
     }
     m_logFormatter = logFormatter;
 }

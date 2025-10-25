@@ -1669,7 +1669,7 @@ bool configureLogLevelFormat(const char* logLevelConfig) {
 bool configureLogFormat(const char* logFormat) {
     ELogFormatter* logFormatter = new (std::nothrow) ELogFormatter();
     if (!logFormatter->initialize(logFormat)) {
-        delete logFormatter;
+        destroyLogFormatter(logFormatter);
         return false;
     }
     setLogFormatter(logFormatter);
@@ -1678,7 +1678,7 @@ bool configureLogFormat(const char* logFormat) {
 
 void setLogFormatter(ELogFormatter* logFormatter) {
     if (sGlobalFormatter != nullptr) {
-        delete sGlobalFormatter;
+        destroyLogFormatter(sGlobalFormatter);
     }
     sGlobalFormatter = logFormatter;
 }

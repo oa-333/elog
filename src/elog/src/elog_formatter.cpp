@@ -79,6 +79,33 @@ ELogFormatter* constructLogFormatter(const char* name, bool issueErrors /* = tru
     return logFormatter;
 }
 
+void destroyLogFormatter(ELogFormatter* formatter) {
+    if (formatter == nullptr) {
+        ELOG_REPORT_WARN("Attempting to delete null log formatter, request ignored");
+        return;
+    }
+
+    // locate the constructor
+    ELogFormatterConstructorMap::iterator itr =
+        sLogFormatterConstructorMap.find(formatter->getTypeName());
+    if (itr == sLogFormatterConstructorMap.end()) {
+        // special case: base class can also be created, but has no factory, so we delete it
+        // manually here
+        if (strcmp(formatter->getTypeName(), ELOG_DEFAULT_FORMATTER_TYPE_NAME) == 0) {
+            formatter->destroy();
+            delete formatter;
+            return;
+        } else {
+            ELOG_REPORT_ERROR("Invalid log formatter %s: not found", formatter->getTypeName());
+            return;
+        }
+    }
+
+    // delete the field selector at its origin module
+    ELogFormatterConstructor* constructor = itr->second;
+    constructor->destroyFormatter(formatter);
+}
+
 ELogFormatter::~ELogFormatter() {
     for (ELogFieldSelector* fieldSelector : m_fieldSelectors) {
         destroyFieldSelector(fieldSelector);

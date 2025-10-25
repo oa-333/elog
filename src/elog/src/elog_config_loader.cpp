@@ -840,7 +840,7 @@ ELogFormatter* ELogConfigLoader::loadLogFormatter(const char* logFormat) {
     // initialize the formatter (parse field selectors)
     if (!logFormatter->initialize(logFormatStr.c_str())) {
         ELOG_REPORT_ERROR("Invalid log format '%s' specified in log target", logFormat);
-        delete logFormatter;
+        destroyLogFormatter(logFormatter);
         return nullptr;
     }
 

@@ -20,7 +20,6 @@ public:
     ELogJsonFormatter(const ELogJsonFormatter&) = delete;
     ELogJsonFormatter(ELogJsonFormatter&&) = delete;
     ELogJsonFormatter& operator=(const ELogJsonFormatter&) = delete;
-    ~ELogJsonFormatter() final {}
 
     static constexpr const char* TYPE_NAME = "json";
 
@@ -40,7 +39,7 @@ private:
     nlohmann::json m_jsonField;
     std::vector<std::string> m_propNames;
 
-    ELOG_DECLARE_LOG_FORMATTER(ELogJsonFormatter, json)
+    ELOG_DECLARE_LOG_FORMATTER(ELogJsonFormatter, json, ELOG_API)
 };
 
 }  // namespace elog

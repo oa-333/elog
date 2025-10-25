@@ -11,7 +11,6 @@ public:
     ELogPropsFormatter(const ELogPropsFormatter&) = delete;
     ELogPropsFormatter(ELogPropsFormatter&&) = delete;
     ELogPropsFormatter& operator=(const ELogPropsFormatter&) = delete;
-    ~ELogPropsFormatter() final {}
 
     static constexpr const char* TYPE_NAME = "props";
 
@@ -30,7 +29,7 @@ public:
 private:
     std::vector<std::string> m_propNames;
 
-    ELOG_DECLARE_LOG_FORMATTER(ELogPropsFormatter, props)
+    ELOG_DECLARE_LOG_FORMATTER(ELogPropsFormatter, props, ELOG_API)
 };
 
 }  // namespace elog

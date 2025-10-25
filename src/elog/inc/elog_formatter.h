@@ -14,14 +14,15 @@ namespace elog {
 // the following special log field reference tokens can be used in configuration:
 // ${rid} ${time} ${host} ${user} ${prog} ${pid} ${tid} ${src} ${msg}
 
+#define ELOG_DEFAULT_FORMATTER_TYPE_NAME "default"
+
 /** @class Utility class for formatting log messages. */
 class ELOG_API ELogFormatter : public ELogManagedObject {
 public:
-    ELogFormatter(const char* typeName = "") : m_typeName(typeName) {}
+    ELogFormatter(const char* typeName = ELOG_DEFAULT_FORMATTER_TYPE_NAME) : m_typeName(typeName) {}
     ELogFormatter(const ELogFormatter&) = delete;
     ELogFormatter(ELogFormatter&&) = delete;
     ELogFormatter& operator=(const ELogFormatter&) = delete;
-    ~ELogFormatter() override;
 
     /**
      * @brief Initializes the log formatter.
@@ -52,6 +53,12 @@ public:
     virtual void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
 
     /**
+     * @brief Allow for special cleanup, since log formatter destruction is controlled (destructor
+     * not exposed).
+     */
+    virtual void destroy() {}
+
+    /**
      * @brief Select log record fields into a receptor.
      * @param logRecord The log record to format.
      * @param receptor The receiving end of the selector log record fields.
@@ -62,6 +69,8 @@ public:
     inline const char* getTypeName() const { return m_typeName.c_str(); }
 
 protected:
+    ~ELogFormatter() override;
+
     bool parseFormatSpec(const std::string& formatSpec);
 
     bool parseFieldSpec(const std::string& fieldSpecStr);
@@ -120,6 +129,8 @@ private:
     ELogFieldSelector* loadConstSelector(const std::string& fieldSpecStr);
 
     std::string m_typeName;
+
+    friend ELOG_API void destroyLogFormatter(ELogFormatter* formatter);
 };
 
 // forward declaration
@@ -142,6 +153,9 @@ extern ELOG_API void registerLogFormatterConstructor(const char* name,
  */
 extern ELOG_API ELogFormatter* constructLogFormatter(const char* name, bool issueErrors = true);
 
+/** @brief Destroys a log formatter object. */
+extern ELOG_API void destroyLogFormatter(ELogFormatter* formatter);
+
 /** @brief Utility helper class for log formatter construction. */
 class ELOG_API ELogFormatterConstructor {
 public:
@@ -152,6 +166,9 @@ public:
      * @return ELogFormatter* The resulting log formatter, or null if failed.
      */
     virtual ELogFormatter* constructFormatter() = 0;
+
+    /** @brief Destroys a log formatter object. */
+    virtual void destroyFormatter(ELogFormatter* formatter) = 0;
 
 protected:
     /** @brief Constructor. */
@@ -165,23 +182,35 @@ protected:
 // macro parameter, so it can be set to dll export, or to nothing
 
 /** @def Utility macro for declaring log formatter factory method registration. */
-#define ELOG_DECLARE_LOG_FORMATTER(FormatterType, Name)                                       \
-    class ELOG_API FormatterType##Constructor final : public elog::ELogFormatterConstructor { \
-    public:                                                                                   \
-        FormatterType##Constructor() : elog::ELogFormatterConstructor(#Name) {}               \
-        elog::ELogFormatter* constructFormatter() final {                                     \
-            return new (std::nothrow) FormatterType();                                        \
-        }                                                                                     \
-        ~FormatterType##Constructor() final {}                                                \
-        FormatterType##Constructor(const FormatterType##Constructor&) = delete;               \
-        FormatterType##Constructor(FormatterType##Constructor&&) = delete;                    \
-        FormatterType##Constructor& operator=(const FormatterType##Constructor&) = delete;    \
-    };                                                                                        \
+#define ELOG_DECLARE_LOG_FORMATTER(FormatterType, Name, ImportExportSpec)                  \
+    ~FormatterType() final {}                                                              \
+    friend class ImportExportSpec FormatterType##Constructor;                              \
+    class ImportExportSpec FormatterType##Constructor final                                \
+        : public elog::ELogFormatterConstructor {                                          \
+    public:                                                                                \
+        FormatterType##Constructor() : elog::ELogFormatterConstructor(#Name) {}            \
+        elog::ELogFormatter* constructFormatter() final;                                   \
+        void destroyFormatter(elog::ELogFormatter* formatter) final;                       \
+        ~FormatterType##Constructor() final {}                                             \
+        FormatterType##Constructor(const FormatterType##Constructor&) = delete;            \
+        FormatterType##Constructor(FormatterType##Constructor&&) = delete;                 \
+        FormatterType##Constructor& operator=(const FormatterType##Constructor&) = delete; \
+    };                                                                                     \
     static FormatterType##Constructor sConstructor;
 
 /** @def Utility macro for implementing log formatter factory method registration. */
-#define ELOG_IMPLEMENT_LOG_FORMATTER(FormatterType) \
-    FormatterType::FormatterType##Constructor FormatterType::sConstructor;
+#define ELOG_IMPLEMENT_LOG_FORMATTER(FormatterType)                                        \
+    FormatterType::FormatterType##Constructor FormatterType::sConstructor;                 \
+    elog::ELogFormatter* FormatterType::FormatterType##Constructor::constructFormatter() { \
+        return new (std::nothrow) FormatterType();                                         \
+    }                                                                                      \
+    void FormatterType::FormatterType##Constructor::destroyFormatter(                      \
+        elog::ELogFormatter* formatter) {                                                  \
+        if (formatter != nullptr) {                                                        \
+            formatter->destroy();                                                          \
+            delete (FormatterType*)formatter;                                              \
+        }                                                                                  \
+    }
 
 }  // namespace elog
 
