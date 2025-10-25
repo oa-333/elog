@@ -125,7 +125,7 @@ void destroyFilter(ELogFilter* filter) {
     // locate the constructor
     ELogFilterConstructorMap::iterator itr = sFilterConstructorMap.find(filter->getName());
     if (itr == sFilterConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid field selector %s: not found", filter->getName());
+        ELOG_REPORT_ERROR("Invalid filter %s: not found", filter->getName());
         return;
     }
 

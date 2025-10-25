@@ -44,7 +44,7 @@ protected:
     virtual ~ELogFilter() {}
 
     // let subclasses to set the filter name
-    inline void setFilterName(const char* name) { m_name = name; }
+    inline void setName(const char* name) { m_name = name; }
 
 private:
     std::string m_name;
@@ -130,7 +130,7 @@ private:
     elog::ELogFilter* FilterType::FilterType##Constructor::constructFilter() {          \
         FilterType* filter = new (std::nothrow) FilterType();                           \
         if (filter != nullptr) {                                                        \
-            filter->setFilterName(getFilterName());                                     \
+            filter->setName(getFilterName());                                           \
         }                                                                               \
         return filter;                                                                  \
     }                                                                                   \

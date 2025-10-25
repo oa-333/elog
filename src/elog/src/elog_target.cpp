@@ -124,7 +124,7 @@ bool ELogTarget::startNoLock() {
     if (!res) {
         // TODO: is it ok to delete flush policy here? what is the contract? should it be deleted
         // only during dtor? or it doesn't really matter? this seems out of order
-        delete m_flushPolicy;
+        destroyFlushPolicy(m_flushPolicy);
         m_flushPolicy = nullptr;
         if (m_stats != nullptr) {
             m_stats->terminate();
@@ -351,7 +351,7 @@ void ELogTarget::setLogFormatter(ELogFormatter* logFormatter) {
 
 void ELogTarget::setFlushPolicy(ELogFlushPolicy* flushPolicy) {
     if (m_flushPolicy != nullptr) {
-        delete m_flushPolicy;
+        destroyFlushPolicy(m_flushPolicy);
     }
     m_flushPolicy = flushPolicy;
 }

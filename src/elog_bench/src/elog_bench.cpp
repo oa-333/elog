@@ -115,6 +115,7 @@ static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
 static bool sTestSelector = false;
 static bool sTestFilter = false;
+static bool sTestFlushPolicy = false;
 static int sMsgCnt = -1;
 static int sMinThreadCnt = -1;
 static int sMaxThreadCnt = -1;
@@ -870,6 +871,7 @@ static int testLifeSign();
 static int testConfigService();
 static int testSelector();
 static int testFilter();
+static int testFlushPolicy();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -1228,6 +1230,9 @@ static bool parseArgs(int argc, char* argv[]) {
             return true;
         } else if (strcmp(argv[1], "--test-filter") == 0) {
             sTestFilter = true;
+            return true;
+        } else if (strcmp(argv[1], "--test-flush-policy") == 0) {
+            sTestFlushPolicy = true;
             return true;
         }
     }
@@ -1650,6 +1655,8 @@ int main(int argc, char* argv[]) {
         res = testSelector();
     } else if (sTestFilter) {
         res = testFilter();
+    } else if (sTestFlushPolicy) {
+        res = testFlushPolicy();
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
 
@@ -2312,6 +2319,57 @@ int testFilter() {
     const char* cfg =
         "sys://stderr?log_format=${time} ${level:6} [${tid}] <${test}> ${src} ${msg}&"
         "filter=test_filter";
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        return 1;
+    }
+    elog::ELogLogger* logger = elog::getPrivateLogger("elog_bench_logger");
+    for (int i = 0; i < 10; ++i) {
+        ELOG_INFO_EX(logger, "This is a test message %d", i);
+    }
+    termELog();
+    return 0;
+}
+
+/**
+ * @class A flush policy that enforces log target flush whenever the number of un-flushed log
+ * messages exceeds a configured limit.
+ */
+class TestFlushPolicy final : public elog::ELogFlushPolicy {
+public:
+    TestFlushPolicy() : m_counter(0) {}
+    TestFlushPolicy(const TestFlushPolicy&) = delete;
+    TestFlushPolicy(TestFlushPolicy&&) = delete;
+    TestFlushPolicy& operator=(const TestFlushPolicy&) = delete;
+
+    /** @brief Loads flush policy from configuration. */
+    bool load(const elog::ELogConfigMapNode* flushPolicyCfg) final { return true; }
+
+    /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
+    bool loadExpr(const elog::ELogExpression* expr) final { return true; }
+
+    bool shouldFlush(uint32_t msgSizeBytes) final {
+        if ((++m_counter) % 2 == 0) {
+            fprintf(stderr, "Test flush PASS\n");
+            return true;
+        } else {
+            fprintf(stderr, "Test flush NO-PASS\n");
+            return false;
+        }
+    }
+
+private:
+    uint64_t m_counter;
+
+    ELOG_DECLARE_FLUSH_POLICY(TestFlushPolicy, test_policy, ELOG_NO_EXPORT)
+};
+
+ELOG_IMPLEMENT_FLUSH_POLICY(TestFlushPolicy)
+
+int testFlushPolicy() {
+    const char* cfg =
+        "sys://stderr?log_format=${time} ${level:6} [${tid}] <${test}> ${src} ${msg}&"
+        "flush_policy=test_policy";
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         return 1;

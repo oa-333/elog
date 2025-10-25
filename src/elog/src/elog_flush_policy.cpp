@@ -111,6 +111,25 @@ ELogFlushPolicy* constructFlushPolicy(const char* name) {
     return flushPolicy;
 }
 
+void destroyFlushPolicy(ELogFlushPolicy* flushPolicy) {
+    if (flushPolicy == nullptr) {
+        ELOG_REPORT_WARN("Attempting to delete null flush policy, request ignored");
+        return;
+    }
+
+    // locate the constructor
+    ELogFlushPolicyConstructorMap::iterator itr =
+        sFlushPolicyConstructorMap.find(flushPolicy->getName());
+    if (itr == sFlushPolicyConstructorMap.end()) {
+        ELOG_REPORT_ERROR("Invalid flush policy %s: not found", flushPolicy->getName());
+        return;
+    }
+
+    // delete the field selector at its origin module
+    ELogFlushPolicyConstructor* constructor = itr->second;
+    constructor->destroyFlushPolicy(flushPolicy);
+}
+
 bool ELogFlushPolicy::moderateFlush(ELogTarget* logTarget) {
     // NOTE: we must order log target to avoid further flush moderation since that would cause
     // endless recurrence
@@ -493,8 +512,6 @@ ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarg
       m_prevFlushTime(getTimestamp()),
       m_stopTimer(false) {}
 
-ELogTimedFlushPolicy::~ELogTimedFlushPolicy() {}
-
 bool ELogTimedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return loadTimeoutFlushPolicy(flushPolicyCfg, "time", "flush_timeout", m_logTimeLimitMillis,
                                   ELogTimeUnits::TU_MILLI_SECONDS);
@@ -572,7 +589,7 @@ bool ELogChainedFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     }
     m_moderatePolicy = loadSubFlushPolicy("moderate", "moderate_flush_policy", flushPolicyCfg);
     if (m_moderatePolicy == nullptr) {
-        delete m_controlPolicy;
+        destroyFlushPolicy(m_controlPolicy);
         m_controlPolicy = nullptr;
         return false;
     }
@@ -600,7 +617,7 @@ bool ELogChainedFlushPolicy::loadExpr(const ELogExpression* expr) {
         ELogConfigLoader::loadFlushPolicyExpr(chainExpr->m_expressions[1]);
     if (moderatePolicy == nullptr) {
         ELOG_REPORT_ERROR("Failed to load moderate flush policy for CHAIN flush policy");
-        delete controlPolicy;
+        destroyFlushPolicy(controlPolicy);
         return false;
     }
     setControlFlushPolicy(controlPolicy);

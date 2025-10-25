@@ -673,7 +673,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicyExpr(const ELogExpression* exp
     }
     if (!flushPolicy->loadExpr(expr)) {
         ELOG_REPORT_ERROR("Failed to load compound flush policy from expression");
-        delete flushPolicy;
+        destroyFlushPolicy(flushPolicy);
         flushPolicy = nullptr;
     }
     return flushPolicy;
@@ -703,7 +703,7 @@ ELogFlushPolicy* ELogConfigLoader::loadFlushPolicy(const ELogConfigMapNode* flus
     if (!flushPolicy->load(flushPolicyCfg)) {
         ELOG_REPORT_ERROR("Failed to load flush policy %s by configuration object (context: %s)",
                           flushPolicyType, flushPolicyCfg->getFullContext());
-        delete flushPolicy;
+        destroyFlushPolicy(flushPolicy);
         flushPolicy = nullptr;
     } else {
         result = true;
