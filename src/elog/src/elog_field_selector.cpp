@@ -345,7 +345,17 @@ static void initOsNameAndVersion() {
     OSVERSIONINFOEXA verInfo;
     ZeroMemory(&verInfo, sizeof(OSVERSIONINFOEXA));
     verInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
+// disable deprecated warning
+// NOTE: this is still an open issue (requires manifest for proper solution, but it is unclear
+// how to embed a manifest in a DLL such that the correct version will be returned)
+#ifdef ELOG_MSVC
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
     GetVersionExA((LPOSVERSIONINFOA)&verInfo);
+#ifdef ELOG_MSVC
+#pragma warning(pop)
+#endif
 
     // TODO: This is a hack, since embedding manifest is very awkward and does not work...
     // (it is unclear whether the manifest can be embedded within any DLL or it must be embedded

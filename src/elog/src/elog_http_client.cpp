@@ -30,12 +30,14 @@ bool ELogHttpClientAssistant::handleResult(const httplib::Result& result) {
 
 void ELogHttpClient::initialize(const char* serverAddress, const char* logTargetName,
                                 const ELogHttpConfig& httpConfig,
-                                ELogHttpClientAssistant* assistant /* = nullptr */) {
+                                ELogHttpClientAssistant* assistant /* = nullptr */,
+                                bool disableResend /* = false */) {
     // save configuration
     m_serverAddress = serverAddress;
     m_logTargetName = logTargetName;
     m_config = httpConfig;
     m_assistant = assistant;
+    m_disableResend = disableResend;
 }
 
 bool ELogHttpClient::start() {
@@ -43,27 +45,31 @@ bool ELogHttpClient::start() {
     if (m_client == nullptr) {
         return false;
     }
-    m_resendClient = createClient();
-    if (m_resendClient == nullptr) {
-        delete m_client;
-        m_client = nullptr;
-        return false;
-    }
+    if (!m_disableResend) {
+        m_resendClient = createClient();
+        if (m_resendClient == nullptr) {
+            delete m_client;
+            m_client = nullptr;
+            return false;
+        }
 
-    // start resend thread
-    m_resendThread = std::thread([this] {
-        setCurrentThreadNameField("http-resend");
-        resendThread();
-    });
+        // start resend thread
+        m_resendThread = std::thread([this] {
+            setCurrentThreadNameField("http-resend");
+            resendThread();
+        });
+    }
     return true;
 }
 
 bool ELogHttpClient::stop() {
     // stop resend thread, but only if http clients are valid
-    if (m_resendClient != nullptr) {
-        stopResendThread();
-        delete m_resendClient;
-        m_resendClient = nullptr;
+    if (!m_disableResend) {
+        if (m_resendClient != nullptr) {
+            stopResendThread();
+            delete m_resendClient;
+            m_resendClient = nullptr;
+        }
     }
     if (m_client != nullptr) {
         delete m_client;
@@ -74,9 +80,40 @@ bool ELogHttpClient::stop() {
 
 std::pair<bool, int> ELogHttpClient::post(const char* endpoint, const char* body, size_t len,
                                           const char* contentType /* = "application/json" */,
-                                          bool compress /* = false */) {
+                                          bool compress /* = false */,
+                                          std::string* responseBody /* = nullptr */) {
+    return sendHttpMsg(HM_POST, endpoint, body, len, contentType, compress, responseBody);
+}
+
+std::pair<bool, int> ELogHttpClient::put(const char* endpoint, const char* body, size_t len,
+                                         const char* contentType /* = "application/json" */,
+                                         bool compress /* = false */,
+                                         std::string* responseBody /* = nullptr */) {
+    return sendHttpMsg(HM_PUT, endpoint, body, len, contentType, compress, responseBody);
+}
+
+std::pair<bool, int> ELogHttpClient::get(const char* endpoint, const char* body, size_t len,
+                                         const char* contentType /* = "application/json" */,
+                                         bool compress /* = false */,
+                                         std::string* responseBody /* = nullptr */) {
+    return sendHttpMsg(HM_GET, endpoint, body, len, contentType, compress, responseBody);
+}
+
+std::pair<bool, int> ELogHttpClient::del(const char* endpoint, const char* body, size_t len,
+                                         const char* contentType /* = "application/json" */,
+                                         bool compress /* = false */,
+                                         std::string* responseBody /* = nullptr */) {
+    return sendHttpMsg(HM_DEL, endpoint, body, len, contentType, compress, responseBody);
+}
+
+std::pair<bool, int> ELogHttpClient::sendHttpMsg(HttpMethod method, const char* endpoint,
+                                                 const char* body, size_t len,
+                                                 const char* contentType /* = "application/json" */,
+                                                 bool compress /* = false */,
+                                                 std::string* responseBody /* = nullptr */) {
     // start with default headers specified in initialize(), and add additional headers if any
-    ELOG_REPORT_TRACE("POST log data to %s at HTTP address/endpoint: %s/%s",
+    const char* methodName = getMethodName(method);
+    ELOG_REPORT_TRACE("%s log data to %s at HTTP address/endpoint: %s/%s", methodName,
                       m_logTargetName.c_str(), m_serverAddress.c_str(), endpoint);
     httplib::Headers headers;
     if (m_assistant != nullptr) {
@@ -97,25 +134,67 @@ std::pair<bool, int> ELogHttpClient::post(const char* endpoint, const char* body
     }
 
     // POST HTTP message
-    ELOG_REPORT_TRACE("Sending data to %s at HTTP server %s/%s via POST", m_logTargetName.c_str(),
-                      m_serverAddress.c_str(), endpoint);
-    httplib::Result res = m_client->Post(endpoint, headers, body, len, contentType);
-    ELOG_REPORT_TRACE("POST done");
+    ELOG_REPORT_TRACE("Sending data to %s at HTTP server %s/%s via %s", m_logTargetName.c_str(),
+                      m_serverAddress.c_str(), endpoint, methodName);
+    httplib::Result res = execHttpRequest(method, endpoint, headers, body, len, contentType);
+    ELOG_REPORT_TRACE("%s done", methodName);
     if (!res) {
-        ELOG_REPORT_ERROR("Failed to POST HTTP request to %s: %s", m_logTargetName.c_str(),
-                          httplib::to_string(res.error()).c_str());
+        ELOG_REPORT_ERROR("Failed to %s HTTP request to %s: %s", methodName,
+                          m_logTargetName.c_str(), httplib::to_string(res.error()).c_str());
         // no need to consult result handler, this is a clear network error
-        addBacklog(endpoint, headers, body, len, contentType);
+        if (!m_disableResend) {
+            addBacklog(endpoint, headers, body, len, contentType);
+        }
         return {false, -1};  // no status when result evaluates to false
+    }
+
+    // collect response if required
+    if (responseBody != nullptr) {
+        *responseBody = res->body;
     }
 
     // consult with result to handler so we can tell whether resend is required
     ELOG_REPORT_TRACE("%s server returned HTTP status: %d", m_logTargetName.c_str(), res->status);
     if (m_assistant != nullptr && !m_assistant->handleResult(res)) {
-        addBacklog(endpoint, headers, body, len, contentType);
+        if (!m_disableResend) {
+            addBacklog(endpoint, headers, body, len, contentType);
+        }
         return {false, res->status};
     }
     return {true, res->status};
+}
+
+const char* ELogHttpClient::getMethodName(HttpMethod method) {
+    switch (method) {
+        case HM_POST:
+            return "POST";
+        case HM_PUT:
+            return "PUT";
+        case HM_GET:
+            return "GET";
+        case HM_DEL:
+            return "DEL";
+        default:
+            return "N/A";
+    }
+}
+
+httplib::Result ELogHttpClient::execHttpRequest(HttpMethod method, const char* endpoint,
+                                                const httplib::Headers& headers, const char* body,
+                                                size_t len, const char* contentType) {
+    switch (method) {
+        case HM_POST:
+            return m_client->Post(endpoint, headers, body, len, contentType);
+        case HM_PUT:
+            return m_client->Put(endpoint, headers, body, len, contentType);
+        case HM_GET:
+            return m_client->Get(endpoint, headers);
+        case HM_DEL:
+            return m_client->Delete(endpoint, headers, body, len, contentType);
+        default:
+            // empty result yields unspecified error
+            return httplib::Result();
+    }
 }
 
 httplib::Client* ELogHttpClient::createClient() {

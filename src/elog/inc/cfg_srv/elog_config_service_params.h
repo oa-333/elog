@@ -4,7 +4,6 @@
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
 
 #include <string>
-#include <vector>
 
 #include "elog_common_def.h"
 #include "elog_config_service_publisher.h"

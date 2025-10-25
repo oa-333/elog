@@ -3,61 +3,26 @@
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 
-#include <condition_variable>
-#include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
+#include "cfg_srv/elog_config_service_publisher.h"
+#include "cfg_srv/elog_config_service_redis_params.h"
+#include "cfg_srv/elog_config_service_redis_user.h"
 #include "elog_common_def.h"
-#include "elog_config_service_publisher.h"
-#include "elog_config_service_redis_params.h"
 #include "elog_redis_client.h"
 
 namespace elog {
 
 /** @brief Helper class for publishing the remote configuration service. */
-class ELOG_API ELogConfigServiceRedisPublisher : public ELogConfigServicePublisher {
+class ELOG_API ELogConfigServiceRedisPublisher : public ELogConfigServicePublisher,
+                                                 public ELogConfigServiceRedisUser {
 public:
-    ELogConfigServiceRedisPublisher()
-        : ELogConfigServicePublisher("redis"), m_requiresPublish(true), m_stopPublish(false) {}
+    ELogConfigServiceRedisPublisher() : ELogConfigServicePublisher("redis") {}
     ELogConfigServiceRedisPublisher(ELogConfigServiceRedisPublisher&) = delete;
     ELogConfigServiceRedisPublisher(ELogConfigServiceRedisPublisher&&) = delete;
     ELogConfigServiceRedisPublisher& operator=(const ELogConfigServiceRedisPublisher&) = delete;
     ~ELogConfigServiceRedisPublisher() override {}
-
-    /** @brief Configures the publisher */
-    inline void configure(const ELogConfigServiceRedisParams& params) { m_params = params; }
-
-    /**
-     * @brief Adds a server to the redis server list.
-     * @param host The server's host name.
-     * @param port The server's port.
-     */
-    inline void addServer(const char* host, int port) {
-        m_params.m_serverList.push_back({host, port});
-    }
-
-    /** @brief Sets the list of redis servers. */
-    inline void setServerList(const std::vector<std::pair<std::string, int>>& serverList) {
-        m_params.m_serverList = serverList;
-    }
-
-    /**
-     * @brief Sets the key name under which the configuration service will publish its details.
-     * @param key The key to use for publishing the remote configuration service.
-     */
-    inline void setKey(const char* key) { m_params.m_key = key; }
-
-    /** @brief Sets password for redis login */
-    inline void setPassword(const char* user, const char* password) {
-        m_params.m_password = password;
-    }
-
-    /** @brief Sets SSL options, as defined by the Redis C Client API (hiredis). */
-    void setSSLOptions(const char* caCertFileName, const char* caPath, const char* certFileName,
-                       const char* privateKeyFileName, const char* serverName,
-                       ELogRedisSslVerifyMode m_verifyMode);
 
     /** @brief Loads configuration service publisher from configuration. */
     bool load(const ELogConfigMapNode* cfg) override;
@@ -93,22 +58,23 @@ public:
      */
     void onConfigServiceStop(const char* host, int port) override;
 
-private:
-    ELogConfigServiceRedisParams m_params;
-    ELogRedisClient m_redisClient;
-    std::string m_serviceSpec;
-    std::thread m_publishThread;
-    std::mutex m_lock;
-    std::condition_variable m_cv;
-    bool m_requiresPublish;
-    bool m_stopPublish;
+    // publish config service details key (first time after connect)
+    bool publishConfigService() final;
 
-    bool parseServerListString(const std::string& serverListStr);
-    void publishThread();
-    void execPublishService();
-    void publishConfigService();
-    void unpublishConfigService();
-    void renewExpiry();
+    // delete config service details key (before shutdown)
+    void unpublishConfigService() final;
+
+    // renew expiry/ttl of config service details key
+    void renewExpiry() final;
+
+    // query whether connected to service discovery server (key-value store)
+    bool isConnected() final;
+
+    // connect to service discovery server (key-value store)
+    bool connect() final;
+
+private:
+    std::string m_serviceSpec;
 
     ELOG_DECLARE_CONFIG_SERVICE_PUBLISHER(ELogConfigServiceRedisPublisher, redis)
 };

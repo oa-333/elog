@@ -12,7 +12,7 @@
 # -n|--life-sign
 # -p|--reload-config
 # -q|--config-service
-# -u|--config-publish redis
+# -u|--config-publish redis|etcd
 # -f|--full
 # -c|--conn sqlite|mysql|postgresql|redis|kafka|grafana|sentry|datadog|otel|grpc|net|ipc
 # -i|--install-dir <INSTALL_DIR>
@@ -137,6 +137,7 @@ if [ "$HELP" -eq "1" ]; then
     echo "  Name            Publisher"
     echo "  ----            ---------"
     echo "  redis           Redis publisher"
+    echo "  etcd            etcd publisher"
     echo ""
     echo ""
     echo "BUILD OPTIONS"
@@ -217,6 +218,8 @@ fi
 if [ -n "$CONFIG_PUBLISH" ]; then
     if  [ "$CONFIG_PUBLISH" == "redis" ]; then
         OPTS+=" -DELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON"
+    elif [ "$CONFIG_PUBLISH" == "etcd" ]; then
+        OPTS+=" -DELOG_ENABLE_CONFIG_PUBLISH_ETCD=ON"
     else
         echo "[ERROR] Unsupported configuration service publisher '$CONFIG_PUBLISH', aborting"
         exit 1

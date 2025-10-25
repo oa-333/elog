@@ -198,12 +198,12 @@ struct ELogFrequencySpec {
 /** @def Default remote configuration service port (zero, meaning any available). */
 #define ELOG_DEFAULT_CONFIG_SERVICE_PORT 0
 
-/** @def Default value of remote configuration service publisher usage. */
+/** @def Default value of enable remote configuration service publisher usage. */
 #define ELOG_DEFAULT_ENABLE_CONFIG_SERVICE_PUBLISH true
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 /**
- * @def Default value for the redis directory prefix used for remote configuration service
+ * @def Default value for the redis key prefix used for remote configuration service
  * publish/discovery.
  */
 #define ELOG_DEFAULT_REDIS_KEY "elog_config_service"
@@ -213,6 +213,23 @@ struct ELogFrequencySpec {
 
 /** @brief Default value for key expiry renewal period in redis publisher. */
 #define ELOG_DEFAULT_REDIS_EXPIRY_RENEW_SECONDS 2
+#endif
+
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+/**
+ * @def Default value for the etcd directory prefix used for remote configuration service
+ * publish/discovery.
+ */
+#define ELOG_DEFAULT_ETCD_PREFIX "elog/config_service/"
+
+/** @def Default value for the etcd key used for remote configuration service publish/discovery. */
+#define ELOG_DEFAULT_ETCD_KEY "elog_config_service"
+
+/** @brief Default value for key expiry in etcd publisher. */
+#define ELOG_DEFAULT_ETCD_EXPIRY_SECONDS 10
+
+/** @brief Default value for key expiry renewal period in etcd publisher. */
+#define ELOG_DEFAULT_ETCD_EXPIRY_RENEW_SECONDS 2
 #endif
 
 }  // namespace elog

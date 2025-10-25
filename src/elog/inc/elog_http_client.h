@@ -23,7 +23,7 @@ public:
     virtual void embedHeaders(httplib::Headers& headers) {}
 
     /**
-     * @brief Handles HTTP POS result.
+     * @brief Handles HTTP POST result.
      * @param result The result to examine.
      * @return true If the result is regarded as success.
      * @return false If the result is regarded as failure, in which case the HTTP message will be
@@ -31,7 +31,7 @@ public:
      * errors occur it does not make sense to resend, since the same error would occur again (e.g.
      * invalid payload, wrong endpoint name, etc.).
      */
-    bool handleResult(const httplib::Result& result);
+    virtual bool handleResult(const httplib::Result& result);
 
 protected:
     /**
@@ -55,6 +55,7 @@ public:
         : m_client(nullptr),
           m_resendClient(nullptr),
           m_assistant(nullptr),
+          m_disableResend(false),
           m_backlogSizeBytes(0),
           m_stopResend(false) {}
 
@@ -70,9 +71,11 @@ public:
      * @param serverName The server name (for logging purposes).
      * @param httpConfig Timeouts and backlog configuration
      * @param assistant Optional assistant in carrying out client operations.
+     * @param disableResend Optionally disable resend task.
      */
     void initialize(const char* serverAddress, const char* serverName,
-                    const ELogHttpConfig& httpConfig, ELogHttpClientAssistant* assistant = nullptr);
+                    const ELogHttpConfig& httpConfig, ELogHttpClientAssistant* assistant = nullptr,
+                    bool disableResend = false);
 
     /** @brief Starts the HTTP client. */
     bool start();
@@ -81,13 +84,14 @@ public:
     bool stop();
 
     /**
-     * @brief Posts HTTP message to a given endpoint (using HTTP POST).
+     * @brief Sends HTTP message to a given endpoint (using HTTP POST).
      *
      * @param endpoint The endpoint. Expected resource path starting with forward slash.
      * @param body The message's body.
      * @param len The message's length.
      * @param contentType The message's content type.
      * @param compress Specifies whether to compress the message (using gzip).
+     * @param responseBody Optionally receives the response body.
      * @return std::pair<bool, int> A pair denoting wether message sending was successful and if so
      * then the HTTP status returned by the server.
      * @note The HTTP result handler is invoked in order to decide whether to save the message for
@@ -95,7 +99,65 @@ public:
      * and will not be an attempt to resend the message to the server.
      */
     std::pair<bool, int> post(const char* endpoint, const char* body, size_t len,
-                              const char* contentType = "application/json", bool compress = false);
+                              const char* contentType = "application/json", bool compress = false,
+                              std::string* responseBody = nullptr);
+
+    /**
+     * @brief Sends HTTP message to a given endpoint (using HTTP PUT).
+     *
+     * @param endpoint The endpoint. Expected resource path starting with forward slash.
+     * @param body The message's body.
+     * @param len The message's length.
+     * @param contentType The message's content type.
+     * @param compress Specifies whether to compress the message (using gzip).
+     * @param responseBody Optionally receives the response body.
+     * @return std::pair<bool, int> A pair denoting wether message sending was successful and if so
+     * then the HTTP status returned by the server.
+     * @note The HTTP result handler is invoked in order to decide whether to save the message for
+     * resending. If none was installed and message sending failed, then the message si discarded
+     * and will not be an attempt to resend the message to the server.
+     */
+    std::pair<bool, int> put(const char* endpoint, const char* body, size_t len,
+                             const char* contentType = "application/json", bool compress = false,
+                             std::string* responseBody = nullptr);
+
+    /**
+     * @brief Sends HTTP message to a given endpoint (using HTTP GET).
+     *
+     * @param endpoint The endpoint. Expected resource path starting with forward slash.
+     * @param body The message's body.
+     * @param len The message's length.
+     * @param contentType The message's content type.
+     * @param compress Specifies whether to compress the message (using gzip).
+     * @param responseBody Optionally receives the response body.
+     * @return std::pair<bool, int> A pair denoting wether message sending was successful and if so
+     * then the HTTP status returned by the server.
+     * @note The HTTP result handler is invoked in order to decide whether to save the message for
+     * resending. If none was installed and message sending failed, then the message si discarded
+     * and will not be an attempt to resend the message to the server.
+     */
+    std::pair<bool, int> get(const char* endpoint, const char* body, size_t len,
+                             const char* contentType = "application/json", bool compress = false,
+                             std::string* responseBody = nullptr);
+
+    /**
+     * @brief Sends HTTP message to a given endpoint (using HTTP DELETE).
+     *
+     * @param endpoint The endpoint. Expected resource path starting with forward slash.
+     * @param body The message's body.
+     * @param len The message's length.
+     * @param contentType The message's content type.
+     * @param compress Specifies whether to compress the message (using gzip).
+     * @param responseBody Optionally receives the response body.
+     * @return std::pair<bool, int> A pair denoting wether message sending was successful and if so
+     * then the HTTP status returned by the server.
+     * @note The HTTP result handler is invoked in order to decide whether to save the message for
+     * resending. If none was installed and message sending failed, then the message si discarded
+     * and will not be an attempt to resend the message to the server.
+     */
+    std::pair<bool, int> del(const char* endpoint, const char* body, size_t len,
+                             const char* contentType = "application/json", bool compress = false,
+                             std::string* responseBody = nullptr);
 
 private:
     std::string m_serverAddress;
@@ -104,6 +166,19 @@ private:
     httplib::Client* m_client;
     httplib::Client* m_resendClient;
     ELogHttpClientAssistant* m_assistant;
+    bool m_disableResend;
+
+    enum HttpMethod { HM_POST, HM_PUT, HM_GET, HM_DEL };
+
+    std::pair<bool, int> sendHttpMsg(HttpMethod method, const char* endpoint, const char* body,
+                                     size_t len, const char* contentType = "application/json",
+                                     bool compress = false, std::string* responseBody = nullptr);
+
+    const char* getMethodName(HttpMethod method);
+
+    httplib::Result execHttpRequest(HttpMethod method, const char* endpoint,
+                                    const httplib::Headers& headers, const char* body, size_t len,
+                                    const char* contentType);
 
     httplib::Client* createClient();
 

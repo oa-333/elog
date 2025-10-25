@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "cfg_srv/elog_config_server_details.h"
 #include "elog_common_def.h"
 
 namespace elog {
@@ -36,7 +37,7 @@ extern ELOG_API int convertVerifyMode(ELogRedisSslVerifyMode verifyMode);
 /** @struct Remote Configuration Service publisher for redis parameters. */
 struct ELOG_API ELogConfigServiceRedisParams {
     /** @brief List of redis servers (host,port). */
-    std::vector<std::pair<std::string, int>> m_serverList;
+    ELogConfigServerList m_serverList;
 
     /** @brief Key name for redis. */
     std::string m_key;

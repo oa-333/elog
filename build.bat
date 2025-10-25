@@ -13,7 +13,7 @@ REM -b|--fmt-lib
 REM -n|--life-sign
 REM -p|--reload-config
 REM -q|--config-service
-REM -u|--config-publish redis
+REM -u|--config-publish redis|etcd
 REM -f|--full
 REM -c|--conn sqlite|mysql|postgresql|redis|kafka|grafana|sentry|datadog|otel|grpc|net|ipc
 REM -i|--install-dir <INSTALL_DIR>
@@ -168,6 +168,11 @@ IF "%CONFIG_PUBLISH%" NEQ "" (
     IF "%CONFIG_PUBLISH%" == "redis" (
         SET OPTS=%OPTS% -DELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON
         vcpkg add port hiredis[ssl]
+        GOTO CONFIG_PUBLISH_SET
+    )
+    IF "%CONFIG_PUBLISH%" == "etcd" (
+        SET OPTS=%OPTS% -DELOG_ENABLE_CONFIG_PUBLISH_ETCD=ON
+        vcpkg add port cpp-httplib
         GOTO CONFIG_PUBLISH_SET
     )
     echo [ERROR] Unsupported configuration service publisher '%CONFIG_PUBLISH%', aborting
@@ -440,6 +445,7 @@ echo.
 echo   Name            Publisher
 echo   ----            ---------
 echo   redis           Redis publisher
+echo   etcd            etcd publisher
 echo.
 echo.
 echo BUILD OPTIONS

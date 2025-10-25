@@ -16,7 +16,7 @@ The following table summarizes the main features of the ELog Logging Framework:
 | [Logging Macros](#logging-macros) | - [Per-level macros](#log-levels)</br>- [Binary logging](#binary-logging)</br>- [Cached logging](#cached-logging)</br>- [Log sampling](#every-n-logging)</br>- [Log once](#once-logging)</br>- [Rate limiting](#moderated-logging)</br> | ELog provides a wide variety of logging macros for different situations, providing developers the ability to execute complex functionality within a one liner macro. Both printf and fmtlib styles are supported. Future versions may support insertion operator style for legacy systems. |
 | [Log Targets (Appenders)](#log-targets) | - [File Targets](#configuring-file-log-targets) ([Buffered File Target](#configuring-buffered-file-log-targets), [Segmented File Target](#configuring-segmented-file-log-targets), [Rotating File Target](#configuring-rotating-file-log-target))</br>- [System Log Targets](#configuring-system-log-targets) ([Syslog Target](#configuring-syslog-log-target), [Windows Event Log Target](#configuring-windows-event-log-target), [Standard Error/Output Stream Target](#configuring-terminal-log-target))</br>- [Database Log Targets](#configuring-database-log-targets) ([PostgreSQL Log Target](#connecting-to-postgresql), [MySQL Log Target (experimental, Windows only)](#connecting-to-mysql-experimental), [Redis Log Target](#connecting-to-redis), [SQLite Log Target](#connecting-to-sqlite))</br>- Message Queue Log Targets ([Kafka Log Target](#connecting-to-kafka-topic))</br>-  RPC Log Targets ([gRPC Log Target](#connecting-to-grpc-endpoint))</br>- Network Log Targets ([TCP/UDP Log Target](#connecting-to-tcpudp-server))</br>- IPC Log Targets ([Pipe Log Target](#connecting-to-pipeunix-domain-socket-server))<br>- Monitoring Tools Log Targets ([Grafana-Loki Log Target](#connecting-to-grafana-loki), [Datadog Log Target](#connecting-to-datadog), [Sentry Log Target](#connecting-to-sentry), [Open Telemetry Log Target](#connecting-to-open-telemetry-collector))</br>- [Asynchronous Logging](#configuring-asynchronous-log-targets) (Deferred Log Target, Queued Log Target, Quantum Log Target, Multi-Quantum Log Target)</br> | ELog provides a wide range of predefined log targets (appenders) ready to use out of the box, fully configurable from file. This includes lock-free scalable asynchronous log targets that can be composed with regular log targets to achieve minimum latency at the logging application.|
 | Debugging | - [Call Stack Dumping Macros](#call-stack-logging)</br>- [Crash Handling](#crash-handling)</br>- [Life Signs](#life-sign-management)</br>- [Post Mortem](#post-mortem) | ELog supports out of the box various debugging scenarios, starting from dumping call stack (with file/line information) for the current thread or the entire application (as in pstack), continuing with crash handling and exception reporting to log, and in addition supports emitting periodic life-signs to a post-mortem shared memory segment. An additional tool is provided that can inspect shared memory segments of crashed and live applications. |
-| Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration)</br>- [Publishing to Redis cluster for service discovery](#configuration-service-redis-publishing) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. |
+| Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration)</br>- [Publishing to Redis cluster for service discovery](#configuration-service-publishing-to-redis-cluster)</br>- [Publishing to etcd cluster for service discovery](#configuration-service-publishing-to-etcd-cluster) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. |
 | Configurability | - [Loggers Log level](#configuring-log-level)</br>- [Log targets](#configuring-log-targets)</br>- [Asynchronous logging schemes](#configuring-asynchronous-log-targets)</br>- [Log formatting](#log-line-format)</br>- [Log filters](#configuring-log-filters)</br>- [Flush Policies](#configuring-flush-policy)<br>- [Logger hierarchy](#log-sources-and-loggers)</br>- [Rate limiting](#limiting-log-rate) | The entire library is **fully configurable** from file or string, including very complex scenarios (see [basic examples](#basic-examples)). All configurable parameters can be set either globally and/or per log target. |
 | [Extendibility](#extending-the-library) | The following entities can be extended:</br>- [Log targets](#adding-new-log-target-types)</br>- [Flush policies](#adding-new-flush-policy-types)</br>- [Filters](#adding-new-log-filter-types)</br>- [Formatters](#adding-new-log-formatter-types)</br>- [Log Record Fields](#extending-the-formatting-scheme) | All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file). This requires static registration, which is normally achieved through helper macros. |
 | Misc. | - [Pre-initialization log queueing](#pre-initialization-log-queueing)</br>- [Structured Logging](#structured-logging)<br> | |
@@ -212,6 +212,7 @@ The ELog library provides the following notable features:
     - Can connect from remote machines and update log levels of log sources
     - Utility CLI tool also provided (elog_cli)
     - Publish remote configuration service to a Redis cluster (for service discovery)
+    - Publish remote configuration service to a etcd cluster (for service discovery)
 - Extendibility
     - All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file)
         - log targets
@@ -388,7 +389,8 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Call Stack Logging](#call-stack-logging)
     - [Configuration Reloading](#configuration-reloading)
     - [Live Remote Configuration](#live-remote-configuration)
-    - [Configuration Service Redis Publishing](#configuration-service-redis-publishing)
+    - [Configuration Service Publishing to Redis Cluster](#configuration-service-publishing-to-redis-cluster)
+    - [Configuration Service Publishing to etcd Cluster](#configuration-service-publishing-to-etcd-cluster)
     - [Live Remote Configuration CLI](#live-remote-configuration-cli)
     - [Crash Handling](#crash-handling)
     - [Life Sign Management](#life-sign-management)
@@ -1102,7 +1104,7 @@ In addition, the following environment variables (corresponding to the configura
 - ELOG_CONFIG_SERVICE_PORT (integer value, can be zero for any available port)
 - ELOG_CONFIG_SERVICE_PUBLISHER (string, name of publisher, currently only 'redis' is supported)
 
-## Configuration Service Redis Publishing
+## Configuration Service Publishing to Redis Cluster
 
 When building with ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON, ELog enables configuring a publisher that writes the configuration service contact details (host and port) to a Redis cluster, for the purpose of service discovery. The Redis publisher can be configured via configuration file/string, with the following configuration items:
 
@@ -1173,6 +1175,75 @@ The redis publisher can be created and configured manually when using directly E
         // report error
     }
 
+## Configuration Service Publishing to etcd Cluster
+
+When building with ELOG_ENABLE_CONFIG_PUBLISH_ETCD=ON, ELog enables configuring a publisher that writes the configuration service contact details (host and port) to an etcd cluster, for the purpose of service discovery. The etcd publisher can be configured via configuration file/string, with the following configuration items:
+
+- etcd_servers
+    - A comma or semicolon-separated list of host:port pairs, denoting Redis servers
+- etcd_api_version
+    - The API version to use, can be v2 or v3
+- etcd_prefix
+    - The directory prefix used to save remote configuration service details in etcd
+    - This is optional, and if not specified defaults to "elog/config_service/"
+    - valid only for API version v2
+- etcd_key
+    - The key prefix used to save remote configuration service details in etcd
+    - This is optional, and if not specified defaults to "elog_config_service"
+- redis_expire_seconds
+    - The number of seconds until the configuration service details expire in Redis
+- redis_renew_expire_seconds
+    - The Redis key expiry renewal timeout in seconds (in a background task)
+- etcd_user
+    - Optional user for etcd login
+- etcd_password
+    - Optional password for etcd login
+
+ELog connects to etcd v3 cluster through the etcd gRPC-gateway (a HTTP/JSON proxy, see [here](https://etcd.io/docs/v3.4/dev-guide/api_grpc_gateway/)), and therefore does not use SSL authentication. In order to ensure safe access to the cluster, make sure to configure the gRPC gateway to access the etcd cluster using SSL.
+
+The corresponding environment variables can be used to configure the etcd publisher from the command line:
+
+- ELOG_ETCD_SERVERS (A comma or semicolon-separated list of host:port pairs, denoting Redis servers)
+- ELOG_ETCD_API_VERSION
+- ELOG_ETCD_PREFIX
+- ELOG_ETCD_KEY
+- ELOG_ETCD_EXPIRE_SECONDS
+- ELOG_ETCD_RENEW_EXPIRE_SECONDS
+- ELOG_ETCD_PASSWORD
+
+The publisher task repeatedly attempts to connect to the etcd cluster and publish the details of the remote configuration service. This allows other processes (e.g. ELog CLI) to discover the details of configuration services in ELog processes, so remote live configuration of log levels can take place (see next section).
+
+The etcd publisher can be automatically reconfigured when [configuration reloading](#configuration-reloading) is enabled. When configuration changes, a new etcd publisher is constructed and installed at the configuration service.
+
+The etcd publisher can be created and configured manually when using directly ELogConfigServiceEtcdPublisher. Following is an example that demonstrates that:
+
+    // configure and initialize etcd publisher
+    elog::ELogConfigServiceEtcdPublisher publisher;
+
+    // have publisher connect to local host etcd
+    publisher.addServer("localhost", 2379);
+    
+    // use default key prefix ("elog_config_service")
+    
+    // initialize the publisher
+    if (!publisher.initialize()) {
+        // report error
+    }
+
+    // hand over the publisher to the configuration service and trigger an immediate restart
+    // of the configuration service
+    if (!setConfigServicePublisher(&publisher, true /* restart configuration service */)) {
+        // report error
+    }
+
+    // NOTE: configuration publisher must be alive as long as being used
+    // if it goes out of scope, then first make sure to remove it
+
+    // NOTE: make sure to restart the configuration service so that changes will take effect immediately
+    if (!setConfigServicePublisher(null, true)) {
+        // report error
+    }
+
 ### Live Remote Configuration CLI
 
 In addition a command line interface was added to connect to live processes, query log levels (with regular expression inclusion/exclusion filters), and update log filters. This also includes the internal report level of ELog. The CLI tool can be invoked by the command "elog_cli" for interactive operation, and is part of the build artifacts when building with ELOG_ENABLE_CONFIG_SERVICE=ON. It also support command line options for non-interactive modes, so it can be embedded in scripts.
@@ -1200,7 +1271,25 @@ NOTE: When configuring the CLI to connect to a Redis cluster, the following envi
 - ELOG_REDIS_SERVER_NAME
 - ELOG_REDIS_VERIFY_MODE
 
-See [Configuration Service Redis Publishing](#configuration-service-redis-publishing) for more details about allowed values for these environment variables.
+Note that the CLI requires that the ELOG_REDIS_SERVERS environment variable be properly set so the CLI can list registered configuration services.
+
+See [Configuration Service Publishing to Redis Cluster](#configuration-service-publishing-to-redis-cluster) for more details about allowed values for these environment variables.
+
+In the same manner, if ELOG_ENABLE_CONFIG_PUBLISH_ETCD=ON is used during build, then the elog_cli also supports listing available services, as they are loaded from the etcd servers configured by the environment variable ELOG_ETCD_SERVERS (comma or semicolon separated list of host:port pairs).
+
+NOTE: When configuring the CLI to connect to a etcd cluster, the following environment variables are recognized:
+
+- ELOG_ETCD_SERVERS (A comma or semicolon-separated list of host:port pairs, denoting etcd servers)
+- ELOG_ETCD_API_VERSION
+- ELOG_ETCD_PREFIX
+- ELOG_ETCD_KEY
+- ELOG_ETCD_EXPIRE_SECONDS
+- ELOG_ETCD_RENEW_EXPIRE_SECONDS
+- ELOG_ETCD_PASSWORD
+
+Note that the CLI requires that the ELOG_ETCD_SERVERS environment variable be properly set so the CLI can list registered configuration services.
+
+See [Configuration Service Publishing to etcd Cluster](#configuration-service-publishing-to-etcd-cluster) for more details about allowed values for these environment variables.
 
 On Linux and MinGW platforms, the CLI tool supports auto-complete of commands and log source names. If service discovery is enabled, then the CLI also supports auto-complete of configuration service details.
 

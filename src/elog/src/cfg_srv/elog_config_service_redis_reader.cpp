@@ -4,69 +4,15 @@
 
 #include <cinttypes>
 
-#include "elog_common.h"
-#include "elog_config_parser.h"
 #include "elog_report.h"
 
 namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogConfigServiceRedisReader)
 
-void ELogConfigServiceRedisReader::setSSLOptions(const char* caCertFileName, const char* caPath,
-                                                 const char* certFileName,
-                                                 const char* privateKeyFileName,
-                                                 const char* serverName,
-                                                 ELogRedisSslVerifyMode verifyMode) {
-    m_params.m_usingSSL = true;
-    m_params.m_caCertFileName = caCertFileName;
-    m_params.m_caPath = caPath;
-    m_params.m_certFileName = certFileName;
-    m_params.m_privateKeyFileName = privateKeyFileName;
-    m_params.m_serverName = serverName;
-    m_params.m_verifyMode = verifyMode;
-}
+bool ELogConfigServiceRedisReader::initialize() { return initializeRedis(); }
 
-bool ELogConfigServiceRedisReader::initialize() {
-    // verify user provided all details
-    if (m_params.m_serverList.empty()) {
-        ELOG_REPORT_ERROR(
-            "Cannot start redis configuration service publisher: no redis server defined");
-        return false;
-    }
-    if (m_params.m_key.empty()) {
-        ELOG_REPORT_ERROR(
-            "Cannot start redis configuration service publisher: no publish key defined");
-        return false;
-    }
-
-    // configure redis client
-    m_redisClient.setServerList(m_params.m_serverList);
-    m_redisClient.setPassword(m_params.m_password.c_str());
-    if (m_params.m_usingSSL) {
-        redisSSLOptions opts;
-        opts.cacert_filename = m_params.m_caCertFileName.c_str();
-        opts.capath = m_params.m_caPath.c_str();
-        opts.cert_filename = m_params.m_certFileName.c_str();
-        opts.private_key_filename = m_params.m_privateKeyFileName.c_str();
-        opts.server_name = m_params.m_serverName.c_str();
-        opts.verify_mode = convertVerifyMode(m_params.m_verifyMode);
-        if (opts.verify_mode == -1) {
-            ELOG_REPORT_ERROR("Invalid SSL verification mode");
-            return false;
-        }
-        m_redisClient.setSSL(opts);
-    }
-
-    // we connect on-demand
-    return true;
-}
-
-bool ELogConfigServiceRedisReader::terminate() {
-    if (m_redisClient.isRedisConnected()) {
-        m_redisClient.disconnectRedis();
-    }
-    return true;
-}
+bool ELogConfigServiceRedisReader::terminate() { return terminateRedis(); }
 
 bool ELogConfigServiceRedisReader::listServices(ELogConfigServiceMap& serviceMap) {
     // connect on-demand
@@ -111,22 +57,6 @@ bool ELogConfigServiceRedisReader::listServices(ELogConfigServiceMap& serviceMap
     }
 
     return res;
-}
-
-bool ELogConfigServiceRedisReader::parseServerListString(const std::string& serverListStr) {
-    std::vector<std::string> serverList;
-    tokenize(serverListStr.c_str(), serverList, ";,");
-    for (const std::string& server : serverList) {
-        std::string host;
-        int port = 0;
-        if (!ELogConfigParser::parseHostPort(server, host, port)) {
-            ELOG_REPORT_ERROR("Invalid redis server specification, cannot parse host and port: %s",
-                              server.c_str());
-            return false;
-        }
-        m_params.m_serverList.push_back({host, port});
-    }
-    return true;
 }
 
 bool ELogConfigServiceRedisReader::checkScanReply(redisReply* reply, uint64_t& cursor) {

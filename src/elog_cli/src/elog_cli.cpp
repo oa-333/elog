@@ -19,6 +19,9 @@
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 #include "cfg_srv/elog_config_service_redis_reader.h"
 #endif
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+#include "cfg_srv/elog_config_service_etcd_reader.h"
+#endif
 
 #define ELOG_CLI_VER_MAJOR 0
 #define ELOG_CLI_VER_MINOR 1
@@ -26,6 +29,11 @@
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 #define ELOG_CLI_HAS_SERVICE_DISCOVERY
 #define ELOG_CLI_SERVICE_DISCOVERY_NAME "redis"
+#endif
+
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+#define ELOG_CLI_HAS_SERVICE_DISCOVERY
+#define ELOG_CLI_SERVICE_DISCOVERY_NAME "etcd"
 #endif
 
 // command names
@@ -79,7 +87,13 @@ static bool sConnected = false;
 static std::vector<std::string> sLogSources;
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
-static elog::ELogConfigServiceRedisReader sConfigServiceReader;
+static elog::ELogConfigServiceRedisReader sRedisConfigServiceReader;
+static elog::ELogConfigServiceReader* sConfigServiceReader = &sRedisConfigServiceReader;
+#endif
+
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+static elog::ELogConfigServiceEtcdReader sEtcdConfigServiceReader;
+static elog::ELogConfigServiceReader* sConfigServiceReader = &sEtcdConfigServiceReader;
 #endif
 
 #ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
@@ -296,28 +310,77 @@ inline std::string trim(const std::string& s) {
     return res;
 }
 
-#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
 static int listServices() {
-    std::string redisServerList;
-    std::string redisKey;
-    std::string redisPassword;
+    static bool initialized = false;
+    if (!initialized) {
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+        std::string redisServerList;
+        std::string redisKey;
+        std::string redisPassword;
 
-    // first check in env
-    getEnvVar("ELOG_REDIS_SERVERS", redisServerList);
-    getEnvVar("ELOG_REDIS_KEY", redisKey);
-    getEnvVar("ELOG_REDIS_PASSWORD", redisPassword);
+        // check in env
+        getEnvVar("ELOG_REDIS_SERVERS", redisServerList);
+        getEnvVar("ELOG_REDIS_KEY", redisKey);
+        getEnvVar("ELOG_REDIS_PASSWORD", redisPassword);
 
-    if (!sConfigServiceReader.setServerList(redisServerList.c_str())) {
-        return 1;
-    }
-    if (!sConfigServiceReader.initialize()) {
-        return 1;
+        if (!sRedisConfigServiceReader.setServerList(redisServerList.c_str())) {
+            return 1;
+        }
+        if (!redisKey.empty()) {
+            sRedisConfigServiceReader.setKey(redisKey.c_str());
+        }
+        if (!redisPassword.empty()) {
+            sRedisConfigServiceReader.setPassword(redisPassword.c_str());
+        }
+#endif
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+        std::string etcdServerList;
+        std::string etcdApiVersion;
+        std::string etcdPrefix;
+        std::string etcdKey;
+        std::string etcdUser;
+        std::string etcdPassword;
+
+        // check in env
+        getEnvVar("ELOG_ETCD_SERVERS", etcdServerList);
+        getEnvVar("ELOG_ETCD_API_VERSION", etcdApiVersion);
+        elog::ELogEtcdApiVersion apiVersion;
+        if (!elog::convertEtcdApiVersion(etcdApiVersion.c_str(), apiVersion)) {
+            return 2;
+        }
+        getEnvVar("ELOG_ETCD_PREFIX", etcdPrefix);
+        getEnvVar("ELOG_ETCD_KEY", etcdKey);
+        getEnvVar("ELOG_ETCD_USER", etcdUser);
+        getEnvVar("ELOG_ETCD_PASSWORD", etcdPassword);
+
+        if (!sEtcdConfigServiceReader.setServerList(etcdServerList.c_str())) {
+            return 3;
+        }
+        sEtcdConfigServiceReader.setApiVersion(apiVersion);
+        if (!etcdPrefix.empty()) {
+            sEtcdConfigServiceReader.setPrefix(etcdPrefix.c_str());
+        }
+        if (!etcdKey.empty()) {
+            sEtcdConfigServiceReader.setKey(etcdKey.c_str());
+        }
+        if (!etcdUser.empty()) {
+            sEtcdConfigServiceReader.setUser(etcdUser.c_str());
+        }
+        if (!etcdPassword.empty()) {
+            sEtcdConfigServiceReader.setPassword(etcdPassword.c_str());
+        }
+#endif
+        if (!sConfigServiceReader->initialize()) {
+            return 4;
+        }
+        initialized = true;
     }
 
     // get raw service map
     elog::ELogConfigServiceMap rawServiceMap;
-    if (!sConfigServiceReader.listServices(rawServiceMap)) {
-        return 2;
+    if (!sConfigServiceReader->listServices(rawServiceMap)) {
+        return 5;
     }
 
     sServiceMap.clear();

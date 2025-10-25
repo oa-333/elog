@@ -26,6 +26,9 @@
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 #include "cfg_srv/elog_config_service_redis_publisher.h"
 #endif
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+#include "cfg_srv/elog_config_service_etcd_publisher.h"
+#endif
 
 #if defined(ELOG_MSVC) || defined(ELOG_MINGW)
 #ifdef __clang__
@@ -1597,6 +1600,11 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "ELog remote configuration service at %s:%d is down\n", host, port);
             fflush(stderr);
         }
+        bool publishConfigService() final { return true; }
+        void unpublishConfigService() final {}
+        void renewExpiry() final {}
+        bool isConnected() final { return true; }
+        bool connect() final { return true; }
     };
     Publisher publisher;
     if (sTestConfigService) {
@@ -2120,6 +2128,13 @@ static int testLifeSign() {
 #endif
 }
 
+static void getEnvVar(const char* name, std::string& value) {
+    char* envVarValueLocal = getenv(name);
+    if (envVarValueLocal != nullptr) {
+        value = envVarValueLocal;
+    }
+}
+
 static int testConfigService() {
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
     // baseline test - no filter used, direct life sign report
@@ -2131,27 +2146,50 @@ static int testConfigService() {
     }
     fprintf(stderr, "initElog() OK\n");
 
+    elog::ELogConfigServicePublisher* publisher = nullptr;
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
     elog::ELogConfigServiceRedisPublisher redisPublisher;
-    redisPublisher.addServer(sServerAddr.c_str(), 6379);
-    if (!redisPublisher.initialize()) {
-        fprintf(stderr, "Failed to initialize redis publisher\n");
-        return 2;
-    }
-    if (!elog::stopConfigService()) {
-        fprintf(stderr, "Failed to stop configuration service\n");
-        redisPublisher.terminate();
-        return 2;
-    }
-    elog::setConfigServiceDetails("subnet:192.168.1.0", 0);
-    elog::setConfigServicePublisher(&redisPublisher);
-    if (!elog::startConfigService()) {
-        fprintf(stderr, "Failed to restart configuration service\n");
-        elog::setConfigServicePublisher(nullptr);
-        redisPublisher.terminate();
-        return 2;
-    }
+    std::string redisServerList;
+    getEnvVar("ELOG_REDIS_SERVERS", redisServerList);
+    redisPublisher.setServerList(redisServerList);
+    publisher = &redisPublisher;
 #endif
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+    elog::ELogConfigServiceEtcdPublisher etcdPublisher;
+    std::string etcdServerList;
+    getEnvVar("ELOG_ETCD_SERVERS", etcdServerList);
+    fprintf(stderr, "etcd server at: %s", etcdServerList.c_str());
+    etcdPublisher.setServerList(etcdServerList);
+    std::string etcdApiVersion;
+    getEnvVar("ELOG_ETCD_API_VERSION", etcdApiVersion);
+    if (!etcdApiVersion.empty()) {
+        elog::ELogEtcdApiVersion apiVersion;
+        if (!elog::convertEtcdApiVersion(etcdApiVersion.c_str(), apiVersion)) {
+            return 2;
+        }
+        etcdPublisher.setApiVersion(apiVersion);
+    }
+    publisher = &etcdPublisher;
+#endif
+    if (publisher != nullptr) {
+        if (!publisher->initialize()) {
+            fprintf(stderr, "Failed to initialize redis publisher\n");
+            return 2;
+        }
+        if (!elog::stopConfigService()) {
+            fprintf(stderr, "Failed to stop configuration service\n");
+            publisher->terminate();
+            return 2;
+        }
+        elog::setConfigServiceDetails("subnet:192.168.1.0", 0);
+        elog::setConfigServicePublisher(publisher);
+        if (!elog::startConfigService()) {
+            fprintf(stderr, "Failed to restart configuration service\n");
+            elog::setConfigServicePublisher(nullptr);
+            publisher->terminate();
+            return 2;
+        }
+    }
 
     // just print every second with two loggers
     elog::ELogLogger* logger1 = elog::getPrivateLogger("test.logger1");
@@ -2182,13 +2220,13 @@ static int testConfigService() {
     t2.join();
 
     termELog();
-    // must stop config ser
-#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
-    if (!elog::setConfigServicePublisher(nullptr, true)) {
-        fprintf(stderr, "Failed to remove redis publisher\n");
+    // must remove publisher before going out of scope
+    if (publisher != nullptr) {
+        if (!elog::setConfigServicePublisher(nullptr, true)) {
+            fprintf(stderr, "Failed to remove publisher\n");
+        }
+        publisher->terminate();
     }
-    redisPublisher.terminate();
-#endif
 #endif
     return 0;
 }
@@ -2742,7 +2780,8 @@ void testRedis() {
         "insert_query=HSET log_records:${rid} time \"${time}\" level \"${level}\" "
         "host \"${host}\" user \"${user}\" prog \"${prog}\" pid \"${pid}\" tid \"${tid}\" "
         "mod \"${mod}\" src \"${src}\" msg \"${msg}\"&"
-        "index_insert=SADD log_records_all ${rid};ZADD log_records_by_time ${time_epoch} ${rid}&"
+        "index_insert=SADD log_records_all ${rid};ZADD log_records_by_time ${time_epoch} "
+        "${rid}&"
         "db_thread_model=conn-per-thread";
     double msgPerf = 0.0f;
     double ioPerf = 0.0f;
@@ -2833,7 +2872,8 @@ void testDatadog() {
 void testOtel() {
     std::string cfg =
         "mon://"
-        "otel?method=http&endpoint=192.168.1.163:4318&debug=true&batching=yes&batch_export_size=25&"
+        "otel?method=http&endpoint=192.168.1.163:4318&debug=true&batching=yes&batch_export_"
+        "size=25&"
         "log_format=msg:${rid}, ${time}, ${src}, ${mod}, ${tid}, ${pid}, ${file}, ${line}, "
         "${level}, ${msg}&"
         "flush_policy=count&flush_count=10";
@@ -2842,16 +2882,16 @@ void testOtel() {
     StatData statData;
     runSingleThreadedTest("Open-Telemetry", cfg.c_str(), msgPerf, ioPerf, statData, 10);
 
-    // NOTE: grpc method works, but it cannot be run after http (process stuck with some lock) so
-    // for unit tests we must do two separate runs
+    // NOTE: grpc method works, but it cannot be run after http (process stuck with some lock)
+    // so for unit tests we must do two separate runs
     /*cfg =
         "mon://otel?method=grpc&endpoint=192.168.1.163:4317&debug=true&"
         "log_format=msg:${rid}, ${time}, ${src}, ${mod}, ${tid}, ${pid}, ${file}, ${line}, "
         "${level}, ${msg}";
     runSingleThreadedTest("Open-Telemetry", cfg.c_str(), msgPerf, ioPerf, statData, 10);*/
 
-    // TODO: regression test will launch a local otel collector and have it write records to file
-    // then we can parse the log file and verify all records and attributes are there
+    // TODO: regression test will launch a local otel collector and have it write records to
+    // file then we can parse the log file and verify all records and attributes are there
 }
 #endif
 

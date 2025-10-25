@@ -3,13 +3,17 @@
 
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
 
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 #include "elog_config.h"
 #include "elog_def.h"
 #include "elog_props.h"
 
 namespace elog {
 
-/** @brief Helper class for publishing the remote configuration service. */
+/** @brief Parent class for all remote configuration service publishers. */
 class ELOG_API ELogConfigServicePublisher {
 public:
     virtual ~ELogConfigServicePublisher() {}
@@ -48,10 +52,85 @@ public:
      */
     virtual void onConfigServiceStop(const char* host, int port) = 0;
 
+    /** @brief Retrieves the publisher's name. */
     inline const char* getName() const { return m_name.c_str(); }
 
 protected:
-    ELogConfigServicePublisher(const char* name) : m_name(name) {}
+    ELogConfigServicePublisher(const char* name)
+        : m_name(name), m_requiresPublish(true), m_stopPublish(false) {}
+
+    // utility helper functions
+    // load string configuration item
+    bool loadCfg(const ELogConfigMapNode* cfg, const char* propName, std::string& value,
+                 bool isMandatory);
+
+    // load integer configuration item
+    bool loadIntCfg(const ELogConfigMapNode* cfg, const char* propName, uint32_t& value,
+                    bool isMandatory);
+
+    // load boolean configuration item
+    bool loadBoolCfg(const ELogConfigMapNode* cfg, const char* propName, bool& value,
+                     bool isMandatory);
+
+    // load string property
+    bool loadProp(const ELogPropertySequence& props, const char* propName, std::string& value,
+                  bool isMandatory);
+
+    // load integer property
+    bool loadIntProp(const ELogPropertySequence& props, const char* propName, uint32_t& value,
+                     bool isMandatory);
+
+    // load boolean property
+    bool loadBoolProp(const ELogPropertySequence& props, const char* propName, bool& value,
+                      bool isMandatory);
+
+    // load string configuration item, optional override from env var
+    bool loadEnvCfg(const ELogConfigMapNode* cfg, const char* propName, std::string& value,
+                    bool mandatory);
+
+    // load integer configuration item, optional override from env var
+    bool loadIntEnvCfg(const ELogConfigMapNode* cfg, const char* propName, uint32_t& value,
+                       bool mandatory);
+
+    // load boolean configuration item, optional override from env var
+    bool loadBoolEnvCfg(const ELogConfigMapNode* cfg, const char* propName, bool& value,
+                        bool mandatory);
+
+    // load string property, optional override from env var
+    bool loadEnvProp(const ELogPropertySequence& props, const char* propName, std::string& value,
+                     bool mandatory);
+
+    // load int property, optional override from env var
+    bool loadIntEnvProp(const ELogPropertySequence& props, const char* propName, uint32_t& value,
+                        bool mandatory);
+
+    // load boolean property, optional override from env var
+    bool loadBoolEnvProp(const ELogPropertySequence& props, const char* propName, bool& value,
+                         bool mandatory);
+
+    // starts the publish thread
+    void startPublishThread(uint32_t renewExpiryTimeoutSeconds);
+
+    // stops the publish thread
+    void stopPublishThread();
+
+    // raise requires-publish flag so publish thread calls publishConfigService() next round
+    inline void setRequiresPublish() { m_requiresPublish = true; }
+
+    // publish config service details key (first time after connect)
+    virtual bool publishConfigService() = 0;
+
+    // delete config service details key (before shutdown)
+    virtual void unpublishConfigService() = 0;
+
+    // renew expiry/ttl of config service details key
+    virtual void renewExpiry() = 0;
+
+    // query whether connected to service discovery server (key-value store)
+    virtual bool isConnected() = 0;
+
+    // connect to service discovery server (key-value store)
+    virtual bool connect() = 0;
 
 private:
     ELogConfigServicePublisher(ELogConfigServicePublisher&) = delete;
@@ -59,6 +138,14 @@ private:
     ELogConfigServicePublisher& operator=(const ELogConfigServicePublisher&) = delete;
 
     std::string m_name;
+    std::thread m_publishThread;
+    std::mutex m_lock;
+    std::condition_variable m_cv;
+    bool m_requiresPublish;
+    bool m_stopPublish;
+
+    void publishThread(uint32_t renewExpiryTimeoutSeconds);
+    void execPublishService();
 };
 
 // forward declaration

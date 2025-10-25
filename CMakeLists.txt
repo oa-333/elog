@@ -73,6 +73,7 @@ option(ELOG_ENABLE_LIFE_SIGN "ELog periodic life-sign report support" OFF)
 option(ELOG_ENABLE_RELOAD_CONFIG "ELog periodic configuration reloading support" OFF)
 option(ELOG_ENABLE_CONFIG_SERVICE "ELog configuration via TCP/pipe channel support" OFF)
 option(ELOG_ENABLE_CONFIG_PUBLISH_REDIS "ELog publish configuration service via redis client" OFF)
+option(ELOG_ENABLE_CONFIG_PUBLISH_ETCD "ELog publish configuration service via etcd client" OFF)
 option(ELOG_ENABLE_SQLITE_DB_CONNECTOR "ELog SQLite database connector" OFF)
 option(ELOG_ENABLE_PGSQL_DB_CONNECTOR "ELog PostgreSQL database connector" OFF)
 option(ELOG_ENABLE_MYSQL_DB_CONNECTOR "ELog MySQL database connector" OFF)
@@ -89,6 +90,9 @@ option(ELOG_ENABLE_IPC "ELog IPC connector" OFF)
 # ensure options are correct
 if (ELOG_ENABLE_CONFIG_PUBLISH_REDIS AND NOT ELOG_ENABLE_CONFIG_SERVICE)
     message(FATAL_ERROR "Must define ELOG_ENABLE_CONFIG_SERVICE=ON before using ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON")
+endif()
+if (ELOG_ENABLE_CONFIG_PUBLISH_ETCD AND NOT ELOG_ENABLE_CONFIG_SERVICE)
+    message(FATAL_ERROR "Must define ELOG_ENABLE_CONFIG_SERVICE=ON before using ELOG_ENABLE_CONFIG_PUBLISH_ETCD=ON")
 endif()
 
 # define db connector package
@@ -124,7 +128,8 @@ option(ELOG_ENABLE_GROUP_FLUSH_GC_TRACE "Enable debug trace group flush garbage 
 # figure out whether HTTP client and JSON support is required
 set(ELOG_ENABLE_HTTP OFF)
 set(ELOG_ENABLE_JSON OFF)
-if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR OR ELOG_ENABLE_OTEL_CONNECTOR)
+if (ELOG_ENABLE_GRAFANA_CONNECTOR OR ELOG_ENABLE_DATADOG_CONNECTOR OR
+    ELOG_ENABLE_OTEL_CONNECTOR OR ELOG_ENABLE_CONFIG_PUBLISH_ETCD)
     set(ELOG_ENABLE_HTTP ON)
     set(ELOG_ENABLE_JSON ON)
 endif()
@@ -331,6 +336,21 @@ if (ELOG_ENABLE_HTTP)
 
         target_link_libraries(elog httplib)
     endif()
+
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_HTTP)
+        target_link_libraries(elog_bench httplib)
+    endif()
+
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_HTTP)
+        target_link_libraries(elog_pm httplib)
+    endif()
+
+    if (ELOG_ENABLE_CONFIG_SERVICE)
+        target_compile_definitions(elog_cli PRIVATE ELOG_ENABLE_HTTP)
+        target_link_libraries(elog_cli httplib)
+    endif()
 endif()
 
 #############################################################
@@ -349,6 +369,24 @@ if (ELOG_USING_GZIP)
     find_package(ZLIB REQUIRED)
     target_link_libraries(elog ZLIB::ZLIB)
     target_compile_definitions(elog PRIVATE ZLIB_CONST)
+
+    if (ELOG_BUILD_BENCH)
+        target_include_directories(elog_bench PRIVATE ${GZIP_HPP_INCLUDE_DIRS})
+        target_link_libraries(elog_bench ZLIB::ZLIB)
+        target_compile_definitions(elog_bench PRIVATE ZLIB_CONST)
+    endif()
+
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_include_directories(elog_pm PRIVATE ${GZIP_HPP_INCLUDE_DIRS})
+        target_link_libraries(elog_pm ZLIB::ZLIB)
+        target_compile_definitions(elog_pm PRIVATE ZLIB_CONST)
+    endif()
+
+    if (ELOG_ENABLE_CONFIG_SERVICE)
+        target_include_directories(elog_cli PRIVATE ${GZIP_HPP_INCLUDE_DIRS})
+        target_link_libraries(elog_cli ZLIB::ZLIB)
+        target_compile_definitions(elog_cli PRIVATE ZLIB_CONST)
+    endif()
 endif()
 
 #############################################################
@@ -526,6 +564,23 @@ if (ELOG_ENABLE_CONFIG_PUBLISH_REDIS)
     else()
         target_link_libraries(elog_cli hiredis hiredis_ssl)
     endif()
+endif()
+
+#############################################################
+# config service publish via etcd definitions
+#############################################################
+if (ELOG_ENABLE_CONFIG_PUBLISH_ETCD)
+    target_compile_definitions(elog PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_ETCD)
+    if (ELOG_BUILD_BENCH)
+        target_compile_definitions(elog_bench PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_ETCD)
+    endif()
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_compile_definitions(elog_pm PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_ETCD)
+    endif()
+    target_compile_definitions(elog_cli PRIVATE ELOG_ENABLE_CONFIG_PUBLISH_ETCD)
+
+    # cli needs http client
+    target_link_libraries(elog_cli httplib)
 endif()
 
 #############################################################

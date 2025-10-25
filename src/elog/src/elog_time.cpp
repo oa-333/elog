@@ -32,8 +32,9 @@ ELOG_DECLARE_REPORT_LOGGER(ELogTime)
 
 // unused, currently commented out
 // #define FILETIME_TO_UNIXTIME(ft) FILETIME_TO_UNIXTIME_NANOS(ft) / 1000000000LL
-// #define UNIXTIME_TO_FILETIME(ut, ft) \
-//    FILE_TIME_TO_LL(ft) = SECONDS_TO_100NANOS(ut + UNIX_MSVC_DIFF_SECONDS)
+// clang-format off
+// #define UNIXTIME_TO_FILETIME(ut, ft) FILE_TIME_TO_LL(ft) = SECONDS_TO_100NANOS(ut + UNIX_MSVC_DIFF_SECONDS)
+// clang-format on
 
 // old definitions
 // #define FILETIME_TO_UNIXTIME(ft) ((*(LONGLONG*)&(ft) - 116444736000000000LL) / 10000000LL)

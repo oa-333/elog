@@ -30,7 +30,10 @@
                 "ELOG_ENABLE_SQLITE_DB_CONNECTOR",
                 "ELOG_ENABLE_OTEL_CONNECTOR",
                 "ELOG_ENABLE_CONFIG_SERVICE",
-                "ELOG_ENABLE_CONFIG_PUBLISH_REDIS"
+                "ELOG_ENABLE_CONFIG_PUBLISH_REDIS",
+                "ELOG_ENABLE_CONFIG_PUBLISH_ETCD",
+                "ELOG_ENABLE_HTTP",
+                "ELOG_ENABLE_JSON"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "cStandard": "c23",
