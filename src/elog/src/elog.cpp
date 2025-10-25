@@ -1743,15 +1743,15 @@ bool configureLogFilter(const char* logFilterCfg) {
 // global log filtering
 void setLogFilter(ELogFilter* logFilter) {
     if (sGlobalFilter != nullptr) {
-        delete sGlobalFilter;
+        destroyFilter(sGlobalFilter);
     }
     sGlobalFilter = logFilter;
 }
 
 bool setRateLimit(uint64_t maxMsg, uint64_t timeout, ELogTimeUnits timeoutUnits,
                   bool replaceGlobalFilter /* = true */) {
-    ELogRateLimiter* rateLimiter =
-        new (std::nothrow) ELogRateLimiter(maxMsg, timeout, timeoutUnits);
+    ELogRateLimitFilter* rateLimiter =
+        new (std::nothrow) ELogRateLimitFilter(maxMsg, timeout, timeoutUnits);
     if (rateLimiter == nullptr) {
         ELOG_REPORT_ERROR("Failed to set rate limit, out of memory");
         return false;
@@ -1766,7 +1766,7 @@ bool setRateLimit(uint64_t maxMsg, uint64_t timeout, ELogTimeUnits timeoutUnits,
     if (logFilter == nullptr) {
         ELOG_REPORT_ERROR(
             "Failed to allocate AND log filter for global rate limiter, out of memory");
-        delete rateLimiter;
+        destroyFilter(rateLimiter);
         return false;
     }
     // put rate limiter first, and if ok, then apply next filter

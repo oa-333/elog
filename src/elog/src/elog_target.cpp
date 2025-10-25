@@ -337,7 +337,7 @@ bool ELogTarget::flushNoLock(bool allowModeration) {
 
 void ELogTarget::setLogFilter(ELogFilter* logFilter) {
     if (m_logFilter != nullptr) {
-        delete m_logFilter;
+        destroyFilter(m_logFilter);
     }
     m_logFilter = logFilter;
 }

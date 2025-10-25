@@ -116,6 +116,24 @@ ELogFilter* constructFilter(const char* name) {
     return filter;
 }
 
+void destroyFilter(ELogFilter* filter) {
+    if (filter == nullptr) {
+        ELOG_REPORT_WARN("Attempting to delete null filter, request ignored");
+        return;
+    }
+
+    // locate the constructor
+    ELogFilterConstructorMap::iterator itr = sFilterConstructorMap.find(filter->getName());
+    if (itr == sFilterConstructorMap.end()) {
+        ELOG_REPORT_ERROR("Invalid field selector %s: not found", filter->getName());
+        return;
+    }
+
+    // delete the field selector at its origin module
+    ELogFilterConstructor* constructor = itr->second;
+    constructor->destroyFilter(filter);
+}
+
 template <typename T>
 static bool compareInt(ELogCmpOp cmpOp, const T& lhs, const T& rhs) {
     switch (cmpOp) {
@@ -163,9 +181,9 @@ inline bool compareTime(ELogCmpOp cmpOp, ELogTime lhs, ELogTime rhs) {
     return compareInt<uint64_t>(cmpOp, elogTimeToUnixTimeNanos(lhs), elogTimeToUnixTimeNanos(rhs));
 }
 
-ELogNotFilter::~ELogNotFilter() {
+void ELogNotFilter::destroy() {
     if (m_filter != nullptr) {
-        delete m_filter;
+        destroyFilter(m_filter);
         m_filter = nullptr;
     }
 }
@@ -228,7 +246,7 @@ bool ELogNotFilter::load(const ELogConfigMapNode* filterCfg) {
 
 ELogCompoundLogFilter::~ELogCompoundLogFilter() {
     for (ELogFilter* filter : m_filters) {
-        delete filter;
+        destroyFilter(filter);
     }
     m_filters.clear();
 }

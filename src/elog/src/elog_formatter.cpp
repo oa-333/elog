@@ -347,7 +347,7 @@ bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
             "Invalid true-clause '%s' in conditional formatting specification (field parsing "
             "failed): %s",
             trueSpecStr.c_str(), fieldSpecStr.c_str());
-        delete filter;
+        destroyFilter(filter);
         return false;
     }
 
@@ -365,7 +365,7 @@ bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
                 "failed): %s",
                 suffix.c_str(), fieldSpecStr.c_str());
             destroyFieldSelector(trueSelector);
-            delete filter;
+            destroyFilter(filter);
             return false;
         }
 
@@ -381,7 +381,7 @@ bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
             destroyFieldSelector(falseSelector);
         }
         destroyFieldSelector(trueSelector);
-        delete filter;
+        destroyFilter(filter);
         return false;
     }
 
@@ -394,7 +394,7 @@ bool ELogFormatter::parseCondField(const std::string& fieldSpecStr) {
             destroyFieldSelector(falseSelector);
         }
         destroyFieldSelector(trueSelector);
-        delete filter;
+        destroyFilter(filter);
         return false;
     }
 
@@ -802,7 +802,7 @@ bool ELogFormatter::parseExprCaseClause(ELogExprSwitchSelector* switchSelector,
             "Failed to load result selector for switch format specification, invalid expression: "
             "%s",
             resultSpec.c_str());
-        delete valueFilter;
+        destroyFilter(valueFilter);
         destroyFieldSelector(switchSelector);
         return false;
     }

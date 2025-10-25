@@ -757,7 +757,7 @@ ELogFilter* ELogConfigLoader::loadLogFilterExpr(ELogExpression* expr) {
         ELogNotFilter* notFilter = new (std::nothrow) ELogNotFilter(subFilter);
         if (notFilter == nullptr) {
             ELOG_REPORT_ERROR("Failed to allocate filter, out of memory");
-            delete subFilter;
+            destroyFilter(subFilter);
             return nullptr;
         }
         return notFilter;
@@ -781,7 +781,7 @@ ELogFilter* ELogConfigLoader::loadLogFilterExpr(ELogExpression* expr) {
         // now have the filter load itself from the parsed expression
         if (!filter->loadExpr(opExpr)) {
             ELOG_REPORT_ERROR("Failed to load filter from expression");
-            delete filter;
+            destroyFilter(filter);
             return nullptr;
         }
         return filter;
@@ -800,7 +800,7 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* filterCfg,
     if (!filter->load(filterCfg)) {
         ELOG_REPORT_ERROR("Failed to load filter %s by configuration object (context: %s)",
                           filterType, filterCfg->getFullContext());
-        delete filter;
+        destroyFilter(filter);
         filter = nullptr;
     } else {
         result = true;

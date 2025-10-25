@@ -7,12 +7,12 @@
 
 namespace elog {
 
-ELOG_DECLARE_REPORT_LOGGER(ELogRateLimiter)
+ELOG_DECLARE_REPORT_LOGGER(ELogRateLimitFilter)
 
-ELOG_IMPLEMENT_FILTER(ELogRateLimiter)
+ELOG_IMPLEMENT_FILTER(ELogRateLimitFilter)
 
-ELogRateLimiter::ELogRateLimiter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* = 0 */,
-                                 ELogTimeUnits timeoutUnits /* = ELogTimeUnits::TU_NONE */)
+ELogRateLimitFilter::ELogRateLimitFilter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* = 0 */,
+                                         ELogTimeUnits timeoutUnits /* = ELogTimeUnits::TU_NONE */)
     : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ),
       m_maxMsg(maxMsg),
       m_timeout(timeout),
@@ -26,7 +26,7 @@ ELogRateLimiter::ELogRateLimiter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* 
     }
 }
 
-bool ELogRateLimiter::prepareInterval() {
+bool ELogRateLimitFilter::prepareInterval() {
     if (!convertTimeUnit(m_timeout, m_timeoutUnits, ELogTimeUnits::TU_MILLI_SECONDS,
                          m_intervalMillis)) {
         ELOG_REPORT_ERROR("Invalid rate limiter timeout value: %" PRIu64 " %s", m_timeout,
@@ -44,7 +44,7 @@ bool ELogRateLimiter::prepareInterval() {
     return true;
 }
 
-bool ELogRateLimiter::load(const ELogConfigMapNode* filterCfg) {
+bool ELogRateLimitFilter::load(const ELogConfigMapNode* filterCfg) {
     if (!loadIntFilter(filterCfg, "rate", "max_msg", m_maxMsg)) {
         return false;
     }
@@ -59,7 +59,7 @@ bool ELogRateLimiter::load(const ELogConfigMapNode* filterCfg) {
     return true;
 }
 
-bool ELogRateLimiter::loadExpr(const ELogExpression* expr) {
+bool ELogRateLimitFilter::loadExpr(const ELogExpression* expr) {
     if (expr->m_type != ELogExpressionType::ET_FUNC_EXPR) {
         ELOG_REPORT_ERROR(
             "Cannot load rate limiter, invalid expression type (required function expression)");
@@ -86,7 +86,7 @@ bool ELogRateLimiter::loadExpr(const ELogExpression* expr) {
 }
 
 // TODO: consider providing several types of rate limiters
-bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {
+bool ELogRateLimitFilter::filterLogRecord(const ELogRecord& logRecord) {
     // TODO: fix this comment, it is too unclear
     // we get a sample timestamp and associate it with a whole interval boundary
     // next we check the current count. If it is associated with the current whole interval, then we
@@ -144,6 +144,17 @@ bool ELogRateLimiter::filterLogRecord(const ELogRecord& logRecord) {
         m_currIntervalCount.store(1, std::memory_order_release);
     }
     return true;
+}
+
+ELogRateLimiter::ELogRateLimiter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* = 0 */,
+                                 ELogTimeUnits timeoutUnits /* = ELogTimeUnits::TU_NONE */)
+    : m_filter(nullptr) {
+    m_filter = new (m_rateLimiterBuf) ELogRateLimitFilter(maxMsg, timeout, timeoutUnits);
+}
+
+ELogRateLimiter::~ELogRateLimiter() {
+    m_filter->destroy();
+    m_filter = nullptr;
 }
 
 }  // namespace elog

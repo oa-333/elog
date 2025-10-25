@@ -16,15 +16,14 @@
 
 namespace elog {
 
-/** @brief Log rate limiter. */
-class ELOG_API ELogRateLimiter final : public ELogCmpFilter {
+/** @brief Log rate limit filter. */
+class ELOG_API ELogRateLimitFilter final : public ELogCmpFilter {
 public:
-    ELogRateLimiter(uint64_t maxMsg = 0, uint64_t timeout = 0,
-                    ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE);
-    ELogRateLimiter(const ELogRateLimiter&) = delete;
-    ELogRateLimiter(ELogRateLimiter&&) = delete;
-    ELogRateLimiter& operator=(const ELogRateLimiter&) = delete;
-    ~ELogRateLimiter() final {}
+    ELogRateLimitFilter(uint64_t maxMsg = 0, uint64_t timeout = 0,
+                        ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE);
+    ELogRateLimitFilter(const ELogRateLimitFilter&) = delete;
+    ELogRateLimitFilter(ELogRateLimitFilter&&) = delete;
+    ELogRateLimitFilter& operator=(const ELogRateLimitFilter&) = delete;
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -49,10 +48,36 @@ protected:
     std::atomic<uint64_t> m_currIntervalCount;
     std::atomic<uint64_t> m_prevIntervalCount;
 
-    ELOG_DECLARE_FILTER(ELogRateLimiter, rate_limit)
+    ELOG_DECLARE_FILTER(ELogRateLimitFilter, rate_limit, ELOG_API)
 
 private:
     bool prepareInterval();
+};
+
+/** Rate limiter utility class, without ELogFilter's stuff. */
+class ELOG_API ELogRateLimiter {
+public:
+    ELogRateLimiter(uint64_t maxMsg = 0, uint64_t timeout = 0,
+                    ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE);
+    ELogRateLimiter(const ELogRateLimiter&) = delete;
+    ELogRateLimiter(ELogRateLimiter&&) = delete;
+    ELogRateLimiter& operator=(const ELogRateLimiter&) = delete;
+    ~ELogRateLimiter();
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    inline bool filterLogRecord(const ELogRecord& logRecord) {
+        return m_filter->filterLogRecord(logRecord);
+    }
+
+private:
+    // buffer for in-place allocation
+    char m_rateLimiterBuf[sizeof(ELogRateLimitFilter)];
+    ELogRateLimitFilter* m_filter;
 };
 
 }  // namespace elog

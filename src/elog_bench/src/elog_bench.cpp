@@ -114,6 +114,7 @@ static bool sTestConfigService = false;
 static std::string sServerAddr = DEFAULT_SERVER_ADDR;
 static bool sTestColors = false;
 static bool sTestSelector = false;
+static bool sTestFilter = false;
 static int sMsgCnt = -1;
 static int sMinThreadCnt = -1;
 static int sMaxThreadCnt = -1;
@@ -868,6 +869,7 @@ static int testRegression();
 static int testLifeSign();
 static int testConfigService();
 static int testSelector();
+static int testFilter();
 
 static bool sTestPerfAll = true;
 static bool sTestPerfIdleLog = false;
@@ -1223,6 +1225,9 @@ static bool parseArgs(int argc, char* argv[]) {
 #endif
         } else if (strcmp(argv[1], "--test-selector") == 0) {
             sTestSelector = true;
+            return true;
+        } else if (strcmp(argv[1], "--test-filter") == 0) {
+            sTestFilter = true;
             return true;
         }
     }
@@ -1643,6 +1648,8 @@ int main(int argc, char* argv[]) {
         res = testConfigService();
     } else if (sTestSelector) {
         res = testSelector();
+    } else if (sTestFilter) {
+        res = testFilter();
     } else {
         fprintf(stderr, "STARTING ELOG BENCHMARK\n");
 
@@ -2268,6 +2275,51 @@ int testSelector() {
     }
     elog::ELogLogger* logger = elog::getPrivateLogger("elog_bench_logger");
     ELOG_INFO_EX(logger, "This is a test message");
+    termELog();
+    return 0;
+}
+
+class TestFilter final : public elog::ELogFilter {
+public:
+    TestFilter() {}
+    TestFilter(const TestFilter&) = delete;
+    TestFilter(TestFilter&&) = delete;
+    TestFilter& operator=(const TestFilter&) = delete;
+
+    /** @brief Loads filter from configuration. */
+    bool load(const elog::ELogConfigMapNode* filterCfg) final { return true; }
+
+    /** @brief Loads filter from a free-style predicate-like parsed expression. */
+    bool loadExpr(const elog::ELogExpression* expr) final { return true; }
+
+    /**
+     * @brief Filters a log record.
+     * @param logRecord The log record to filter.
+     * @return true If the log record is to be logged.
+     * @return false If the log record is to be discarded.
+     */
+    bool filterLogRecord(const elog::ELogRecord& logRecord) final {
+        return logRecord.m_logRecordId % 2 == 0;
+    }
+
+private:
+    ELOG_DECLARE_FILTER(TestFilter, test_filter, ELOG_NO_EXPORT)
+};
+
+ELOG_IMPLEMENT_FILTER(TestFilter)
+
+int testFilter() {
+    const char* cfg =
+        "sys://stderr?log_format=${time} ${level:6} [${tid}] <${test}> ${src} ${msg}&"
+        "filter=test_filter";
+    elog::ELogTarget* logTarget = initElog(cfg);
+    if (logTarget == nullptr) {
+        return 1;
+    }
+    elog::ELogLogger* logger = elog::getPrivateLogger("elog_bench_logger");
+    for (int i = 0; i < 10; ++i) {
+        ELOG_INFO_EX(logger, "This is a test message %d", i);
+    }
     termELog();
     return 0;
 }

@@ -849,7 +849,7 @@ void ELogFormatSelector::selectField(const ELogRecord& record, ELogFieldReceptor
 
 void ELogIfSelector::destroy() {
     if (m_cond != nullptr) {
-        delete m_cond;
+        destroyFilter(m_cond);
         m_cond = nullptr;
     }
     if (m_trueSelector != nullptr) {
@@ -988,7 +988,7 @@ void ELogSwitchSelector::selectField(const ELogRecord& record, ELogFieldReceptor
 
 void ELogExprSwitchSelector::destroy() {
     for (auto& entry : m_cases) {
-        delete entry.first;
+        destroyFilter(entry.first);
         destroyFieldSelector(entry.second);
     }
     m_cases.clear();
