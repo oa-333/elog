@@ -104,7 +104,7 @@ void termFilters() {
 ELogFilter* constructFilter(const char* name) {
     ELogFilterConstructorMap::iterator itr = sFilterConstructorMap.find(name);
     if (itr == sFilterConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid filter %s: not found", name);
+        ELOG_REPORT_ERROR("Cannot construct filter %s: not found", name);
         return nullptr;
     }
 
@@ -125,7 +125,7 @@ void destroyFilter(ELogFilter* filter) {
     // locate the constructor
     ELogFilterConstructorMap::iterator itr = sFilterConstructorMap.find(filter->getName());
     if (itr == sFilterConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid filter %s: not found", filter->getName());
+        ELOG_REPORT_ERROR("Cannot destroy filter %s: not found", filter->getName());
         return;
     }
 

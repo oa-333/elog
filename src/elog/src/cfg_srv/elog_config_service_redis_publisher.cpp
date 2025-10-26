@@ -45,6 +45,16 @@ static bool verifyModeFromString(const char* verifyModeStr, ELogRedisSslVerifyMo
     return true;
 }
 
+ELogConfigServiceRedisPublisher* ELogConfigServiceRedisPublisher::create() {
+    return new (std::nothrow) ELogConfigServiceRedisPublisher();
+}
+
+void ELogConfigServiceRedisPublisher::destroy(ELogConfigServiceRedisPublisher* publisher) {
+    if (publisher != nullptr) {
+        delete publisher;
+    }
+}
+
 bool ELogConfigServiceRedisPublisher::load(const ELogConfigMapNode* cfg) {
     // load everything into parameters object
     ELogConfigServiceRedisParams params;

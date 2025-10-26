@@ -22,7 +22,19 @@ public:
     ELogConfigServiceRedisPublisher(ELogConfigServiceRedisPublisher&) = delete;
     ELogConfigServiceRedisPublisher(ELogConfigServiceRedisPublisher&&) = delete;
     ELogConfigServiceRedisPublisher& operator=(const ELogConfigServiceRedisPublisher&) = delete;
-    ~ELogConfigServiceRedisPublisher() override {}
+
+    /**
+     * @brief Creates a redis publisher object.
+     * @note Since the destructor is private, this publisher can be created only in this way. This
+     * was done by design, in order to avoid allocating objects in one module and releasing them in
+     * another module.
+     * @note When done, dispose of the object by calling @ref
+     * ELogConfigServiceEtcdPublisher::destroy() or @ref destroyConfigServicePublisher().
+     */
+    static ELogConfigServiceRedisPublisher* create();
+
+    /** @brief Static destructor (enforce same module of allocation/deallocation). */
+    static void destroy(ELogConfigServiceRedisPublisher* publisher);
 
     /** @brief Loads configuration service publisher from configuration. */
     bool load(const ELogConfigMapNode* cfg) override;
@@ -76,7 +88,7 @@ public:
 private:
     std::string m_serviceSpec;
 
-    ELOG_DECLARE_CONFIG_SERVICE_PUBLISHER(ELogConfigServiceRedisPublisher, redis)
+    ELOG_DECLARE_CONFIG_SERVICE_PUBLISHER(ELogConfigServiceRedisPublisher, redis, ELOG_API)
 };
 
 }  // namespace elog

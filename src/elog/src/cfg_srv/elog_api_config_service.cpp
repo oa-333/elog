@@ -250,12 +250,12 @@ bool loadConfigServicePublisher(const char* configServicePublisher,
     bool res = (props != nullptr) ? publisher->load(*props) : publisher->load(cfgMap);
     if (!res) {
         ELOG_REPORT_ERROR("Failed to load remote configuration service publisher");
-        delete publisher;
+        destroyConfigServicePublisher(publisher);
         return false;
     }
     if (!publisher->initialize()) {
         ELOG_REPORT_ERROR("Failed to initialize remote configuration service publisher");
-        delete publisher;
+        destroyConfigServicePublisher(publisher);
         return false;
     }
     updatePublisher(publisher, true);
@@ -418,7 +418,7 @@ void updatePublisher(ELogConfigServicePublisher* publisher, bool isInternalPubli
                     "may be observed",
                     configServiceParams.m_publisher->getName());
             }
-            delete configServiceParams.m_publisher;
+            destroyConfigServicePublisher(configServiceParams.m_publisher);
             sShouldDeletePublisher.store(false, std::memory_order_relaxed);
         }
         configServiceParams.m_publisher = nullptr;

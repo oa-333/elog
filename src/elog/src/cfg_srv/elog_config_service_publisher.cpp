@@ -69,7 +69,7 @@ ELogConfigServicePublisher* constructConfigServicePublisher(const char* name) {
     ELogConfigServicePublisherConstructorMap::iterator itr =
         sConfigServicePublisherConstructorMap.find(name);
     if (itr == sConfigServicePublisherConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid configuration service publisher %s: not found", name);
+        ELOG_REPORT_ERROR("Cannot construct configuration service publisher %s: not found", name);
         return nullptr;
     }
 
@@ -80,6 +80,25 @@ ELogConfigServicePublisher* constructConfigServicePublisher(const char* name) {
         ELOG_REPORT_ERROR("Failed to create configuration service publisher, out of memory");
     }
     return configServicePublisher;
+}
+
+void destroyConfigServicePublisher(ELogConfigServicePublisher* publisher) {
+    if (publisher == nullptr) {
+        ELOG_REPORT_WARN("Attempting to delete null publisher, request ignored");
+        return;
+    }
+
+    // locate the constructor
+    ELogConfigServicePublisherConstructorMap::iterator itr =
+        sConfigServicePublisherConstructorMap.find(publisher->getName());
+    if (itr == sConfigServicePublisherConstructorMap.end()) {
+        ELOG_REPORT_ERROR("Cannot destroy publisher %s: not found", publisher->getName());
+        return;
+    }
+
+    // delete the field selector at its origin module
+    ELogConfigServicePublisherConstructor* constructor = itr->second;
+    constructor->destroyConfigServicePublisher(publisher);
 }
 
 bool ELogConfigServicePublisher::loadCfg(const ELogConfigMapNode* cfg, const char* propName,

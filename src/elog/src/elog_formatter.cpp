@@ -63,9 +63,9 @@ ELogFormatter* constructLogFormatter(const char* name, bool issueErrors /* = tru
     ELogFormatterConstructorMap::iterator itr = sLogFormatterConstructorMap.find(name);
     if (itr == sLogFormatterConstructorMap.end()) {
         if (issueErrors) {
-            ELOG_REPORT_ERROR("Invalid log formatter %s: not found", name);
+            ELOG_REPORT_ERROR("Cannot construct log formatter %s: not found", name);
         } else {
-            ELOG_REPORT_TRACE("Invalid log formatter %s: not found", name);
+            ELOG_REPORT_TRACE("Cannot construct log formatter %s: not found", name);
         }
         return nullptr;
     }
@@ -96,7 +96,8 @@ void destroyLogFormatter(ELogFormatter* formatter) {
             delete formatter;
             return;
         } else {
-            ELOG_REPORT_ERROR("Invalid log formatter %s: not found", formatter->getTypeName());
+            ELOG_REPORT_ERROR("Cannot destroy log formatter %s: not found",
+                              formatter->getTypeName());
             return;
         }
     }

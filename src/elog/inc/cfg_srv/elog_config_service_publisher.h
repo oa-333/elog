@@ -16,8 +16,6 @@ namespace elog {
 /** @brief Parent class for all remote configuration service publishers. */
 class ELOG_API ELogConfigServicePublisher {
 public:
-    virtual ~ELogConfigServicePublisher() {}
-
     /** @brief Loads configuration service publisher from configuration. */
     virtual bool load(const ELogConfigMapNode* cfg) = 0;
 
@@ -58,6 +56,7 @@ public:
 protected:
     ELogConfigServicePublisher(const char* name)
         : m_name(name), m_requiresPublish(true), m_stopPublish(false) {}
+    virtual ~ELogConfigServicePublisher() {}
 
     // utility helper functions
     // load string configuration item
@@ -168,6 +167,9 @@ extern ELOG_API void registerConfigServicePublisherConstructor(
  */
 extern ELOG_API ELogConfigServicePublisher* constructConfigServicePublisher(const char* name);
 
+/** @brief Destroys a configuration service publisher object. */
+extern ELOG_API void destroyConfigServicePublisher(ELogConfigServicePublisher* publisher);
+
 /** @brief Utility helper class for configuration service publisher construction. */
 class ELOG_API ELogConfigServicePublisherConstructor {
 public:
@@ -180,30 +182,43 @@ public:
      */
     virtual ELogConfigServicePublisher* constructConfigServicePublisher() = 0;
 
+    /** @brief Destroys a configuration service publisher object. */
+    virtual void destroyConfigServicePublisher(ELogConfigServicePublisher* publisher) = 0;
+
 protected:
     /** @brief Constructor. */
-    ELogConfigServicePublisherConstructor(const char* name) {
+    ELogConfigServicePublisherConstructor(const char* name) : m_publisherName(name) {
         registerConfigServicePublisherConstructor(name, this);
     }
     ELogConfigServicePublisherConstructor(const ELogConfigServicePublisherConstructor&) = delete;
     ELogConfigServicePublisherConstructor(ELogConfigServicePublisherConstructor&&) = delete;
     ELogConfigServicePublisherConstructor& operator=(const ELogConfigServicePublisherConstructor&) =
         delete;
+
+    inline const char* getPublisherName() const { return m_publisherName.c_str(); }
+
+private:
+    std::string m_publisherName;
 };
 
-// TODO: for sake of being able to externally extend elog, the ELOG_API should be replaced with
-// macro parameter, so it can be set to dll export, or to nothing
-
-/** @def Utility macro for declaring configuration service publisher factory method registration. */
-#define ELOG_DECLARE_CONFIG_SERVICE_PUBLISHER(ConfigServicePublisherType, Name)                   \
-    class ELOG_API ConfigServicePublisherType##Constructor final                                  \
+/**
+ * @def Utility macro for declaring configuration service publisher factory method registration.
+ * @param ConfigServicePublisherType Type name of publisher.
+ * @param Name Configuration name of publisher (for dynamic loading from configuration).
+ * @param ImportExportSpec Window import/export specification. If exporting from a library then
+ * specify a macro that will expand correctly within the library and from outside as well. If not
+ * relevant then pass ELOG_NO_EXPORT.
+ */
+#define ELOG_DECLARE_CONFIG_SERVICE_PUBLISHER(ConfigServicePublisherType, Name, ImportExportSpec) \
+    ~ConfigServicePublisherType() final {}                                                        \
+    friend class ImportExportSpec ConfigServicePublisherType##Constructor;                        \
+    class ImportExportSpec ConfigServicePublisherType##Constructor final                          \
         : public elog::ELogConfigServicePublisherConstructor {                                    \
     public:                                                                                       \
         ConfigServicePublisherType##Constructor()                                                 \
             : elog::ELogConfigServicePublisherConstructor(#Name) {}                               \
-        elog::ELogConfigServicePublisher* constructConfigServicePublisher() final {               \
-            return new (std::nothrow) ConfigServicePublisherType();                               \
-        }                                                                                         \
+        elog::ELogConfigServicePublisher* constructConfigServicePublisher() final;                \
+        void destroyConfigServicePublisher(elog::ELogConfigServicePublisher* publisher) final;    \
         ~ConfigServicePublisherType##Constructor() final {}                                       \
         ConfigServicePublisherType##Constructor(const ConfigServicePublisherType##Constructor&) = \
             delete;                                                                               \
@@ -217,9 +232,19 @@ protected:
 /**
  * @def Utility macro for implementing configuration service publisher factory method registration.
  */
-#define ELOG_IMPLEMENT_CONFIG_SERVICE_PUBLISHER(ConfigServicePublisherType) \
-    ConfigServicePublisherType::ConfigServicePublisherType##Constructor     \
-        ConfigServicePublisherType::sConstructor;
+#define ELOG_IMPLEMENT_CONFIG_SERVICE_PUBLISHER(ConfigServicePublisherType)          \
+    ConfigServicePublisherType::ConfigServicePublisherType##Constructor              \
+        ConfigServicePublisherType::sConstructor;                                    \
+    elog::ELogConfigServicePublisher* ConfigServicePublisherType::                   \
+        ConfigServicePublisherType##Constructor::constructConfigServicePublisher() { \
+        return new (std::nothrow) ConfigServicePublisherType();                      \
+    }                                                                                \
+    void ConfigServicePublisherType::ConfigServicePublisherType##Constructor::       \
+        destroyConfigServicePublisher(elog::ELogConfigServicePublisher* publisher) { \
+        if (publisher != nullptr) {                                                  \
+            delete (ConfigServicePublisherType*)publisher;                           \
+        }                                                                            \
+    }
 
 }  // namespace elog
 

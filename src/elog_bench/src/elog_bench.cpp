@@ -2176,18 +2176,20 @@ static int testConfigService() {
 
     elog::ELogConfigServicePublisher* publisher = nullptr;
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
-    elog::ELogConfigServiceRedisPublisher redisPublisher;
+    elog::ELogConfigServiceRedisPublisher* redisPublisher =
+        elog::ELogConfigServiceRedisPublisher::create();
     std::string redisServerList;
     getEnvVar("ELOG_REDIS_SERVERS", redisServerList);
-    redisPublisher.setServerList(redisServerList);
-    publisher = &redisPublisher;
+    redisPublisher->setServerList(redisServerList);
+    publisher = redisPublisher;
 #endif
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
-    elog::ELogConfigServiceEtcdPublisher etcdPublisher;
+    elog::ELogConfigServiceEtcdPublisher* etcdPublisher =
+        elog::ELogConfigServiceEtcdPublisher::create();
     std::string etcdServerList;
     getEnvVar("ELOG_ETCD_SERVERS", etcdServerList);
     fprintf(stderr, "etcd server at: %s", etcdServerList.c_str());
-    etcdPublisher.setServerList(etcdServerList);
+    etcdPublisher->setServerList(etcdServerList);
     std::string etcdApiVersion;
     getEnvVar("ELOG_ETCD_API_VERSION", etcdApiVersion);
     if (!etcdApiVersion.empty()) {
@@ -2195,9 +2197,9 @@ static int testConfigService() {
         if (!elog::convertEtcdApiVersion(etcdApiVersion.c_str(), apiVersion)) {
             return 2;
         }
-        etcdPublisher.setApiVersion(apiVersion);
+        etcdPublisher->setApiVersion(apiVersion);
     }
-    publisher = &etcdPublisher;
+    publisher = etcdPublisher;
 #endif
     if (publisher != nullptr) {
         if (!publisher->initialize()) {
@@ -2248,13 +2250,16 @@ static int testConfigService() {
     t2.join();
 
     termELog();
+    // NOTE: we can remove publisher early, or let ELog destroy it during shutdown
+    // we leave this comment  for future tests
     // must remove publisher before going out of scope
-    if (publisher != nullptr) {
+    /*if (publisher != nullptr) {
         if (!elog::setConfigServicePublisher(nullptr, true)) {
             fprintf(stderr, "Failed to remove publisher\n");
         }
         publisher->terminate();
-    }
+        elog::destroyConfigServicePublisher(publisher);
+    }*/
 #endif
     return 0;
 }

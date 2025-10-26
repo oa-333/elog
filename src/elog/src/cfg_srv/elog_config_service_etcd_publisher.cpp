@@ -37,6 +37,16 @@ bool convertEtcdApiVersion(const char* apiVersionStr, ELogEtcdApiVersion& apiVer
     return false;
 }
 
+ELogConfigServiceEtcdPublisher* ELogConfigServiceEtcdPublisher::create() {
+    return new (std::nothrow) ELogConfigServiceEtcdPublisher();
+}
+
+void ELogConfigServiceEtcdPublisher::destroy(ELogConfigServiceEtcdPublisher* publisher) {
+    if (publisher != nullptr) {
+        delete publisher;
+    }
+}
+
 bool ELogConfigServiceEtcdPublisher::load(const ELogConfigMapNode* cfg) {
     // load everything into parameters object
     ELogConfigServiceEtcdParams params;

@@ -210,7 +210,8 @@ ELogFieldSelector* constructFieldSelector(const ELogFieldSpec& fieldSpec) {
     ELogFieldSelectorConstructorMap::iterator itr =
         sFieldSelectorConstructorMap.find(fieldSpec.m_name);
     if (itr == sFieldSelectorConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid field selector %s: not found", fieldSpec.m_name.c_str());
+        ELOG_REPORT_ERROR("Cannot construct field selector %s: not found",
+                          fieldSpec.m_name.c_str());
         return nullptr;
     }
 
@@ -232,7 +233,7 @@ void destroyFieldSelector(ELogFieldSelector* fieldSelector) {
     ELogFieldSelectorConstructorMap::iterator itr =
         sFieldSelectorConstructorMap.find(fieldSelector->getFieldSpec().m_name);
     if (itr == sFieldSelectorConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid field selector %s: not found",
+        ELOG_REPORT_ERROR("Cannot destroy field selector %s: not found",
                           fieldSelector->getFieldSpec().m_name.c_str());
         return;
     }

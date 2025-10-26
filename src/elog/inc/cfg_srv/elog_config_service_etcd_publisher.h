@@ -25,7 +25,19 @@ public:
     ELogConfigServiceEtcdPublisher(ELogConfigServiceEtcdPublisher&) = delete;
     ELogConfigServiceEtcdPublisher(ELogConfigServiceEtcdPublisher&&) = delete;
     ELogConfigServiceEtcdPublisher& operator=(const ELogConfigServiceEtcdPublisher&) = delete;
-    ~ELogConfigServiceEtcdPublisher() override {}
+
+    /**
+     * @brief Creates an etcd publisher object.
+     * @note Since the destructor is private, this publisher can be created only in this way. This
+     * was done by design, in order to avoid allocating objects in one module and releasing them in
+     * another module.
+     * @note When done, dispose of the object by calling @ref
+     * ELogConfigServiceEtcdPublisher::destroy() or @ref destroyConfigServicePublisher().
+     */
+    static ELogConfigServiceEtcdPublisher* create();
+
+    /** @brief Static destructor (enforce same module of allocation/deallocation). */
+    static void destroy(ELogConfigServiceEtcdPublisher* publisher);
 
     /** @brief Loads configuration service publisher from configuration. */
     bool load(const ELogConfigMapNode* cfg) override;
@@ -91,7 +103,7 @@ public:
     bool handleResult(const httplib::Result& result) final;
 
 private:
-    ELOG_DECLARE_CONFIG_SERVICE_PUBLISHER(ELogConfigServiceEtcdPublisher, etcd)
+    ELOG_DECLARE_CONFIG_SERVICE_PUBLISHER(ELogConfigServiceEtcdPublisher, etcd, ELOG_API)
 
     // publish config service details key (first time after connect)
     bool publishConfigServiceV2(const char* value);

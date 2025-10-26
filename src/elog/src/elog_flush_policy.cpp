@@ -99,7 +99,7 @@ void termFlushPolicies() { sFlushPolicyConstructorMap.clear(); }
 ELogFlushPolicy* constructFlushPolicy(const char* name) {
     ELogFlushPolicyConstructorMap::iterator itr = sFlushPolicyConstructorMap.find(name);
     if (itr == sFlushPolicyConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid flush policy %s: not found", name);
+        ELOG_REPORT_ERROR("Cannot construct flush policy %s: not found", name);
         return nullptr;
     }
 
@@ -121,7 +121,7 @@ void destroyFlushPolicy(ELogFlushPolicy* flushPolicy) {
     ELogFlushPolicyConstructorMap::iterator itr =
         sFlushPolicyConstructorMap.find(flushPolicy->getName());
     if (itr == sFlushPolicyConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Invalid flush policy %s: not found", flushPolicy->getName());
+        ELOG_REPORT_ERROR("Cannot destroy flush policy %s: not found", flushPolicy->getName());
         return;
     }
 
