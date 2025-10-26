@@ -14,9 +14,6 @@ public:
     ELogSchemaHandler(ELogSchemaHandler&&) = delete;
     ELogSchemaHandler& operator=(const ELogSchemaHandler&) = delete;
 
-    /** @brief Destructor. */
-    virtual ~ELogSchemaHandler() {}
-
     /** @brief Registers predefined target providers. */
     virtual bool registerPredefinedProviders() = 0;
 
@@ -27,8 +24,20 @@ public:
      */
     virtual ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) = 0;
 
+    /**
+     * @brief Let every schema handler implement object destruction and finally call "delete this".
+     */
+    virtual void destroy() = 0;
+
 protected:
     ELogSchemaHandler() {}
+
+    /**
+     * @brief protected destructor. ELog cannot delete directly, but only through destroy() method,
+     * so that each schema handler will be deleted at its origin module (avoid core dump due to heap
+     * mixup).
+     */
+    virtual ~ELogSchemaHandler() {}
 };
 
 }  // namespace elog

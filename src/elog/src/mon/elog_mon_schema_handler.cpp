@@ -102,4 +102,6 @@ ELogTarget* ELogMonSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetC
     return nullptr;
 }
 
+void ELogMonSchemaHandler::destroy() { delete this; }
+
 }  // namespace elog

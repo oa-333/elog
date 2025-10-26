@@ -49,7 +49,7 @@ static bool initSchemaHandler(const char* name) {
     }
     if (!ELogSchemaManager::registerSchemaHandler(name, handler)) {
         ELOG_REPORT_ERROR("Failed to add %s schema handler", name);
-        delete handler;
+        handler->destroy();
         return false;
     }
     return true;
@@ -104,7 +104,7 @@ bool ELogSchemaManager::initSchemaHandlers() {
 
 void ELogSchemaManager::termSchemaHandlers() {
     for (uint32_t i = 0; i < sSchemaHandlerCount; ++i) {
-        delete sSchemaHandlers[i];
+        sSchemaHandlers[i]->destroy();
         sSchemaHandlers[i] = nullptr;
     }
     sSchemaHandlerCount = 0;

@@ -16,9 +16,6 @@ public:
     ELogAsyncSchemaHandler(ELogAsyncSchemaHandler&&) = delete;
     ELogAsyncSchemaHandler& operator=(const ELogAsyncSchemaHandler&) = delete;
 
-    /** @brief Destructor. */
-    ~ELogAsyncSchemaHandler() final;
-
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;
 
@@ -32,9 +29,20 @@ public:
      */
     ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
 
+    /**
+     * @brief Let every schema handler implement object destruction and finally call "delete this".
+     */
+    void destroy() final;
+
 private:
     typedef std::unordered_map<std::string, ELogAsyncTargetProvider*> ProviderMap;
     ProviderMap m_providerMap;
+
+    /**
+     * @brief Private destructor, do not allow direct call to delete. Subclasses should also
+     * disallow direct deletion by having the destructor protected or private.
+     */
+    ~ELogAsyncSchemaHandler() final;
 };
 
 }  // namespace elog

@@ -111,4 +111,6 @@ ELogTarget* ELogRpcSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetC
     return nullptr;
 }
 
+void ELogRpcSchemaHandler::destroy() { delete this; }
+
 }  // namespace elog

@@ -67,6 +67,8 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
                            segmentCount, enableStats);
 }
 
+void ELogFileSchemaHandler::destroy() { delete this; }
+
 ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path,
                                                    uint64_t bufferSizeBytes, bool useFileLock,
                                                    uint64_t segmentSizeBytes,

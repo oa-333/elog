@@ -83,4 +83,6 @@ ELogTarget* ELogAsyncSchemaHandler::loadTarget(const ELogConfigMapNode* logTarge
     return nullptr;
 }
 
+void ELogAsyncSchemaHandler::destroy() { delete this; }
+
 }  // namespace elog

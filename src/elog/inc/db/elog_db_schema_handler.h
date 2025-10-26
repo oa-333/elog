@@ -16,9 +16,6 @@ public:
     ELogDbSchemaHandler(ELogDbSchemaHandler&&) = delete;
     ELogDbSchemaHandler& operator=(const ELogDbSchemaHandler&) = delete;
 
-    /** @brief Destructor. */
-    ~ELogDbSchemaHandler() final;
-
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;
 
@@ -32,9 +29,17 @@ public:
      */
     ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
 
+    /**
+     * @brief Let every schema handler implement object destruction and finally call "delete this".
+     */
+    void destroy() final;
+
 private:
     typedef std::unordered_map<std::string, ELogDbTargetProvider*> ProviderMap;
     ProviderMap m_providerMap;
+
+    /** @brief Private destructor, do not allow direct call to delete. */
+    ~ELogDbSchemaHandler() final;
 };
 
 }  // namespace elog

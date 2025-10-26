@@ -83,4 +83,6 @@ ELogTarget* ELogMsgQSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
     return nullptr;
 }
 
+void ELogMsgQSchemaHandler::destroy() { delete this; }
+
 }  // namespace elog

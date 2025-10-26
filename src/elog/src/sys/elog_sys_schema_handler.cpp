@@ -66,4 +66,6 @@ ELogTarget* ELogSysSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetC
     return logTarget;
 }
 
+void ELogSysSchemaHandler::destroy() { delete this; }
+
 }  // namespace elog

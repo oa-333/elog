@@ -68,6 +68,8 @@ ELogTarget* ELogNetSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetC
     return nullptr;
 }
 
+void ELogNetSchemaHandler::destroy() { delete this; }
+
 }  // namespace elog
 
 #endif  // ELOG_ENABLE_NET

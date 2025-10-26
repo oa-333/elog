@@ -156,4 +156,6 @@ ELogTarget* ELogDbSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCf
     return nullptr;
 }
 
+void ELogDbSchemaHandler::destroy() { delete this; }
+
 }  // namespace elog
