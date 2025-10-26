@@ -19,8 +19,8 @@ The following table summarizes the main features of the ELog Logging Framework:
 | Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration)</br>- [Publishing to Redis cluster for service discovery](#configuration-service-publishing-to-redis-cluster)</br>- [Publishing to etcd cluster for service discovery](#configuration-service-publishing-to-etcd-cluster) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. |
 | Configurability | - [Loggers Log level](#configuring-log-level)</br>- [Log targets](#configuring-log-targets)</br>- [Asynchronous logging schemes](#configuring-asynchronous-log-targets)</br>- [Log formatting](#log-line-format)</br>- [Log filters](#configuring-log-filters)</br>- [Flush Policies](#configuring-flush-policy)<br>- [Logger hierarchy](#log-sources-and-loggers)</br>- [Rate limiting](#limiting-log-rate) | The entire library is **fully configurable** from file or string, including very complex scenarios (see [basic examples](#basic-examples)). All configurable parameters can be set either globally and/or per log target. |
 | [Extendibility](#extending-the-library) | The following entities can be extended:</br>- [Log targets](#adding-new-log-target-types)</br>- [Flush policies](#adding-new-flush-policy-types)</br>- [Filters](#adding-new-log-filter-types)</br>- [Formatters](#adding-new-log-formatter-types)</br>- [Log Record Fields](#extending-the-formatting-scheme) | All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file). This requires static registration, which is normally achieved through helper macros. |
-| Misc. | - [Pre-initialization log queueing](#pre-initialization-log-queueing)</br>- [Structured Logging](#structured-logging)<br> | |
-| [High-Performance](#benchmark-highlights) | - 130 nano-seconds latency (async logging)</br>- Up to 10M log/sec throughput</br>- Scalable in multi-threaded scenario</br>- Scalable with long log messages</br>- Scalable with many log format parameters | Optimized to minimize impact on logging application, via lock-free asynchronous logging, binary logging, and cached format messages - all combined may result in just copying a message id to a lock-free ring buffer. No message files are required. |
+| Misc. | - [Pre-initialization log queueing](#pre-initialization-log-queueing)</br>- [Structured Logging](#structured-logging)<br>- [Lazy Time Source](#lazy-time-source) | |
+| [High-Performance](#benchmark-highlights) | - 80 nano-seconds latency (async logging)</br>- Up to 13M log/sec throughput</br>- Scalable in multi-threaded scenario</br>- Scalable with long log messages</br>- Scalable with many log format parameters | Optimized to minimize impact on logging application, via lock-free asynchronous logging, binary logging, and cached format messages - all combined may result in just copying a message id to a lock-free ring buffer. No message files are required. |
 
 ## Basic Examples
 
@@ -136,7 +136,7 @@ The ELog library provides the following notable features:
     - Although perhaps not the fastest out there, ELog still provides very high performance logging with low overhead
     - Minimal formatting on logging application side, possibly combined with lock-free asynchronous logging
     - Full formatting takes place on background thread
-    - **130 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, **scalable** in multi-threaded scenarios), coupled with binary, pre-cached logging
+    - **80 nano-seconds latency** using Quantum log target (asynchronous lock-free ring buffer, **scalable** in multi-threaded scenarios), coupled with binary, pre-cached logging
     - Check out the [benchmarks](#benchmarks) below
 - Synchronous and asynchronous logging schemes
     - Synchronous logging to file, allowing for efficient buffering and log rotation/segmentation
@@ -237,7 +237,6 @@ The ELog library provides the following notable features:
 - Logging hub framework for log pre-processing before shipping to server analysis (offload to edge compute)
 - Support clang
 - Support on MacOS
-- Publish configuration service to etcd cluster (V2 API)
 
 
 ## Common Use Cases
@@ -381,6 +380,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Limiting Log Rate](#limiting-log-rate)
     - [Enabling ELog Internal Trace Messages](#enabling-elog-internal-trace-messages)
     - [Pre-initialization Log Queueing](#pre-initialization-log-queueing)
+    - [Lazy Time Source](#lazy-time-source)
     - [Binary Logging](#binary-logging)
     - [Cached Logging](#cached-logging)
     - [Once Logging](#once-logging)
@@ -957,6 +957,44 @@ ELog by default puts in a backlog queue all log messages issued before the ELog 
 
     // Discards all accumulated log messages.
     extern ELOG_API void discardAccumulatedLogMessages();
+
+### Lazy Time Source
+
+Since timestamps in log files are not necessarily that important, and order matter most of time more than actual logging time, and since taking timestamp for each log message may be costly in high performance scenarios, a lazy time source was added to ELog, to enable less accurate time resolution, with significantly lower latency and higher throughput (30% improvement).
+
+The lazy time source updates its internal time stamp periodically and loggers use it instead of getting the time stamp from the OS. The operation is thread-safe and atomic.
+
+The lazy time source can be configured in the following ways:
+
+- ELogParams passed to elog::initialize()
+- Lazy Time Source API
+- Configuration file/string
+
+The ELog global parameters include the following members for configuring the lazy time source:
+
+- enable time source
+- time source resolution (value and units)
+
+In the same manner the ELog's API contains the following global function for managing the time source:
+
+- enable/disable time source
+- configure time source resolution (value and units)
+
+If the time source is enabled it will be restarted with the new parameters.
+
+The following configuration items can be used to configure the time source:
+
+- enable_time_source (boolean, default value: no)
+- time_source_resolution (time, default value: 100millis)
+
+The time source can be reconfigured if configuration reloading is enabled. If it is stopped, all loggers will revert to taking time stamp from the OS. If it is reconfigured, it will generate time stamps in different frequency. If it is enabled after being disabled, then all log sources will begin to take time stamp from the time source.
+
+The corresponding environment variables can be used to control time source from the command line:
+
+- ELOG_ENABLE_TIME_SOURCE
+- ELOG_TIME_SOURCE_RESOLUTION
+
+Pay attention, that environment variables override configuration items, even when configuration is reloaded from file.
 
 ### Binary Logging
 

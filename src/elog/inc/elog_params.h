@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include "elog_atomic.h"
 #include "elog_common_def.h"
 #include "elog_def.h"
 #include "elog_report_handler.h"
@@ -58,6 +59,15 @@ struct ELOG_API ELogParams {
      */
     uint32_t m_maxThreads;
 
+    /** @brief Specifies whether a time source is used (better performance, less resolution). */
+    ELogAtomic<bool> m_enableTimeSource;
+
+    /** @brief The time source resolution (time stamp update frequency). */
+    uint64_t m_timeSourceResolution;
+
+    /** @brief The time source resolution units. */
+    ELogTimeUnits m_timeSourceUnits;
+
 #ifdef ELOG_ENABLE_LIFE_SIGN
     ELogLifeSignParams m_lifeSignParams;
 #endif
@@ -73,7 +83,10 @@ struct ELOG_API ELogParams {
 #endif
           m_reportHandler(nullptr),
           m_reportLevel(ELEVEL_WARN),
-          m_maxThreads(ELOG_DEFAULT_MAX_THREADS) {
+          m_maxThreads(ELOG_DEFAULT_MAX_THREADS),
+          m_enableTimeSource(ELOG_DEFAULT_ENABLE_TIME_SOURCE),
+          m_timeSourceResolution(ELOG_DEFAULT_TIME_SOURCE_RESOLUTION),
+          m_timeSourceUnits(ELOG_DEFAULT_TIME_SOURCE_UNITS) {
     }
     ELogParams(const ELogParams&) = default;
     ELogParams(ELogParams&&) = default;

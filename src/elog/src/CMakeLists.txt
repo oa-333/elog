@@ -1,6 +1,7 @@
 target_sources(elog PRIVATE
     elog_api_life_sign.cpp
     elog_api_reload_config.cpp
+    elog_api_time_source.cpp
     elog_buffer_receptor.cpp
     elog_buffer.cpp
     elog_cache.cpp
@@ -43,6 +44,7 @@ target_sources(elog PRIVATE
     elog_string_stream_receptor.cpp
     elog_string_receptor.cpp
     elog_target.cpp
+    elog_time_source.cpp
     elog_time.cpp
     elog_tls.cpp
     elog_type_codec.cpp

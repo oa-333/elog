@@ -130,6 +130,15 @@ enum class ELogSizeUnits : uint32_t {
 /** @def Default maximum number of threads used by ELog. */
 #define ELOG_DEFAULT_MAX_THREADS 256
 
+/** @def By default do not enable time source. */
+#define ELOG_DEFAULT_ENABLE_TIME_SOURCE false
+
+/** @brief By default use 100 milli seconds resolution for the time source. */
+#define ELOG_DEFAULT_TIME_SOURCE_RESOLUTION 100
+
+/** @brief By default use 100 milli seconds resolution for the time source. */
+#define ELOG_DEFAULT_TIME_SOURCE_UNITS ELogTimeUnits::TU_MILLI_SECONDS
+
 /** @def Default value of life-sign usage. */
 #define ELOG_DEFAULT_ENABLE_LIFE_SIGN true
 

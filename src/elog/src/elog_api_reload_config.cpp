@@ -11,6 +11,7 @@
 #include "cfg_srv/elog_api_config_service.h"
 #endif
 #include "elog_api_life_sign.h"
+#include "elog_api_time_source.h"
 #include "elog_config_loader.h"
 #include "elog_config_parser.h"
 #include "elog_field_selector_internal.h"
@@ -338,6 +339,11 @@ bool reconfigure(ELogConfig* config) {
         return false;
     }
 #endif
+
+    // configure time source (allow override from env)
+    if (!configTimeSource(cfgMap)) {
+        return false;
+    }
 
     return true;
 }

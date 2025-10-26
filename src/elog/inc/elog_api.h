@@ -54,6 +54,12 @@ extern ELOG_API void terminate();
 /** @brief Queries whether the ELog library is initialized. */
 extern ELOG_API bool isInitialized();
 
+/**************************************************************************************
+ *
+ *                          Reload Configuration Interface
+ *
+ **************************************************************************************/
+
 #ifdef ELOG_ENABLE_RELOAD_CONFIG
 /**
  * @brief Reloads configuration from a file. If no configuration file path is specified, then the
@@ -93,6 +99,12 @@ extern ELOG_API bool setPeriodicReloadConfigFile(const char* configFilePath);
  */
 extern ELOG_API bool setReloadConfigPeriodMillis(uint64_t reloadPeriodMillis);
 #endif
+
+/**************************************************************************************
+ *
+ *                     Remote Configuration Service Interface
+ *
+ **************************************************************************************/
 
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
 /**
@@ -181,6 +193,12 @@ extern ELOG_API bool setConfigServicePublisher(ELogConfigServicePublisher* publi
                                                bool restartConfigService = false);
 #endif
 
+/**************************************************************************************
+ *
+ *                          Pre-Init Log Queueing Interface
+ *
+ **************************************************************************************/
+
 /**
  * @brief Retrieves the logger that is used to accumulate log messages while the ELog library
  * has not initialized yet.
@@ -197,6 +215,12 @@ extern ELOG_API bool hasAccumulatedLogMessages();
  */
 extern ELOG_API void discardAccumulatedLogMessages();
 
+/**************************************************************************************
+ *
+ *                          Internal Reporting Interface
+ *
+ **************************************************************************************/
+
 /** @brief Installs a handler for ELog's internal log message reporting. */
 extern ELOG_API void setReportHandler(ELogReportHandler* reportHandler);
 
@@ -209,6 +233,25 @@ extern ELOG_API ELogLevel getReportLevel();
 /** @brief Registers a schema handler by name. */
 extern ELOG_API bool registerSchemaHandler(const char* schemeName,
                                            ELogSchemaHandler* schemaHandler);
+
+/**************************************************************************************
+ *
+ *                          Lazy Time Source Interface
+ *
+ **************************************************************************************/
+
+/** @brief Enables the lazy time source. */
+extern ELOG_API void enableTimeSource();
+
+/** @brief Disables the lazy time source. */
+extern ELOG_API void disableTimeSource();
+
+/**
+ * @brief Configures the lazy time source.
+ * @param resolution The clock resolution of the lazy time source.
+ * @param resolutionUnits The resolution units of the lazy time source.
+ */
+extern ELOG_API void configureTimeSource(uint64_t resolution, ELogTimeUnits resolutionUnits);
 
 /**************************************************************************************
  *
@@ -1048,6 +1091,10 @@ extern ELOG_API char* win32SysErrorToStr(unsigned long sysErrorCode);
 extern ELOG_API void win32FreeErrorStr(char* errStr);
 #endif
 
+/**************************************************************************************
+ *                       Logging Macros Helper Functions/Classes
+ **************************************************************************************/
+
 /** @brief Retrieves any valid logger (helper function for logging macros). */
 inline ELogLogger* getValidLogger(ELogLogger* logger) {
     if (logger != nullptr) {
@@ -1107,7 +1154,9 @@ private:
 }  // namespace elog
 
 /**************************************************************************************
+ *
  *                              Logging Macros
+ *
  **************************************************************************************/
 
 /**

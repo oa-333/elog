@@ -153,7 +153,11 @@ void ELogLogger::startLogRecord(ELogRecord& logRecord, ELogLevel logLevel, const
     // TODO: maybe we can take 2 bytes from another filed (e.g. not so importnat record id)?
     logRecord.m_line = line > UINT16_MAX ? (uint16_t)0 : (uint16_t)line;
     logRecord.m_function = function;
-    elogGetCurrentTime(logRecord.m_logTime);
+    if (isTimeSourceEnabled()) {
+        getCurrentTimeFromSource(logRecord.m_logTime);
+    } else {
+        elogGetCurrentTime(logRecord.m_logTime);
+    }
     logRecord.m_threadId = getCurrentThreadId();
     logRecord.m_logger = this;
     logRecord.m_flags = flags;

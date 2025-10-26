@@ -268,7 +268,8 @@ const char* timeUnitToString(ELogTimeUnits timeUnits) {
 
 bool parseTimeValueProp(const char* propName, const std::string& logTargetCfg,
                         const std::string& prop, uint64_t& timeValue, ELogTimeUnits& origUnits,
-                        ELogTimeUnits targetUnits, bool issueError /* = true */) {
+                        ELogTimeUnits targetUnits /* = ELogTimeUnits::TU_NONE */,
+                        bool issueError /* = true */) {
     std::size_t pos = 0;
     try {
         timeValue = std::stoull(prop, &pos);
@@ -300,7 +301,8 @@ bool parseTimeValueProp(const char* propName, const std::string& logTargetCfg,
     }
 
     // first convert to nanos, then move to target units
-    if (!convertTimeUnit(timeValue, origUnits, targetUnits, timeValue, issueError)) {
+    if (targetUnits != ELogTimeUnits::TU_NONE &&
+        !convertTimeUnit(timeValue, origUnits, targetUnits, timeValue, issueError)) {
         ELOG_REPORT_ERROR("Internal error, failed to convert time value (unexpected)");
         return false;
     }
@@ -328,7 +330,7 @@ bool parseSizeProp(const char* propName, const std::string& logTargetCfg, const 
         return false;
     }
 
-    // first comput bytes, then move to target units
+    // first compute bytes, then move to target units
     std::string units = toLower(trim(prop.substr(pos)));
     if (units.compare("b") == 0 || units.compare("byte") == 0 || units.compare("bytes") == 0) {
         // bytes

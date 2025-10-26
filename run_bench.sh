@@ -31,6 +31,8 @@ rm -f bench_data/*
 echo "[INFO] Executing benchmark"
 if [ "$OS" = "Msys" ]; then
     echo "[DEBUG] Running command ./elog_bench_mingw.exe $*"
+    export ELOG_ENABLE_TIME_SOURCE=yes
+    export ELOG_TIME_SOURCE_RESOLUTION=100millis
     ./elog_bench_mingw.exe $*
 else
     export LD_LIBRARY_PATH=.

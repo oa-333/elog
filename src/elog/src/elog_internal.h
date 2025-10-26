@@ -106,6 +106,14 @@ inline void forEachLogSource(const char* includeRegEx, const char* excludeRegEx,
     visitLogSources(includeRegEx, excludeRegEx, &v);
 }
 
+/** @brief Queries whether a time source is being used. */
+inline bool isTimeSourceEnabled() {
+    return getParams().m_enableTimeSource.m_atomicValue.load(std::memory_order_relaxed);
+}
+
+/** @brief Retrieves the current time from the time source. */
+extern void getCurrentTimeFromSource(ELogTime& currentTime);
+
 }  // namespace elog
 
 #endif  // __ELOG_INTERNAL_H__

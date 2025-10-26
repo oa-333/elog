@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "elog_api.h"
+#include "elog_api_time_source.h"
 #include "elog_cache.h"
 #include "elog_common.h"
 #include "elog_config.h"
@@ -30,6 +31,7 @@
 #include "elog_stats_internal.h"
 #include "elog_target_spec.h"
 #include "elog_time_internal.h"
+#include "elog_time_source.h"
 #include "file/elog_buffered_file_target.h"
 #include "file/elog_file_schema_handler.h"
 #include "file/elog_file_target.h"
@@ -130,6 +132,9 @@ bool initGlobals() {
         return false;
     }
     ELOG_REPORT_TRACE("Date table initialized");
+
+    // initialize the time source if needed
+    initTimeSource();
 
     // initialize log target statistics
     if (!initializeStats(sParams.m_maxThreads)) {
@@ -439,6 +444,7 @@ void termGlobals() {
     if (!ELogTarget::destroyLogBufferKey()) {
         ELOG_REPORT_ERROR("Failed to destroy log buffer thread-local storage");
     }
+    termTimeSource();
     termDateTable();
     sPreInitLogger.discardAccumulatedLogMessages();
 }
@@ -747,19 +753,24 @@ bool configureByProps(const ELogPropertySequence& props, bool defineLogSources /
         cfg.m_logSource->setLogLevel(cfg.m_logLevel, cfg.m_propagationMode);
     }
 
-// configure life-sign report settings
+    // configure life-sign report settings
 #ifdef ELOG_ENABLE_LIFE_SIGN
     if (!configLifeSignProps(props)) {
         return false;
     }
 #endif
 
-// configure configuration service and restart it
+    // configure configuration service and restart it
 #ifdef ELOG_ENABLE_CONFIG_SERVICE
     if (!configConfigServiceProps(props)) {
         return false;
     }
 #endif
+
+    // configure time source
+    if (!configTimeSourceProps(props)) {
+        return false;
+    }
 
     return true;
 }
@@ -1060,6 +1071,11 @@ bool configure(ELogConfig* config, bool defineLogSources /* = true */,
         return false;
     }
 #endif
+
+    // configure time source (allow override from env)
+    if (!configTimeSource(cfgMap)) {
+        return false;
+    }
 
     return true;
 }

@@ -44,6 +44,8 @@
 #define ELOG_ENABLE_CONFIG_SERVICE_PUBLISHER_NAME "enable_config_service_publisher"
 #define ELOG_CONFIG_SERVICE_PUBLISHER_NAME "config_service_publisher"
 #endif
+#define ELOG_CONFIG_ENABLE_TIME_SOURCE_NAME "enable_time_source"
+#define ELOG_CONFIG_TIME_SOURCE_RESOLUTION_NAME "time_source_resolution"
 
 // simple colors for internal use
 #define RED "\x1B[31m"
@@ -164,7 +166,8 @@ extern const char* timeUnitToString(ELogTimeUnits timeUnits);
 /** @brief Helper function for parsing a timeout property, with suffix ms, us, ns. */
 extern bool parseTimeValueProp(const char* propName, const std::string& logTargetCfg,
                                const std::string& prop, uint64_t& timeValue,
-                               ELogTimeUnits& origUnits, ELogTimeUnits targetUnits,
+                               ELogTimeUnits& origUnits,
+                               ELogTimeUnits targetUnits = ELogTimeUnits::TU_NONE,
                                bool issueError = true);
 
 /** @brief Helper function for parsing a timeout property, with suffix ms, us, ns. */
@@ -270,8 +273,7 @@ inline void prepareEnvVarName(const char* configName, std::string& envVarName) {
 }
 
 /** @brief Retrieves an environment variable value by configuration value. */
-inline bool getStringEnv(const char* configName, std::string& value, bool normalizeEnvVar = true,
-                         bool* found = nullptr) {
+inline bool getStringEnv(const char* configName, std::string& value, bool normalizeEnvVar = true) {
     std::string envVarName;
     if (normalizeEnvVar) {
         prepareEnvVarName(configName, envVarName);

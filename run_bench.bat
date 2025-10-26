@@ -28,6 +28,8 @@ del /Q bench_data\*
 echo INFO: Executing benchmark
 echo DEBUG: Running command .\elog_bench.exe %*
 REM xcopy /Y %INSTALL_DIR%\elog\bin\* .
+set ELOG_ENABLE_TIME_SOURCE=yes
+set ELOG_TIME_SOURCE_RESOLUTION=100millis
 .\elog_bench.exe %*
 
 REM plot
