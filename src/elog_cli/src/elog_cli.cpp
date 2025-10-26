@@ -28,12 +28,10 @@
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 #define ELOG_CLI_HAS_SERVICE_DISCOVERY
-#define ELOG_CLI_SERVICE_DISCOVERY_NAME "redis"
 #endif
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
 #define ELOG_CLI_HAS_SERVICE_DISCOVERY
-#define ELOG_CLI_SERVICE_DISCOVERY_NAME "etcd"
 #endif
 
 // command names
@@ -88,12 +86,10 @@ static std::vector<std::string> sLogSources;
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
 static elog::ELogConfigServiceRedisReader sRedisConfigServiceReader;
-static elog::ELogConfigServiceReader* sConfigServiceReader = &sRedisConfigServiceReader;
 #endif
 
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
 static elog::ELogConfigServiceEtcdReader sEtcdConfigServiceReader;
-static elog::ELogConfigServiceReader* sConfigServiceReader = &sEtcdConfigServiceReader;
 #endif
 
 #ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
@@ -286,8 +282,7 @@ static void printHelp() {
     printf("ELog Configuration CLI:\n\n");
     printf("q/quit/exit:     exit from the cli\n");
 #ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
-    printf("list:            lists all ELog services registered at %s cluster\n",
-           ELOG_CLI_SERVICE_DISCOVERY_NAME);
+    printf("list:            lists all ELog remote configuration services\n");
 #endif
     printf("connect:         connect to an ELog configuration service\n");
     printf("disconnect:      disconnect from an ELog configuration service\n");
@@ -333,6 +328,9 @@ static int listServices() {
         if (!redisPassword.empty()) {
             sRedisConfigServiceReader.setPassword(redisPassword.c_str());
         }
+        if (!sRedisConfigServiceReader.initialize()) {
+            return 2;
+        }
 #endif
 #ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
         std::string etcdServerList;
@@ -370,18 +368,25 @@ static int listServices() {
         if (!etcdPassword.empty()) {
             sEtcdConfigServiceReader.setPassword(etcdPassword.c_str());
         }
-#endif
-        if (!sConfigServiceReader->initialize()) {
-            return 4;
+        if (!sEtcdConfigServiceReader.initialize()) {
+            return 2;
         }
+#endif
         initialized = true;
     }
 
-    // get raw service map
+    // get raw service map (we allow both discovery services to coexist)
     elog::ELogConfigServiceMap rawServiceMap;
-    if (!sConfigServiceReader->listServices(rawServiceMap)) {
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_REDIS
+    if (!sRedisConfigServiceReader.listServices(rawServiceMap)) {
         return 5;
     }
+#endif
+#ifdef ELOG_ENABLE_CONFIG_PUBLISH_ETCD
+    if (!sEtcdConfigServiceReader.listServices(rawServiceMap)) {
+        return 5;
+    }
+#endif
 
     sServiceMap.clear();
     sServiceList.clear();

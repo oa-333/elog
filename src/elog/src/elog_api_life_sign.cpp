@@ -119,7 +119,7 @@ bool termLifeSignReport() {
     ELogFormatter* formatter = sLifeSignFormatter.load(std::memory_order_acquire);
     if (formatter != nullptr) {
         sLifeSignFormatter.store(nullptr, std::memory_order_release);
-        delete formatter;
+        destroyLogFormatter(formatter);
     }
 
     // destroy TLS for thread-scope life-sign reports
@@ -239,7 +239,7 @@ bool setCurrentThreadLifeSignReport(ELogLevel level, const ELogFrequencySpec& fr
 
     // no need for GC in case of current thread
     if (prevFilter != nullptr) {
-        delete prevFilter;
+        destroyFilter(prevFilter);
     }
     return true;
 }
@@ -256,7 +256,7 @@ bool removeCurrentThreadLifeSignReport(ELogLevel level) {
 
     // no need for GC in case of current thread
     if (prevFilter != nullptr) {
-        delete prevFilter;
+        destroyFilter(prevFilter);
     }
     return true;
 }
@@ -598,7 +598,7 @@ bool setLifeSignLogFormat(const char* logFormat) {
         ELOG_REPORT_ERROR(
             "Failed to initialize life-sign log line formatter, invalid log line format: %s",
             logFormat);
-        delete newFormatter;
+        destroyLogFormatter(newFormatter);
         newFormatter = nullptr;
         return false;
     }

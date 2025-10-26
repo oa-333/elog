@@ -11,13 +11,46 @@ namespace elog {
 ELOG_DECLARE_REPORT_LOGGER(ELogGrafanaJsonTarget)
 
 bool ELogGrafanaJsonTarget::startLogTarget() {
-    if (!m_labels.empty() && !parseLabels(m_labels)) {
+    m_labelFormatter = ELogPropsFormatter::create();
+    if (m_labelFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create labels properties formatter, out of memory");
         return false;
     }
-    if (!m_logLineMetadata.empty() && !parseMetadata(m_logLineMetadata)) {
+    m_metadataFormatter = ELogPropsFormatter::create();
+    if (m_metadataFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create meta-data properties formatter, out of memory");
+        ELogPropsFormatter::destroy(m_labelFormatter);
+        m_labelFormatter = nullptr;
         return false;
     }
-    return ELogGrafanaTarget::startLogTarget();
+
+    bool res = parseLabels(m_labels);
+    if (res) {
+        res = parseMetadata(m_logLineMetadata);
+    }
+    if (res) {
+        res = ELogGrafanaTarget::startLogTarget();
+    }
+
+    if (!res) {
+        ELogPropsFormatter::destroy(m_labelFormatter);
+        ELogPropsFormatter::destroy(m_metadataFormatter);
+        m_labelFormatter = nullptr;
+        m_metadataFormatter = nullptr;
+    }
+    return res;
+}
+
+bool ELogGrafanaJsonTarget::stopLogTarget() {
+    if (m_labelFormatter != nullptr) {
+        ELogPropsFormatter::destroy(m_labelFormatter);
+        m_labelFormatter = nullptr;
+    }
+    if (m_metadataFormatter != nullptr) {
+        ELogPropsFormatter::destroy(m_metadataFormatter);
+        m_metadataFormatter = nullptr;
+    }
+    return ELogGrafanaTarget::stopLogTarget();
 }
 
 uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
@@ -45,7 +78,7 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
     logLine[1] = logMsg;
 
     // fill int log line attributes
-    if (m_metadataFormatter.getPropCount() > 0) {
+    if (m_metadataFormatter->getPropCount() > 0) {
         ELogJsonReceptor receptor;
         fillInMetadata(logRecord, &receptor);
         if (!receptor.prepareJsonMap(logLine[2], getMetadataNames())) {

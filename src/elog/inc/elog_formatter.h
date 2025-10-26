@@ -39,6 +39,14 @@ public:
     }
 
     /**
+     * @brief Allow for object orderly termination (member cleanup), since flush policy destruction
+     * is controlled (destructor not exposed).
+     * @note This function must be idempotent, meaning it might be called several times, having
+     * effect only for the first time.
+     */
+    virtual void terminate() {}
+
+    /**
      * @brief Formats a log message into a string from a log records using the formatter.
      * @param logRecord The log record used for formatting.
      * @param[out] logMsg The resulting formatted log message.
@@ -51,12 +59,6 @@ public:
      * @param[out] logBuffer The resulting formatted log buffer.
      */
     virtual void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
-
-    /**
-     * @brief Allow for special cleanup, since log formatter destruction is controlled (destructor
-     * not exposed).
-     */
-    virtual void destroy() {}
 
     /**
      * @brief Select log record fields into a receptor.
@@ -178,13 +180,22 @@ protected:
     ELogFormatterConstructor& operator=(const ELogFormatterConstructor&) = delete;
 };
 
-// TODO: for sake of being able to externally extend elog, the ELOG_API should be replaced with
-// macro parameter, so it can be set to dll export, or to nothing
-
-/** @def Utility macro for declaring log formatter factory method registration. */
+/**
+ * @def Utility macro for declaring log formatter factory method registration. Using this macro is
+ * mandatory for every log formatter class that wishes to be loadable from configuration.
+ * @param FormatterType Type name of log formatter.
+ * @param Name Configuration name of log formatter (for dynamic loading from configuration).
+ * @param ImportExportSpec Window import/export specification. If exporting from a library then
+ * specify a macro that will expand correctly within the library and from outside as well. If not
+ * relevant then pass ELOG_NO_EXPORT.
+ */
 #define ELOG_DECLARE_LOG_FORMATTER(FormatterType, Name, ImportExportSpec)                  \
+public:                                                                                    \
+    static FormatterType* create();                                                        \
+    static void destroy(FormatterType* formatter);                                         \
+                                                                                           \
+private:                                                                                   \
     ~FormatterType() final {}                                                              \
-    friend class ImportExportSpec FormatterType##Constructor;                              \
     class ImportExportSpec FormatterType##Constructor final                                \
         : public elog::ELogFormatterConstructor {                                          \
     public:                                                                                \
@@ -200,6 +211,13 @@ protected:
 
 /** @def Utility macro for implementing log formatter factory method registration. */
 #define ELOG_IMPLEMENT_LOG_FORMATTER(FormatterType)                                        \
+    FormatterType* FormatterType::create() { return new (std::nothrow) FormatterType(); }  \
+    void FormatterType::destroy(FormatterType* formatter) {                                \
+        if (formatter != nullptr) {                                                        \
+            formatter->terminate();                                                        \
+            delete formatter;                                                              \
+        }                                                                                  \
+    }                                                                                      \
     FormatterType::FormatterType##Constructor FormatterType::sConstructor;                 \
     elog::ELogFormatter* FormatterType::FormatterType##Constructor::constructFormatter() { \
         return new (std::nothrow) FormatterType();                                         \
@@ -207,8 +225,7 @@ protected:
     void FormatterType::FormatterType##Constructor::destroyFormatter(                      \
         elog::ELogFormatter* formatter) {                                                  \
         if (formatter != nullptr) {                                                        \
-            formatter->destroy();                                                          \
-            delete (FormatterType*)formatter;                                              \
+            FormatterType::destroy((FormatterType*)formatter);                             \
         }                                                                                  \
     }
 

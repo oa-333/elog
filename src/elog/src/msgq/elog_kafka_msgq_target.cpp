@@ -76,10 +76,16 @@ private:
 };
 
 bool ELogKafkaMsgQTarget::startLogTarget() {
+    // call parent first
+    if (!ELogMsgQTarget::startLogTarget()) {
+        return false;
+    }
+
     // parse the headers with log record field selector tokens
     // this builds a processed statement text with questions marks instead of log record field
     // references, and also prepares the field selector array
     if (!parseHeaders(m_headers)) {
+        ELogMsgQTarget::stopLogTarget();
         return false;
     }
     char errstr[512];
@@ -268,6 +274,7 @@ void ELogKafkaMsgQTarget::cleanup() {
         rd_kafka_conf_destroy(m_conf);
         m_conf = nullptr;
     }
+    ELogMsgQTarget::stopLogTarget();
 }
 
 }  // namespace elog

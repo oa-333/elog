@@ -34,7 +34,9 @@ public:
                           const char* logLineMetadata)
         : ELogGrafanaTarget(lokiAddress, config),
           m_labels(labels),
-          m_logLineMetadata(logLineMetadata) {}
+          m_logLineMetadata(logLineMetadata),
+          m_labelFormatter(nullptr),
+          m_metadataFormatter(nullptr) {}
 
     ELogGrafanaJsonTarget(const ELogGrafanaJsonTarget&) = delete;
     ELogGrafanaJsonTarget(ELogGrafanaJsonTarget&&) = delete;
@@ -44,6 +46,9 @@ public:
 protected:
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() final;
+
+    /** @brief Order the log target to stop (required for threaded targets). */
+    bool stopLogTarget() final;
 
     /** @brief Sends a log record to a log target. */
     uint32_t writeLogRecord(const ELogRecord& logRecord) final;
@@ -55,32 +60,32 @@ private:
     std::string m_labels;
     std::string m_logLineMetadata;
     nlohmann::json m_logEntry;
-    ELogPropsFormatter m_labelFormatter;
-    ELogPropsFormatter m_metadataFormatter;
+    ELogPropsFormatter* m_labelFormatter;
+    ELogPropsFormatter* m_metadataFormatter;
 
     inline bool parseLabels(const std::string& labels) {
-        return m_labelFormatter.parseProps(labels);
+        return m_labelFormatter->parseProps(labels);
     }
 
     inline const std::vector<std::string>& getLabelNames() const {
-        return m_labelFormatter.getPropNames();
+        return m_labelFormatter->getPropNames();
     }
 
     inline void fillInLabels(const elog::ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {
-        m_labelFormatter.fillInProps(logRecord, receptor);
+        m_labelFormatter->fillInProps(logRecord, receptor);
     }
 
     inline bool parseMetadata(const std::string& labels) {
-        return m_metadataFormatter.parseProps(labels);
+        return m_metadataFormatter->parseProps(labels);
     }
 
     inline const std::vector<std::string>& getMetadataNames() const {
-        return m_metadataFormatter.getPropNames();
+        return m_metadataFormatter->getPropNames();
     }
 
     inline void fillInMetadata(const elog::ELogRecord& logRecord,
                                elog::ELogFieldReceptor* receptor) {
-        m_metadataFormatter.fillInProps(logRecord, receptor);
+        m_metadataFormatter->fillInProps(logRecord, receptor);
     }
 };
 

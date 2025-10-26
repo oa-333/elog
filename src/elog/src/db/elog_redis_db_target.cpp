@@ -79,7 +79,7 @@ bool ELogRedisDbTarget::initDbTarget() {
         if (!formatter->initialize(indexInsert.c_str())) {
             ELOG_REPORT_ERROR("Failed to parse Redis index insert statement: %s",
                               indexInsert.c_str());
-            delete formatter;
+            destroyLogFormatter(formatter);
             termDbTarget();
             return false;
         }
@@ -91,7 +91,7 @@ bool ELogRedisDbTarget::initDbTarget() {
 void ELogRedisDbTarget::termDbTarget() {
     for (ELogDbFormatter* formatter : m_indexStmtFormatters) {
         if (formatter != nullptr) {
-            delete formatter;
+            destroyLogFormatter(formatter);
         }
     }
     m_indexStmtFormatters.clear();

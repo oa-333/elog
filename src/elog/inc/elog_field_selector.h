@@ -54,9 +54,9 @@ public:
 
     /**
      * @brief Allow for special cleanup, since field selector destruction is controlled (destructor
-     * not exposed).
+     * is forced as private through macro @ref ELOG_DECLARE_FIELD_SELECTOR()).
      */
-    virtual void destroy() {}
+    virtual void terminate() {}
 
 protected:
     ELogFieldSelector(ELogFieldType fieldType, const ELogFieldSpec& fieldSpec = ELogFieldSpec())
@@ -165,7 +165,7 @@ public:                                                                         
     void FieldSelectorType::FieldSelectorType##Constructor::destroyFieldSelector(      \
         elog::ELogFieldSelector* fieldSelector) {                                      \
         if (fieldSelector != nullptr) {                                                \
-            fieldSelector->destroy();                                                  \
+            fieldSelector->terminate();                                                \
             delete (FieldSelectorType*)fieldSelector;                                  \
         }                                                                              \
     }
@@ -508,7 +508,11 @@ public:
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
-    void destroy() final;
+    /**
+     * @brief Allow for special cleanup, since field selector destruction is controlled (destructor
+     * is forced as private through macro @ref ELOG_DECLARE_FIELD_SELECTOR()).
+     */
+    void terminate() final;
 
 private:
     // parent class's m_fieldSpec member holds all following 3 members (3rd optional)
@@ -546,7 +550,11 @@ public:
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
-    void destroy() final;
+    /**
+     * @brief Allow for special cleanup, since field selector destruction is controlled (destructor
+     * is forced as private through macro @ref ELOG_DECLARE_FIELD_SELECTOR()).
+     */
+    void terminate() final;
 
 private:
     // parent class's m_fieldSpec member holds all following 3 members (3rd optional)
@@ -579,7 +587,11 @@ public:
 
     void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
 
-    void destroy() final;
+    /**
+     * @brief Allow for special cleanup, since field selector destruction is controlled (destructor
+     * is forced as private through macro @ref ELOG_DECLARE_FIELD_SELECTOR()).
+     */
+    void terminate() final;
 
 private:
     std::vector<std::pair<ELogFilter*, ELogFieldSelector*>> m_cases;

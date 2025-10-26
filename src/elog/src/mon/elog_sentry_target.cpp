@@ -243,31 +243,66 @@ private:
 };
 
 bool ELogSentryTarget::startLogTarget() {
+    // create formatters
+    m_contextFormatter = ELogPropsFormatter::create();
+    if (m_contextFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create context properties formatter, out of memory");
+        return false;
+    }
+    m_tagsFormatter = ELogPropsFormatter::create();
+    if (m_tagsFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create tags properties formatter, out of memory");
+        ELogPropsFormatter::destroy(m_contextFormatter);
+        m_contextFormatter = nullptr;
+        return false;
+    }
+    m_attributesFormatter = ELogPropsFormatter::create();
+    if (m_attributesFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create attributes properties formatter, out of memory");
+        ELogPropsFormatter::destroy(m_contextFormatter);
+        ELogPropsFormatter::destroy(m_tagsFormatter);
+        m_contextFormatter = nullptr;
+        m_tagsFormatter = nullptr;
+        return false;
+    }
+
     // process context if any
+    bool res = true;
     if (!m_params.m_context.empty()) {
-        if (!m_contextFormatter.parseProps(m_params.m_context.c_str())) {
+        if (!m_contextFormatter->parseProps(m_params.m_context.c_str())) {
             ELOG_REPORT_ERROR("Invalid context specification for Sentry log target: %s",
                               m_params.m_context.c_str());
-            return false;
+            res = false;
         }
     }
 
     // process tags if any
-    if (!m_params.m_tags.empty()) {
-        if (!m_tagsFormatter.parseProps(m_params.m_tags.c_str())) {
+    if (res && !m_params.m_tags.empty()) {
+        if (!m_tagsFormatter->parseProps(m_params.m_tags.c_str())) {
             ELOG_REPORT_ERROR("Invalid tags specification for Sentry log target: %s",
                               m_params.m_tags.c_str());
-            return false;
+            res = false;
         }
     }
 
     // process attributes if any
-    if (!m_params.m_attributes.empty()) {
-        if (!m_tagsFormatter.parseProps(m_params.m_attributes.c_str())) {
+    if (res && !m_params.m_attributes.empty()) {
+        if (!m_tagsFormatter->parseProps(m_params.m_attributes.c_str())) {
             ELOG_REPORT_ERROR("Invalid attributes specification for Sentry log target: %s",
                               m_params.m_tags.c_str());
-            return false;
+            res = false;
         }
+    }
+
+    // clean up if failed
+    if (!res) {
+        ELogPropsFormatter::destroy(m_contextFormatter);
+        ELogPropsFormatter::destroy(m_tagsFormatter);
+        ELogPropsFormatter::destroy(m_attributesFormatter);
+        m_contextFormatter = nullptr;
+        m_tagsFormatter = nullptr;
+        m_attributesFormatter = nullptr;
+        return false;
     }
 
     // set options
@@ -353,6 +388,18 @@ bool ELogSentryTarget::stopLogTarget() {
     // for now we will just set it to null
     sentry_close();
     sSentryLogger = nullptr;
+    if (m_contextFormatter != nullptr) {
+        ELogPropsFormatter::destroy(m_contextFormatter);
+        m_contextFormatter = nullptr;
+    }
+    if (m_tagsFormatter != nullptr) {
+        ELogPropsFormatter::destroy(m_tagsFormatter);
+        m_tagsFormatter = nullptr;
+    }
+    if (m_attributesFormatter != nullptr) {
+        ELogPropsFormatter::destroy(m_attributesFormatter);
+        m_attributesFormatter = nullptr;
+    }
     return true;
 }
 
@@ -367,7 +414,7 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     // append additional event context if configured to do so
     if (!m_params.m_context.empty()) {
         ELogSentryContextReceptor contextReceptor;
-        m_contextFormatter.fillInProps(logRecord, &contextReceptor);
+        m_contextFormatter->fillInProps(logRecord, &contextReceptor);
         contextReceptor.applyContext(m_params.m_contextTitle.c_str());
     }
 
@@ -375,8 +422,8 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     uint32_t bytesWritten = 0;
     if (!m_params.m_tags.empty()) {
         ELogSentryTagsReceptor receptor;
-        m_tagsFormatter.fillInProps(logRecord, &receptor);
-        receptor.applyTags(m_tagsFormatter.getPropNames(), bytesWritten);
+        m_tagsFormatter->fillInProps(logRecord, &receptor);
+        receptor.applyTags(m_tagsFormatter->getPropNames(), bytesWritten);
     }
 
     // append current thread attributes

@@ -69,16 +69,16 @@ private:
 
     ELogHttpClient m_client;
     nlohmann::json m_logItemArray;
-    ELogPropsFormatter m_tagsFormatter;
+    ELogPropsFormatter* m_tagsFormatter;
 
-    inline bool parseTags(const std::string& tags) { return m_tagsFormatter.parseProps(tags); }
+    inline bool parseTags(const std::string& tags) { return m_tagsFormatter->parseProps(tags); }
 
     inline const std::vector<std::string>& getTagNames() const {
-        return m_tagsFormatter.getPropNames();
+        return m_tagsFormatter->getPropNames();
     }
 
     inline void fillInTags(const elog::ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {
-        m_tagsFormatter.fillInProps(logRecord, receptor);
+        m_tagsFormatter->fillInProps(logRecord, receptor);
     }
 
     bool prepareTagsString(const std::vector<std::string>& propNames,

@@ -250,7 +250,7 @@ bool ELogOtelTarget::startLogTarget() {
             ELOG_REPORT_ERROR("Invalid headers formatter, expecting '%s', seeing instead '%s': %s",
                               ELogPropsFormatter::TYPE_NAME, headersFormatter->getTypeName(),
                               m_headers.c_str());
-            delete headersFormatter;
+            destroyLogFormatter(headersFormatter);
             return false;
         }
         m_headersFormatter = (ELogPropsFormatter*)headersFormatter;
@@ -304,7 +304,7 @@ bool ELogOtelTarget::startLogTarget() {
     if (m_logger.get() == nullptr) {
         ELOG_REPORT_ERROR("Failed to initialize Open Telemtry logger");
         if (m_headersFormatter != nullptr) {
-            delete m_headersFormatter;
+            destroyLogFormatter(m_headersFormatter);
             m_headersFormatter = nullptr;
         }
         return false;
@@ -330,7 +330,7 @@ bool ELogOtelTarget::stopLogTarget() {
     std::shared_ptr<logs_api::LoggerProvider> none;
     logs_api::Provider::SetLoggerProvider(none);
     if (m_headersFormatter != nullptr) {
-        delete m_headersFormatter;
+        destroyLogFormatter(m_headersFormatter);
         m_headersFormatter = nullptr;
     }
     return true;

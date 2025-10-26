@@ -10,7 +10,14 @@
 
 namespace elog {
 
-/** @brief Parent interface for all log filters. */
+/**
+ * @brief Parent interface for all log filters.
+ * @note All filters that use the macro pair @ref ELOG_DECLARE_FILTER() and @ref
+ * ELOG_IMPLEMENT_FILTER() can be allocated and deallocated only through controlled static
+ * create()/destroy() methods. This is by design, so that filter are deallocated within the module
+ * they were allocated at (in case of mismatching linked static c runtime, which may lead to crash,
+ * especially when integrating filter types defined in external modules).
+ */
 class ELOG_API ELogFilter : public ELogManagedObject {
 public:
     /** @brief Loads filter from configuration. */
@@ -28,10 +35,12 @@ public:
     virtual bool filterLogRecord(const ELogRecord& logRecord) = 0;
 
     /**
-     * @brief Allow for special cleanup, since filter destruction is controlled (destructor not
-     * exposed).
+     * @brief Allow for object orderly termination (member cleanup), since filter destruction is
+     * controlled (destructor not exposed).
+     * @note This function must be idempotent, meaning it might be called several times, having
+     * effect only for the first time.
      */
-    virtual void destroy() {}
+    virtual void terminate() {}
 
     /** @brief Retrieves the filter's name. */
     inline const char* getName() const { return m_name.c_str(); }
@@ -100,9 +109,9 @@ private:
     std::string m_filterName;
 };
 
-/** @def Utility macro for declaring filter factory method registration. */
 /**
- * @def Utility macro for declaring filter factory method registration.
+ * @def Utility macro for declaring filter factory method registration. Using this macro is
+ * mandatory for every filter class that wishes to be loadable from configuration.
  * @param FilterType Type name of filter.
  * @param Name Configuration name of filter (for dynamic loading from configuration).
  * @param ImportExportSpec Window import/export specification. If exporting from a library then
@@ -110,8 +119,12 @@ private:
  * relevant then pass ELOG_NO_EXPORT.
  */
 #define ELOG_DECLARE_FILTER(FilterType, Name, ImportExportSpec)                                 \
+public:                                                                                         \
+    static FilterType* create();                                                                \
+    static void destroy(FilterType* filter);                                                    \
+                                                                                                \
+private:                                                                                        \
     ~FilterType() final {}                                                                      \
-    friend class ImportExportSpec FilterType##Constructor;                                      \
     class ImportExportSpec FilterType##Constructor final : public elog::ELogFilterConstructor { \
     public:                                                                                     \
         FilterType##Constructor() : elog::ELogFilterConstructor(#Name) {}                       \
@@ -126,6 +139,13 @@ private:
 
 /** @def Utility macro for implementing filter factory method registration. */
 #define ELOG_IMPLEMENT_FILTER(FilterType)                                               \
+    FilterType* FilterType::create() { return new (std::nothrow) FilterType(); }        \
+    void FilterType::destroy(FilterType* filter) {                                      \
+        if (filter != nullptr) {                                                        \
+            filter->terminate();                                                        \
+            delete filter;                                                              \
+        }                                                                               \
+    }                                                                                   \
     FilterType::FilterType##Constructor FilterType::sConstructor;                       \
     elog::ELogFilter* FilterType::FilterType##Constructor::constructFilter() {          \
         FilterType* filter = new (std::nothrow) FilterType();                           \
@@ -136,8 +156,7 @@ private:
     }                                                                                   \
     void FilterType::FilterType##Constructor::destroyFilter(elog::ELogFilter* filter) { \
         if (filter != nullptr) {                                                        \
-            filter->destroy();                                                          \
-            delete (FilterType*)filter;                                                 \
+            FilterType::destroy((FilterType*)filter);                                   \
         }                                                                               \
     }
 
@@ -145,6 +164,7 @@ private:
 class ELOG_API ELogNotFilter final : public ELogFilter {
 public:
     ELogNotFilter() : m_filter(nullptr) {}
+    /** @note Once done, the sub-filter will be destroyed by the not-filter. */
     ELogNotFilter(ELogFilter* filter) : m_filter(filter) {}
     ELogNotFilter(const ELogNotFilter&) = delete;
     ELogNotFilter(ELogNotFilter&&) = delete;
@@ -152,6 +172,12 @@ public:
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
+
+    /**
+     * @brief Sets the sub-filter. Once done, the sub-filter will be destroyed by the not-filter.
+     * @note Any previous set filter will be destroyed.
+     */
+    void setSubFilter(ELogFilter* filter);
 
     /**
      * @brief Filters a log record.
@@ -163,7 +189,13 @@ public:
         return !m_filter->filterLogRecord(logRecord);
     }
 
-    void destroy() final;
+    /**
+     * @brief Allow for object orderly termination (member cleanup), since filter destruction is
+     * controlled (destructor not exposed).
+     * @note This function must be idempotent, meaning it might be called several times, having
+     * effect only for the first time.
+     */
+    void terminate() final;
 
 private:
     ELogFilter* m_filter;
@@ -299,6 +331,12 @@ public:
     ELogRecordIdFilter(ELogRecordIdFilter&&) = delete;
     ELogRecordIdFilter& operator=(const ELogRecordIdFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(uint64_t recordId, ELogCmpOp cmpOp) {
+        m_recordId = recordId;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -327,6 +365,12 @@ public:
     ELogRecordTimeFilter(const ELogRecordTimeFilter&) = delete;
     ELogRecordTimeFilter(ELogRecordTimeFilter&&) = delete;
     ELogRecordTimeFilter& operator=(const ELogRecordTimeFilter&) = delete;
+
+    /** @brief Configure the filter. */
+    inline void configure(ELogTime logTime, ELogCmpOp cmpOp) {
+        m_logTime = logTime;
+        m_cmpOp = cmpOp;
+    }
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -361,6 +405,12 @@ public:
     ELogHostNameFilter(ELogHostNameFilter&&) = delete;
     ELogHostNameFilter& operator=(const ELogHostNameFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(const char* hostName, ELogCmpOp cmpOp) {
+        m_hostName = hostName;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -388,6 +438,12 @@ public:
     ELogUserNameFilter(const ELogUserNameFilter&) = delete;
     ELogUserNameFilter(ELogUserNameFilter&&) = delete;
     ELogUserNameFilter& operator=(const ELogUserNameFilter&) = delete;
+
+    /** @brief Configure the filter. */
+    inline void configure(const char* userName, ELogCmpOp cmpOp) {
+        m_userName = userName;
+        m_cmpOp = cmpOp;
+    }
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -417,6 +473,12 @@ public:
     ELogProgramNameFilter(ELogProgramNameFilter&&) = delete;
     ELogProgramNameFilter& operator=(const ELogProgramNameFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(const char* programName, ELogCmpOp cmpOp) {
+        m_programName = programName;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -445,6 +507,16 @@ public:
     ELogProcessIdFilter(ELogProcessIdFilter&&) = delete;
     ELogProcessIdFilter& operator=(const ELogProcessIdFilter&) = delete;
 
+    // TODO: it might be better to separate this into two classes, when for regex, one for numbers
+    /** 
+     * @brief Configure the filter. 
+     * @note Process id is used a string to allow for regular expressions.
+     */
+    inline void configure(const char* processIdName, ELogCmpOp cmpOp) {
+        m_processIdName = processIdName;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -472,6 +544,12 @@ public:
     ELogThreadIdFilter(const ELogThreadIdFilter&) = delete;
     ELogThreadIdFilter(ELogThreadIdFilter&&) = delete;
     ELogThreadIdFilter& operator=(const ELogThreadIdFilter&) = delete;
+
+    /** @brief Configure the filter. */
+    inline void configure(const char* threadIdName, ELogCmpOp cmpOp) {
+        m_threadIdName = threadIdName;
+        m_cmpOp = cmpOp;
+    }
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -502,6 +580,12 @@ public:
     ELogThreadNameFilter(ELogThreadNameFilter&&) = delete;
     ELogThreadNameFilter& operator=(const ELogThreadNameFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(const char* threadName, ELogCmpOp cmpOp) {
+        m_threadName = threadName;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -529,6 +613,12 @@ public:
     ELogSourceFilter(const ELogSourceFilter&) = delete;
     ELogSourceFilter(ELogSourceFilter&&) = delete;
     ELogSourceFilter& operator=(const ELogSourceFilter&) = delete;
+
+    /** @brief Configure the filter. */
+    inline void configure(const char* logSourceName, ELogCmpOp cmpOp) {
+        m_logSourceName = logSourceName;
+        m_cmpOp = cmpOp;
+    }
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -558,6 +648,12 @@ public:
     ELogModuleFilter(ELogModuleFilter&&) = delete;
     ELogModuleFilter& operator=(const ELogModuleFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(const char* logModuleName, ELogCmpOp cmpOp) {
+        m_logModuleName = logModuleName;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -585,6 +681,12 @@ public:
     ELogFileNameFilter(const ELogFileNameFilter&) = delete;
     ELogFileNameFilter(ELogFileNameFilter&&) = delete;
     ELogFileNameFilter& operator=(const ELogFileNameFilter&) = delete;
+
+    /** @brief Configure the filter. */
+    inline void configure(const char* fileName, ELogCmpOp cmpOp) {
+        m_fileName = fileName;
+        m_cmpOp = cmpOp;
+    }
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -616,6 +718,12 @@ public:
     ELogLineNumberFilter(ELogLineNumberFilter&&) = delete;
     ELogLineNumberFilter& operator=(const ELogLineNumberFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(int lineNumber, ELogCmpOp cmpOp) {
+        m_lineNumber = lineNumber;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -643,6 +751,12 @@ public:
     ELogFunctionNameFilter(const ELogFunctionNameFilter&) = delete;
     ELogFunctionNameFilter(ELogFunctionNameFilter&&) = delete;
     ELogFunctionNameFilter& operator=(const ELogFunctionNameFilter&) = delete;
+
+    /** @brief Configure the filter. */
+    inline void configure(const char* functionName, ELogCmpOp cmpOp) {
+        m_functionName = functionName;
+        m_cmpOp = cmpOp;
+    }
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
@@ -674,6 +788,12 @@ public:
     ELogLevelFilter(ELogLevelFilter&&) = delete;
     ELogLevelFilter& operator=(const ELogLevelFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(ELogLevel logLevel, ELogCmpOp cmpOp) {
+        m_logLevel = logLevel;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -702,6 +822,12 @@ public:
     ELogMsgFilter(ELogMsgFilter&&) = delete;
     ELogMsgFilter& operator=(const ELogMsgFilter&) = delete;
 
+    /** @brief Configure the filter. */
+    inline void configure(const char* logMsg, ELogCmpOp cmpOp) {
+        m_logMsg = logMsg;
+        m_cmpOp = cmpOp;
+    }
+
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;
 
@@ -729,6 +855,12 @@ public:
     ELogCountFilter(const ELogCountFilter&) = delete;
     ELogCountFilter(ELogCountFilter&&) = delete;
     ELogCountFilter& operator=(const ELogCountFilter&) = delete;
+
+    /** @brief Configure the filter. */
+    inline void configure(uint64_t count, ELogCmpOp cmpOp) {
+        m_count = count;
+        m_cmpOp = cmpOp;
+    }
 
     /** @brief Loads filter from configuration. */
     bool load(const ELogConfigMapNode* filterCfg) final;

@@ -28,7 +28,8 @@ ELogDatadogTarget::ELogDatadogTarget(const char* serverAddress, const char* apiK
       m_service(service),
       m_tags(tags),
       m_stackTrace(stackTrace),
-      m_compress(compress) {
+      m_compress(compress),
+      m_tagsFormatter(nullptr) {
     ELOG_REPORT_TRACE("Creating HTTP client to Datadog at: %s", serverAddress);
     m_client.initialize(serverAddress, "Datadog", config, this);
 }
@@ -38,6 +39,12 @@ void ELogDatadogTarget::embedHeaders(httplib::Headers& headers) {
 }
 
 bool ELogDatadogTarget::startLogTarget() {
+    m_tagsFormatter = ELogPropsFormatter::create();
+    if (m_tagsFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create tags properties formatter, out of memory");
+        return false;
+    }
+
     if (!m_tags.empty() && !parseTags(m_tags)) {
         return false;
     }
@@ -48,7 +55,14 @@ bool ELogDatadogTarget::startLogTarget() {
     return m_client.start();
 }
 
-bool ELogDatadogTarget::stopLogTarget() { return m_client.stop(); }
+bool ELogDatadogTarget::stopLogTarget() {
+    bool res = m_client.stop();
+    if (res) {
+        ELogPropsFormatter::destroy(m_tagsFormatter);
+        m_tagsFormatter = nullptr;
+    }
+    return res;
+}
 
 uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     ELOG_REPORT_TRACE("Preapring log message for Datadog");

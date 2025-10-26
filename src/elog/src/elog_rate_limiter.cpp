@@ -153,7 +153,7 @@ ELogRateLimiter::ELogRateLimiter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* 
 }
 
 ELogRateLimiter::~ELogRateLimiter() {
-    m_filter->destroy();
+    m_filter->terminate();
     m_filter = nullptr;
 }
 

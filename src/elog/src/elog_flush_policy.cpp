@@ -393,6 +393,13 @@ bool ELogOrFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
     return res;
 }
 
+void ELogNotFlushPolicy::setSubPolicy(ELogFlushPolicy* flushPolicy) {
+    if (m_flushPolicy != nullptr) {
+        destroyFlushPolicy(m_flushPolicy);
+    }
+    m_flushPolicy = flushPolicy;
+}
+
 bool ELogNotFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     // we expect to find a nested property 'args' with one array item
     const ELogConfigValue* cfgValue = flushPolicyCfg->getValue("flush_policy_args");
@@ -466,6 +473,8 @@ bool ELogNotFlushPolicy::loadExpr(const ELogExpression* expr) {
     }
     return true;
 }
+
+void ELogNotFlushPolicy::terminate() { setSubPolicy(nullptr); }
 
 bool ELogImmediateFlushPolicy::shouldFlush(uint32_t msgSizeBytes) { return true; }
 

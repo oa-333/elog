@@ -92,7 +92,7 @@ void destroyLogFormatter(ELogFormatter* formatter) {
         // special case: base class can also be created, but has no factory, so we delete it
         // manually here
         if (strcmp(formatter->getTypeName(), ELOG_DEFAULT_FORMATTER_TYPE_NAME) == 0) {
-            formatter->destroy();
+            formatter->terminate();
             delete formatter;
             return;
         } else {

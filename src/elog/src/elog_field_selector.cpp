@@ -848,7 +848,7 @@ void ELogFormatSelector::selectField(const ELogRecord& record, ELogFieldReceptor
     receptor->receiveStringField(getTypeId(), "", m_fieldSpec, 0);
 }
 
-void ELogIfSelector::destroy() {
+void ELogIfSelector::terminate() {
     if (m_cond != nullptr) {
         destroyFilter(m_cond);
         m_cond = nullptr;
@@ -950,7 +950,7 @@ private:
     ELogFieldType m_fieldType;
 };
 
-void ELogSwitchSelector::destroy() {
+void ELogSwitchSelector::terminate() {
     if (m_valueExpr != nullptr) {
         destroyFieldSelector(m_valueExpr);
         m_valueExpr = nullptr;
@@ -987,7 +987,7 @@ void ELogSwitchSelector::selectField(const ELogRecord& record, ELogFieldReceptor
     }
 }
 
-void ELogExprSwitchSelector::destroy() {
+void ELogExprSwitchSelector::terminate() {
     for (auto& entry : m_cases) {
         destroyFilter(entry.first);
         destroyFieldSelector(entry.second);

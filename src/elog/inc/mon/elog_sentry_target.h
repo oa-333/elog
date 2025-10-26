@@ -36,7 +36,11 @@ struct ELOG_API ELogSentryParams {
 
 class ELOG_API ELogSentryTarget : public ELogMonTarget {
 public:
-    ELogSentryTarget(const ELogSentryParams& params) : m_params(params) {}
+    ELogSentryTarget(const ELogSentryParams& params)
+        : m_params(params),
+          m_contextFormatter(nullptr),
+          m_tagsFormatter(nullptr),
+          m_attributesFormatter(nullptr) {}
 
     ELogSentryTarget(const ELogSentryTarget&) = delete;
     ELogSentryTarget(ELogSentryTarget&&) = delete;
@@ -61,9 +65,9 @@ protected:
 
 private:
     ELogSentryParams m_params;
-    ELogPropsFormatter m_contextFormatter;
-    ELogPropsFormatter m_tagsFormatter;
-    ELogPropsFormatter m_attributesFormatter;
+    ELogPropsFormatter* m_contextFormatter;
+    ELogPropsFormatter* m_tagsFormatter;
+    ELogPropsFormatter* m_attributesFormatter;
 };
 
 }  // namespace elog

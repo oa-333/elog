@@ -181,12 +181,7 @@ inline bool compareTime(ELogCmpOp cmpOp, ELogTime lhs, ELogTime rhs) {
     return compareInt<uint64_t>(cmpOp, elogTimeToUnixTimeNanos(lhs), elogTimeToUnixTimeNanos(rhs));
 }
 
-void ELogNotFilter::destroy() {
-    if (m_filter != nullptr) {
-        destroyFilter(m_filter);
-        m_filter = nullptr;
-    }
-}
+void ELogNotFilter::terminate() { setSubFilter(nullptr); }
 
 bool ELogNotFilter::load(const ELogConfigMapNode* filterCfg) {
     // we expect to find a nested property 'args' with one array item
@@ -242,6 +237,14 @@ bool ELogNotFilter::load(const ELogConfigMapNode* filterCfg) {
         return false;
     }
     return true;
+}
+
+void ELogNotFilter::setSubFilter(ELogFilter* filter) {
+    if (m_filter != nullptr) {
+        destroyFilter(m_filter);
+        m_filter = nullptr;
+    }
+    m_filter = filter;
 }
 
 ELogCompoundLogFilter::~ELogCompoundLogFilter() {

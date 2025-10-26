@@ -75,10 +75,12 @@ public:
     virtual bool moderateFlush(ELogTarget* logTarget);
 
     /**
-     * @brief Allow for special cleanup, since flush policy destruction is controlled (destructor
-     * not exposed).
+     * @brief Allow for object orderly termination (member cleanup), since flush policy destruction
+     * is controlled (destructor not exposed).
+     * @note This function must be idempotent, meaning it might be called several times, having
+     * effect only for the first time.
      */
-    virtual void destroy() {}
+    virtual void terminate() {}
 
     /** @brief Retrieves the flush policy's name. */
     inline const char* getName() const { return m_name.c_str(); }
@@ -174,9 +176,6 @@ private:
     std::string m_flushPolicyName;
 };
 
-// TODO: for sake of being able to externally extend elog, the ELOG_API should be replaced with
-// macro parameter, so it can be set to dll export, or to nothing
-
 /**
  * @def Utility macro for declaring flush policy factory method registration.
  * @param FlushPolicyType Type name of flush policy.
@@ -186,8 +185,12 @@ private:
  * relevant then pass ELOG_NO_EXPORT.
  */
 #define ELOG_DECLARE_FLUSH_POLICY(FlushPolicyType, Name, ImportExportSpec)                     \
+public:                                                                                        \
+    static FlushPolicyType* create();                                                          \
+    static void destroy(FlushPolicyType* flushPolicy);                                         \
+                                                                                               \
+private:                                                                                       \
     ~FlushPolicyType() final {}                                                                \
-    friend class ImportExportSpec FlushPolicyType##Constructor;                                \
     class ImportExportSpec FlushPolicyType##Constructor final                                  \
         : public elog::ELogFlushPolicyConstructor {                                            \
     public:                                                                                    \
@@ -203,6 +206,13 @@ private:
 
 /** @def Utility macro for implementing flush policy factory method registration. */
 #define ELOG_IMPLEMENT_FLUSH_POLICY(FlushPolicyType)                                               \
+    FlushPolicyType* FlushPolicyType::create() { return new (std::nothrow) FlushPolicyType(); }    \
+    void FlushPolicyType::destroy(FlushPolicyType* flushPolicy) {                                  \
+        if (flushPolicy != nullptr) {                                                              \
+            flushPolicy->terminate();                                                              \
+            delete flushPolicy;                                                                    \
+        }                                                                                          \
+    }                                                                                              \
     FlushPolicyType::FlushPolicyType##Constructor FlushPolicyType::sConstructor;                   \
     elog::ELogFlushPolicy* FlushPolicyType::FlushPolicyType##Constructor::constructFlushPolicy() { \
         FlushPolicyType* flushPolicy = new (std::nothrow) FlushPolicyType();                       \
@@ -214,8 +224,7 @@ private:
     void FlushPolicyType::FlushPolicyType##Constructor::destroyFlushPolicy(                        \
         elog::ELogFlushPolicy* flushPolicy) {                                                      \
         if (flushPolicy != nullptr) {                                                              \
-            flushPolicy->destroy();                                                                \
-            delete (FlushPolicyType*)flushPolicy;                                                  \
+            FlushPolicyType::destroy((FlushPolicyType*)flushPolicy);                               \
         }                                                                                          \
     }
 
@@ -290,6 +299,12 @@ public:
     ELogNotFlushPolicy(ELogNotFlushPolicy&&) = delete;
     ELogNotFlushPolicy& operator=(const ELogNotFlushPolicy&) = delete;
 
+    /**
+     * @brief Sets the sub-policy. Once done, the sub-policy will be destroyed by the not-policy.
+     * @note Any previous set sub-policy will be destroyed.
+     */
+    void setSubPolicy(ELogFlushPolicy* flushPolicy);
+
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
@@ -299,6 +314,14 @@ public:
     bool shouldFlush(uint32_t msgSizeBytes) final {
         return !m_flushPolicy->shouldFlush(msgSizeBytes);
     }
+
+    /**
+     * @brief Allow for object orderly termination (member cleanup), since policy destruction is
+     * controlled (destructor not exposed).
+     * @note This function must be idempotent, meaning it might be called several times, having
+     * effect only for the first time.
+     */
+    void terminate() final;
 
 private:
     ELogFlushPolicy* m_flushPolicy;
@@ -349,6 +372,9 @@ public:
     ELogCountFlushPolicy(ELogCountFlushPolicy&&) = delete;
     ELogCountFlushPolicy& operator=(const ELogCountFlushPolicy&) = delete;
 
+    /** @brief Configures the policy. */
+    inline void configure(uint64_t logCountLimit) { m_logCountLimit = logCountLimit; }
+
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
 
@@ -375,6 +401,9 @@ public:
     ELogSizeFlushPolicy(const ELogSizeFlushPolicy&) = delete;
     ELogSizeFlushPolicy(ELogSizeFlushPolicy&&) = delete;
     ELogSizeFlushPolicy& operator=(const ELogSizeFlushPolicy&) = delete;
+
+    /** @brief Configures the policy. */
+    inline void configure(uint64_t logSizeLimitBytes) { m_logSizeLimitBytes = logSizeLimitBytes; }
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
@@ -403,6 +432,11 @@ public:
     ELogTimedFlushPolicy(const ELogTimedFlushPolicy&) = delete;
     ELogTimedFlushPolicy(ELogTimedFlushPolicy&&) = delete;
     ELogTimedFlushPolicy& operator=(const ELogTimedFlushPolicy&) = delete;
+
+    /** @brief Configures the policy. */
+    inline void configure(uint64_t logTimeLimitMillis) {
+        m_logTimeLimitMillis = logTimeLimitMillis;
+    }
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
@@ -497,7 +531,7 @@ public:
         return m_moderatePolicy->moderateFlush(logTarget);
     }
 
-    void destroy() final {
+    void terminate() final {
         setControlFlushPolicy(nullptr);
         setModerateFlushPolicy(nullptr);
     }
@@ -527,6 +561,12 @@ public:
     ELogGroupFlushPolicy(const ELogGroupFlushPolicy&) = delete;
     ELogGroupFlushPolicy(ELogGroupFlushPolicy&&) = delete;
     ELogGroupFlushPolicy& operator=(const ELogGroupFlushPolicy&) = delete;
+
+    /** @brief Configures the policy. */
+    inline void configure(uint32_t groupSize, uint32_t groupTimeoutMicros) {
+        m_groupSize = groupSize;
+        m_groupTimeoutMicros = std::chrono::microseconds(groupTimeoutMicros);
+    }
 
     /** @brief Loads flush policy from configuration. */
     bool load(const ELogConfigMapNode* flushPolicyCfg) final;
