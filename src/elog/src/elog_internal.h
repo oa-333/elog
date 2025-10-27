@@ -121,6 +121,10 @@ inline bool isTimeSourceEnabled() {
 /** @brief Retrieves the current time from the time source. */
 extern void getCurrentTimeFromSource(ELogTime& currentTime);
 
+#ifdef ELOG_USING_COMM_UTIL
+extern void refreshCommUtilLogLevelCfg();
+#endif
+
 }  // namespace elog
 
 #endif  // __ELOG_INTERNAL_H__
