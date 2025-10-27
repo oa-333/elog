@@ -1,5 +1,6 @@
 target_sources(elog PRIVATE
     elog_api_life_sign.cpp
+    elog_api_log_target.cpp
     elog_api_reload_config.cpp
     elog_api_time_source.cpp
     elog_buffer_receptor.cpp

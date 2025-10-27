@@ -9,6 +9,7 @@
 #include "elog_def.h"
 #include "elog_formatter.h"
 #include "elog_params.h"
+#include "elog_pre_init_logger.h"
 #include "elog_record.h"
 #include "elog_source.h"
 
@@ -22,6 +23,12 @@ extern ELogParams& modifyParams();
 
 /** @brief Retrieves the maximum number of threads configured for ELog. */
 extern uint32_t getMaxThreads();
+
+/** @brief Query whether ELog is in termination phase. */
+extern bool isTerminating();
+
+/** @brief Retrieves a reference to the pre-init logger. */
+extern ELogPreInitLogger& getPreInitLoggerRef();
 
 /** @brief Resets the statistics counters for the current thread. */
 extern void resetThreadStatCounters(uint64_t slotId);
