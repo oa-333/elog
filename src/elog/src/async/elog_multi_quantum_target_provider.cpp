@@ -66,7 +66,7 @@ ELogAsyncTarget* ELogMultiQuantumTargetProvider::loadTarget(const ELogConfigMapN
                                fullRevisitPeriod, maxBatchSize, quantumCollectPeriodMicros);
     if (asyncTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create multi quantum log target, out of memory");
-        delete target;
+        target->destroy();
         return nullptr;
     }
     // NOTE: ELogSystem will configure common properties for this log target

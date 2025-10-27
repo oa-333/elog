@@ -17,7 +17,7 @@ ELogAsyncTarget* ELogDeferredTargetProvider::loadTarget(const ELogConfigMapNode*
     ELogAsyncTarget* asyncTarget = new (std::nothrow) ELogDeferredTarget(target);
     if (asyncTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create deferred log target, out of memory");
-        delete target;
+        target->destroy();
         return nullptr;
     }
     // NOTE: ELogSystem will configure common properties for this log target

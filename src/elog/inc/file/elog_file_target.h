@@ -36,7 +36,7 @@ public:
     ELogFileTarget(ELogFileTarget&&) = delete;
     ELogFileTarget& operator=(const ELogFileTarget&) = delete;
 
-    ~ELogFileTarget() final {}
+    ELOG_DECLARE_LOG_TARGET(ELogFileTarget)
 
     /** @brief Experimental API for configuring optimal buffer size according to setvbuf(). */
     bool configureOptimalBufferSize();

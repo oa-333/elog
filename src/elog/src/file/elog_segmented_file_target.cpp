@@ -96,6 +96,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogSegmentedFileTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogSegmentedFileTarget)
+
 static const char* LOG_SUFFIX = ".log";
 
 // determines the depth of the garbage collector wrt maximum number of threads
@@ -360,8 +362,6 @@ ELogSegmentedFileTarget::ELogSegmentedFileTarget(
     setNativelyThreadSafe();
     setAddNewLine(true);
 }
-
-ELogSegmentedFileTarget::~ELogSegmentedFileTarget() {}
 
 bool ELogSegmentedFileTarget::startLogTarget() {
     m_epochSet.resizeRing(elog::getMaxThreads() * ELOG_SEGMENT_EPOCH_RING_FACTOR);

@@ -35,7 +35,8 @@ public:
     ELogMsgTarget(const ELogMsgTarget&) = delete;
     ELogMsgTarget(ELogMsgTarget&&) = delete;
     ELogMsgTarget& operator=(const ELogMsgTarget&) = delete;
-    ~ELogMsgTarget() override;
+
+    ELOG_DECLARE_LOG_TARGET(ELogMsgTarget)
 
     /**
      * @brief Notifies on sent message statistics.

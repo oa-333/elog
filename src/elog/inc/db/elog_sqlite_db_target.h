@@ -25,7 +25,8 @@ public:
     ELogSQLiteDbTarget(const ELogSQLiteDbTarget&) = delete;
     ELogSQLiteDbTarget(ELogSQLiteDbTarget&&) = delete;
     ELogSQLiteDbTarget& operator=(const ELogSQLiteDbTarget&) = delete;
-    ~ELogSQLiteDbTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogSQLiteDbTarget)
 
 protected:
     /** @brief Allocates database access object. */

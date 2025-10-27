@@ -20,6 +20,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogOtelTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogOtelTarget)
+
 inline logs_api::Severity elogLevelToOtelLevel(ELogLevel logLevel) {
     switch (logLevel) {
         case ELEVEL_FATAL:

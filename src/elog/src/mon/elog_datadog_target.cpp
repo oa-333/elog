@@ -16,6 +16,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogDatadogTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogDatadogTarget)
+
 static const int ELOG_DATADOG_HTTP_SUCCESS_STATUS = 204;
 
 ELogDatadogTarget::ELogDatadogTarget(const char* serverAddress, const char* apiKey,

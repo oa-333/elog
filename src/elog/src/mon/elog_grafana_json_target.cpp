@@ -10,6 +10,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogGrafanaJsonTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogGrafanaJsonTarget)
+
 bool ELogGrafanaJsonTarget::startLogTarget() {
     m_labelFormatter = ELogPropsFormatter::create();
     if (m_labelFormatter == nullptr) {

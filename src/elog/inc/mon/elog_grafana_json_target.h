@@ -41,7 +41,8 @@ public:
     ELogGrafanaJsonTarget(const ELogGrafanaJsonTarget&) = delete;
     ELogGrafanaJsonTarget(ELogGrafanaJsonTarget&&) = delete;
     ELogGrafanaJsonTarget& operator=(const ELogGrafanaJsonTarget&) = delete;
-    ~ELogGrafanaJsonTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogGrafanaJsonTarget)
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */

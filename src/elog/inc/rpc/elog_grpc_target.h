@@ -297,7 +297,8 @@ public:
     ELogGRPCBaseTarget(const ELogGRPCBaseTarget&) = delete;
     ELogGRPCBaseTarget(ELogGRPCBaseTarget&&) = delete;
     ELogGRPCBaseTarget& operator=(const ELogGRPCBaseTarget&) = delete;
-    ~ELogGRPCBaseTarget() final {}
+
+    void destroy() final { delete this; }
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */

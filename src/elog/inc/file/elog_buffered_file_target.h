@@ -56,7 +56,7 @@ public:
     ELogBufferedFileTarget(ELogBufferedFileTarget&&) = delete;
     ELogBufferedFileTarget& operator=(const ELogBufferedFileTarget&) = delete;
 
-    ~ELogBufferedFileTarget() final {}
+    ELOG_DECLARE_LOG_TARGET(ELogBufferedFileTarget)
 
 protected:
     /** @brief Log a formatted message. */

@@ -74,7 +74,8 @@ public:
     ELogQuantumTarget(const ELogQuantumTarget&) = delete;
     ELogQuantumTarget(ELogQuantumTarget&&) = delete;
     ELogQuantumTarget& operator=(const ELogQuantumTarget&) = delete;
-    ~ELogQuantumTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogQuantumTarget)
 
 private:
     /** @brief Order the log target to start (required for threaded targets). */

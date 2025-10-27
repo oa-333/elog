@@ -38,7 +38,7 @@ ELogTarget* ELogAsyncTargetProvider::loadNestedTarget(const ELogConfigMapNode* l
                 ELOG_REPORT_ERROR(
                     "Invalid sub log target type, expecting map, instead seeing %s (context: %s)",
                     configValueTypeToString(value->getValueType()), value->getFullContext());
-                delete combinedTarget;
+                combinedTarget->destroy();
                 return nullptr;
             }
             const ELogConfigMapNode* subLogTargetCfg =
@@ -48,7 +48,7 @@ ELogTarget* ELogAsyncTargetProvider::loadNestedTarget(const ELogConfigMapNode* l
                 ELOG_REPORT_ERROR(
                     "Failed to load sub log target %zu for combined log target (context: %s)", i,
                     subLogTargetCfg->getFullContext());
-                delete combinedTarget;
+                combinedTarget->destroy();
                 return nullptr;
             }
             combinedTarget->addLogTarget(subLogTarget);

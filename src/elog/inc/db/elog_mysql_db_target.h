@@ -43,7 +43,8 @@ public:
     ELogMySqlDbTarget(const ELogMySqlDbTarget&) = delete;
     ELogMySqlDbTarget(ELogMySqlDbTarget&&) = delete;
     ELogMySqlDbTarget& operator=(const ELogMySqlDbTarget&) = delete;
-    ~ELogMySqlDbTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogMySqlDbTarget)
 
 protected:
     /** @brief Allocates database access object. */

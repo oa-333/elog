@@ -30,7 +30,8 @@ public:
     ELogQueuedTarget(const ELogQueuedTarget&) = delete;
     ELogQueuedTarget(ELogQueuedTarget&&) = delete;
     ELogQueuedTarget& operator=(const ELogQueuedTarget&) = delete;
-    ~ELogQueuedTarget() final;
+
+    ELOG_DECLARE_LOG_TARGET(ELogQueuedTarget)
 
 protected:
     void waitQueue(std::unique_lock<std::mutex>& lock) final;

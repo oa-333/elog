@@ -9,6 +9,8 @@
 
 namespace elog {
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogSysLogTarget)
+
 bool ELogSysLogTarget::startLogTarget() {
     openlog(getProgramName(), LOG_PID, LOG_USER);
     return true;

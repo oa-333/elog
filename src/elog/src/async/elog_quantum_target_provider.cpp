@@ -37,7 +37,7 @@ ELogAsyncTarget* ELogQuantumTargetProvider::loadTarget(const ELogConfigMapNode* 
         new (std::nothrow) ELogQuantumTarget(target, quantumBufferSize, quantumCollectPeriodMicros);
     if (asyncTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create quantum log target, out of memory");
-        delete target;
+        target->destroy();
         return nullptr;
     }
     // NOTE: ELogSystem will configure common properties for this log target

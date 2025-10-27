@@ -7,6 +7,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogBufferedFileTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogBufferedFileTarget)
+
 ELogBufferedFileTarget::ELogBufferedFileTarget(const char* filePath,
                                                uint64_t bufferSizeBytes /* = 0 */,
                                                bool useLock /* = true */,

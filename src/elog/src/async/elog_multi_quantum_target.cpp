@@ -30,6 +30,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogMultiQuantumTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogMultiQuantumTarget)
+
 static ELogTlsKey sThreadSlotKey = ELOG_INVALID_TLS_KEY;
 static thread_local uint64_t sThreadSlotId = ELOG_INVALID_THREAD_SLOT_ID;
 

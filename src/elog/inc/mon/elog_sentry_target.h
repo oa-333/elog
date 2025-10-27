@@ -45,7 +45,8 @@ public:
     ELogSentryTarget(const ELogSentryTarget&) = delete;
     ELogSentryTarget(ELogSentryTarget&&) = delete;
     ELogSentryTarget& operator=(const ELogSentryTarget&) = delete;
-    ~ELogSentryTarget() override {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogSentryTarget)
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */

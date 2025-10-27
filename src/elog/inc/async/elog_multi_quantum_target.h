@@ -113,7 +113,8 @@ public:
     ELogMultiQuantumTarget(const ELogMultiQuantumTarget&) = delete;
     ELogMultiQuantumTarget(ELogMultiQuantumTarget&&) = delete;
     ELogMultiQuantumTarget& operator=(const ELogMultiQuantumTarget&) = delete;
-    ~ELogMultiQuantumTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogMultiQuantumTarget)
 
 private:
     /** @brief Order the log target to start (required for threaded targets). */

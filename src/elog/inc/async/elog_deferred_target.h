@@ -26,7 +26,8 @@ public:
     ELogDeferredTarget(const ELogDeferredTarget&) = delete;
     ELogDeferredTarget(ELogDeferredTarget&&) = delete;
     ELogDeferredTarget& operator=(const ELogDeferredTarget&) = delete;
-    ~ELogDeferredTarget() override {}
+
+    ELOG_DECLARE_LOG_TARGET_OVERRIDE(ELogDeferredTarget)
 
 protected:
     typedef std::list<std::pair<ELogRecord, std::string>> LogQueue;

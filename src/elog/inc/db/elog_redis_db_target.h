@@ -27,7 +27,8 @@ public:
     ELogRedisDbTarget(const ELogRedisDbTarget&) = delete;
     ELogRedisDbTarget(ELogRedisDbTarget&&) = delete;
     ELogRedisDbTarget& operator=(const ELogRedisDbTarget&) = delete;
-    ~ELogRedisDbTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogRedisDbTarget)
 
 protected:
     /** @brief Performs target level initialization. */

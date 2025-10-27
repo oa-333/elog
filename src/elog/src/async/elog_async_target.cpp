@@ -4,7 +4,7 @@ namespace elog {
 
 ELogAsyncTarget::~ELogAsyncTarget() {
     if (m_subTarget != nullptr) {
-        delete m_subTarget;
+        m_subTarget->destroy();
         m_subTarget = nullptr;
     }
 }

@@ -8,6 +8,8 @@
 
 namespace elog {
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogDeferredTarget)
+
 bool ELogDeferredTarget::startLogTarget() {
     if (!m_subTarget->start()) {
         return false;

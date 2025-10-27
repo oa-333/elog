@@ -238,7 +238,7 @@ bool initGlobals() {
     sDefaultLogTarget->setName("elog_default");
     if (!sDefaultLogTarget->start()) {
         ELOG_REPORT_ERROR("Failed to create default log target, out of memory");
-        delete sDefaultLogTarget;
+        sDefaultLogTarget->destroy();
         sDefaultLogTarget = nullptr;
         termGlobals();
         return false;
@@ -422,7 +422,7 @@ void termGlobals() {
     setLogFilter(nullptr);
     if (sDefaultLogTarget != nullptr) {
         sDefaultLogTarget->stop();
-        delete sDefaultLogTarget;
+        sDefaultLogTarget->destroy();
         sDefaultLogTarget = nullptr;
     }
     if (sRootLogSource != nullptr) {
@@ -559,7 +559,7 @@ bool configureLogTargetImpl(const std::string& logTargetCfg, ELogTargetId* id /*
     if (addLogTarget(logTarget) == ELOG_INVALID_TARGET_ID) {
         ELOG_REPORT_ERROR("Failed to add log target %s with scheme %s", logTarget->getName(),
                           logTarget->getTypeName());
-        delete logTarget;
+        logTarget->destroy();
         return false;
     }
     if (id != nullptr) {
@@ -581,7 +581,7 @@ bool configureLogTargetNode(const ELogConfigMapNode* logTargetCfg,
         ELOG_REPORT_ERROR("Failed to add log target %s with scheme %s (context: %s)",
                           logTarget->getName(), logTarget->getTypeName(),
                           logTargetCfg->getFullContext());
-        delete logTarget;
+        logTarget->destroy();
         return false;
     }
     if (id != nullptr) {
@@ -1166,7 +1166,7 @@ ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 
         // NOTE: detach from policy/filter/formatter before delete, because in case of failure
         // caller is still owner of these objects.
         logTarget->detach();
-        delete logTarget;
+        logTarget->destroy();
     }
 
     return logTargetId;
@@ -1208,7 +1208,7 @@ ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone /* =
         // NOTE: detach from policy/filter/formatter before delete, because in case of failure
         // caller is still owner of these objects.
         logTarget->detach();
-        delete logTarget;
+        logTarget->destroy();
     }
 
     return logTargetId;
@@ -1251,7 +1251,7 @@ ELogTargetId addSysLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
         // NOTE: detach from policy/filter/formatter before delete, because in case of failure
         // caller is still owner of these objects.
         logTarget->detach();
-        delete logTarget;
+        logTarget->destroy();
     }
 
     return logTargetId;
@@ -1287,7 +1287,7 @@ ELogTargetId addWin32EventLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
         // NOTE: detach from policy/filter/formatter before delete, because in case of failure
         // caller is still owner of these objects.
         logTarget->detach();
-        delete logTarget;
+        logTarget->destroy();
     }
 
     return logTargetId;
@@ -1401,7 +1401,7 @@ void removeLogTarget(ELogTargetId targetId) {
     ELogTarget* logTarget = sLogTargets[targetId];
     ELOG_REPORT_TRACE("Removing log target %s at %p", logTarget->getName(), logTarget);
     logTarget->stop();
-    delete logTarget;
+    logTarget->destroy();
     sLogTargets[targetId] = nullptr;
 
     // if suffix entries contain nulls we can reduce array size
@@ -1421,7 +1421,7 @@ void clearAllLogTargets() {
     for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
         ELogTarget* logTarget = sLogTargets[i];
         if (sIsTerminating || (logTarget != nullptr && !logTarget->isSystemTarget())) {
-            delete logTarget;
+            logTarget->destroy();
             sLogTargets[i] = nullptr;
         }
     }

@@ -30,7 +30,8 @@ public:
     ELogKafkaMsgQTarget(const ELogKafkaMsgQTarget&) = delete;
     ELogKafkaMsgQTarget(ELogKafkaMsgQTarget&&) = delete;
     ELogKafkaMsgQTarget& operator=(const ELogKafkaMsgQTarget&) = delete;
-    ~ELogKafkaMsgQTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogKafkaMsgQTarget)
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */

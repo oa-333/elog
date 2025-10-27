@@ -10,7 +10,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogMsgTarget)
 
-ELogMsgTarget::~ELogMsgTarget() {
+// special case: implement object self-destruction due to member destruction
+void ELogMsgTarget::destroy() {
     if (m_dataClient != nullptr) {
         delete m_dataClient;
         m_dataClient = nullptr;
@@ -19,6 +20,7 @@ ELogMsgTarget::~ELogMsgTarget() {
         delete m_binaryFormatProvider;
         m_binaryFormatProvider = nullptr;
     }
+    delete this;
 }
 
 void ELogMsgTarget::onSendMsgStats(uint32_t msgSizeBytes, uint32_t compressedMsgSizeBytes,

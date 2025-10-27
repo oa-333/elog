@@ -34,7 +34,8 @@ class ELOG_API ELogFormatter;
  */
 class ELOG_API ELogTarget {
 public:
-    virtual ~ELogTarget();
+    /** @brief Enforce controlled destruction at origin module. */
+    virtual void destroy() = 0;
 
     /** @brief Allocate thread local storage key for per-thread log buffer. */
     static bool createLogBufferKey();
@@ -42,7 +43,10 @@ public:
     /** @brief Free thread local storage key used for per-thread log buffer. */
     static bool destroyLogBufferKey();
 
-    /** @brief Retrieves the unique type name of the log target. */
+    /**
+     * @brief Retrieves the unique type name of the log target. If originating from a schema
+     * handler, then this name matches the scheme name.
+     */
     inline const char* getTypeName() const { return m_typeName.c_str(); }
 
     /**
@@ -197,7 +201,7 @@ public:
      * @param targetMsgCount The number of messages required to declare to log target has caught up.
      * @param[out] caughtUp Returns true if the log target has fully processed the specified number
      * of log messages.
-     * @return True if the operation was successful (whether lgo target has caught up or not). If
+     * @return True if the operation was successful (whether log target has caught up or not). If
      * statistics collection is disabled (by calling @ref disableStats()), then this call always
      * returns false.
      */
@@ -227,6 +231,7 @@ protected:
     ELogTarget(const ELogTarget&) = delete;
     ELogTarget(ELogTarget&&) = delete;
     ELogTarget& operator=(const ELogTarget&) = delete;
+    virtual ~ELogTarget();
 
     /** @brief Sets the natively-thread-safe property to true. */
     inline void setNativelyThreadSafe() {
@@ -317,6 +322,35 @@ protected:
     void drainBacklog();
 };
 
+/**
+ * @brief Helper macro for enforcing controlled object destruction. To be placed in the public
+ * section of the log target class.
+ */
+#define ELOG_DECLARE_LOG_TARGET(LogTargetType) \
+private:                                       \
+    ~LogTargetType() final{};                  \
+                                               \
+public:                                        \
+    void destroy() final;
+
+/**
+ * @brief Helper macro for enforcing controlled object destruction. To be placed in the public
+ * section of the log target class.
+ */
+#define ELOG_DECLARE_LOG_TARGET_OVERRIDE(LogTargetType) \
+protected:                                              \
+    ~LogTargetType() override{};                        \
+                                                        \
+public:                                                 \
+    void destroy() override;
+
+/**
+ * @brief Helper macro for enforcing controlled object destruction. To be placed in implementation
+ * source file of log target class.
+ */
+#define ELOG_IMPLEMENT_LOG_TARGET(LogTargetType) \
+    void LogTargetType::destroy() { delete this; }
+
 /** @class Combined log target. Dispatches to multiple log targets. */
 class ELOG_API ELogCombinedTarget final : public ELogTarget {
 public:
@@ -324,7 +358,8 @@ public:
     ELogCombinedTarget(const ELogCombinedTarget&) = delete;
     ELogCombinedTarget(ELogCombinedTarget&&) = delete;
     ELogCombinedTarget& operator=(const ELogCombinedTarget&) = delete;
-    ~ELogCombinedTarget() final {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogCombinedTarget)
 
     inline void addLogTarget(ELogTarget* target) { m_logTargets.push_back(target); }
 

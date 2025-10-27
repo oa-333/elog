@@ -62,7 +62,7 @@ public:
     ELogSegmentedFileTarget(ELogSegmentedFileTarget&&) = delete;
     ELogSegmentedFileTarget& operator=(const ELogSegmentedFileTarget&) = delete;
 
-    ~ELogSegmentedFileTarget() final;
+    ELOG_DECLARE_LOG_TARGET(ELogSegmentedFileTarget)
 
 protected:
     /** @brief Log a formatted message. */

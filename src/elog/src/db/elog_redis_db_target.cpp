@@ -13,6 +13,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogRedisDbTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogRedisDbTarget)
+
 // NOTE: If Redis API allows in the future, we can use this receptor
 #if 0
 class ELogRedisDbFieldReceptor : public ELogFieldReceptor {

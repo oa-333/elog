@@ -56,7 +56,8 @@ public:
     ELogOtelTarget(const ELogOtelTarget&) = delete;
     ELogOtelTarget(ELogOtelTarget&&) = delete;
     ELogOtelTarget& operator=(const ELogOtelTarget&) = delete;
-    ~ELogOtelTarget() override {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogOtelTarget)
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */

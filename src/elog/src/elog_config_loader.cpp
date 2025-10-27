@@ -181,7 +181,7 @@ ELogTarget* ELogConfigLoader::loadLogTarget(const ELogConfigMapNode* logTargetCf
 
     // configure common properties (just this target, not recursively nested)
     if (!configureLogTargetCommon(logTarget, logTargetCfg)) {
-        delete logTarget;
+        logTarget->destroy();
         return nullptr;
     }
     return logTarget;

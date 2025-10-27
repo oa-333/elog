@@ -18,7 +18,7 @@ public:
     ELogSysLogTarget(const ELogSysLogTarget&) = delete;
     ELogSysLogTarget(ELogSysLogTarget&&) = delete;
 
-    ~ELogSysLogTarget() final {}
+    ELOG_DECLARE_LOG_TARGET(ELogSysLogTarget)
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */

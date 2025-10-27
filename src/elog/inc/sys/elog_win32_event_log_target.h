@@ -43,7 +43,7 @@ public:
     ELogWin32EventLogTarget(ELogWin32EventLogTarget&&) = delete;
     ELogWin32EventLogTarget& operator=(const ELogWin32EventLogTarget&) = delete;
 
-    ~ELogWin32EventLogTarget() final {}
+    ELOG_DECLARE_LOG_TARGET(ELogWin32EventLogTarget)
 
 protected:
     /** @brief Order the log target to start (required for threaded targets). */

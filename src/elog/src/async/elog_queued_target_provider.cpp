@@ -37,7 +37,7 @@ ELogAsyncTarget* ELogQueuedTargetProvider::loadTarget(const ELogConfigMapNode* l
         new (std::nothrow) ELogQueuedTarget(target, queueBatchSize, queueTimeoutMillis);
     if (asyncTarget == nullptr) {
         ELOG_REPORT_ERROR("Failed to create queued log target, out of memory");
-        delete target;
+        target->destroy();
         return nullptr;
     }
     // NOTE: ELogSystem will configure common properties for this log target

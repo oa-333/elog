@@ -38,7 +38,8 @@ public:
     ELogDatadogTarget(const ELogDatadogTarget&) = delete;
     ELogDatadogTarget(ELogDatadogTarget&&) = delete;
     ELogDatadogTarget& operator=(const ELogDatadogTarget&) = delete;
-    ~ELogDatadogTarget() override {}
+
+    ELOG_DECLARE_LOG_TARGET(ELogDatadogTarget)
 
     /** @brief Embed headers in outgoing HTTP message. */
     void embedHeaders(httplib::Headers& headers) final;

@@ -16,6 +16,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogTarget)
 
+ELOG_IMPLEMENT_LOG_TARGET(ELogCombinedTarget)
+
 static ELogTlsKey sLogBufferKey = ELOG_INVALID_TLS_KEY;
 
 inline ELogBuffer* allocLogBuffer() {
