@@ -351,6 +351,21 @@ void ELogTarget::setLogFormatter(ELogFormatter* logFormatter) {
     m_logFormatter = logFormatter;
 }
 
+bool ELogTarget::setLogFormat(const char* logFormat) {
+    ELogFormatter* formatter = new (std::nothrow) ELogFormatter();
+    if (formatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to create log formatter, out of memory");
+        return false;
+    }
+    if (!formatter->initialize(logFormat)) {
+        ELOG_REPORT_ERROR("Failed to initialize log formatter with log format: %s", logFormat);
+        destroyLogFormatter(formatter);
+        return false;
+    }
+    setLogFormatter(formatter);
+    return true;
+}
+
 void ELogTarget::setFlushPolicy(ELogFlushPolicy* flushPolicy) {
     if (m_flushPolicy != nullptr) {
         destroyFlushPolicy(m_flushPolicy);

@@ -59,7 +59,10 @@ struct ELOG_API ELogParams {
      */
     uint32_t m_maxThreads;
 
-    /** @brief Specifies whether a time source is used (better performance, less resolution). */
+    /** @brief Specifies whether log statistics are enabled (per-level counters). */
+    ELogAtomic<bool> m_enableLogStatistics;
+
+    /** @brief Specifies whether a time source is used (better performance, less accuracy). */
     ELogAtomic<bool> m_enableTimeSource;
 
     /** @brief The time source resolution (time stamp update frequency). */
@@ -84,6 +87,7 @@ struct ELOG_API ELogParams {
           m_reportHandler(nullptr),
           m_reportLevel(ELEVEL_WARN),
           m_maxThreads(ELOG_DEFAULT_MAX_THREADS),
+          m_enableLogStatistics(ELOG_DEFAULT_ENABLE_LOG_STATISTICS),
           m_enableTimeSource(ELOG_DEFAULT_ENABLE_TIME_SOURCE),
           m_timeSourceResolution(ELOG_DEFAULT_TIME_SOURCE_RESOLUTION),
           m_timeSourceUnits(ELOG_DEFAULT_TIME_SOURCE_UNITS) {

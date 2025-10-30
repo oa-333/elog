@@ -86,6 +86,9 @@ static ELogFilter* sGlobalFilter = nullptr;
 static ELogLogger* sDefaultLogger = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
 
+static std::atomic<bool> sEnableStatistics = false;
+static std::atomic<uint64_t> sMsgCount[ELEVEL_COUNT];
+
 // these functions are defined as external because they are friends of some classes
 extern bool initGlobals();
 extern void termGlobals();
@@ -412,6 +415,8 @@ ELogLogger* getPreInitLogger() { return &sPreInitLogger; }
 
 bool hasAccumulatedLogMessages() { return sPreInitLogger.hasAccumulatedLogMessages(); }
 
+uint32_t getAccumulatedMessageCount() { return sPreInitLogger.getAccumulatedMessageCount(); }
+
 void discardAccumulatedLogMessages() { sPreInitLogger.discardAccumulatedLogMessages(); }
 
 void setReportLevelFromEnv() {
@@ -566,7 +571,11 @@ ELogCacheEntryId getOrCacheFormatMsg(const char* fmt) {
 
 void setAppName(const char* appName) { setAppNameField(appName); }
 
+const char* getAppName() { return getAppNameField(); }
+
 bool setCurrentThreadName(const char* threadName) { return setCurrentThreadNameField(threadName); }
+
+const char* getCurrentThreadName() { return getCurrentThreadNameField(); }
 
 bool configureLogFilter(const char* logFilterCfg) {
     if (logFilterCfg[0] != '(') {
@@ -708,6 +717,27 @@ void logMsg(const ELogRecord& logRecord,
 #endif
     // send log record to all log targets
     logMsgTarget(logRecord, logTargetAffinityMask);
+
+    // update global statistics
+    if (sEnableStatistics.load(std::memory_order_relaxed)) {
+        sMsgCount[logRecord.m_logLevel].fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+void enableLogStatistics() { sEnableStatistics.store(true, std::memory_order_relaxed); }
+
+void disableLogStatistics() { sEnableStatistics.store(false, std::memory_order_relaxed); }
+
+void getLogStatistics(ELogStatistics& stats) {
+    for (uint32_t i = 0; i < ELEVEL_COUNT; ++i) {
+        stats.m_msgCount[i] = sMsgCount[i].load(std::memory_order_relaxed);
+    }
+}
+
+void resetLogStatistics() {
+    for (uint32_t i = 0; i < ELEVEL_COUNT; ++i) {
+        sMsgCount[i].store(0, std::memory_order_relaxed);
+    }
 }
 
 char* sysErrorToStr(int sysErrorCode) { return ELogReport::sysErrorToStr(sysErrorCode); }

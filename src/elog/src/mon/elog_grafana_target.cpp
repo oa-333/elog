@@ -9,10 +9,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogGrafanaTarget)
 
-static const int ELOG_GRAFANA_HTTP_SUCCESS_STATUS = 204;
-
 ELogGrafanaTarget::ELogGrafanaTarget(const char* lokiAddress, const ELogHttpConfig& config)
-    : ELogHttpClientAssistant("Grafana Loki", ELOG_GRAFANA_HTTP_SUCCESS_STATUS) {
+    : ELogHttpClientAssistant("Grafana Loki", ELOG_HTTP_STATUS_NO_CONTENT) {
     ELOG_REPORT_TRACE("Creating HTTP client to Grafana loki at: %s", lokiAddress);
     m_client.initialize(lokiAddress, "Grafana Loki", config, this);
 }

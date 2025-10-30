@@ -19,13 +19,14 @@ protected:
           m_host(host),
           m_port(port),
           m_functionName(functionName),
-          m_rpcFormatter(nullptr) {
-        m_rpcFormatter = (ELogRpcFormatter*)getLogFormatter();
-    }
+          m_rpcFormatter(nullptr) {}
     ELogRpcTarget(const ELogRpcTarget&) = delete;
     ELogRpcTarget(ELogRpcTarget&&) = delete;
     ELogRpcTarget& operator=(const ELogRpcTarget&) = delete;
     ~ELogRpcTarget() override {}
+
+    /** @brief Order the log target to start (required for threaded targets). */
+    bool startLogTarget() override;
 
     /** @brief Orders a buffered log target to flush it log messages. */
     bool flushLogTarget() override { return true; }

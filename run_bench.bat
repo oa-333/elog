@@ -8,7 +8,7 @@ set DEV_DIR=%~dp0
 REM build elog (enable fmtlib for binary quantum test)
 call .\build.bat --rel-with-debug-info --fmt-lib --reconfigure --verbose
 IF errorlevel 1 (
-    echo ERROR: fBuild failed
+    echo ERROR: Build failed
     exit /b 1
 )
 echo INFO: Build success

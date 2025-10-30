@@ -44,6 +44,17 @@ public:
     /** @brief Embed headers in outgoing HTTP message. */
     void embedHeaders(httplib::Headers& headers) final;
 
+    /**
+     * @brief Handles HTTP POST result.
+     * @param result The result to examine.
+     * @return true If the result is regarded as success.
+     * @return false If the result is regarded as failure, in which case the HTTP message will be
+     * stored in a backlog for future attempt to resend to the server. Pay attention that when some
+     * errors occur it does not make sense to resend, since the same error would occur again (e.g.
+     * invalid payload, wrong endpoint name, etc.).
+     */
+    bool handleResult(const httplib::Result& result) final;
+
 protected:
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() override;

@@ -17,6 +17,9 @@ ELOG_DECLARE_REPORT_LOGGER(ELogTargetApi)
 static std::vector<ELogTarget*> sLogTargets;
 static ELogTarget* sDefaultLogTarget = nullptr;
 
+/** @def A log target pointer denoting a reserved slot. */
+#define ELOG_TARGET_RESERVED ((ELogTarget*)(-1ll))
+
 extern bool initLogTargets() {
     // NOTE: statistics disabled
     sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr, nullptr, false);
@@ -48,23 +51,21 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
     // affinity mask building) - this might require API change (returning at least bool)
     ELOG_REPORT_TRACE("Adding log target: %s", logTarget->getName());
 
-    // we must start the log target early because of statistics dependency (if started after adding
-    // to array, then any ELOG_REPORT_XXX in between would trigger logging for the new target before
-    // the statistics object was created)
+    // NOTE: we must start the log target early because of statistics dependency (if started after
+    // adding to array, then any ELOG_REPORT_XXX in between would trigger logging for the new target
+    // before the statistics object was created) but some log targets require they have an id
+    // allocated early, before start is called (e.g. Grafana), so that they can set up a debug
+    // logger that does not send logs to itself
+
     // TODO: this is too sensitive, it is better to check whether the statistics object exists and
     // get rid of m_enableStats altogether
-    if (!logTarget->start()) {
-        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
-        logTarget->setId(ELOG_INVALID_TARGET_ID);
-        return ELOG_INVALID_TARGET_ID;
-    }
 
-    // find vacant slot ro add a new one
+    // find vacant slot and reserve it for the log target
     ELogTargetId logTargetId = ELOG_INVALID_TARGET_ID;
     for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
         if (sLogTargets[i] == nullptr) {
-            sLogTargets[i] = logTarget;
-            ELOG_REPORT_TRACE("Added log target %s with id %u", logTarget->getName(), i);
+            sLogTargets[i] = ELOG_TARGET_RESERVED;
+            ELOG_REPORT_TRACE("Reserved slot %u to log target %s", i, logTarget->getName());
             logTargetId = i;
             break;
         }
@@ -85,6 +86,16 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
 
     // set target id and start it
     logTarget->setId(logTargetId);
+
+    // start target id
+    if (!logTarget->start()) {
+        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
+        logTarget->setId(ELOG_INVALID_TARGET_ID);
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    // now we can replace the reserved pointer to the real pointer
+    sLogTargets[logTargetId] = logTarget;
 
     // write accumulated log messages if there are such
     getPreInitLoggerRef().writeAccumulatedLogMessages(logTarget);
@@ -401,6 +412,10 @@ void logMsgTarget(const ELogRecord& logRecord, ELogTargetAffinityMask logTargetA
     bool logged = false;
     for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
+        // NOTE: we may encounter a reserved entry (see addLogTarget above)
+        if (logTarget == ELOG_TARGET_RESERVED) {
+            continue;
+        }
         if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY ||
             ELOG_HAS_TARGET_AFFINITY_MASK(logTargetAffinityMask, logTargetId)) {
             // check also pass key if present

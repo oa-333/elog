@@ -65,25 +65,25 @@ bool ELogSchemaManager::initSchemaHandlers() {
 
     // optional packages
 #ifdef ELOG_ENABLE_DB
-    if (!initSchemaHandler<ELogNetSchemaHandler>("db")) {
+    if (!initSchemaHandler<ELogDbSchemaHandler>("db")) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_MSGQ
-    if (!initSchemaHandler<ELogNetSchemaHandler>("msgq")) {
+    if (!initSchemaHandler<ELogMsgQSchemaHandler>("msgq")) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_RPC
-    if (!initSchemaHandler<ELogNetSchemaHandler>("rpc")) {
+    if (!initSchemaHandler<ELogRpcSchemaHandler>("rpc")) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_MON
-    if (!initSchemaHandler<ELogNetSchemaHandler>("mon")) {
+    if (!initSchemaHandler<ELogMonSchemaHandler>("mon")) {
         return false;
     }
 #endif

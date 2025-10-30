@@ -250,7 +250,7 @@ bool ELogKafkaMsgQTarget::flushLogTarget() {
 
 void ELogKafkaMsgQTarget::formatClientId() {
     std::stringstream s;
-    s << getHostName() << "." << getUserName() << "." << getProgramName() << ".";
+    s << getHostNameField() << "." << getUserNameField() << "." << getProgramNameField() << ".";
 #ifdef ELOG_WINDOWS
     s << GetCurrentProcessId();
 #else

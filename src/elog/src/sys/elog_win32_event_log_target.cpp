@@ -14,9 +14,9 @@ ELOG_IMPLEMENT_LOG_TARGET(ELogWin32EventLogTarget)
 
 bool ELogWin32EventLogTarget::startLogTarget() {
     if (m_eventSourceName.empty()) {
-        m_eventSourceName = getAppName();
+        m_eventSourceName = getAppNameField();
         if (m_eventSourceName.empty()) {
-            m_eventSourceName = getProgramName();
+            m_eventSourceName = getProgramNameField();
             if (m_eventSourceName.empty()) {
                 m_eventSourceName = "elog";
             }

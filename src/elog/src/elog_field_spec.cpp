@@ -335,7 +335,7 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
             }
             m_textSpec->m_resetTextSpec = 1;
         } else {
-            // finally tru simple integer justification value
+            // finally try simple integer justification value
             int32_t justify = 0;
             if (!parseIntProp("", "", specToken, justify, false)) {
                 ELOG_REPORT_ERROR("Invalid field specification: %s", specToken.c_str());

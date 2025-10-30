@@ -72,7 +72,7 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
     auto& logLine = values[logLineCount];
     // need to send local time, other Loki complains that timestamp is too new
     logLine[0] = std::to_string(
-        std::chrono::nanoseconds(elogTimeToUnixTimeNanos(logRecord.m_logTime, true)).count());
+        std::chrono::nanoseconds(elogTimeToUnixTimeNanos(logRecord.m_logTime, false)).count());
 
     // log line
     std::string logMsg;
@@ -95,6 +95,10 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
 }
 
 bool ELogGrafanaJsonTarget::flushLogTarget() {
+    if (m_logEntry.empty()) {
+        // silently ignore request
+        return true;
+    }
     std::string jsonBody = m_logEntry.dump();
     ELOG_REPORT_TRACE("POST log message for Grafana Loki: %s", jsonBody.c_str());
     bool res =

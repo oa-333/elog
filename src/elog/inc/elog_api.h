@@ -208,6 +208,9 @@ extern ELOG_API ELogLogger* getPreInitLogger();
 /** @brief Queries whether there are any accumulated log messages. */
 extern ELOG_API bool hasAccumulatedLogMessages();
 
+/** @brief Retrieves the number of accumulated log messages. */
+extern ELOG_API uint32_t getAccumulatedMessageCount();
+
 /**
  * @brief Discards all accumulated log messages. This will prevent from log targets added in
  * the future to receive all log messages that were accumulated before the ELog library was
@@ -981,11 +984,23 @@ extern ELOG_API ELogCacheEntryId getOrCacheFormatMsg(const char* fmt);
 extern ELOG_API void setAppName(const char* appName);
 
 /**
+ * @brief Retrieves the installed application's name. Returns empty string (not null) if none was
+ * installed prior to the call.
+ */
+extern ELOG_API const char* getAppName();
+
+/**
  * @brief Sets the current thread's name, to be referenced by token ${tname}.
  * @param threadName The name of the thread. Duplicate names are not allowed.
  * @return True if succeeded, or false if name is already used by another thread.
  */
 extern ELOG_API bool setCurrentThreadName(const char* threadName);
+
+/**
+ * @brief Retrieves the installed current thread's name. Returns empty string (not null) if none was
+ * installed prior to the call.
+ */
+extern ELOG_API const char* getCurrentThreadName();
 
 /**************************************************************************************
  *
@@ -1150,6 +1165,21 @@ private:
     std::chrono::steady_clock::time_point m_startDiscardTime;
     uint64_t m_startDiscardCount;
 };
+
+/**************************************************************************************
+ *                          Logging Statistics
+ **************************************************************************************/
+
+/** @brief Enables log statistics collection (per-level counters). */
+extern ELOG_API void enableLogStatistics();
+
+/** @brief Disables log statistics collection (per-level counters). */
+extern ELOG_API void disableLogStatistics();
+
+/** @brief Retrieves the per-level message count statistics (global scope). */
+extern ELOG_API void getLogStatistics(ELogStatistics& stats);
+
+extern ELOG_API void resetLogStatistics();
 
 }  // namespace elog
 

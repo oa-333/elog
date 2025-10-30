@@ -112,7 +112,9 @@
         "multi_span": "cpp",
         "string_span": "cpp",
         "csetjmp": "cpp",
-        "span_ext": "cpp"
+        "span_ext": "cpp",
+        "gsl_narrow": "cpp",
+        "cerrno": "cpp"
     },
     "cSpell.ignoreWords": [
         "ELEVEL",
@@ -150,8 +152,10 @@
         "fmtlib",
         "fsanitize",
         "GIGA",
+        "googletest",
         "GRPCPP",
         "grpcpublicheaders",
+        "gtest",
         "hexa",
         "hiredis",
         "httplib",

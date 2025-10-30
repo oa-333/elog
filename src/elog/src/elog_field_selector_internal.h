@@ -21,22 +21,22 @@ extern bool initFieldSelectors();
 extern void termFieldSelectors();
 
 /** @brief Retrieves host name (for internal use only). */
-extern const char* getHostName();
+extern const char* getHostNameField();
 
 /** @brief Retrieves user name (for internal use only). */
-extern const char* getUserName();
+extern const char* getUserNameField();
 
 /** @brief Retrieves operating system name (for internal use only). */
-extern const char* getOsName();
+extern const char* getOsNameField();
 
 /** @brief Retrieves operating system version (for internal use only). */
-extern const char* getOsVersion();
+extern const char* getOsVersionField();
 
 /** @brief Retrieves application name (for internal use only). */
-extern const char* getAppName();
+extern const char* getAppNameField();
 
 /** @brief Retrieves program name (for internal use only). */
-extern const char* getProgramName();
+extern const char* getProgramNameField();
 
 /** @brief Retrieves the process id field (for internal use only). */
 extern uint32_t getProcessIdField();
@@ -46,6 +46,9 @@ extern void setAppNameField(const char* appName);
 
 /** @brief Installs the current thread name (for internal use only). */
 extern bool setCurrentThreadNameField(const char* threadName);
+
+/** @brief Retrieves the current thread name (for internal use only). */
+extern const char* getCurrentThreadNameField();
 
 /** @brief Retrieves the currently installed thread name (for internal use only). */
 extern const char* getThreadNameField(uint32_t threadId);

@@ -12,6 +12,10 @@ ELOG_IMPLEMENT_LOG_FORMATTER(ELogPropsFormatter)
 bool ELogPropsFormatter::parseProps(const std::string& props) {
     // props is expected to wrapped with curly braces
     std::string trimmedProps = trim(props);
+    if (trimmedProps.empty()) {
+        // empty properties are allowed (not enforcing existence of braces)
+        return true;
+    }
     if (trimmedProps[0] != '{' || trimmedProps[trimmedProps.length() - 1] != '}') {
         ELOG_REPORT_ERROR(
             "Invalid properties specification, should be enclosed with curly braces {}: %s",

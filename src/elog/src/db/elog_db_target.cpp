@@ -349,7 +349,7 @@ void ELogDbTarget::stopReconnect() {
 
 void ELogDbTarget::reconnectTask() {
     // now start reconnect attempt until success or ordered to stop
-    std::string threadName = std::string(getName()) + "-reconnect-db";
+    std::string threadName = std::string(getName()) + "-" + m_dbName + "-reconnect-db";
     setCurrentThreadNameField(threadName.c_str());
     while (!shouldStop()) {
         for (uint32_t i = 0; i < m_connectionPool.size(); ++i) {

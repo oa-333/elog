@@ -24,6 +24,13 @@
 # -t|--trace
 # -h|--help
 
+# colors
+WHITE='\033[1;37m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
 # set default values
 PLATFORM=$(uname -s)
 BUILD_TYPE=Debug
@@ -81,7 +88,7 @@ while true; do
     -t | --trace) TRACE=1; shift ;;
     -h | --help) HELP=1; shift ;;
     -- ) shift; break ;;
-    * ) echo "[ERROR] Invalid option $1, aborting"; exit 1; break ;;
+    * ) echo -e "${RED}[ERROR] Invalid option $1, aborting${NC}"; exit 1; break ;;
   esac
 done
 
@@ -161,6 +168,17 @@ if [ "$HELP" -eq "1" ]; then
     exit 0
 fi
 
+if [ "$FULL" -eq "1" ]; then
+    echo "[INFO] Configuring FULL options"
+    SECURE=1
+    STACK_TRACE=1
+    FMT_LIB=1
+    LIFE_SIGN=1
+    RELOAD_CONFIG=1
+    CONFIG_SERVICE=1
+    CONNS=(all)
+fi
+
 # set normal options
 echo "[INFO] Build type: $BUILD_TYPE"
 echo "[INFO] Install dir: $INSTALL_DIR"
@@ -179,17 +197,6 @@ echo "[INFO] Rebuild: $REBUILD"
 echo "[INFO] Reconfigure: $RE_CONFIG"
 echo "[INFO] Mem-check: $MEM_CHECK"
 echo "[INFO] Clang: $CLANG"
-
-if [ "$FULL" -eq "1" ]; then
-    echo "[INFO] Configuring FULL options"
-    SECURE=1
-    STACK_TRACE=1
-    FMT_LIB=1
-    LIFE_SIGN=1
-    RELOAD_CONFIG=1
-    CONFIG_SERVICE=1
-    CONNS=(all)
-fi
 
 # set options
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
@@ -221,7 +228,7 @@ if [ -n "$CONFIG_PUBLISH" ]; then
     elif [ "$CONFIG_PUBLISH" == "etcd" ]; then
         OPTS+=" -DELOG_ENABLE_CONFIG_PUBLISH_ETCD=ON"
     else
-        echo "[ERROR] Unsupported configuration service publisher '$CONFIG_PUBLISH', aborting"
+        echo -e "${RED}[ERROR] Unsupported configuration service publisher '$CONFIG_PUBLISH', aborting[$NC]"
         exit 1
     fi
 fi
@@ -234,8 +241,19 @@ fi
 if [ "$CLANG" == "1" ]; then
     export CXX=`which clang++`;
     if [ -z "$CXX" ]; then
-        echo "[ERROR] clang not found, aborting"
+        echo -e "${RED}[ERROR] clang not found, aborting${NC}"
         exit 1
+    fi
+fi
+
+# NOTE: On Linux we cannot have config-service and otel together due to protobuf/gRPC build conflict
+if [ "${CONNS[0]}" == "otel" ] || [ "${CONNS[0]}" == "all" ]; then
+    BUILD_OTEL=1
+    if [[ $OS == *"Linux"* ]]; then
+        if [ "$CONFIG_SERVICE" == "1" ]; then
+            echo -e "${YELLOW}[WARN] Ignoring request to build Open Telemetry connector due to configuration service${NC}"
+            BUILD_OTEL=0
+        fi
     fi
 fi
 
@@ -270,8 +288,10 @@ do
         echo "[INFO] Adding Datadog connector"
         OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
     elif [ "$conn" == "otel" ]; then
-        echo "[INFO] Adding Open Telemetry connector"
-        OPTS+=" -DELOG_ENABLE_OTEL_CONNECTOR=ON"
+        if [ "$BUILD_OTEL" == "1" ]; then
+            echo "[INFO] Adding Open Telemetry connector"
+            OPTS+=" -DELOG_ENABLE_OTEL_CONNECTOR=ON"
+        fi
     elif [ "$conn" == "net" ]; then
         echo "[INFO] Adding Network connector"
         OPTS+=" -DELOG_ENABLE_NET=ON"
@@ -288,11 +308,13 @@ do
         OPTS+=" -DELOG_ENABLE_GRAFANA_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_SENTRY_CONNECTOR=ON"
         OPTS+=" -DELOG_ENABLE_DATADOG_CONNECTOR=ON"
-        OPTS+=" -DELOG_ENABLE_OTEL_CONNECTOR=ON"
+        if [ "$BUILD_OTEL" == "1" ]; then
+            OPTS+=" -DELOG_ENABLE_OTEL_CONNECTOR=ON"
+        fi
         OPTS+=" -DELOG_ENABLE_NET=ON"
         OPTS+=" -DELOG_ENABLE_IPC=ON"
     else
-        echo "[ERROR] Invalid connector name $conn, aborting"
+        echo -e "${RED}[ERROR] Invalid connector name $conn, aborting${NC}"
         exit 1
     fi
 done
@@ -311,7 +333,7 @@ if [ $CLEAN -eq 1 ]; then
     echo "[INFO] Running target clean"
     cmake --build . -j $VERBOSE_OPT --target clean
     if [ $? -ne 0 ]; then
-        echo "[WARN] Clean failed, see errors above, build continues"
+        echo -e "${YELLOW}[WARN] Clean failed, see errors above, build continues${NC}"
         # popd > /dev/null
         # exit 1
     fi
@@ -332,7 +354,7 @@ echo "[INFO] Configuring project"
 echo "[INFO] Using options: $OPTS"
 cmake $OPTS $* ../../
 if [ $? -ne 0 ]; then
-    echo "[ERROR] Configure phase failed, see errors above, aborting"
+    echo -e "${RED}[ERROR] Configure phase failed, see errors above, aborting${NC}"
     popd > /dev/null
     exit 1
 fi
@@ -341,7 +363,7 @@ fi
 echo "[INFO] Building target elog"
 cmake --build . -j $VERBOSE_OPT
 if [ $? -ne 0 ]; then
-    echo "[ERROR] Build phase failed, see errors above, aborting"
+    echo -e "${RED}[ERROR] Build phase failed, see errors above, aborting${NC}"
     popd > /dev/null
     exit 1
 fi
@@ -350,7 +372,7 @@ fi
 echo "[INFO] Installing"
 cmake --install . $VERBOSE_OPT
 if [ $? -ne 0 ]; then
-    echo "[ERROR] Install phase failed, see errors above, aborting"
+    echo -e "${RED}[ERROR] Install phase failed, see errors above, aborting${NC}"
     popd > /dev/null
     exit 1
 fi

@@ -46,6 +46,7 @@
 #endif
 #define ELOG_CONFIG_ENABLE_TIME_SOURCE_NAME "enable_time_source"
 #define ELOG_CONFIG_TIME_SOURCE_RESOLUTION_NAME "time_source_resolution"
+#define ELOG_CONFIG_ENABLE_LOG_STATISTICS_NAME "enable_log_statistics"
 
 // simple colors for internal use
 #define RED "\x1B[31m"

@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "elog_def.h"
+#include "elog_level.h"
 
 // put some basic definitions here to avoid including files just for some type definitions
 
@@ -82,6 +83,11 @@ enum class ELogPropagateMode : uint32_t {
 /** @def Cache entry id type. */
 typedef uint32_t ELogCacheEntryId;
 
+/** @brief Statistics object. Contains number of messages issued per level. */
+struct ELOG_API ELogStatistics {
+    uint64_t m_msgCount[ELEVEL_COUNT];
+};
+
 /** @def Invalid cache entry id value. */
 #define ELOG_INVALID_CACHE_ENTRY_ID ((ELogCacheEntryId)0xFFFFFFFF)
 
@@ -129,6 +135,9 @@ enum class ELogSizeUnits : uint32_t {
 
 /** @def Default maximum number of threads used by ELog. */
 #define ELOG_DEFAULT_MAX_THREADS 256
+
+/** @def By default do not enable log statistics. */
+#define ELOG_DEFAULT_ENABLE_LOG_STATISTICS false
 
 /** @def By default do not enable time source. */
 #define ELOG_DEFAULT_ENABLE_TIME_SOURCE false

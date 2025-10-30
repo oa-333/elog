@@ -345,6 +345,20 @@ bool reconfigure(ELogConfig* config) {
         return false;
     }
 
+    bool found = false;
+    bool enableLogStatisticsVar = false;
+    if (!cfgMap->getBoolValue(ELOG_CONFIG_ENABLE_LOG_STATISTICS_NAME, found,
+                              enableLogStatisticsVar)) {
+        return false;
+    }
+    if (found) {
+        if (enableLogStatisticsVar) {
+            enableLogStatistics();
+        } else {
+            disableLogStatistics();
+        }
+    }
+
     return true;
 }
 

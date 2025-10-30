@@ -18,13 +18,11 @@ ELOG_DECLARE_REPORT_LOGGER(ELogDatadogTarget)
 
 ELOG_IMPLEMENT_LOG_TARGET(ELogDatadogTarget)
 
-static const int ELOG_DATADOG_HTTP_SUCCESS_STATUS = 204;
-
 ELogDatadogTarget::ELogDatadogTarget(const char* serverAddress, const char* apiKey,
                                      const ELogHttpConfig& config, const char* source /* = "" */,
                                      const char* service /* = "" */, const char* tags /* = "" */,
                                      bool stackTrace /* = false */, bool compress /* = false */)
-    : ELogHttpClientAssistant("Datadog", ELOG_DATADOG_HTTP_SUCCESS_STATUS),
+    : ELogHttpClientAssistant("Datadog"),
       m_apiKey(apiKey),
       m_source(source),
       m_service(service),
@@ -38,6 +36,10 @@ ELogDatadogTarget::ELogDatadogTarget(const char* serverAddress, const char* apiK
 
 void ELogDatadogTarget::embedHeaders(httplib::Headers& headers) {
     headers.insert(httplib::Headers::value_type("DD-API-KEY", m_apiKey));
+}
+
+bool ELogDatadogTarget::handleResult(const httplib::Result& result) {
+    return result == ELOG_HTTP_STATUS_ACCEPTED || result == ELOG_HTTP_STATUS_NO_CONTENT;
 }
 
 bool ELogDatadogTarget::startLogTarget() {
@@ -77,7 +79,7 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
 
     // more metadata
     m_logItemArray[index]["status"] = elogLevelToStr(logRecord.m_logLevel);
-    m_logItemArray[index]["hostname"] = getHostName();
+    m_logItemArray[index]["hostname"] = getHostNameField();
     // TODO: this is not working well, neither as int, nor as string
     // m_logItemArray[index]["timestamp"] = elogTimeToUnixTimeSeconds(logRecord.m_logTime);
     m_logItemArray[index]["logger.name"] = logRecord.m_logger->getLogSource()->getQualifiedName();

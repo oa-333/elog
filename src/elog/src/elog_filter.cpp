@@ -621,7 +621,7 @@ bool ELogHostNameFilter::load(const std::string& logTargetCfg,
 }
 
 bool ELogHostNameFilter::filterLogRecord(const ELogRecord& logRecord) {
-    const char* hostName = getHostName();
+    const char* hostName = getHostNameField();
     if (hostName == nullptr) {
         // this should not happen, we silently allow the message to pass...
         return true;

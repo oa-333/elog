@@ -24,6 +24,11 @@ public:
     /** @brief Queries whether there are any accumulated log messages. */
     inline bool hasAccumulatedLogMessages() { return !m_accumulatedRecordBuilders.empty(); }
 
+    /** @brief Retrieves the number of accumulated log messages. */
+    inline uint32_t getAccumulatedMessageCount() const {
+        return (uint32_t)m_accumulatedRecordBuilders.size();
+    }
+
     /** @brief Discards all accumulated log messages. */
     void discardAccumulatedLogMessages();
 

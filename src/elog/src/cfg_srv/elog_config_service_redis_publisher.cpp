@@ -207,9 +207,9 @@ void ELogConfigServiceRedisPublisher::onConfigServiceStop(const char* host, int 
 
 bool ELogConfigServiceRedisPublisher::publishConfigService() {
     // try to set the key with expiry
-    const char* appName = getAppName();
+    const char* appName = getAppNameField();
     if (appName == nullptr || *appName == 0) {
-        appName = getProgramName();
+        appName = getProgramNameField();
     }
     std::string value = std::string(appName);
     bool res = m_redisClient.visitRedisCommand([this, &value](redisContext* conext) {

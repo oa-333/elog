@@ -17,6 +17,8 @@
 #endif
 #else
 #include <fcntl.h>
+#include <pwd.h>
+#include <sys/types.h>
 #include <sys/utsname.h>
 #include <unistd.h>
 #endif
@@ -257,16 +259,35 @@ static void initHostName() {
 }
 
 static void initUserName() {
+    bool res = true;
 #ifdef ELOG_WINDOWS
     DWORD len = LOGIN_NAME_MAX;
     if (!GetUserNameA(sUserName, &len)) {
-        elog_strncpy(sUserName, "<N/A>", LOGIN_NAME_MAX);
+        res = false;
     }
 #else  // ELOG_WINDOWS
     if (getlogin_r(sUserName, LOGIN_NAME_MAX) != 0) {
-        elog_strncpy(sUserName, "<N/A>", LOGIN_NAME_MAX);
+        // try from geteuid
+        uid_t uid = geteuid();
+        struct passwd* pw = getpwuid(uid);
+        if (pw != nullptr) {
+            elog_strncpy(sUserName, pw->pw_name, LOGIN_NAME_MAX);
+        } else {
+            res = false;
+        }
     }
 #endif
+    // try environment variable USERNAME or USER
+    if (!res) {
+        std::string userName;
+        if (elog_getenv("USERNAME", userName)) {
+            elog_strncpy(sUserName, userName.c_str(), LOGIN_NAME_MAX, userName.length());
+        } else if (elog_getenv("USER", userName)) {
+            elog_strncpy(sUserName, userName.c_str(), LOGIN_NAME_MAX, userName.length());
+        } else {
+            elog_strncpy(sUserName, "<N/A>", LOGIN_NAME_MAX);
+        }
+    }
 }
 
 #ifdef ELOG_WINDOWS
@@ -534,17 +555,17 @@ void termFieldSelectors() {
     elogDestroyTls(sThreadNameKey);
 }
 
-const char* getHostName() { return sHostName; }
+const char* getHostNameField() { return sHostName; }
 
-const char* getUserName() { return sUserName; }
+const char* getUserNameField() { return sUserName; }
 
-extern const char* getOsName() { return sOsName; }
+const char* getOsNameField() { return sOsName; }
 
-extern const char* getOsVersion() { return sOsVersion; }
+const char* getOsVersionField() { return sOsVersion; }
 
-extern const char* getAppName() { return sAppName; }
+const char* getAppNameField() { return sAppName; }
 
-const char* getProgramName() { return sProgName; }
+const char* getProgramNameField() { return sProgName; }
 
 uint32_t getProcessIdField() { return (uint32_t)pid; }
 
@@ -609,6 +630,8 @@ bool setCurrentThreadNameField(const char* threadName) {
     ELOG_REPORT_DEBUG("Thread name set to %s at entry id %u", threadName, entryId);
     return true;
 }
+
+const char* getCurrentThreadNameField() { return getThreadNameField(getCurrentThreadId()); }
 
 const char* getThreadNameField(uint32_t threadId) {
     const char* threadName = "";

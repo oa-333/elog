@@ -487,6 +487,11 @@ template <typename ServiceType, typename StubType, typename MessageType, typenam
           typename ReceptorType>
 bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
                         ReceptorType>::startLogTarget() {
+    // first let parent do initialization
+    if (!ELogRpcTarget::startLogTarget()) {
+        return false;
+    }
+
     // parse the parameters with log record field selector tokens
     if (!parseParams(m_params)) {
         return false;

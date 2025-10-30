@@ -70,6 +70,11 @@ bool ELogMySqlDbTarget::connectDb(void* dbData) {
         mysqlDbData->m_insertStmt.reset();
         mysqlDbData->m_connection.reset();
         return false;
+    } catch (std::exception& e) {
+        ELOG_REPORT_ERROR("Failed to start MySQL log target: %s", e.what());
+        mysqlDbData->m_insertStmt.reset();
+        mysqlDbData->m_connection.reset();
+        return false;
     }
     return true;
 }

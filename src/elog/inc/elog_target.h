@@ -144,6 +144,9 @@ public:
     /** @brief Retrieves the log formatter associated with this log target. */
     inline ELogFormatter* getLogFormatter() { return m_logFormatter; }
 
+    /** @brief Sets a default formatter with the given log format. */
+    bool setLogFormat(const char* logFormat);
+
     /**
      * @brief Configures whether to add a new line character at the end of the formatted message.
      * Typically file log targets will add a new line, while others, such as db log targets, will

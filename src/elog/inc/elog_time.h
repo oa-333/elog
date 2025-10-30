@@ -73,7 +73,7 @@ inline void elogGetCurrentTime(ELogTime& logTime) {
 #endif
 #else
     // NOTE: gettimeofday is obsolete, instead clock_gettime() should be used
-    // in order to squeeze time to 32 bit we save it from year 2000 offset, this way we get
+    // NOTE: in order to squeeze time to 32 bit we save it from year 2000 offset
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     logTime.m_seconds = ts.tv_sec - sUnixTimeRef;

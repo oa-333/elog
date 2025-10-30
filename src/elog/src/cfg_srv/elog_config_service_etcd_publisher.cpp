@@ -159,9 +159,9 @@ void ELogConfigServiceEtcdPublisher::onConfigServiceStop(const char* host, int p
 
 bool ELogConfigServiceEtcdPublisher::publishConfigService() {
     // try to set the key with expiry
-    const char* appName = getAppName();
+    const char* appName = getAppNameField();
     if (appName == nullptr || *appName == 0) {
-        appName = getProgramName();
+        appName = getProgramNameField();
     }
     std::string value = std::string(appName);
 

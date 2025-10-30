@@ -9,6 +9,15 @@
 #include "elog_gzip.h"
 #include "elog_http_config.h"
 
+/** @def HTTP status OK. */
+#define ELOG_HTTP_STATUS_OK 200
+
+/** @def HTTP status ACCEPTED (asynchronous processing). */
+#define ELOG_HTTP_STATUS_ACCEPTED 202
+
+/** @def HTTP status NO CONTENT (result OK, no specific response data). */
+#define ELOG_HTTP_STATUS_NO_CONTENT 204
+
 namespace elog {
 
 /** @brief An assistant to carry out HTTP client operations. */
@@ -40,7 +49,7 @@ protected:
      * @param logTargetName The log target name (for error reporting purposes).
      * @param status Optionally specify the expected response status. By default it is HTTP 200 OK.
      */
-    ELogHttpClientAssistant(const char* logTargetName, int status = 200)
+    ELogHttpClientAssistant(const char* logTargetName, int status = ELOG_HTTP_STATUS_OK)
         : m_logTargetName(logTargetName), m_status(status) {}
 
 private:
