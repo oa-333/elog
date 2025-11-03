@@ -276,3 +276,171 @@ TEST(ELogCore, LogFields) {
     EXPECT_EQ(logMessages.size(), 1);
     EXPECT_EQ(logMessages[0].compare("Test message"), 0);
 }
+
+TEST(ELogCore, TimeFormat) {
+    TestLogTarget* logTarget = new (std::nothrow) TestLogTarget();
+    elog::addLogTarget(logTarget);
+    const auto& logMessages = logTarget->getLogMessages();
+
+    elog::getRootLogSource()->setLogLevel(elog::ELEVEL_INFO, elog::ELogPropagateMode::PM_NONE);
+
+    // check local time without millis
+    bool res = logTarget->setLogFormat("${time:seconds}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time without millis
+    res = logTarget->setLogFormat("${time:millis}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time without millis
+    res = logTarget->setLogFormat("${time:micros}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time without millis
+    res = logTarget->setLogFormat("${time:nanos}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time with zone
+    res = logTarget->setLogFormat("${time:zone}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time with zone but without millis
+    res = logTarget->setLogFormat("${time:zone:seconds}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time with zone but without millis
+    res = logTarget->setLogFormat("${time:zone:millis}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time with zone but without millis
+    res = logTarget->setLogFormat("${time:zone:micros}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check local time with zone but without millis
+    res = logTarget->setLogFormat("${time:zone:nanos}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time
+    res = logTarget->setLogFormat("${time:global}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time
+    res = logTarget->setLogFormat("${time:global:seconds}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time
+    res = logTarget->setLogFormat("${time:global:millis}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time
+    res = logTarget->setLogFormat("${time:global:micros}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time
+    res = logTarget->setLogFormat("${time:global:nanos}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time with zone
+    res = logTarget->setLogFormat("${time:global:zone}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time without milliseconds
+    res = logTarget->setLogFormat("${time:global:zone:seconds}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time with zone and without milliseconds
+    res = logTarget->setLogFormat("${time:global:zone:millis}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time with zone and without milliseconds
+    res = logTarget->setLogFormat("${time:global:zone:micros}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time with zone and without milliseconds
+    res = logTarget->setLogFormat("${time:global:zone:nanos}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+
+    // check global time with zone and without milliseconds
+    res = logTarget->setLogFormat("${time:format=\"%Y-%m-%d %H:%M:%S %Z %Ez\":nanos}");
+    EXPECT_EQ(res, true);
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    fprintf(stderr, "Time: %s\n", logMessages[0].c_str());
+}

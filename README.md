@@ -721,6 +721,37 @@ The following special log record field reference tokens are understood by the EL
 Reference tokens may contain justification number, where positive means justify to the left,  
 and negative number means justify to the right. For instance: ${level:6}, ${tid:-8}.
 
+Time reference token may be further specialized with the following attributes:
+
+- resolution/accuracy: seconds, millis, micros, nanos
+- local or global time (GMT)
+- optional zone specification
+- optional format specification
+    - must be quoted (see example below)
+    - any zone specification is ignored
+
+Following are a few sample time specifications:
+
+    // use local time, microseconds resolution, show zone
+    ${time:local:zone:micros}
+
+    // possible outcome
+    2025-11-02 15:56:21.870695 GMT+2
+
+    // use global time, seconds resolution, show zone
+    ${time:local:seconds}
+
+    // possible outcome
+    2025-11-02 13:56:21 GMT
+
+    // use specialized format with nanoseconds resolution
+    // NOTE: format must be quoted, also any zone specification is ignored
+    ${time:format:"%Y-%m-%d %H:%M:%S %Ez":nanos}
+
+    // possible outcome
+    2025-11-02 15:56:33.1570210 +02:00
+
+
 Log record field reference tokens may be specified in several places in the configuration file:
 
 - log line format
@@ -1538,7 +1569,7 @@ The format of the log message sent to the life-sign shared memory segment is tak
 
 NOTE: All life-sign configuration APIs are thread-safe and designed for usage during normal operation of ELog, through the usage of a lock-free (atomic RCU pointers) epoch-based garbage collector.
 
-Since on Windows the shared memory object may be out-of-sync with its backing file, it may be required to flush the contents of the sahred memory segment to disk. This can be done manually with:
+Since on Windows the shared memory object may be out-of-sync with its backing file, it may be required to flush the contents of the shared memory segment to disk. This can be done manually with:
 
     bool syncLifeSignReport();
 

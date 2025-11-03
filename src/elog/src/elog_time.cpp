@@ -6,6 +6,7 @@
 #include <ctime>
 #include <new>
 
+#include "elog_common.h"
 #include "elog_report.h"
 #include "elog_time_internal.h"
 
@@ -420,12 +421,108 @@ static uint64_t unixELogFormatTime(char* buf, struct tm* tm_info, uint32_t msec)
 }
 #endif
 
-size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer) {
-#ifdef ELOG_TIME_USE_CHRONO
-    auto timePoint = std::chrono::time_point_cast<std::chrono::milliseconds>(record.m_logTime);
-    std::chrono::zoned_time<std::chrono::milliseconds> zt(std::chrono::current_zone(), timePoint);
-    std::string timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", zt.get_local_time());
+template <typename Duration = std::chrono::milliseconds>
+static void elogTimeToStringChronoImpl(const std::chrono::zoned_time<Duration>& zt, bool showZone,
+                                       const char* formatStr, std::string& timeStr) {
+    if (formatStr != nullptr && *formatStr != 0) {
+        std::string formatStrProper = std::string("{:") + formatStr + "}";
+        timeStr = std::vformat(formatStrProper, std::make_format_args(zt));
+    } else {
+        if (showZone) {
+            timeStr = std::format("{:%Y-%m-%d %H:%M:%S %Z}", zt);
+        } else {
+            timeStr = std::format("{:%Y-%m-%d %H:%M:%S}", zt);
+        }
+    }
+}
+
+template <typename Duration = std::chrono::milliseconds>
+static void elogLocalTimeToStringChrono(
+    const std::chrono::time_point<std::chrono::system_clock, Duration>& logTime, bool showZone,
+    const char* formatStr, std::string& timeStr) {
+    std::chrono::zoned_time<Duration> zt(std::chrono::current_zone(), logTime);
+    elogTimeToStringChronoImpl(zt, showZone, formatStr, timeStr);
+}
+
+template <typename Duration = std::chrono::milliseconds>
+static void elogGlobalTimeToStringChrono(
+    const std::chrono::time_point<std::chrono::system_clock, Duration>& logTime, bool showZone,
+    const char* formatStr, std::string& timeStr) {
+    std::chrono::zoned_time<Duration> zt("GMT", logTime);
+    elogTimeToStringChronoImpl(zt, showZone, formatStr, timeStr);
+}
+
+static size_t elogTimeToStringChrono(const std::chrono::system_clock::time_point& logTimeNanos,
+                                     ELogTimeBuffer& timeBuffer, bool useLocalTime,
+                                     ELogTimeUnits timeUnits, bool showZone,
+                                     const char* formatStr) {
+    std::string timeStr;
+    if (useLocalTime) {
+        if (timeUnits == ELogTimeUnits::TU_NANO_SECONDS) {
+            elogLocalTimeToStringChrono(logTimeNanos, showZone, formatStr, timeStr);
+        } else if (timeUnits == ELogTimeUnits::TU_MICRO_SECONDS) {
+            auto timePointMicros =
+                std::chrono::time_point_cast<std::chrono::microseconds>(logTimeNanos);
+            elogLocalTimeToStringChrono(timePointMicros, showZone, formatStr, timeStr);
+        } else if (timeUnits == ELogTimeUnits::TU_MILLI_SECONDS) {
+            auto timePointMillis =
+                std::chrono::time_point_cast<std::chrono::milliseconds>(logTimeNanos);
+            elogLocalTimeToStringChrono(timePointMillis, showZone, formatStr, timeStr);
+        } else {
+            auto timePointSeconds =
+                std::chrono::time_point_cast<std::chrono::seconds>(logTimeNanos);
+            elogLocalTimeToStringChrono(timePointSeconds, showZone, formatStr, timeStr);
+        }
+    } else {
+        if (timeUnits == ELogTimeUnits::TU_NANO_SECONDS) {
+            elogGlobalTimeToStringChrono(logTimeNanos, showZone, formatStr, timeStr);
+        } else if (timeUnits == ELogTimeUnits::TU_MICRO_SECONDS) {
+            auto timePointMicros =
+                std::chrono::time_point_cast<std::chrono::microseconds>(logTimeNanos);
+            elogGlobalTimeToStringChrono(timePointMicros, showZone, formatStr, timeStr);
+        } else if (timeUnits == ELogTimeUnits::TU_MILLI_SECONDS) {
+            auto timePointMillis =
+                std::chrono::time_point_cast<std::chrono::milliseconds>(logTimeNanos);
+            elogGlobalTimeToStringChrono(timePointMillis, showZone, formatStr, timeStr);
+        } else {
+            auto timePointSeconds =
+                std::chrono::time_point_cast<std::chrono::seconds>(logTimeNanos);
+            elogGlobalTimeToStringChrono(timePointSeconds, showZone, formatStr, timeStr);
+        }
+    }
+
     return elog_strncpy(timeBuffer.m_buffer, timeStr.c_str(), sizeof(timeBuffer.m_buffer));
+}
+
+#ifdef ELOG_MSVC
+static std::chrono::system_clock::time_point win32FileTimeToChrono(const FILETIME& ftTime) {
+    std::chrono::file_clock::duration d{(static_cast<int64_t>(ftTime.dwHighDateTime) << 32) |
+                                        ftTime.dwLowDateTime};
+    std::chrono::file_clock::time_point tp{d};
+    return std::chrono::clock_cast<std::chrono::system_clock>(tp);
+}
+#ifdef ELOG_TIME_USE_SYSTEMTIME
+static std::chrono::system_clock::time_point win32SystemTimeToChrono(const SYSTEMTIME& stTime) {
+    FILETIME ftTime = {};
+    SystemTimeToFileTime(&stTime, &ftTime);
+    return win32FileTimeToChrono(ftTime);
+}
+#endif
+#else
+static std::chrono::system_clock::time_point unixTimeToChrono(uint64_t seconds, uint64_t nanos) {
+    std::chrono::system_clock::duration d{static_cast<int64_t>(seconds * 1000000000ull + nanos)};
+    std::chrono::system_clock::time_point tp{d};
+    return tp;
+}
+#endif
+
+size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer,
+                        bool useLocalTime /* = true */,
+                        ELogTimeUnits timeUnits /* = ELogTimeUnits::TU_MILLI_SECONDS */,
+                        bool showZone /* = false */, const char* formatStr /* = nullptr */) {
+#ifdef ELOG_TIME_USE_CHRONO
+    return elogTimeToStringChrono(logTime, timeBuffer, useLocalTime, timeUnits, showZone,
+                                  formatStr);
 #else
 #ifdef ELOG_MSVC
 #ifdef ELOG_TIME_USE_SYSTEMTIME
@@ -433,30 +530,50 @@ size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer) {
     /*std::size_t offset = snprintf(timeStr, BUF_SIZE, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u",
                                   sysTime.wYear, sysTime.wMonth, sysTime.wDay, sysTime.wHour,
                                   sysTime.wMinute, sysTime.wSecond, sysTime.wMilliseconds);*/
-    return win32ELogFormatTime(timeBuffer.m_buffer, &record.m_logTime);
-#else
-    FILETIME localFileTime;
-    SYSTEMTIME sysTime;
-    if (FileTimeToLocalFileTime(&logTime, &localFileTime) &&
-        FileTimeToSystemTime(&localFileTime, &sysTime)) {
-        // it appears that this snprintf is very costly, so we revert to internal implementation
-        /*size_t offset = snprintf(timeStr, BUF_SIZE, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u",
-                                 sysTime.wYear, sysTime.wMonth, sysTime.wDay, sysTime.wHour,
-                                 sysTime.wMinute, sysTime.wSecond, sysTime.wMilliseconds);*/
-        return win32ELogFormatTime(timeBuffer.m_buffer, &sysTime);
+    // if any optional parameter differs from its default value then we use elogTimeToStringChrono()
+    // after proper conversion
+    if (useLocalTime == true && timeUnits == ELogTimeUnits::TU_MILLI_SECONDS && showZone == false &&
+        (formatStr == nullptr || *formatStr == 0)) {
+        return win32ELogFormatTime(timeBuffer.m_buffer, &record.m_logTime);
     }
+    std::chrono::system_clock::time_point logTimeChrono = win32SystemTimeToChrono(logTime);
+    return elogTimeToStringChrono(logTimeChrono, timeBuffer, useLocalTime, timeUnits, showZone,
+                                  formatStr);
+#else
+    if (useLocalTime == true && timeUnits == ELogTimeUnits::TU_MILLI_SECONDS && showZone == false &&
+        (formatStr == nullptr || *formatStr == 0)) {
+        FILETIME localFileTime;
+        SYSTEMTIME sysTime;
+        if (FileTimeToLocalFileTime(&logTime, &localFileTime) &&
+            FileTimeToSystemTime(&localFileTime, &sysTime)) {
+            // it appears that this snprintf is very costly, so we revert to internal implementation
+            /*size_t offset = snprintf(timeStr, BUF_SIZE, "%u-%.2u-%.2u %.2u:%.2u:%.2u.%.3u",
+                                     sysTime.wYear, sysTime.wMonth, sysTime.wDay, sysTime.wHour,
+                                     sysTime.wMinute, sysTime.wSecond, sysTime.wMilliseconds);*/
+            return win32ELogFormatTime(timeBuffer.m_buffer, &sysTime);
+        }
+    }
+    std::chrono::system_clock::time_point logTimeChrono = win32FileTimeToChrono(logTime);
+    return elogTimeToStringChrono(logTimeChrono, timeBuffer, useLocalTime, timeUnits, showZone,
+                                  formatStr);
 #endif
 #else
-    time_t timer = logTime.m_seconds + sUnixTimeRef;
-    struct tm* tm_info = localtime(&timer);
-    // size_t offset = strftime(timeStr, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
-    // offset += snprintf(timeStr + offset, BUF_SIZE - offset, "%.3u",
-    //                    (unsigned)(record.m_logTime.tv_nsec / 1000000L));
-    return unixELogFormatTime(timeBuffer.m_buffer, tm_info,
-                              (unsigned)(logTime.m_100nanos / 10000UL));
+    if (useLocalTime == true && timeUnits == ELogTimeUnits::TU_MILLI_SECONDS && showZone == false &&
+        (formatStr == nullptr || *formatStr == 0)) {
+        time_t timer = logTime.m_seconds + sUnixTimeRef;
+        struct tm* tm_info = localtime(&timer);
+        // size_t offset = strftime(timeStr, 64, "%Y-%m-%d %H:%M:%S.", tm_info);
+        // offset += snprintf(timeStr + offset, BUF_SIZE - offset, "%.3u",
+        //                    (unsigned)(record.m_logTime.tv_nsec / 1000000L));
+        return unixELogFormatTime(timeBuffer.m_buffer, tm_info,
+                                  (unsigned)(logTime.m_100nanos / 10000UL));
+    }
+    std::chrono::system_clock::time_point logTimeChrono =
+        unixTimeToChrono(logTime.m_seconds, logTime.m_100nanos * 100);
+    return elogTimeToStringChrono(logTimeChrono, timeBuffer, useLocalTime, timeUnits, showZone,
+                                  formatStr);
 #endif
 #endif
-    return 0;
 }
 
 }  // namespace elog

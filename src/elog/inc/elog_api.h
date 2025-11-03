@@ -208,8 +208,11 @@ extern ELOG_API ELogLogger* getPreInitLogger();
 /** @brief Queries whether there are any accumulated log messages. */
 extern ELOG_API bool hasAccumulatedLogMessages();
 
-/** @brief Retrieves the number of accumulated log messages. */
-extern ELOG_API uint32_t getAccumulatedMessageCount();
+/**
+ * @brief Retrieves the number of accumulated log messages. Optional filter may be used to avoid
+ * counting certain message types.
+ */
+extern ELOG_API uint32_t getAccumulatedMessageCount(ELogFilter* filter = nullptr);
 
 /**
  * @brief Discards all accumulated log messages. This will prevent from log targets added in
@@ -244,17 +247,17 @@ extern ELOG_API bool registerSchemaHandler(const char* schemeName,
  **************************************************************************************/
 
 /** @brief Enables the lazy time source. */
-extern ELOG_API void enableTimeSource();
+extern ELOG_API void enableLazyTimeSource();
 
 /** @brief Disables the lazy time source. */
-extern ELOG_API void disableTimeSource();
+extern ELOG_API void disableLazyTimeSource();
 
 /**
  * @brief Configures the lazy time source.
  * @param resolution The clock resolution of the lazy time source.
  * @param resolutionUnits The resolution units of the lazy time source.
  */
-extern ELOG_API void configureTimeSource(uint64_t resolution, ELogTimeUnits resolutionUnits);
+extern ELOG_API void configureLazyTimeSource(uint64_t resolution, ELogTimeUnits resolutionUnits);
 
 /**************************************************************************************
  *

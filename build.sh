@@ -22,6 +22,7 @@
 # -m|--mem-check
 # -a|--clang
 # -t|--trace
+# -j|--doc
 # -h|--help
 
 # colors
@@ -56,10 +57,11 @@ RE_CONFIG=0
 MEM_CHECK=0
 CLANG=0
 TRACE=0
+DOC=0
 HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwexsbnpqufc:i:lrgmath -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,reload-config,config-service,config-publish:,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,help -- "$@")
+TEMP=$(getopt -o vdrwexsbnpqufc:i:lrgmatjh -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,reload-config,config-service,config-publish:,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,doc,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -86,6 +88,7 @@ while true; do
     -m | --mem-check) MEM_CHECK=1; shift ;;
     -a | --clang) CLANG=1; shift ;;
     -t | --trace) TRACE=1; shift ;;
+    -j | --doc) DOC=1; shift ;;
     -h | --help) HELP=1; shift ;;
     -- ) shift; break ;;
     * ) echo -e "${RED}[ERROR] Invalid option $1, aborting${NC}"; exit 1; break ;;
@@ -164,6 +167,7 @@ if [ "$HELP" -eq "1" ]; then
     echo ""
     echo "MISC OPTIONS"
     echo ""
+    echo "      -j|--doc            Generates documentation."
     echo "      -h|--help           Prints this help screen."
     exit 0
 fi
@@ -197,6 +201,7 @@ echo "[INFO] Rebuild: $REBUILD"
 echo "[INFO] Reconfigure: $RE_CONFIG"
 echo "[INFO] Mem-check: $MEM_CHECK"
 echo "[INFO] Clang: $CLANG"
+echo "[INFO] Doc: $DOC"
 
 # set options
 OPTS="-DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}"
@@ -237,6 +242,9 @@ if [ "$MEM_CHECK" == "1" ]; then
 fi
 if [ "$TRACE" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_GROUP_FLUSH_GC_TRACE=ON"
+fi
+if [ "$DOC" == "1" ]; then
+    OPTS+=" -DELOG_BUILD_DOC=ON"
 fi
 if [ "$CLANG" == "1" ]; then
     export CXX=`which clang++`;

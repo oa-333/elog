@@ -100,6 +100,11 @@ static bool parseHexaDigit(char c, int& value);
 static bool parseColorComponent(const char* color, uint8_t& value, const char* name);
 static bool parseTokenTextAttribute(const std::string& specToken, ELogFontSpec& fontSpec);
 
+static bool allocTimeFormat(ELogFieldSpec& fieldSpec);
+static bool parseTimeClockAttribute(const std::string& specToken, ELogTimeClock& timeClock);
+static bool parseTimeSourceAttribute(const std::string& specToken, ELogTimeProvider& timeProvider);
+static bool parseTimeFormatAttribute(const std::string& specToken, std::string& timeFormat);
+
 const char* ELogTextSpec::m_resetSpec = ELOG_TT_RESET;
 
 void ELogTextSpec::resolve() {
@@ -283,14 +288,43 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
     // and ${const-time:<value>} - so the expression is actually a field selector, and the
     // expressions result type MUST match.
     // the vswitch is actually a full-blown if else.
+    //
+    // time source/format specification is also supported:
+    // ${time:clock=realtime/monotonic:src=os/std:format=<strftime format>:local:zone:millis}
+    // synonyms for realtime/monotonic are system/steady
     std::string::size_type colonPos = fieldSpecStr.find(':');
     m_name = fieldSpecStr.substr(0, colonPos);
+    std::string prevSpecToken;
     while (colonPos != std::string::npos) {
         std::string::size_type nextColonPos = fieldSpecStr.find(':', colonPos + 1);
         std::string specToken =
             nextColonPos == std::string::npos
                 ? fieldSpecStr.substr(colonPos + 1)
                 : fieldSpecStr.substr(colonPos + 1, nextColonPos - colonPos - 1);
+
+        // NOTE: with time field we have a special case, since time format string may contain colon
+        // chars, so we need to allow user to either quote the value string, or to escape colon
+        // signs. escaping is easier for parsing but not user-friendly, so we choose quoting instead
+        if (m_name.compare("time") == 0 && specToken.starts_with("format")) {
+            // expect a quoted string here
+            std::string::size_type quotePos1 = fieldSpecStr.find('"', colonPos + 1);
+            if (quotePos1 == std::string::npos) {
+                ELOG_REPORT_WARN("Missing expected quote for time format specification: %s",
+                                 fieldSpecStr.c_str());
+            } else {
+                std::string::size_type quotePos2 = fieldSpecStr.find('"', quotePos1 + 1);
+                if (quotePos2 == std::string::npos) {
+                    ELOG_REPORT_ERROR("Missing end-quote for time format specification: %s",
+                                      fieldSpecStr.c_str());
+                    return false;
+                }
+                // now find the colon past this quote and fix token string
+                nextColonPos = fieldSpecStr.find(':', quotePos2);
+                specToken = nextColonPos == std::string::npos
+                                ? fieldSpecStr.substr(colonPos + 1)
+                                : fieldSpecStr.substr(colonPos + 1, nextColonPos - colonPos - 1);
+            }
+        }
         specToken = trim(specToken);
         // special case: "begin-" prefix
         uint8_t autoReset = 1;
@@ -334,6 +368,42 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
                 return false;
             }
             m_textSpec->m_resetTextSpec = 1;
+        } else if (m_name.compare("time") == 0) {
+            if (!allocTimeFormat(*this)) {
+                return false;
+            }
+            if (specToken.starts_with("clock")) {
+                if (!parseTimeClockAttribute(specToken, m_timeSpec->m_timeClock)) {
+                    return false;
+                }
+            } else if (specToken.starts_with("src")) {
+                if (!parseTimeSourceAttribute(specToken, m_timeSpec->m_timeProvider)) {
+                    return false;
+                }
+            } else if (specToken.starts_with("format")) {
+                if (!parseTimeFormatAttribute(specToken, m_timeSpec->m_timeFormat)) {
+                    return false;
+                }
+            } else if (specToken.compare("local") == 0) {
+                m_timeSpec->m_useLocalTime = true;
+            } else if (specToken.compare("global") == 0) {
+                m_timeSpec->m_useLocalTime = false;
+            } else if (specToken.compare("seconds") == 0) {
+                m_timeSpec->m_timeUnits = ELogTimeUnits::TU_SECONDS;
+            } else if (specToken.compare("millis") == 0) {
+                m_timeSpec->m_timeUnits = ELogTimeUnits::TU_MILLI_SECONDS;
+            } else if (specToken.compare("micros") == 0) {
+                m_timeSpec->m_timeUnits = ELogTimeUnits::TU_MICRO_SECONDS;
+            } else if (specToken.compare("nanos") == 0) {
+                m_timeSpec->m_timeUnits = ELogTimeUnits::TU_NANO_SECONDS;
+            } else if (specToken.compare("zone") == 0) {
+                m_timeSpec->m_useTimeZone = true;
+            } else if (specToken.compare("no-zone") == 0) {
+                m_timeSpec->m_useTimeZone = false;
+            } else {
+                ELOG_REPORT_ERROR("Invalid time attribute specification: %s", specToken.c_str());
+                return false;
+            }
         } else {
             // finally try simple integer justification value
             int32_t justify = 0;
@@ -369,6 +439,17 @@ bool allocTextFormat(ELogFieldSpec& fieldSpec, uint8_t autoReset) {
         }
     }
     fieldSpec.m_textSpec->m_autoReset = autoReset;
+    return true;
+}
+
+bool allocTimeFormat(ELogFieldSpec& fieldSpec) {
+    if (fieldSpec.m_timeSpec == nullptr) {
+        fieldSpec.m_timeSpec = new (std::nothrow) ELogTimeSpec();
+        if (fieldSpec.m_timeSpec == nullptr) {
+            ELOG_REPORT_ERROR("Failed to allocate time specification object, out of memory");
+            return false;
+        }
+    }
     return true;
 }
 
@@ -659,6 +740,70 @@ bool parseTokenTextAttribute(const std::string& specToken, ELogFontSpec& fontSpe
                               token.c_str());
             return false;
         }
+    }
+    return true;
+}
+
+bool parseTimeClockAttribute(const std::string& specToken, ELogTimeClock& timeClock) {
+    std::string propValue;
+    if (!parsePropValue(specToken, "time", propValue)) {
+        ELOG_REPORT_ERROR("Failed to parse text specification, invalid syntax: %s",
+                          specToken.c_str());
+        return false;
+    }
+
+    if (propValue.compare("realtime") == 0 || propValue.compare("system") == 0) {
+        timeClock = ELogTimeClock::TC_REALTIME_CLOCK;
+    } else if (propValue.compare("monotonic") == 0 || propValue.compare("steady") == 0) {
+        timeClock = ELogTimeClock::TC_MONOTONIC_CLOCK;
+    } else {
+        ELOG_REPORT_ERROR("Invalid time clock specification: %s", propValue.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool parseTimeSourceAttribute(const std::string& specToken, ELogTimeProvider& timeProvider) {
+    std::string propValue;
+    if (!parsePropValue(specToken, "time", propValue)) {
+        ELOG_REPORT_ERROR("Failed to parse text specification, invalid syntax: %s",
+                          specToken.c_str());
+        return false;
+    }
+
+    if (propValue.compare("std") == 0) {
+        timeProvider = ELogTimeProvider::TP_STD_CHRONO;
+    } else if (propValue.compare("os") == 0) {
+        timeProvider = ELogTimeProvider::TP_OS;
+    } else {
+        ELOG_REPORT_ERROR("Invalid time source specification: %s", propValue.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool parseTimeFormatAttribute(const std::string& specToken, std::string& timeFormat) {
+    if (!parsePropValue(specToken, "time", timeFormat)) {
+        ELOG_REPORT_ERROR("Failed to parse time format specification, invalid syntax: %s",
+                          specToken.c_str());
+        return false;
+    }
+
+    // trim and check if nto empty
+    timeFormat = trim(timeFormat);
+    if (timeFormat.empty()) {
+        ELOG_REPORT_ERROR("Time format specification is empty");
+        return false;
+    }
+
+    // remove any quote marks
+    // NOTE: the test is loose permits only one quote mark, even through we already tests for either
+    // two or none
+    if (timeFormat[0] == '"') {
+        timeFormat = timeFormat.substr(1);
+    }
+    if (timeFormat.back() == '"') {
+        timeFormat.pop_back();
     }
     return true;
 }

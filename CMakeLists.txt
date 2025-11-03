@@ -89,6 +89,8 @@ option(ELOG_ENABLE_OTEL_CONNECTOR "ELog Open Telemetry connector" OFF)
 option(ELOG_ENABLE_NET "ELog Network connector" OFF)
 option(ELOG_ENABLE_IPC "ELog IPC connector" OFF)
 
+option(ELOG_BUILD_DOC "Build ELog Documentation" OFF)
+
 # ensure options are correct
 if (ELOG_ENABLE_CONFIG_PUBLISH_REDIS AND NOT ELOG_ENABLE_CONFIG_SERVICE)
     message(FATAL_ERROR "Must define ELOG_ENABLE_CONFIG_SERVICE=ON before using ELOG_ENABLE_CONFIG_PUBLISH_REDIS=ON")
@@ -1484,5 +1486,20 @@ if (ELOG_BUILD_INTERNAL)
         if (ELOG_ENABLE_KAFKA_MSGQ_CONNECTOR)
             install(IMPORTED_RUNTIME_ARTIFACTS RdKafka::rdkafka RdKafka::rdkafka++ DESTINATION ${ELOG_INSTALL_PATH})
         endif()
+    endif()
+
+    if (ELOG_BUILD_DOC)
+        message(STATUS "Generating documentation")
+        find_package(Doxygen REQUIRED)
+        set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/src/doc/elog.doxyfile.in)
+        set(DOXYGEN_OUT ${CMAKE_CURRENT_SOURCE_DIR}/src/doc/elog.doxyfile)
+        configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
+        message(STATUS "Starting Doxygen build")
+
+        add_custom_target(doc ALL
+                        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                        COMMENT "Generating API documentation with Doxygen"
+                        VERBATIM)
     endif()
 endif()

@@ -625,7 +625,9 @@ bool setCurrentThreadNameField(const char* threadName) {
 
     // infrom life-sign of current thread name
 #ifdef ELOG_ENABLE_LIFE_SIGN
-    reportCurrentThreadNameLifeSign(threadId, threadName);
+    if (getParams().m_lifeSignParams.m_enableLifeSignReport) {
+        reportCurrentThreadNameLifeSign(threadId, threadName);
+    }
 #endif
     ELOG_REPORT_DEBUG("Thread name set to %s at entry id %u", threadName, entryId);
     return true;
@@ -708,7 +710,15 @@ void ELogRecordIdSelector::selectField(const ELogRecord& record, ELogFieldRecept
 
 void ELogTimeSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
     ELogTimeBuffer timeBuffer;
-    size_t len = elogTimeToString(record.m_logTime, timeBuffer);
+    size_t len = 0;
+    if (m_fieldSpec.m_timeSpec != nullptr) {
+        len = elogTimeToString(record.m_logTime, timeBuffer, m_fieldSpec.m_timeSpec->m_useLocalTime,
+                               m_fieldSpec.m_timeSpec->m_timeUnits,
+                               m_fieldSpec.m_timeSpec->m_useTimeZone,
+                               m_fieldSpec.m_timeSpec->m_timeFormat.c_str());
+    } else {
+        len = elogTimeToString(record.m_logTime, timeBuffer);
+    }
     receptor->receiveTimeField(getTypeId(), record.m_logTime, timeBuffer.m_buffer, m_fieldSpec,
                                len);
 }

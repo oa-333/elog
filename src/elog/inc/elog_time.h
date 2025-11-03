@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 
+#include "elog_common_def.h"
 #include "elog_def.h"
 
 #ifndef ELOG_TIME_USE_CHRONO
@@ -160,12 +161,29 @@ extern ELOG_API bool elogTimeFromString(const char* timeStr, ELogTime& logTime);
 
 /**
  * @brief Converts log time to string.
+ *
  * @param logTime The log time.
  * @param timeBuffer The output buffer, receiving the log time string.
+ * @param useLocalTime Optionally specifies whether to use local time (by default yes).
+ * @param showMillis Optionally specifies whether to display milliseconds in the resulting time
+ * string (by default yes).
+ * @param showZone Optionally specifies whether to display time zone (by default no).
+ * @param formatStr Optionally specify a time format string, as specified in std::format for
+ * chrono types (see here for more details:
+ * https://en.cppreference.com/w/cpp/chrono/system_clock/formatter.html#Format_specification).
+ *
  * @return The number of formatted characters (not including the terminating null). This should
  * normally be the constant value ELOG_TIME_STR_LEN.
+ *
+ * @note Pay attention that when using a time format string, it is still possible to have
+ * milliseconds displayed, even though std::format does not support that. In that case, the
+ * milliseconds are appended to the date/time. If a zone is also to be displayed, then it will be
+ * added after the milliseconds part.
  */
-extern ELOG_API size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer);
+extern ELOG_API size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer,
+                                        bool useLocalTime = true,
+                                        ELogTimeUnits timeUnits = ELogTimeUnits::TU_MILLI_SECONDS,
+                                        bool showZone = false, const char* formatStr = nullptr);
 
 /** @brief Retrieves a time stamp. */
 // TODO: change this name, it is too much similar to elogGetCurrentTime()

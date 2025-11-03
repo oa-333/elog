@@ -101,7 +101,7 @@ TEST(ELogMisc, StructuredLogging) {
     logTarget->clearLogMessages();
     ELOG_INFO("This is a test message");
     EXPECT_EQ(logMessages.size(), 1);
-    DBGPRINT(stderr, "Got message: %s\n", logMessages[0].c_str());
+    ELOG_DEBUG_EX(sTestLogger, "Got message: %s\n", logMessages[0].c_str());
     nlohmann::json jsonLog = nlohmann::json::parse(logMessages[0]);
     EXPECT_EQ(jsonLog.is_object(), true);
     EXPECT_EQ(jsonLog.contains("time"), true);

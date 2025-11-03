@@ -31,6 +31,7 @@ static uint64_t sLifeSignSyncPeriodMillis;
 static std::thread sLifeSignSyncThread;
 static std::mutex sLifeSignLock;
 static std::condition_variable sLifeSignCV;
+static std::atomic<bool> sTerminating = false;
 
 static void cleanupThreadLifeSignFilter(void* key);
 static ELogLifeSignFilter* initThreadLifeSignFilter();
@@ -108,12 +109,20 @@ bool initLifeSignReport() {
         return false;
     }
 
+    sTerminating.store(false, std::memory_order_relaxed);
     return true;
 }
 
 bool termLifeSignReport() {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Cannot terminate life-sign reporting, already terminating (cyclic dependency?)");
+        return false;
+    }
+
     // stop periodic syncing if any
     setLifeSignSyncPeriod(0);
+    sTerminating.store(true, std::memory_order_relaxed);
 
     // delete formatter
     ELogFormatter* formatter = sLifeSignFormatter.load(std::memory_order_acquire);
@@ -474,6 +483,12 @@ bool removeLogSourceLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx
 bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
                        const ELogFrequencySpec& frequencySpec, const char* name /* = nullptr */,
                        bool isRegex /* = false */) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to configure life-sign report rules rejected due to life-sign termination");
+        return false;
+    }
+
     // increment epoch
     ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
 
@@ -524,6 +539,12 @@ bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
 
 bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
                           const char* name /* = nullptr */, bool isRegex /* = false */) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to remove life-sign report rules rejected due to life-sign termination");
+        return false;
+    }
+
     // increment epoch
     ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
 
@@ -576,18 +597,40 @@ bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
 
 bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
                                 ELogSource* logSource) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to configure life-sign report rules for log source %s rejected due to "
+            "life-sign termination",
+            logSource->getName());
+        return false;
+    }
+
     // increment epoch and execute
     ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
     return setLogSourceLifeSignReport(level, frequencySpec, logSource, ELOG_CURRENT_EPOCH);
 }
 
 bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to remove life-sign report rules for log source %s rejected due to life-sign "
+            "termination",
+            logSource->getName());
+        return false;
+    }
+
     // increment epoch and execute
     ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
     return removeLogSourceLifeSignReport(level, logSource, ELOG_CURRENT_EPOCH);
 }
 
 bool setLifeSignLogFormat(const char* logFormat) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to configure life-sign log format rejected due to life-sign termination");
+        return false;
+    }
+
     ELogFormatter* newFormatter = new (std::nothrow) ELogFormatter();
     if (newFormatter == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate life-sign log line formatter, out of memory");
@@ -663,6 +706,11 @@ bool syncLifeSignReport() {
 }
 
 void reportLifeSign(const char* msg) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN("Request to report life-sign rejected due to life-sign termination");
+        return;
+    }
+
     // reserve space for terminating null
     size_t len = strlen(msg) + 1;
     if (len > DBGUTIL_MAX_LIFE_SIGN_RECORD_SIZE_BYTES) {
@@ -672,6 +720,11 @@ void reportLifeSign(const char* msg) {
 }
 
 bool configureLifeSign(const char* lifeSignCfg) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN("Request to configure life-sign rejected due to life-sign termination");
+        return false;
+    }
+
     ELogLifeSignScope scope = ELogLifeSignScope::LS_APP;
     ELogLevel level = ELEVEL_INFO;
     ELogFrequencySpec freqSpec(ELogFrequencySpecMethod::FS_EVERY_N_MESSAGES, 1);
@@ -690,14 +743,34 @@ bool configureLifeSign(const char* lifeSignCfg) {
 }
 
 bool setCurrentThreadNotifier(dbgutil::ThreadNotifier* notifier) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to set life-sign current thread notifier rejected due to life-sign "
+            "termination");
+        return false;
+    }
+
     return setCurrentThreadNotifierImpl(notifier);
 }
 
 bool setThreadNotifier(const char* threadName, dbgutil::ThreadNotifier* notifier) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to set life-sign thread %s notifier rejected due to life-sign termination",
+            threadName);
+        return false;
+    }
+
     return setThreadNotifierImpl(threadName, notifier);
 }
 
 void sendLifeSignReport(const ELogRecord& logRecord) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to send log record life-sign rejected due to life-sign termination");
+        return;
+    }
+
     // increment epoch, so pointers are still valid
     ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
 
@@ -744,6 +817,13 @@ void sendLifeSignReport(const ELogRecord& logRecord) {
 }
 
 void reportAppNameLifeSign(const char* appName) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to report application name to life-sign manager rejected due to life-sign "
+            "termination");
+        return;
+    }
+
     // reserve space for terminating null
     size_t nameLen = strlen(appName) + 1;
     size_t totalLen = nameLen + sizeof(uint32_t);
@@ -772,6 +852,13 @@ void reportAppNameLifeSign(const char* appName) {
 }
 
 void reportCurrentThreadNameLifeSign(elog_thread_id_t threadId, const char* threadName) {
+    if (sTerminating.load(std::memory_order_relaxed)) {
+        ELOG_REPORT_WARN(
+            "Request to report current thread name to life-sign manager rejected due to life-sign "
+            "termination");
+        return;
+    }
+
     size_t nameLen = strlen(threadName) + 1;
     uint32_t totalLen = (uint32_t)(nameLen + sizeof(uint32_t) + sizeof(uint64_t));
     if (nameLen > DBGUTIL_MAX_LIFE_SIGN_RECORD_SIZE_BYTES) {

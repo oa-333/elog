@@ -16,3 +16,7 @@ src/elog/proto/**/*.pb.*
 vcpkg.json
 CMakeUserPresets.json
 mason_packages/**/*
+src/doc/elog.doxyfile
+src/doc/html/**/*
+src/doc/latex/**/*
+src/doc/man/**/*

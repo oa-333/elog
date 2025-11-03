@@ -28,11 +28,12 @@ public:
      * @param eventId The event id to use in the event log report. Since no message
      * file/resource-dll is involved in the reports, this is solely used for searching/identifying
      * events in the event viewer.
-     * @param enableStats Specifies whether to collect statistics for this og target.
+     * @param enableStats Specifies whether to collect statistics for this log target (by default
+     * yes).
      */
     ELogWin32EventLogTarget(const char* eventSourceName = "",
                             uint32_t eventId = ELOG_DEFAULT_WIN32_EVENT_LOG_ID,
-                            bool enableStats = false)
+                            bool enableStats = true)
         : ELogTarget("win32eventlog", nullptr, enableStats),
           m_eventSourceName(eventSourceName),
           m_eventLogHandle(nullptr),

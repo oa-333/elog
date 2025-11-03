@@ -415,7 +415,9 @@ ELogLogger* getPreInitLogger() { return &sPreInitLogger; }
 
 bool hasAccumulatedLogMessages() { return sPreInitLogger.hasAccumulatedLogMessages(); }
 
-uint32_t getAccumulatedMessageCount() { return sPreInitLogger.getAccumulatedMessageCount(); }
+uint32_t getAccumulatedMessageCount(ELogFilter* filter /* = nullptr */) {
+    return sPreInitLogger.getAccumulatedMessageCount(filter);
+}
 
 void discardAccumulatedLogMessages() { sPreInitLogger.discardAccumulatedLogMessages(); }
 

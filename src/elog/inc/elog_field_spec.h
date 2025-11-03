@@ -4,6 +4,7 @@
 #include <cinttypes>
 #include <string>
 
+#include "elog_common_def.h"
 #include "elog_def.h"
 
 namespace elog {
@@ -157,9 +158,63 @@ struct ELOG_API ELogTextSpec {
     static const char* m_resetSpec;
 
     ELogTextSpec() : m_resetTextSpec(0), m_autoReset(1) {}
+    ELogTextSpec(const ELogTextSpec&) = default;
+    ELogTextSpec(ELogTextSpec&&) = default;
+    ELogTextSpec& operator=(const ELogTextSpec&) = default;
+    ~ELogTextSpec() {}
 
     /** @brief Resolves once the specification escape codes. */
     void resolve();
+};
+
+/** @brief Time clock types. */
+enum class ELogTimeClock {
+    /** @brief Realtime clock. */
+    TC_REALTIME_CLOCK,
+
+    /** @brief Monotonic clock. */
+    TC_MONOTONIC_CLOCK
+};
+
+/** @brief Time provider types. */
+enum class ELogTimeProvider {
+    /** @brief std::chrono time provider. */
+    TP_STD_CHRONO,
+
+    /** @brief Direct operating system time provider. */
+    TP_OS
+};
+
+/** @struct Time source and format specification. */
+struct ELOG_API ELogTimeSpec {
+    /** @brief The clock being used to retrieve the current time (currently not in use). */
+    ELogTimeClock m_timeClock;
+
+    /** @brief The time provider being used to retrieve the current time (currently not in use). */
+    ELogTimeProvider m_timeProvider;
+
+    /** @brief Specifies whether to display local time. */
+    bool m_useLocalTime;
+
+    /** @brief Specifies whether to display in seconds, milli, micro or nano-seconds. */
+    ELogTimeUnits m_timeUnits;
+
+    /** @brief Specifies whether to display also time zone. */
+    bool m_useTimeZone;
+
+    /** @brief A time format string, overrides zone settings. */
+    std::string m_timeFormat;
+
+    ELogTimeSpec()
+        : m_timeClock(ELogTimeClock::TC_REALTIME_CLOCK),
+          m_timeProvider(ELogTimeProvider::TP_OS),
+          m_useLocalTime(true),
+          m_timeUnits(ELogTimeUnits::TU_MILLI_SECONDS),
+          m_useTimeZone(false) {}
+    ELogTimeSpec(const ELogTimeSpec&) = default;
+    ELogTimeSpec(ELogTimeSpec&&) = default;
+    ELogTimeSpec& operator=(const ELogTimeSpec&) = default;
+    ~ELogTimeSpec() {}
 };
 
 /** @brief Log record field reference specification. */
@@ -173,29 +228,47 @@ struct ELOG_API ELogFieldSpec {
     /** @var Text (font/color) specification. */
     ELogTextSpec* m_textSpec;
 
+    /** @var Time (source/format) specification. */
+    ELogTimeSpec* m_timeSpec;
+
     /** @brief Simple/default constructor */
     ELogFieldSpec(const char* name = "", ELogJustifyMode justifyMode = ELogJustifyMode::JM_NONE,
                   uint32_t justify = 0)
-        : m_name(name), m_justifySpec({justifyMode, justify}), m_textSpec(nullptr) {}
+        : m_name(name),
+          m_justifySpec({justifyMode, justify}),
+          m_textSpec(nullptr),
+          m_timeSpec(nullptr) {}
 
     ELogFieldSpec(const ELogFieldSpec& fieldSpec)
-        : m_name(fieldSpec.m_name), m_justifySpec(fieldSpec.m_justifySpec), m_textSpec(nullptr) {
+        : m_name(fieldSpec.m_name),
+          m_justifySpec(fieldSpec.m_justifySpec),
+          m_textSpec(nullptr),
+          m_timeSpec(nullptr) {
         if (fieldSpec.m_textSpec != nullptr) {
             m_textSpec = new (std::nothrow) ELogTextSpec(*fieldSpec.m_textSpec);
+        }
+        if (fieldSpec.m_timeSpec != nullptr) {
+            m_timeSpec = new (std::nothrow) ELogTimeSpec(*fieldSpec.m_timeSpec);
         }
     }
 
     ELogFieldSpec(ELogFieldSpec&& fieldSpec)
         : m_name(fieldSpec.m_name),
           m_justifySpec(fieldSpec.m_justifySpec),
-          m_textSpec(fieldSpec.m_textSpec) {
+          m_textSpec(fieldSpec.m_textSpec),
+          m_timeSpec(fieldSpec.m_timeSpec) {
         fieldSpec.m_textSpec = nullptr;
+        fieldSpec.m_timeSpec = nullptr;
     }
 
     ~ELogFieldSpec() {
         if (m_textSpec != nullptr) {
             delete m_textSpec;
             m_textSpec = nullptr;
+        }
+        if (m_timeSpec != nullptr) {
+            delete m_timeSpec;
+            m_timeSpec = nullptr;
         }
     }
 

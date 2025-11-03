@@ -188,7 +188,7 @@ public:
      * @note If statistics were disabled (by calling @ref disableStats()), then this will always
      * return zero.
      */
-    inline uint64_t getBytesWritten() { return getEndLogTarget()->getStats()->getBytesWritten(); }
+    uint64_t getBytesWritten();
 
     /**
      * @brief Retrieves the number of messages that were fully processed by the log target. This

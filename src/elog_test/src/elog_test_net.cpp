@@ -183,11 +183,11 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
                   const char* address, bool compress = false, int opts = 0,
                   uint32_t stMsgCount = 1000, uint32_t mtMsgCount = 1000) {
     if (!server.initTestServer()) {
-        DBGPRINT(stderr, "Failed to initialize test server\n");
+        ELOG_DEBUG_EX(sTestLogger, "Failed to initialize test server");
         return 1;
     }
     if (server.start() != commutil::ErrorCode::E_OK) {
-        DBGPRINT(stderr, "Failed to start test server\n");
+        ELOG_DEBUG_EX(sTestLogger, "Failed to start test server");
         server.terminate();
         return 2;
     }
@@ -219,13 +219,14 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
     uint32_t totalMsg = stMsgCount;
     totalMsg += elog::getAccumulatedMessageCount();
     if (receivedMsgCount != totalMsg) {
-        DBGPRINT(stderr,
-                 "%s client single-thread test failed, missing messages on server side, expected "
-                 "%u, got %u\n",
-                 testName.c_str(), totalMsg, receivedMsgCount);
+        ELOG_ERROR_EX(
+            sTestLogger,
+            "%s client single-thread test failed, missing messages on server side, expected "
+            "%u, got %u",
+            testName.c_str(), totalMsg, receivedMsgCount);
         server.stop();
         server.terminate();
-        DBGPRINT(stderr, "%s client test FAILED\n", testName.c_str());
+        ELOG_DEBUG_EX(sTestLogger, "%s client test FAILED", testName.c_str());
         return 1;
     }
 
@@ -236,6 +237,7 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
                        mtMsgCount, 1, 4);
     sMsgCnt = 0;
 
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     server.stop();
     server.terminate();
 
@@ -249,19 +251,19 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
     totalMsg = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
     totalMsg += elog::getAccumulatedMessageCount();
     if (receivedMsgCount != totalMsg) {
-        DBGPRINT(
-            stderr,
+        ELOG_ERROR_EX(
+            sTestLogger,
             "%s client multi-thread test failed, missing messages on server side, expected %u, "
-            "got %u\n",
+            "got %u",
             testName.c_str(), totalMsg, receivedMsgCount);
-        DBGPRINT(stderr, "%s client test FAILED\n", testName.c_str());
+        ELOG_DEBUG_EX(sTestLogger, "%s client test FAILED", testName.c_str());
         return 2;
     }
 
     if (compress) {
-        DBGPRINT(stderr, "%s client test (compressed) PASSED\n", testName.c_str());
+        ELOG_DEBUG_EX(sTestLogger, "%s client test (compressed) PASSED", testName.c_str());
     } else {
-        DBGPRINT(stderr, "%s client test PASSED\n", testName.c_str());
+        ELOG_DEBUG_EX(sTestLogger, "%s client test PASSED", testName.c_str());
     }
     return 0;
 }
@@ -310,13 +312,13 @@ TEST(ELogNet, UdpAsyncCompress) {
 
 int testTcpSync(bool compress) {
     TestTcpServer server("0.0.0.0", 5051);
-    DBGPRINT(stderr, "Server listening on port 5051\n");
+    ELOG_DEBUG_EX(sTestLogger, "Server listening on port 5051");
     return testMsgClient(server, "net", "tcp", "sync", "127.0.0.1:5051", compress);
 }
 
 int testTcpAsync(bool compress) {
     TestTcpServer server("0.0.0.0", 5051);
-    DBGPRINT(stderr, "Server listening on port 5051\n");
+    ELOG_DEBUG_EX(sTestLogger, "Server listening on port 5051");
     // sPrintNetMsg.store(true);
     return testMsgClient(server, "net", "tcp", "async", "127.0.0.1:5051", compress);
 }
@@ -358,13 +360,13 @@ TEST(ELogIpc, PipeAsyncCompress) {
 
 int testPipeSync(bool compress) {
     TestPipeServer server("elog_test_pipe");
-    DBGPRINT(stderr, "Server listening on pipe elog_test_pipe\n");
+    ELOG_DEBUG_EX(sTestLogger, "Server listening on pipe elog_test_pipe");
     return testMsgClient(server, "ipc", "pipe", "sync", "elog_test_pipe", compress);
 }
 
 int testPipeAsync(bool compress) {
     TestPipeServer server("elog_test_pipe");
-    DBGPRINT(stderr, "Server listening on pipe elog_test_pipe\n");
+    ELOG_DEBUG_EX(sTestLogger, "Server listening on pipe elog_test_pipe");
     return testMsgClient(server, "ipc", "pipe", "async", "elog_test_pipe", compress);
 }
 #endif

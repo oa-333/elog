@@ -34,8 +34,14 @@ echo INFO: test_data directory created
 echo INFO: Purging test_data directory from previous test runs
 del /Q test_data\*
 
+echo Running elog_pm shared memory guardian
+start elog_pm.exe --shm-guard
+
 echo INFO: Running tests
 echo DEBUG: Running command .\elog_test.exe %*
 .\elog_test.exe %*
+
+echo kill elog_pm
+taskkill /im "elog_pm.exe" /f /t >nul 2>&1
 
 popd

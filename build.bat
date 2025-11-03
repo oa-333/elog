@@ -23,6 +23,7 @@ REM -g|--reconfigure
 REM -m|--mem-check
 REM -a|--clang
 REM -t|--trace
+REM -j|--doc
 REM -h|--help
 
 REM set default values
@@ -45,6 +46,7 @@ SET RE_CONFIG=0
 SET MEM_CHECK=0
 SET CLANG=0
 SET TRACE=0
+SET DOC=0
 SET HELP=0
 
 SET CONN_INDEX=0
@@ -99,6 +101,8 @@ IF /I "%ARG1%" == "-a" SET CLANG=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--clang" SET CLANG=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-t" SET TRACE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--trace" SET TRACE=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-j" SET DOC=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--doc" SET DOC=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-h" SET HELP=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--help" SET HELP=1 & GOTO CHECK_OPTS
 REM echo [DEBUG] "%ARG1%" Not matched
@@ -138,6 +142,7 @@ echo [DEBUG] RE_CONFIG=%RE_CONFIG%
 echo [DEBUG] MEM_CHECK=%MEM_CHECK%
 echo [DEBUG] CLANG=%CLANG%
 echo [DEBUG] TRACE=%TRACE%
+echo [DEBUG] DOC=%DOC%
 echo [DEBUG] Args parsed, options left: %*
 
 IF %FULL% EQU 1 (
@@ -181,6 +186,7 @@ IF "%CONFIG_PUBLISH%" NEQ "" (
 :CONFIG_PUBLISH_SET
 IF %MEM_CHECK% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_MEM_CHECK=ON
 IF %TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_GROUP_FLUSH_GC_TRACE=ON
+IF %DOC% EQU 1 SET OPTS=%OPTS% -DELOG_BUILD_DOC=ON
 IF %CLANG% EQU 1 (
     SET CXX=clang-cl
     IF %CXX_VER% EQU 0 SET CXX_VER=23
@@ -465,5 +471,6 @@ echo.
 echo.
 echo MISC OPTIONS
 echo.
+echo       -j^|--doc            Generates documentation.
 echo       -h^|--help           Prints this help screen.
 exit /b 0

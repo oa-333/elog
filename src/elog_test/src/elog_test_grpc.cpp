@@ -349,7 +349,7 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
     }
 
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-    DBGPRINT(stderr, "Server listening on %s\n", serverAddress.c_str());
+    ELOG_DEBUG_EX(sTestLogger, "Server listening on %s\n", serverAddress.c_str());
     std::thread t = startServiceWait(server, service, cq);
 
     // prepare log target URL and test name
@@ -383,7 +383,7 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
             clientType, totalMsg, receivedMsgCount);
         server->Shutdown();
         t.join();
-        DBGPRINT(stderr, "%s gRPC client test FAILED\n", clientType);
+        ELOG_DEBUG_EX(sTestLogger, "%s gRPC client test FAILED\n", clientType);
         return 1;
     }
 
@@ -407,15 +407,16 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
     totalMsg = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
     totalMsg += elog::getAccumulatedMessageCount();
     if (receivedMsgCount != totalMsg) {
-        DBGPRINT(stderr,
-                 "%s gRPC client test failed, missing messages on server side, expected %u, got "
-                 "%u\n",
-                 clientType, totalMsg, receivedMsgCount);
-        DBGPRINT(stderr, "%s gRPC client test FAILED\n", clientType);
+        ELOG_ERROR_EX(
+            sTestLogger,
+            "%s gRPC client test failed, missing messages on server side, expected %u, got "
+            "%u\n",
+            clientType, totalMsg, receivedMsgCount);
+        ELOG_DEBUG_EX(sTestLogger, "%s gRPC client test FAILED\n", clientType);
         return 2;
     }
 
-    DBGPRINT(stderr, "%s gRPC client test PASSED\n", clientType);
+    ELOG_DEBUG_EX(sTestLogger, "%s gRPC client test PASSED\n", clientType);
     return 0;
 }
 

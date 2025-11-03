@@ -13,6 +13,8 @@
 #define MAX_THREAD_COUNT 16ul
 #define DEFAULT_CFG "file:///./test_data/elog_test.log"
 
+extern elog::ELogLogger* sTestLogger;
+
 inline uint32_t getCurrentThreadId() { return dbgutil::getCurrentThreadId(); }
 
 extern void pinThread(uint32_t coreId);
@@ -22,6 +24,8 @@ extern void tokenize(const char* str, std::vector<std::string>& tokens,
 
 extern bool initTestEnv();
 extern void termTestEnv();
+
+extern bool execProcess(const char* cmd, std::string& outputRes);
 
 extern elog::ELogTarget* initElog(const char* cfg = DEFAULT_CFG);
 extern void termELog();
@@ -98,14 +102,6 @@ extern void runMultiThreadTest(const char* title, const char* fileName, const ch
 extern bool verifyNoErrors(const elog::ELogStatistics& startStats,
                            const elog::ELogStatistics& endStats);
 
-extern bool isDebugPrintEnabled();
-
-#define DBGPRINT(stream, fmt, ...)           \
-    if (isDebugPrintEnabled()) {             \
-        fprintf(stream, fmt, ##__VA_ARGS__); \
-        fflush(stream);                      \
-    }
-
 class TestLogTarget : public elog::ELogTarget {
 public:
     TestLogTarget() : ELogTarget("test") {}
@@ -119,6 +115,8 @@ public:
 
     void clearLogMessages() { m_logMessages.clear(); }
 
+    std::mutex& getLock() { return m_lock; };
+
 protected:
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() override { return true; }
@@ -128,6 +126,7 @@ protected:
 
     /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
     virtual void logFormattedMsg(const char* formattedLogMsg, size_t length) {
+        std::unique_lock<std::mutex> lock(m_lock);
         m_logMessages.push_back(formattedLogMsg);
     }
 
@@ -135,6 +134,7 @@ protected:
     bool flushLogTarget() override { return true; }
 
 private:
+    std::mutex m_lock;
     std::vector<std::string> m_logMessages;
 };
 

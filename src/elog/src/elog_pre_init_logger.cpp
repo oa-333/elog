@@ -93,4 +93,17 @@ void ELogPreInitLogger::finishLog(ELogRecordBuilder* recordBuilder) {
     }
 }
 
+uint32_t ELogPreInitLogger::countAccumulatedMessages(ELogFilter* filter) const {
+    uint32_t count = 0;
+    ELogLogger* logger = elog::getDefaultLogger();
+    for (ELogRecordBuilder* recordBuilder : m_accumulatedRecordBuilders) {
+        const ELogRecord& logRecord = recordBuilder->getLogRecord();
+        const_cast<ELogRecord&>(logRecord).m_logger = logger;
+        if (filter->filterLogRecord(logRecord)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 }  // namespace elog

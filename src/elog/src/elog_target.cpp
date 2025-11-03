@@ -372,6 +372,14 @@ void ELogTarget::setFlushPolicy(ELogFlushPolicy* flushPolicy) {
     }
     m_flushPolicy = flushPolicy;
 }
+uint64_t ELogTarget::getBytesWritten() {
+    uint64_t bytesWritten = 0;
+    ELogStats* stats = getEndLogTarget()->getStats();
+    if (stats != nullptr) {
+        bytesWritten = stats->getBytesWritten();
+    }
+    return bytesWritten;
+}
 
 uint64_t ELogTarget::getProcessedMsgCount() {
     ELogTarget* endTarget = getEndLogTarget();

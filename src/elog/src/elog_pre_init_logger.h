@@ -25,8 +25,12 @@ public:
     inline bool hasAccumulatedLogMessages() { return !m_accumulatedRecordBuilders.empty(); }
 
     /** @brief Retrieves the number of accumulated log messages. */
-    inline uint32_t getAccumulatedMessageCount() const {
-        return (uint32_t)m_accumulatedRecordBuilders.size();
+    inline uint32_t getAccumulatedMessageCount(ELogFilter* filter = nullptr) const {
+        if (filter == nullptr) {
+            return (uint32_t)m_accumulatedRecordBuilders.size();
+        } else {
+            return countAccumulatedMessages(filter);
+        }
     }
 
     /** @brief Discards all accumulated log messages. */
@@ -51,6 +55,8 @@ protected:
 private:
     ELogRecordBuilder* m_recordBuilder;
     std::list<ELogRecordBuilder*> m_accumulatedRecordBuilders;
+
+    uint32_t countAccumulatedMessages(ELogFilter* filter) const;
 };
 }  // namespace elog
 

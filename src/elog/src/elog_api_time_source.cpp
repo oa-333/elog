@@ -20,21 +20,21 @@ void termTimeSource() {
     }
 }
 
-void enableTimeSource() {
+void enableLazyTimeSource() {
     if (!isTimeSourceEnabled()) {
         modifyParams().m_enableTimeSource.m_atomicValue.store(true, std::memory_order_release);
         sTimeSource.start();
     }
 }
 
-void disableTimeSource() {
+void disableLazyTimeSource() {
     if (isTimeSourceEnabled()) {
         sTimeSource.stop();
         modifyParams().m_enableTimeSource.m_atomicValue.store(false, std::memory_order_release);
     }
 }
 
-void configureTimeSource(uint64_t resolution, ELogTimeUnits resolutionUnits) {
+void configureLazyTimeSource(uint64_t resolution, ELogTimeUnits resolutionUnits) {
     if (isTimeSourceEnabled()) {
         sTimeSource.stop();
     }
