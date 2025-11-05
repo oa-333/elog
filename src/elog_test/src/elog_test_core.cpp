@@ -275,6 +275,14 @@ TEST(ELogCore, LogFields) {
     ELOG_INFO("Test message");
     EXPECT_EQ(logMessages.size(), 1);
     EXPECT_EQ(logMessages[0].compare("Test message"), 0);
+
+    // check env var
+    // caller script is required to set env var TEST_ENV_VAR=TEST_ENV_VALUE
+    logTarget->setLogFormat("${env:name=TEST_ENV_VAR}");
+    logTarget->clearLogMessages();
+    ELOG_INFO("Test message");
+    EXPECT_EQ(logMessages.size(), 1);
+    EXPECT_EQ(logMessages[0].compare("TEST_ENV_VALUE"), 0);
 }
 
 TEST(ELogCore, TimeFormat) {

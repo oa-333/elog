@@ -157,6 +157,7 @@ ELOG_IMPLEMENT_FIELD_SELECTOR(ELogLineSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogFunctionSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogLevelSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogMsgSelector)
+ELOG_IMPLEMENT_FIELD_SELECTOR(ELogEnvSelector)
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogFormatSelector);
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogIfSelector);
 ELOG_IMPLEMENT_FIELD_SELECTOR(ELogSwitchSelector);
@@ -874,6 +875,16 @@ void ELogMsgSelector::selectField(const ELogRecord& record, ELogFieldReceptor* r
             receptor->receiveStringField(getTypeId(), record.m_logMsg, m_fieldSpec,
                                          record.m_logMsgLen);
         }
+    }
+}
+
+void ELogEnvSelector::selectField(const ELogRecord& record, ELogFieldReceptor* receptor) {
+    if (receptor->getFieldReceiveStyle() == ELogFieldReceptor::ReceiveStyle::RS_BY_NAME) {
+        receptor->receiveEnvVar(getTypeId(), m_fieldSpec.m_envSpec->m_envVarValue.c_str(),
+                                m_fieldSpec);
+    } else {
+        receptor->receiveStringField(getTypeId(), m_fieldSpec.m_envSpec->m_envVarValue.c_str(),
+                                     m_fieldSpec, m_fieldSpec.m_envSpec->m_envVarValue.length());
     }
 }
 

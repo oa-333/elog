@@ -1,6 +1,6 @@
 # ELog Logging Library
 
-ELog (Error Log) is a comprehensive, high-performant and feature-rich C++ logging framework.  
+ELog (Error Log) is a comprehensive, cross-platform, high-performant and feature-rich C++ logging framework.  
 Special attention was given to usability, so that developers can easily achieve much with just very few lines of code.  
 The library has predefined connectors for various widely-used external systems, and was designed such that it can be extended for a broad range of use cases. In addition, it is fully configurable from file or string input (see examples below).
 

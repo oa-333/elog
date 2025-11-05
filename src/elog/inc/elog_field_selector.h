@@ -460,6 +460,20 @@ private:
     ELOG_DECLARE_FIELD_SELECTOR(ELogMsgSelector, msg, ELOG_API)
 };
 
+class ELOG_API ELogEnvSelector final : public ELogFieldSelector {
+public:
+    ELogEnvSelector(const ELogFieldSpec& fieldSpec)
+        : ELogFieldSelector(ELogFieldType::FT_LOG_LEVEL, fieldSpec) {}
+    ELogEnvSelector(const ELogEnvSelector&) = delete;
+    ELogEnvSelector(ELogEnvSelector&&) = delete;
+    ELogEnvSelector& operator=(const ELogEnvSelector&) = delete;
+
+    void selectField(const ELogRecord& record, ELogFieldReceptor* receptor) final;
+
+private:
+    ELOG_DECLARE_FIELD_SELECTOR(ELogEnvSelector, env, ELOG_API)
+};
+
 /**
  * Text Formatting virtual field selector. The following field selectors do not select fields
  * (either from the log record, or from any other custom source), but rather output text formatting

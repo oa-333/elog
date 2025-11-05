@@ -4,7 +4,10 @@
 #include <gtest/gtest.h>
 
 // include elog system first, then any possible connector
+#ifdef ELOG_USING_DBG_UTIL
 #include "dbg_util.h"
+#endif
+
 #include "elog_api.h"
 
 #define MT_MSG_COUNT 10000ull
@@ -15,7 +18,11 @@
 
 extern elog::ELogLogger* sTestLogger;
 
+#ifdef ELOG_USING_DBG_UTIL
 inline uint32_t getCurrentThreadId() { return dbgutil::getCurrentThreadId(); }
+#else
+extern uint32_t getCurrentThreadId();
+#endif
 
 extern void pinThread(uint32_t coreId);
 

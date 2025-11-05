@@ -1192,6 +1192,9 @@ extern ELOG_API void resetLogStatistics();
  *
  **************************************************************************************/
 
+#define ELOG_BASE(logger, level, fmt, ...) \
+    logger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
+
 /**
  * @brief Logs a formatted message.
  * @param logger The logger used for message formatting.
@@ -1199,12 +1202,12 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_EX(logger, level, fmt, ...)                                                          \
-    {                                                                                             \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                             \
-        if (validLogger->canLog(level)) {                                                         \
-            validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
-        }                                                                                         \
+#define ELOG_EX(logger, level, fmt, ...)                              \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            ELOG_BASE(validLogger, level, fmt, ##__VA_ARGS__);        \
+        }                                                             \
     }
 
 // per-level macros
@@ -1235,6 +1238,13 @@ extern ELOG_API void resetLogStatistics();
  **************************************************************************************/
 
 #ifdef ELOG_ENABLE_FMT_LIB
+
+#define ELOG_FMT_BASE(logger, level, fmtStr, ...)                                      \
+    {                                                                                  \
+        std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                       \
+        logger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
+    }
+
 /**
  * @brief Logs a formatted message (fmtlib style).
  * @param logger The logger used for message formatting.
@@ -1242,13 +1252,12 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_FMT_EX(logger, level, fmtStr, ...)                                                 \
-    {                                                                                           \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                           \
-        if (validLogger->canLog(level)) {                                                       \
-            std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                            \
-            validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, logMsg.c_str()); \
-        }                                                                                       \
+#define ELOG_FMT_EX(logger, level, fmtStr, ...)                       \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            ELOG_FMT_BASE(validLogger, level, fmtStr, ##__VA_ARGS__); \
+        }                                                             \
     }
 
 // per-level macros
@@ -1288,6 +1297,9 @@ extern ELOG_API void resetLogStatistics();
  **************************************************************************************/
 
 #ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_BIN_BASE(logger, level, fmt, ...) \
+    logger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
+
 /**
  * @brief Logs a formatted message (fmtlib style, binary form).
  * @param logger The logger used for message formatting.
@@ -1295,12 +1307,12 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BIN_EX(logger, level, fmt, ...)                                                      \
-    {                                                                                             \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                             \
-        if (validLogger->canLog(level)) {                                                         \
-            validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__); \
-        }                                                                                         \
+#define ELOG_BIN_EX(logger, level, fmt, ...)                          \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            ELOG_BIN_BASE(validLogger, level, fmt, ##__VA_ARGS__);    \
+        }                                                             \
     }
 
 // per-level macros
@@ -1340,6 +1352,13 @@ extern ELOG_API void resetLogStatistics();
  **************************************************************************************/
 
 #ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_CACHE_BASE(logger, level, fmt, ...)                                                  \
+    {                                                                                             \
+        static thread_local elog::ELogCacheEntryId cacheEntryId = elog::getOrCacheFormatMsg(fmt); \
+        logger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId,           \
+                                ##__VA_ARGS__);                                                   \
+    }
+
 /**
  * @brief Logs a formatted message (fmtlib style, binary form, auto-cached).
  * @param logger The logger used for message formatting.
@@ -1347,15 +1366,12 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_CACHE_EX(logger, level, fmt, ...)                                                   \
-    {                                                                                            \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
-        if (validLogger->canLog(level)) {                                                        \
-            static thread_local elog::ELogCacheEntryId cacheEntryId =                            \
-                elog::getOrCacheFormatMsg(fmt);                                                  \
-            validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId, \
-                                         ##__VA_ARGS__);                                         \
-        }                                                                                        \
+#define ELOG_CACHE_EX(logger, level, fmt, ...)                        \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            ELOG_CACHE_BASE(validLogger, level, fmt, ##__VA_ARGS__);  \
+        }                                                             \
     }
 
 // per-level macros
@@ -1395,6 +1411,9 @@ extern ELOG_API void resetLogStatistics();
  **************************************************************************************/
 
 #ifdef ELOG_ENABLE_FMT_LIB
+#define ELOG_ID_BASE(logger, level, cacheEntryId, ...) \
+    logger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId, ##__VA_ARGS__);
+
 /**
  * @brief Logs a formatted message (fmtlib style, binary form, pre-cached).
  * @param logger The logger used for message formatting.
@@ -1402,13 +1421,12 @@ extern ELOG_API void resetLogStatistics();
  * @param cacheEntryId The cached log message format string id.
  * @param ... Log message format string parameters.
  */
-#define ELOG_ID_EX(logger, level, cacheEntryId, ...)                                             \
-    {                                                                                            \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                            \
-        if (validLogger->canLog(level)) {                                                        \
-            validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId, \
-                                         ##__VA_ARGS__);                                         \
-        }                                                                                        \
+#define ELOG_ID_EX(logger, level, cacheEntryId, ...)                       \
+    {                                                                      \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);      \
+        if (validLogger->canLog(level)) {                                  \
+            ELOG_ID_BASE(validLogger, level, cacheEntryId, ##__VA_ARGS__); \
+        }                                                                  \
     }
 
 // per-level macros
@@ -1546,12 +1564,11 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                         \
-    {                                                                                    \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                    \
-        ELOG_ERROR_EX(validLogger, "System call " #syscall "() failed: %d (%s)", sysErr, \
-                      elog::sysErrorToStr(sysErr));                                      \
-        ELOG_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                                  \
+#define ELOG_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                    \
+    {                                                                               \
+        ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
+                      elog::sysErrorToStr(sysErr));                                 \
+        ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                  \
     }
 
 /** @brief Logs a system error message with error code (no logger). */
@@ -1560,12 +1577,11 @@ extern ELOG_API void resetLogStatistics();
 
 #ifdef ELOG_ENABLE_FMT_LIB
 /** @brief Logs a system error message with error code (fmtlib style). */
-#define ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                     \
-    {                                                                                    \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                    \
-        ELOG_ERROR_EX(validLogger, "System call " #syscall "() failed: %d (%s)", sysErr, \
-                      elog::sysErrorToStr(sysErr));                                      \
-        ELOG_FMT_ERROR_EX(validLogger, fmt, ##__VA_ARGS__);                              \
+#define ELOG_FMT_SYS_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                \
+    {                                                                               \
+        ELOG_ERROR_EX(logger, "System call " #syscall "() failed: %d (%s)", sysErr, \
+                      elog::sysErrorToStr(sysErr));                                 \
+        ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                              \
     }
 
 /** @brief Logs a system error message with error code (fmtlib style, no logger). */
@@ -1624,14 +1640,13 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                              \
-    {                                                                                           \
-        elog::ELogLogger* errLogger = elog::getValidLogger(logger);                             \
-        char* errStr = elog::win32SysErrorToStr(sysErr);                                        \
-        ELOG_ERROR_EX(errLogger, "Windows system call " #syscall "() failed: %lu (%s)", sysErr, \
-                      errStr);                                                                  \
-        elog::win32FreeErrorStr(errStr);                                                        \
-        ELOG_ERROR_EX(errLogger, fmt, ##__VA_ARGS__);                                           \
+#define ELOG_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                           \
+    {                                                                                        \
+        char* errStr = elog::win32SysErrorToStr(sysErr);                                     \
+        ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %lu (%s)", sysErr, \
+                      errStr);                                                               \
+        elog::win32FreeErrorStr(errStr);                                                     \
+        ELOG_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                           \
     }
 
 /** @brief Logs a system error message with error code (no logger). */
@@ -1640,14 +1655,13 @@ extern ELOG_API void resetLogStatistics();
 
 #ifdef ELOG_ENABLE_FMT_LIB
 /** @brief Logs a system error message with error code (fmtlib style). */
-#define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                         \
-    {                                                                                          \
-        elog::ELogLogger* errLogger = elog::getValidLogger(logger);                            \
-        char* errStr = elog::win32SysErrorToStr(sysErr);                                       \
-        ELOG_ERROR_EX(errLogger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
-                      errStr);                                                                 \
-        elog::win32FreeErrorStr(errStr);                                                       \
-        ELOG_FMT_ERROR_EX(errLogger, fmt, ##__VA_ARGS__);                                      \
+#define ELOG_FMT_WIN32_ERROR_NUM_EX(logger, syscall, sysErr, fmt, ...)                      \
+    {                                                                                       \
+        char* errStr = elog::win32SysErrorToStr(sysErr);                                    \
+        ELOG_ERROR_EX(logger, "Windows system call " #syscall "() failed: %d (%s)", sysErr, \
+                      errStr);                                                              \
+        elog::win32FreeErrorStr(errStr);                                                    \
+        ELOG_FMT_ERROR_EX(logger, fmt, ##__VA_ARGS__);                                      \
     }
 
 /** @brief Logs a system error message with error code (fmtlib style, no logger). */
@@ -1714,24 +1728,24 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)      \
-    {                                                                  \
-        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger); \
-        if (validLogger0->canLog(level)) {                             \
-            ELOG_EX(validLogger0, level, fmt, ##__VA_ARGS__);          \
-            elog::logStackTrace(validLogger0, level, title, skip);     \
-        }                                                              \
+#define ELOG_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)     \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            ELOG_BASE(validLogger, level, fmt, ##__VA_ARGS__);        \
+            elog::logStackTrace(validLogger, level, title, skip);     \
+        }                                                             \
     }
 
 #ifdef ELOG_ENABLE_FMT_LIB
 /** @brief Logs the stack trace of the current thread (fmtlib style). */
-#define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)  \
-    {                                                                  \
-        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger); \
-        if (validLogger0->canLog(level)) {                             \
-            ELOG_FMT_EX(validLogger0, level, fmt, ##__VA_ARGS__);      \
-            elog::logStackTrace(validLogger0, level, title, skip);     \
-        }                                                              \
+#define ELOG_FMT_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            ELOG_FMT_BASE(validLogger, level, fmt, ##__VA_ARGS__);    \
+            elog::logStackTrace(validLogger, level, title, skip);     \
+        }                                                             \
     }
 #endif
 
@@ -1745,22 +1759,22 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string, that will be printed to log before the stack trace.
  * @param ... Log message format string parameters.
  */
-#define ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...)  \
-    {                                                                  \
-        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger); \
-        if (validLogger0->canLog(level)) {                             \
-            ELOG_EX(validLogger0, level, fmt, ##__VA_ARGS__);          \
-            elog::logAppStackTrace(validLogger0, level, title, skip);  \
-        }                                                              \
+#define ELOG_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            ELOG_BASE(validLogger, level, fmt, ##__VA_ARGS__);        \
+            elog::logAppStackTrace(validLogger, level, title, skip);  \
+        }                                                             \
     }
 
 #ifdef ELOG_ENABLE_FMT_LIB
 /** @brief Logs the stack trace of all running threads in the application (fmtlib style). */
 #define ELOG_FMT_APP_STACK_TRACE_EX(logger, level, title, skip, fmt, ...) \
     {                                                                     \
-        elog::ELogLogger* validLogger0 = elog::getValidLogger(logger);    \
-        if (validLogger0->canLog(level)) {                                \
-            ELOG_FMT_EX(validLogger0, level, fmt, ##__VA_ARGS__);         \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
+        if (validLogger->canLog(level)) {                                 \
+            ELOG_FMT_BASE(validLogger, level, fmt, ##__VA_ARGS__);        \
             elog::logAppStackTrace(validLogger0, level, title, skip);     \
         }                                                                 \
     }
@@ -1818,16 +1832,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_ONCE_EX(logger, level, fmt, ...)                                         \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static elog::ELogOnce once;                                               \
-            if (once) {                                                               \
-                validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-        }                                                                             \
+#define ELOG_ONCE_EX(logger, level, fmt, ...)                         \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            static elog::ELogOnce once;                               \
+            if (once) {                                               \
+                ELOG_BASE(validLogger, level, fmt, ##__VA_ARGS__);    \
+            }                                                         \
+        }                                                             \
     }
 
 // per-level once logging macros
@@ -1877,17 +1890,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_FMT_ONCE_EX(logger, level, fmtStr, ...)                               \
-    {                                                                              \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
-        if (validLogger->canLog(level)) {                                          \
-            static elog::ELogOnce once;                                            \
-            if (once) {                                                            \
-                std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
-                validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                         logMsg.c_str());                          \
-            }                                                                      \
-        }                                                                          \
+#define ELOG_FMT_ONCE_EX(logger, level, fmtStr, ...)                      \
+    {                                                                     \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
+        if (validLogger->canLog(level)) {                                 \
+            static elog::ELogOnce once;                                   \
+            if (once) {                                                   \
+                ELOG_FMT_BASE(validLogger, level, fmtStr, ##__VA_ARGS__); \
+            }                                                             \
+        }                                                                 \
     }
 
 // per-level once logging macros (fmtlib style)
@@ -1935,17 +1946,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BIN_ONCE_EX(logger, level, fmt, ...)                                     \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static elog::ELogOnce once;                                               \
-            if (once) {                                                               \
-                validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-            \                                                                         \
-        }                                                                             \
+#define ELOG_BIN_ONCE_EX(logger, level, fmt, ...)                      \
+    {                                                                  \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);  \
+        if (validLogger->canLog(level)) {                              \
+            static elog::ELogOnce once;                                \
+            if (once) {                                                \
+                ELOG_BIN_BASE(validLogger, level, fmt, ##__VA_ARGS__); \
+            }                                                          \
+        }                                                              \
     }
 
 // per-level once logging macros (fmtlib style, binary logging)
@@ -1992,17 +2001,16 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_ONCE_THREAD_EX(logger, level, fmt, ...)                                  \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static thread_local bool once = false;                                    \
-            if (!once) {                                                              \
-                once = true;                                                          \
-                validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-        }                                                                             \
+#define ELOG_ONCE_THREAD_EX(logger, level, fmt, ...)                  \
+    {                                                                 \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger); \
+        if (validLogger->canLog(level)) {                             \
+            static thread_local bool once = false;                    \
+            if (!once) {                                              \
+                once = true;                                          \
+                ELOG_BASE(validLogger, level, fmt, ##__VA_ARGS__);    \
+            }                                                         \
+        }                                                             \
     }
 
 // per-level once-thread logging macros (fmtlib style, binary logging, no logger)
@@ -2048,18 +2056,16 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_FMT_ONCE_THREAD_EX(logger, level, fmtStr, ...)                        \
-    {                                                                              \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
-        if (validLogger->canLog(level)) {                                          \
-            static thread_local bool once = false;                                 \
-            if (!once) {                                                           \
-                once = true;                                                       \
-                std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
-                validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                         logMsg.c_str());                          \
-            }                                                                      \
-        }                                                                          \
+#define ELOG_FMT_ONCE_THREAD_EX(logger, level, fmtStr, ...)               \
+    {                                                                     \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
+        if (validLogger->canLog(level)) {                                 \
+            static thread_local bool once = false;                        \
+            if (!once) {                                                  \
+                once = true;                                              \
+                ELOG_FMT_BASE(validLogger, level, fmtStr, ##__VA_ARGS__); \
+            }                                                             \
+        }                                                                 \
     }
 
 // per-level once-thread logging macros (fmtlib style)
@@ -2115,17 +2121,16 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BIN_ONCE_THREAD_EX(logger, level, fmt, ...)                              \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static thread_local bool once = false;                                    \
-            if (!once) {                                                              \
-                once = true;                                                          \
-                validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-        }                                                                             \
+#define ELOG_BIN_ONCE_THREAD_EX(logger, level, fmt, ...)               \
+    {                                                                  \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);  \
+        if (validLogger->canLog(level)) {                              \
+            static thread_local bool once = false;                     \
+            if (!once) {                                               \
+                once = true;                                           \
+                ELOG_BIN_BASE(validLogger, level, fmt, ##__VA_ARGS__); \
+            }                                                          \
+        }                                                              \
     }
 
 // per-level once-thread logging macros (fmtlib style, binary logging)
@@ -2184,16 +2189,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...)             \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);               \
-            if (mod.moderate()) {                                                     \
-                validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-        }                                                                             \
+#define ELOG_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...) \
+    {                                                                     \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
+        if (validLogger->canLog(level)) {                                 \
+            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);   \
+            if (mod.moderate()) {                                         \
+                ELOG_BASE(validLogger, level, fmt, ##__VA_ARGS__);        \
+            }                                                             \
+        }                                                                 \
     }
 
 // per-level moderate logging macros
@@ -2249,17 +2253,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmtStr The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_FMT_MODERATE_EX(logger, level, maxMsg, timeout, units, fmtStr, ...)   \
-    {                                                                              \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
-        if (validLogger->canLog(level)) {                                          \
-            static elog::ELogModerate mod(fmtStr, maxMsg, timeout, units);         \
-            if (mod.moderate()) {                                                  \
-                std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
-                validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                         logMsg.c_str());                          \
-            }                                                                      \
-        }                                                                          \
+#define ELOG_FMT_MODERATE_EX(logger, level, maxMsg, timeout, units, fmtStr, ...) \
+    {                                                                            \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);            \
+        if (validLogger->canLog(level)) {                                        \
+            static elog::ELogModerate mod(fmtStr, maxMsg, timeout, units);       \
+            if (mod.moderate()) {                                                \
+                ELOG_FMT_BASE(validLogger, level, fmtStr, ##__VA_ARGS__);        \
+            }                                                                    \
+        }                                                                        \
     }
 
 // per-level moderate logging macros (fmtlib style)
@@ -2316,16 +2318,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BIN_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...)         \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);               \
-            if (mod.moderate()) {                                                     \
-                validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-        }                                                                             \
+#define ELOG_BIN_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...) \
+    {                                                                         \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);         \
+        if (validLogger->canLog(level)) {                                     \
+            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);       \
+            if (mod.moderate()) {                                             \
+                ELOG_BIN_BASE(validLogger, level, fmt, ##__VA_ARGS__);        \
+            }                                                                 \
+        }                                                                     \
     }
 
 // per-level moderate logging macros (fmtlib style, binary logging)
@@ -2383,18 +2384,17 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_CACHE_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...)        \
-    {                                                                                  \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                  \
-        if (validLogger->canLog(level)) {                                              \
-            static thread_local elog::ELogCacheEntryId cacheEntryId =                  \
-                elog::getOrCacheFormatMsg(fmt);                                        \
-            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);                \
-            if (mod.moderate()) {                                                      \
-                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                             cacheEntryId, ##__VA_ARGS__);             \
-            }                                                                          \
-        }                                                                              \
+#define ELOG_CACHE_MODERATE_EX(logger, level, maxMsg, timeout, units, fmt, ...) \
+    {                                                                           \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);           \
+        if (validLogger->canLog(level)) {                                       \
+            static thread_local elog::ELogCacheEntryId cacheEntryId =           \
+                elog::getOrCacheFormatMsg(fmt);                                 \
+            static elog::ELogModerate mod(fmt, maxMsg, timeout, units);         \
+            if (mod.moderate()) {                                               \
+                ELOG_ID_BASE(validLogger, level, cacheEntryId, ##__VA_ARGS__);  \
+            }                                                                   \
+        }                                                                       \
     }
 
 // per-level moderate logging macros (fmtlib style, binary logging, auto-cached)
@@ -2459,8 +2459,7 @@ extern ELOG_API void resetLogStatistics();
             static elog::ELogModerate mod(elog::getCachedFormatMsg(cacheEntryId), maxMsg, timeout, \
                                           units);                                                  \
             if (mod.moderate()) {                                                                  \
-                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION,             \
-                                             cacheEntryId, ##__VA_ARGS__);                         \
+                ELOG_ID_BASE(validLogger, level, cacheEntryId, ##__VA_ARGS__);                     \
             }                                                                                      \
         }                                                                                          \
     }
@@ -2525,16 +2524,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_EVERY_N_EX(logger, level, N, fmt, ...)                                   \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static std::atomic<uint64_t> count = 0;                                   \
-            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) {             \
-                validLogger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-        }                                                                             \
+#define ELOG_EVERY_N_EX(logger, level, N, fmt, ...)                       \
+    {                                                                     \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
+        if (validLogger->canLog(level)) {                                 \
+            static std::atomic<uint64_t> count = 0;                       \
+            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) { \
+                ELOG_BASE(validLogger, level, fmt, ##__VA_ARGS__);        \
+            }                                                             \
+        }                                                                 \
     }
 
 // per-level every-N logging macros
@@ -2580,17 +2578,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmtStr The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_FMT_EVERY_N_EX(logger, level, N, fmtStr, ...)                         \
-    {                                                                              \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);              \
-        if (validLogger->canLog(level)) {                                          \
-            static std::atomic<uint64_t> count = 0;                                \
-            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) {          \
-                std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);           \
-                validLogger->logNoFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                         logMsg.c_str());                          \
-            }                                                                      \
-        }                                                                          \
+#define ELOG_FMT_EVERY_N_EX(logger, level, N, fmtStr, ...)                \
+    {                                                                     \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
+        if (validLogger->canLog(level)) {                                 \
+            static std::atomic<uint64_t> count = 0;                       \
+            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) { \
+                ELOG_FMT_BASE(validLogger, level, fmtStr, ##__VA_ARGS__); \
+            }                                                             \
+        }                                                                 \
     }
 
 // per-level every-N logging macros (fmtlib style)
@@ -2646,16 +2642,15 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_BIN_EVERY_N_EX(logger, level, N, fmt, ...)                               \
-    {                                                                                 \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                 \
-        if (validLogger->canLog(level)) {                                             \
-            static std::atomic<uint64_t> count = 0;                                   \
-            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) {             \
-                validLogger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, \
-                                       ##__VA_ARGS__);                                \
-            }                                                                         \
-        }                                                                             \
+#define ELOG_BIN_EVERY_N_EX(logger, level, N, fmt, ...)                   \
+    {                                                                     \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);     \
+        if (validLogger->canLog(level)) {                                 \
+            static std::atomic<uint64_t> count = 0;                       \
+            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) { \
+                ELOG_BIN_BASE(validLogger, level, fmt, ##__VA_ARGS__);    \
+            }                                                             \
+        }                                                                 \
     }
 
 // per-level every-N logging macros (fmtlib style, binary logging)
@@ -2711,18 +2706,17 @@ extern ELOG_API void resetLogStatistics();
  * @param fmt The log message format string.
  * @param ... Log message format string parameters.
  */
-#define ELOG_CACHE_EVERY_N_EX(logger, level, N, fmt, ...)                              \
-    {                                                                                  \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                  \
-        if (validLogger->canLog(level)) {                                              \
-            static thread_local elog::ELogCacheEntryId cacheEntryId =                  \
-                elog::getOrCacheFormatMsg(fmt);                                        \
-            static std::atomic<uint64_t> count = 0;                                    \
-            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) {              \
-                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                             cacheEntryId, ##__VA_ARGS__);             \
-            }                                                                          \
-        }                                                                              \
+#define ELOG_CACHE_EVERY_N_EX(logger, level, N, fmt, ...)                      \
+    {                                                                          \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);          \
+        if (validLogger->canLog(level)) {                                      \
+            static thread_local elog::ELogCacheEntryId cacheEntryId =          \
+                elog::getOrCacheFormatMsg(fmt);                                \
+            static std::atomic<uint64_t> count = 0;                            \
+            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) {      \
+                ELOG_ID_BASE(validLogger, level, cacheEntryId, ##__VA_ARGS__); \
+            }                                                                  \
+        }                                                                      \
     }
 
 // per-level every-N logging macros (fmtlib style, binary logging, auto-cached)
@@ -2779,16 +2773,15 @@ extern ELOG_API void resetLogStatistics();
  * @param cacheEntryId The cached log message format string id.
  * @param ... Log message format string parameters.
  */
-#define ELOG_ID_EVERY_N_EX(logger, level, N, cacheEntryId, ...)                        \
-    {                                                                                  \
-        elog::ELogLogger* validLogger = elog::getValidLogger(logger);                  \
-        if (validLogger->canLog(level)) {                                              \
-            static std::atomic<uint64_t> count = 0;                                    \
-            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) {              \
-                validLogger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, \
-                                             cacheEntryId, ##__VA_ARGS__);             \
-            }                                                                          \
-        }                                                                              \
+#define ELOG_ID_EVERY_N_EX(logger, level, N, cacheEntryId, ...)                \
+    {                                                                          \
+        elog::ELogLogger* validLogger = elog::getValidLogger(logger);          \
+        if (validLogger->canLog(level)) {                                      \
+            static std::atomic<uint64_t> count = 0;                            \
+            if (count.fetch_add(1, std::memory_order_relaxed) % N == 0) {      \
+                ELOG_ID_BASE(validLogger, level, cacheEntryId, ##__VA_ARGS__); \
+            }                                                                  \
+        }                                                                      \
     }
 
 // per-level every-N logging macros (fmtlib style, binary logging, pre-cached)

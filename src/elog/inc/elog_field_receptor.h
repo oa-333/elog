@@ -155,6 +155,12 @@ public:
         return receiveStringField(typeId, logMsg, fieldSpec);
     }
 
+    /** @brief Receives environment variable reference. */
+    virtual void receiveEnvVar(uint32_t typeId, const char* envVarValue,
+                               const ELogFieldSpec& fieldSpec) {
+        return receiveStringField(typeId, envVarValue, fieldSpec);
+    }
+
     /**
      * Methods for receive by-type style.
      */

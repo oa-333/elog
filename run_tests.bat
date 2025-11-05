@@ -24,6 +24,8 @@ REM prepare SQLite db file
 del -Y test.db
 sqlite3 test.db "create table log_records (rid int64, time varchar(64), level varchar(64), host varchar(64), user varchar(64), prog varchar(64), pid int64, tid int64, mod varchar(64), src varchar(64), msg varchar(1024));"
 
+REM set env var used by test
+set TEST_ENV_VAR=TEST_ENV_VALUE
 
 echo INFO: Creating test_data directory
 IF NOT EXIST test_data (

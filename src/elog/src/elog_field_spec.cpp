@@ -105,6 +105,10 @@ static bool parseTimeClockAttribute(const std::string& specToken, ELogTimeClock&
 static bool parseTimeSourceAttribute(const std::string& specToken, ELogTimeProvider& timeProvider);
 static bool parseTimeFormatAttribute(const std::string& specToken, std::string& timeFormat);
 
+static bool allocEnvSpec(ELogFieldSpec& fieldSpec);
+static bool parseEnvNameAttribute(const std::string& specToken, std::string& envVarName,
+                                  std::string& envVarValue);
+
 const char* ELogTextSpec::m_resetSpec = ELOG_TT_RESET;
 
 void ELogTextSpec::resolve() {
@@ -368,6 +372,16 @@ bool ELogFieldSpec::parse(const std::string& fieldSpecStr) {
                 return false;
             }
             m_textSpec->m_resetTextSpec = 1;
+        } else if (m_name.compare("env") == 0) {
+            if (!allocEnvSpec(*this)) {
+                return false;
+            }
+            if (specToken.starts_with("name")) {
+                if (!parseEnvNameAttribute(specToken, m_envSpec->m_envVarName,
+                                           m_envSpec->m_envVarValue)) {
+                    return false;
+                }
+            }
         } else if (m_name.compare("time") == 0) {
             if (!allocTimeFormat(*this)) {
                 return false;
@@ -804,6 +818,38 @@ bool parseTimeFormatAttribute(const std::string& specToken, std::string& timeFor
     }
     if (timeFormat.back() == '"') {
         timeFormat.pop_back();
+    }
+    return true;
+}
+
+bool allocEnvSpec(ELogFieldSpec& fieldSpec) {
+    if (fieldSpec.m_envSpec == nullptr) {
+        fieldSpec.m_envSpec = new (std::nothrow) ELogEnvSpec();
+        if (fieldSpec.m_envSpec == nullptr) {
+            ELOG_REPORT_ERROR(
+                "Failed to allocate environment variable specification object, out of memory");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool parseEnvNameAttribute(const std::string& specToken, std::string& envVarName,
+                           std::string& envVarValue) {
+    if (!parsePropValue(specToken, "name", envVarName)) {
+        ELOG_REPORT_ERROR(
+            "Failed to parse environment variable specification, invalid syntax: %s (expecting: "
+            "name=<env-var-name>)",
+            specToken.c_str());
+        return false;
+    }
+
+    // resolve the value
+    if (!elog_getenv(envVarName.c_str(), envVarValue)) {
+        ELOG_REPORT_ERROR(
+            "Failed to resolve environment variable %s for ${env} field reference token",
+            envVarName.c_str());
+        return false;
     }
     return true;
 }

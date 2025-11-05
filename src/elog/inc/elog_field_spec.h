@@ -217,6 +217,21 @@ struct ELOG_API ELogTimeSpec {
     ~ELogTimeSpec() {}
 };
 
+/** @struct Environment variable specification. */
+struct ELOG_API ELogEnvSpec {
+    /** @brief The environment variable name. */
+    std::string m_envVarName;
+
+    /** @brief The resolved environment variable value. */
+    std::string m_envVarValue;
+
+    ELogEnvSpec() {}
+    ELogEnvSpec(const ELogEnvSpec&) = default;
+    ELogEnvSpec(ELogEnvSpec&&) = default;
+    ELogEnvSpec& operator=(const ELogEnvSpec&) = default;
+    ~ELogEnvSpec() {}
+};
+
 /** @brief Log record field reference specification. */
 struct ELOG_API ELogFieldSpec {
     /** @var The special field name (reference token). */
@@ -231,24 +246,32 @@ struct ELOG_API ELogFieldSpec {
     /** @var Time (source/format) specification. */
     ELogTimeSpec* m_timeSpec;
 
+    /** @var Environment variable specification. */
+    ELogEnvSpec* m_envSpec;
+
     /** @brief Simple/default constructor */
     ELogFieldSpec(const char* name = "", ELogJustifyMode justifyMode = ELogJustifyMode::JM_NONE,
                   uint32_t justify = 0)
         : m_name(name),
           m_justifySpec({justifyMode, justify}),
           m_textSpec(nullptr),
-          m_timeSpec(nullptr) {}
+          m_timeSpec(nullptr),
+          m_envSpec(nullptr) {}
 
     ELogFieldSpec(const ELogFieldSpec& fieldSpec)
         : m_name(fieldSpec.m_name),
           m_justifySpec(fieldSpec.m_justifySpec),
           m_textSpec(nullptr),
-          m_timeSpec(nullptr) {
+          m_timeSpec(nullptr),
+          m_envSpec(nullptr) {
         if (fieldSpec.m_textSpec != nullptr) {
             m_textSpec = new (std::nothrow) ELogTextSpec(*fieldSpec.m_textSpec);
         }
         if (fieldSpec.m_timeSpec != nullptr) {
             m_timeSpec = new (std::nothrow) ELogTimeSpec(*fieldSpec.m_timeSpec);
+        }
+        if (fieldSpec.m_envSpec != nullptr) {
+            m_envSpec = new (std::nothrow) ELogEnvSpec(*fieldSpec.m_envSpec);
         }
     }
 
@@ -256,9 +279,11 @@ struct ELOG_API ELogFieldSpec {
         : m_name(fieldSpec.m_name),
           m_justifySpec(fieldSpec.m_justifySpec),
           m_textSpec(fieldSpec.m_textSpec),
-          m_timeSpec(fieldSpec.m_timeSpec) {
+          m_timeSpec(fieldSpec.m_timeSpec),
+          m_envSpec(fieldSpec.m_envSpec) {
         fieldSpec.m_textSpec = nullptr;
         fieldSpec.m_timeSpec = nullptr;
+        fieldSpec.m_envSpec = nullptr;
     }
 
     ~ELogFieldSpec() {
@@ -269,6 +294,10 @@ struct ELOG_API ELogFieldSpec {
         if (m_timeSpec != nullptr) {
             delete m_timeSpec;
             m_timeSpec = nullptr;
+        }
+        if (m_envSpec != nullptr) {
+            delete m_envSpec;
+            m_envSpec = nullptr;
         }
     }
 

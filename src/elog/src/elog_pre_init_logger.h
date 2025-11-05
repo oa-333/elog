@@ -7,7 +7,8 @@
 
 namespace elog {
 
-class ELogTarget;
+class ELOG_API ELogTarget;
+class ELOG_API ELogFilter;
 
 /** @brief Special logger used for accumulating pre-init log messages. */
 class ELogPreInitLogger : public ELogLogger {

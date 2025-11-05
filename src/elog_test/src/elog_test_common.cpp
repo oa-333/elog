@@ -7,6 +7,20 @@
 #include <cstdio>
 #include <cstdlib>
 
+#ifndef ELOG_USING_DBG_UTIL
+#ifdef ELOG_MINGW
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#endif  // ELOG_MINGW
+#elif !defined(ELOG_WINDOWS)
+#include <sys/syscall.h>
+#ifdef SYS_gettid
+#define gettid() syscall(SYS_gettid)
+#else
+#error "SYS_gettid unavailable on this system"
+#endif  // SYS_gettid defined
+#endif  // ELOG_USING_DBG_UTIL not defined
+
 ELOG_IMPLEMENT_LOG_TARGET(TestLogTarget)
 
 elog::ELogLogger* sTestLogger = nullptr;
@@ -14,6 +28,16 @@ elog::ELogLogger* sTestLogger = nullptr;
 static bool sDebugPrintEnabled = false;
 
 bool isDebugPrintEnabled() { return sDebugPrintEnabled; }
+
+#ifndef ELOG_USING_DBG_UTIL
+uint32_t getCurrentThreadId() {
+#ifdef ELOG_WINDOWS
+    return ::GetCurrentThreadId();
+#else
+    return gettid();
+#endif
+}
+#endif
 
 void pinThread(uint32_t coreId) {
 #ifdef ELOG_WINDOWS

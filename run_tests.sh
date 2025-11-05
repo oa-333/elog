@@ -11,7 +11,7 @@ export INSTALL_DIR
 
 # build elog (enable all extensions and etcd publishing)
 # NOTE: on Windows we test instead for Redis publishing
-./build.sh --full --config-publish etcd
+./build.sh --full --config-publish etcd --doc
 if [ $? -ne 0 ]; then
     echo "ERROR: Build failed"
     exit 1
@@ -30,6 +30,9 @@ fi
 # prepare SQLite db file
 rm -f test.db
 sqlite3 test.db "create table log_records (rid int64, time varchar(64), level varchar(64), host varchar(64), user varchar(64), prog varchar(64), pid int64, tid int64, mod varchar(64), src varchar(64), msg varchar(1024));"
+
+# set env var used by test
+export TEST_ENV_VAR=TEST_ENV_VALUE
 
 mkdir -p test_data
 rm -f test_data/*
