@@ -50,6 +50,7 @@ target_sources(
             elog_stats.h
             elog_string_stream_receptor.h
             elog_string_receptor.h
+            elog_target_provider.h
             elog_target_spec.h
             elog_target.h
             elog_time.h

@@ -12,7 +12,7 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogDatadogTargetProvider)
 
-ELogMonTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+ELogTarget* ELogDatadogTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // expected url is as follows:
     // mon://datadog?
     //  address=http://host:port&  // e.g. address=https://http-intake.logs.datadoghq.com

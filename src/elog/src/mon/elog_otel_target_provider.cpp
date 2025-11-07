@@ -86,7 +86,7 @@ static bool loadBinaryEncoding(
     return true;
 }
 
-ELogMonTarget* ELogOtelTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+ELogTarget* ELogOtelTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // expected url is as follows:
     // mon://otel?method=[http/grpc]
     //  endpoint=[http/https]://host:port&  // both http and grpc

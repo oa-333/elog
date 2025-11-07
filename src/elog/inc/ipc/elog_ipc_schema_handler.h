@@ -6,42 +6,23 @@
 #include <unordered_map>
 
 #include "elog_schema_handler.h"
-#include "ipc/elog_ipc_target_provider.h"
 
 namespace elog {
 
 /** @brief Handler for loading IPC log target from configuration. */
 class ELOG_API ELogIpcSchemaHandler : public ELogSchemaHandler {
 public:
-    ELogIpcSchemaHandler() {}
+    ELogIpcSchemaHandler() : ELogSchemaHandler(SCHEME_NAME) {}
     ELogIpcSchemaHandler(const ELogIpcSchemaHandler&) = delete;
     ELogIpcSchemaHandler(ELogIpcSchemaHandler&&) = delete;
     ELogIpcSchemaHandler& operator=(const ELogIpcSchemaHandler&) = delete;
 
+    static constexpr const char* SCHEME_NAME = "ipc";
+
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;
 
-    /** @brief Register external net target provider. */
-    bool registerIpcTargetProvider(const char* name, ELogIpcTargetProvider* provider);
-
-    /**
-     * @brief Loads a log target from a configuration object.
-     * @param logTargetCfg The log target configuration object.
-     * @return ELogTarget* The resulting log target or null if failed.
-     */
-    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
-
-    /**
-     * @brief Let every schema handler implement object destruction and finally call "delete this".
-     */
-    void destroy() final;
-
-private:
-    typedef std::unordered_map<std::string, ELogIpcTargetProvider*> ProviderMap;
-    ProviderMap m_providerMap;
-
-    /** @brief Private destructor, do not allow direct call to delete. */
-    ~ELogIpcSchemaHandler() final;
+    ELOG_DECLARE_SCHEMA_HANDLER(ELogIpcSchemaHandler)
 };
 
 }  // namespace elog

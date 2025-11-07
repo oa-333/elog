@@ -443,8 +443,8 @@ void setReportLevel(ELogLevel reportLevel) { ELogReport::setReportLevel(reportLe
 
 ELogLevel getReportLevel() { return ELogReport::getReportLevel(); }
 
-bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler) {
-    return ELogSchemaManager::registerSchemaHandler(schemeName, schemaHandler);
+bool registerSchemaHandler(ELogSchemaHandler* schemaHandler) {
+    return ELogSchemaManager::registerSchemaHandler(schemaHandler);
 }
 
 bool configureRateLimit(const char* rateLimitCfg, bool replaceGlobalFilter /* = true */) {

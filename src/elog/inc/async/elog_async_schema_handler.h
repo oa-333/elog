@@ -11,38 +11,17 @@ namespace elog {
 /** @brief Handler for loading asynchronous log target from configuration. */
 class ELOG_API ELogAsyncSchemaHandler : public ELogSchemaHandler {
 public:
-    ELogAsyncSchemaHandler() {}
+    ELogAsyncSchemaHandler() : ELogSchemaHandler(SCHEME_NAME) {}
     ELogAsyncSchemaHandler(const ELogAsyncSchemaHandler&) = delete;
     ELogAsyncSchemaHandler(ELogAsyncSchemaHandler&&) = delete;
     ELogAsyncSchemaHandler& operator=(const ELogAsyncSchemaHandler&) = delete;
 
+    static constexpr const char* SCHEME_NAME = "async";
+
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;
 
-    /** @brief Register external message queue log target provider. */
-    bool registerAsyncTargetProvider(const char* asyncName, ELogAsyncTargetProvider* provider);
-
-    /**
-     * @brief Loads a log target from a configuration object.
-     * @param logTargetCfg The log target configuration object.
-     * @return ELogTarget* The resulting log target or null if failed.
-     */
-    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
-
-    /**
-     * @brief Let every schema handler implement object destruction and finally call "delete this".
-     */
-    void destroy() final;
-
-private:
-    typedef std::unordered_map<std::string, ELogAsyncTargetProvider*> ProviderMap;
-    ProviderMap m_providerMap;
-
-    /**
-     * @brief Private destructor, do not allow direct call to delete. Subclasses should also
-     * disallow direct deletion by having the destructor protected or private.
-     */
-    ~ELogAsyncSchemaHandler() final;
+    ELOG_DECLARE_SCHEMA_HANDLER(ELogAsyncSchemaHandler)
 };
 
 }  // namespace elog

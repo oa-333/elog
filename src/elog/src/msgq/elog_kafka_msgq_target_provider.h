@@ -17,6 +17,7 @@ public:
     ELogKafkaMsgQTargetProvider& operator=(const ELogKafkaMsgQTargetProvider&) = delete;
     ~ELogKafkaMsgQTargetProvider() final {}
 
+protected:
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration object.
@@ -25,7 +26,7 @@ public:
      * header-name=${field}, ...").
      * @return ELogMsgQTarget* The resulting message queue log target, or null of failed.
      */
-    ELogMsgQTarget* loadTarget(const ELogConfigMapNode* logTargetCfg, const std::string& topic,
+    ELogTarget* loadMsgQTarget(const ELogConfigMapNode* logTargetCfg, const std::string& topic,
                                const std::string& headers) final;
 };
 

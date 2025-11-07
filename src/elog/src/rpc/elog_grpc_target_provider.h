@@ -17,6 +17,7 @@ public:
     ELogGRPCTargetProvider& operator=(const ELogGRPCTargetProvider&) = delete;
     ~ELogGRPCTargetProvider() final;
 
+protected:
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration object.
@@ -27,7 +28,7 @@ public:
      * @param params Parameters specification given in comma separated list: ${field}, ${field}, ...
      * @return ELogRpcTarget* The resulting message queue log target, or null of failed.
      */
-    ELogRpcTarget* loadTarget(const ELogConfigMapNode* logTargetCfg, const std::string& server,
+    ELogTarget* loadRpcTarget(const ELogConfigMapNode* logTargetCfg, const std::string& server,
                               const std::string& host, int port, const std::string& functionName,
                               const std::string& params) final;
 

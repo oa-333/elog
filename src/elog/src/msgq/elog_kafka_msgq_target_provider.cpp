@@ -11,7 +11,7 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogKafkaMsgQTargetProvider)
 
-ELogMsgQTarget* ELogKafkaMsgQTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
+ELogTarget* ELogKafkaMsgQTargetProvider::loadMsgQTarget(const ELogConfigMapNode* logTargetCfg,
                                                         const std::string& topic,
                                                         const std::string& headers) {
     // we expect 4 properties: kafka_bootstrap_servers, and optional partition,

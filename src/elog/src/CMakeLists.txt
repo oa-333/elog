@@ -38,6 +38,7 @@ target_sources(elog PRIVATE
     elog_report.cpp
     elog_report.h
     elog_rolling_bitset.cpp
+    elog_schema_handler.cpp
     elog_schema_manager.cpp
     elog_shared_logger.cpp
     elog_source.cpp

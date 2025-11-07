@@ -9,6 +9,8 @@
 
 namespace elog {
 
+ELOG_IMPLEMENT_SCHEMA_HANDLER(ELogFileSchemaHandler)
+
 static const char* LOG_SUFFIX = ".log";
 
 ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
@@ -66,8 +68,6 @@ ELogTarget* ELogFileSchemaHandler::loadTarget(const ELogConfigMapNode* logTarget
     return createLogTarget(path, bufferSizeBytes, useFileLock, segmentSizeBytes, segmentRingSize,
                            segmentCount, enableStats);
 }
-
-void ELogFileSchemaHandler::destroy() { delete this; }
 
 ELogTarget* ELogFileSchemaHandler::createLogTarget(const std::string& path,
                                                    uint64_t bufferSizeBytes, bool useFileLock,

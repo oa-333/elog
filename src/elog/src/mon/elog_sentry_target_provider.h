@@ -5,11 +5,11 @@
 
 #ifdef ELOG_ENABLE_SENTRY_CONNECTOR
 
-#include "mon/elog_mon_target_provider.h"
+#include "elog_target_provider.h"
 
 namespace elog {
 
-class ELogSentryTargetProvider : public ELogMonTargetProvider {
+class ELogSentryTargetProvider : public ELogTargetProvider {
 public:
     ELogSentryTargetProvider() {}
     ELogSentryTargetProvider(const ELogSentryTargetProvider&) = delete;
@@ -20,9 +20,9 @@ public:
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration string.
-     * @return ELogMonTarget* The resulting monitoring tool log target, or null of failed.
+     * @return ELogTarget* The resulting log target, or null of failed.
      */
-    ELogMonTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
+    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
 };
 
 }  // namespace elog

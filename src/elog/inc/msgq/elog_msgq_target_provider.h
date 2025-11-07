@@ -2,12 +2,13 @@
 #define __ELOG_MSGQ_TARGET_PROVIDER_H__
 
 #include "elog_msgq_target.h"
+#include "elog_target_provider.h"
 #include "elog_target_spec.h"
 
 namespace elog {
 
 /** @brief Parent interface for all DB log targets. */
-class ELOG_API ELogMsgQTargetProvider {
+class ELOG_API ELogMsgQTargetProvider : public ELogTargetProvider {
 public:
     ELogMsgQTargetProvider(const ELogMsgQTargetProvider&) = delete;
     ELogMsgQTargetProvider(ELogMsgQTargetProvider&&) = delete;
@@ -17,12 +18,20 @@ public:
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration object.
+     * @return ELogTarget* The resulting log target, or null of failed.
+     */
+    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) override;
+
+protected:
+    /**
+     * @brief Loads a target from configuration.
+     * @param logTargetCfg The configuration object.
      * @param topic The target topic name.
      * @param headers Optional headers specification (in property-CSV format: "header-name=${field},
      * header-name=${field}, ...").
      * @return ELogMsgQTarget* The resulting message queue log target, or null of failed.
      */
-    virtual ELogMsgQTarget* loadTarget(const ELogConfigMapNode* logTargetCfg,
+    virtual ELogTarget* loadMsgQTarget(const ELogConfigMapNode* logTargetCfg,
                                        const std::string& topic, const std::string& headers) = 0;
 
 protected:

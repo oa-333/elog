@@ -13,12 +13,9 @@ class ELOG_API ELogRedisDbTarget : public ELogDbTarget {
 public:
     // if maxThreads is zero, then the number configured during elog::initialize() will be used
     // the user is allowed here to override the value specified during elog::initialize()
-    ELogRedisDbTarget(const std::string& host, int port, const std::string& passwd,
-                      const std::string& insertStmt, const std::vector<std::string>& indexInserts,
-                      ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads = 0,
-                      uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
-        : ELogDbTarget("Redis", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_PRINTF,
-                       threadModel, maxThreads, reconnectTimeoutMillis),
+    ELogRedisDbTarget(const ELogDbConfig& dbConfig, const std::string& host, int port,
+                      const std::string& passwd, const std::vector<std::string>& indexInserts)
+        : ELogDbTarget("Redis", dbConfig, ELogDbFormatter::QueryStyle::QS_PRINTF),
           m_host(host),
           m_port(port),
           m_passwd(passwd),

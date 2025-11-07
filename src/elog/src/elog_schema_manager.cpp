@@ -41,14 +41,14 @@ typedef std::unordered_map<std::string, uint32_t> ELogSchemaHandlerMap;
 static ELogSchemaHandlerMap sSchemaHandlerMap;
 
 template <typename T>
-static bool initSchemaHandler(const char* name) {
+static bool initSchemaHandler() {
     T* handler = new (std::nothrow) T();
     if (handler == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create %s schema handler, out of memory", name);
+        ELOG_REPORT_ERROR("Failed to create schema handler, out of memory");
         return false;
     }
-    if (!ELogSchemaManager::registerSchemaHandler(name, handler)) {
-        ELOG_REPORT_ERROR("Failed to add %s schema handler", name);
+    if (!ELogSchemaManager::registerSchemaHandler(handler)) {
+        ELOG_REPORT_ERROR("Failed to add %s schema handler", handler->getSchemeName());
         handler->destroy();
         return false;
     }
@@ -57,45 +57,44 @@ static bool initSchemaHandler(const char* name) {
 
 bool ELogSchemaManager::initSchemaHandlers() {
     // core packages
-    if (!initSchemaHandler<ELogSysSchemaHandler>("sys") ||
-        !initSchemaHandler<ELogFileSchemaHandler>("file") ||
-        !initSchemaHandler<ELogAsyncSchemaHandler>("async")) {
+    if (!initSchemaHandler<ELogSysSchemaHandler>() || !initSchemaHandler<ELogFileSchemaHandler>() ||
+        !initSchemaHandler<ELogAsyncSchemaHandler>()) {
         return false;
     }
 
     // optional packages
 #ifdef ELOG_ENABLE_DB
-    if (!initSchemaHandler<ELogDbSchemaHandler>("db")) {
+    if (!initSchemaHandler<ELogDbSchemaHandler>()) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_MSGQ
-    if (!initSchemaHandler<ELogMsgQSchemaHandler>("msgq")) {
+    if (!initSchemaHandler<ELogMsgQSchemaHandler>()) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_RPC
-    if (!initSchemaHandler<ELogRpcSchemaHandler>("rpc")) {
+    if (!initSchemaHandler<ELogRpcSchemaHandler>()) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_MON
-    if (!initSchemaHandler<ELogMonSchemaHandler>("mon")) {
+    if (!initSchemaHandler<ELogMonSchemaHandler>()) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_NET
-    if (!initSchemaHandler<ELogNetSchemaHandler>("net")) {
+    if (!initSchemaHandler<ELogNetSchemaHandler>()) {
         return false;
     }
 #endif
 
 #ifdef ELOG_ENABLE_IPC
-    if (!initSchemaHandler<ELogIpcSchemaHandler>("ipc")) {
+    if (!initSchemaHandler<ELogIpcSchemaHandler>()) {
         return false;
     }
 #endif
@@ -111,8 +110,8 @@ void ELogSchemaManager::termSchemaHandlers() {
     sSchemaHandlerMap.clear();
 }
 
-bool ELogSchemaManager::registerSchemaHandler(const char* schemeName,
-                                              ELogSchemaHandler* schemaHandler) {
+bool ELogSchemaManager::registerSchemaHandler(ELogSchemaHandler* schemaHandler) {
+    const char* schemeName = schemaHandler->getSchemeName();
     if (sSchemaHandlerCount == ELOG_MAX_SCHEMA) {
         ELOG_REPORT_ERROR("Cannot initialize %s schema handler, out of space", schemeName);
         return false;

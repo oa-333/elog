@@ -158,7 +158,7 @@ public:
 protected:
     bool handleText(const std::string& text) override {
         if (m_firstField) {
-            m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("***"));
+            m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("*** "));
             m_firstField = false;
         }
         m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector(text.c_str()));
@@ -166,6 +166,10 @@ protected:
     }
 
     bool handleField(const elog::ELogFieldSpec& fieldSpec) override {
+        if (m_firstField) {
+            m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("*** "));
+            m_firstField = false;
+        }
         m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("["));
         bool res = ELogFormatter::handleField(fieldSpec);
         if (res == true) {

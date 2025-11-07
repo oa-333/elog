@@ -101,7 +101,7 @@ ELogGRPCTargetProvider::ELogGRPCTargetProvider() { initGRPCTargetConstructors();
 
 ELogGRPCTargetProvider::~ELogGRPCTargetProvider() { termGRPCTargetConstructors(); }
 
-ELogRpcTarget* ELogGRPCTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
+ELogTarget* ELogGRPCTargetProvider::loadRpcTarget(const ELogConfigMapNode* logTargetCfg,
                                                   const std::string& server,
                                                   const std::string& host, int port,
                                                   const std::string& functionName,

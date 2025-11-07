@@ -236,9 +236,8 @@ extern ELOG_API void setReportLevel(ELogLevel reportLevel);
 /** @brief Retrieves the log level of ELog's internal log message reports. */
 extern ELOG_API ELogLevel getReportLevel();
 
-/** @brief Registers a schema handler by name. */
-extern ELOG_API bool registerSchemaHandler(const char* schemeName,
-                                           ELogSchemaHandler* schemaHandler);
+/** @brief Registers a schema handler. */
+extern ELOG_API bool registerSchemaHandler(ELogSchemaHandler* schemaHandler);
 
 /**************************************************************************************
  *

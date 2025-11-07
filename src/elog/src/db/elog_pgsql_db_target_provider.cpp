@@ -11,12 +11,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogPGSQLDbTargetProvider)
 
-ELogDbTarget* ELogPGSQLDbTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
-                                                    const std::string& connString,
-                                                    const std::string& insertQuery,
-                                                    ELogDbTarget::ThreadModel threadModel,
-                                                    uint32_t maxThreads,
-                                                    uint64_t reconnectTimeoutMillis) {
+ELogTarget* ELogPGSQLDbTargetProvider::loadDbTarget(const ELogConfigMapNode* logTargetCfg,
+                                                    const ELogDbConfig& dbConfig) {
     // we expect 4 properties: db, port, user, passwd (optional)
     // the connection string actually contains the host name/ip
     std::string db;
@@ -40,9 +36,7 @@ ELogDbTarget* ELogPGSQLDbTargetProvider::loadTarget(const ELogConfigMapNode* log
         return nullptr;
     }
 
-    ELogDbTarget* target =
-        new (std::nothrow) ELogPGSQLDbTarget(connString, port, db, user, passwd, insertQuery,
-                                             threadModel, maxThreads, reconnectTimeoutMillis);
+    ELogDbTarget* target = new (std::nothrow) ELogPGSQLDbTarget(dbConfig, port, db, user, passwd);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate PostgreSQL log target, out of memory");
     }

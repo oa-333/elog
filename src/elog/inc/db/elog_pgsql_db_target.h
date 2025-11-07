@@ -13,15 +13,10 @@ class ELOG_API ELogPGSQLDbTarget : public ELogDbTarget {
 public:
     // if maxThreads is zero, then the number configured during elog::initialize() will be used
     // the user is allowed here to override the value specified during elog::initialize()
-    ELogPGSQLDbTarget(const std::string& host, uint32_t port, const std::string& db,
-                      const std::string& user, const std::string& passwd,
-                      const std::string& insertStmt, ELogDbTarget::ThreadModel threadModel,
-                      uint32_t maxThreads = 0,
-                      uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
-        : ELogDbTarget("PostgreSQL", insertStmt.c_str(),
-                       ELogDbFormatter::QueryStyle::QS_DOLLAR_ORDINAL, threadModel, maxThreads,
-                       reconnectTimeoutMillis) {
-        formatConnString(host, port, db, user, passwd);
+    ELogPGSQLDbTarget(const ELogDbConfig& dbConfig, uint32_t port, const std::string& db,
+                      const std::string& user, const std::string& passwd)
+        : ELogDbTarget("PostgreSQL", dbConfig, ELogDbFormatter::QueryStyle::QS_DOLLAR_ORDINAL) {
+        formatConnString(dbConfig.m_connString, port, db, user, passwd);
     }
 
     ELogPGSQLDbTarget(const ELogPGSQLDbTarget&) = delete;

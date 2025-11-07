@@ -18,7 +18,7 @@ public:
      * @param logTargetCfg The configuration object.
      * @return ELogAsyncTarget* The resulting log target, or null if failed.
      */
-    ELogAsyncTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
+    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
 };
 
 }  // namespace elog

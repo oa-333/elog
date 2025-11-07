@@ -11,35 +11,17 @@ namespace elog {
 /** @brief Handler for loading RPC log target from configuration. */
 class ELOG_API ELogRpcSchemaHandler : public ELogSchemaHandler {
 public:
-    ELogRpcSchemaHandler() {}
+    ELogRpcSchemaHandler() : ELogSchemaHandler(SCHEME_NAME) {}
     ELogRpcSchemaHandler(const ELogRpcSchemaHandler&) = delete;
     ELogRpcSchemaHandler(ELogRpcSchemaHandler&&) = delete;
     ELogRpcSchemaHandler& operator=(const ELogRpcSchemaHandler&) = delete;
 
+    static constexpr const char* SCHEME_NAME = "rpc";
+
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final;
 
-    /** @brief Register external RPC log target provider. */
-    bool registerRpcTargetProvider(const char* providerName, ELogRpcTargetProvider* provider);
-
-    /**
-     * @brief Loads a log target from a configuration object.
-     * @param logTargetCfg The log target configuration object.
-     * @return ELogTarget* The resulting log target or null if failed.
-     */
-    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
-
-    /**
-     * @brief Let every schema handler implement object destruction and finally call "delete this".
-     */
-    void destroy() final;
-
-private:
-    typedef std::unordered_map<std::string, ELogRpcTargetProvider*> ProviderMap;
-    ProviderMap m_providerMap;
-
-    /** @brief Private destructor, do not allow direct call to delete. */
-    ~ELogRpcSchemaHandler() final;
+    ELOG_DECLARE_SCHEMA_HANDLER(ELogRpcSchemaHandler)
 };
 
 }  // namespace elog

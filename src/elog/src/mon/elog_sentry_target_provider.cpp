@@ -11,7 +11,7 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogSentryTargetProvider)
 
-ELogMonTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+ELogTarget* ELogSentryTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // expected url is as follows:
     // mon://sentry?
     //  dsn=https://examplePublicKey@o0.ingest.sentry.io/0&

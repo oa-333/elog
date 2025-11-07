@@ -2860,18 +2860,22 @@ So the first step is to derive from ELogFieldSelector:
         }
 
     private:
-        ELOG_DECLARE_FIELD_SELECTOR(SystemStateFieldSelector, sys_state);
+        ELOG_DECLARE_FIELD_SELECTOR(SystemStateFieldSelector, sys_state, ELOG_NO_EXPORT);
     };
 
 Important points to note:
 
 - The constructor should receive one parameter of type const ELogFieldSpec&, and pass it to the parent class
 - The field selector should specify the field type (in our example it is FT_TEXT which is string type)
-- in the selectField() virtual method, the system test should be passed to the receptor alongside with the field selector's type id and configured field specification
+- in the selectField() virtual method, the system state should be passed to the receptor alongside with the field selector's type id and configured field specification
 
 The new field selector class is being registered in the field selector global registry using the helper macro:
 
-    ELOG_DECLARE_FIELD_SELECTOR(SystemStateFieldSelector, sys_state);
+    ELOG_DECLARE_FIELD_SELECTOR(SystemStateFieldSelector, sys_state, ELOG_NO_EXPORT);
+
+If you are developing a Windows library the needs to export the field selector, then assuming there is an import/export macro, such as MY_DLL_API, the macro should be defined as follows:
+
+    ELOG_DECLARE_FIELD_SELECTOR(SystemStateFieldSelector, sys_state, MY_DLL_API);
 
 This helper macro requires a companion macro to be put in the source file (actually any source file):
 
@@ -3016,13 +3020,14 @@ the current system state to some given value:
     private:
         SystemState m_sysState;
 
-        ELOG_DECLARE_FILTER(SystemStateFilter, sys_state);
+        ELOG_DECLARE_FILTER(SystemStateFilter, sys_state, ELOG_NO_EXPORT);
     };
 
 A few points to note:
 
 - The filter must pass to parent class what kind of comparison operator it uses (this will be overridden later during load phase)
 - In order to be loadable from configuration, the new filter needs to declare its reference name (sys_state) using the helper macro ELOG_DECLARE_FILTER().
+- If the filter needs to be exported from a Windows DLL, then replace ELOG_NO_EXPORT with the import/export macro for the DLL
 
 The implementation is also straightforward, and follows the implementation of other predefined log filters:
 
@@ -3124,7 +3129,7 @@ So we begin with this declaration:
         // use atomic variable, access may be multi-threaded
         std::atomic<uint64_t> m_currentLogSizeBytes;
 
-        ELOG_DECLARE_FLUSH_POLICY(SystemStateFlushPolicy, sys_state);
+        ELOG_DECLARE_FLUSH_POLICY(SystemStateFlushPolicy, sys_state, ELOG_NO_EXPORT);
     };
 
 This is no different than adding a new filter type or adding a new token reference.  
@@ -3222,15 +3227,296 @@ Finally, the flush policy needs to get registered in the global flush policy reg
 
 ### Adding New Log Formatter Types
 
-TBD
+In order to add a new log formatter type, it is required to derive from ELogFormatter and implement the formatter interface.  
+So for our example let's take a formatter that surrounds each token field with square brackets ('[]'), and prepends the entire message with three stars:
+
+    class TestFormatter : public elog::ELogFormatter {
+    public:
+        TestFormatter() : ELogFormatter(TYPE_NAME), m_firstField(true) {}
+        TestFormatter(const TestFormatter&) = delete;
+        TestFormatter(TestFormatter&&) = delete;
+        TestFormatter& operator=(const TestFormatter&) = delete;
+
+        static constexpr const char* TYPE_NAME = "test";
+
+    protected:
+        bool handleText(const std::string& text) override {
+            // prepend three stars if this is the first field being processed
+            if (m_firstField) {
+                m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("*** "));
+                m_firstField = false;
+            }
+
+            // then add the text that was parsed by the parent class
+            m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector(text.c_str()));
+            return true;
+        }
+
+        bool handleField(const elog::ELogFieldSpec& fieldSpec) override {
+            // prepend three stars if this is the first field being processed
+            if (m_firstField) {
+                m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("*** "));
+                m_firstField = false;
+            }
+
+            // append opening square bracket as a static text field selector
+            m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("["));
+
+            // delegate back to parent to create the field selector
+            // NOTE: parent adds the newly created field selector to the field selector array of the formatter
+            bool res = ELogFormatter::handleField(fieldSpec);
+            if (res == true) {
+                // if succeeded then add closing square bracket as a static text field selector
+                m_fieldSelectors.push_back(new (std::nothrow) elog::ELogStaticTextSelector("]"));
+            }
+            return res;
+        }
+
+    private:
+        bool m_firstField;
+
+        ELOG_DECLARE_LOG_FORMATTER(TestFormatter, test, ELOG_NO_EXPORT)
+    };
+
+    // should be placed in the source file
+    ELOG_IMPLEMENT_LOG_FORMATTER(TestFormatter)
+
+Points to note:
+
+- The formatter is responsible for building the field selector array
+- The parent ELogFormatter provides basic log format text parsing, and derived classes should implement handleText() and handleField()
+- Actual formatting of input log records is performed by parent class using the field selector array
+
+The registration macros ELOG_DECLARE_LOG_FORMATTER() and ELOG_IMPLEMENT_LOG_FORMATTER() are used to enable loading the formatter from configuration as follows:
+
+    log_target = sys://stderr?log_format=test:${time} ${level:6} ${tid} ${src} ${msg}
+
+Pay attention that log format string begins with "test:", thus ordering ELog to use the formatter we just defined and registered by the name "test", as given to the registration macro:
+
+    ELOG_DECLARE_LOG_FORMATTER(TestFormatter, test, ELOG_NO_EXPORT)
+
+The result of this could look like this:
+
+    *** [2025-11-07 11:42:43.206] [INFO  ] [49200] [elog_test_logger] [This is a test message]
 
 ### Adding New Log Target Types
 
-TBD
+Adding new log target type is a bit different than adding a filter type or flush policy type.  
+The main difference is that the log target must be associated with a schema handler for supporting load from configuration. 
+
+Let's take as an example a log target that accumulates log messages into a string array:
+
+    class StringArrayLogTarget : public elog::ELogTarget {
+    public:
+        StringArrayLogTarget() : ELogTarget("string") {}
+        StringArrayLogTarget(const StringArrayLogTarget&) = delete;
+        StringArrayLogTarget(StringArrayLogTarget&&) = delete;
+        StringArrayLogTarget& operator=(const StringArrayLogTarget&) = delete;
+
+        ELOG_DECLARE_LOG_TARGET(StringArrayLogTarget)
+
+        const std::vector<std::string>& getLogMessages() const { return m_logMessages; }
+
+        void clearLogMessages() { m_logMessages.clear(); }
+
+        std::mutex& getLock() { return m_lock; };
+
+    protected:
+        /** @brief Order the log target to start (required for threaded targets). */
+        bool startLogTarget() override { return true; }
+
+        /** @brief Order the log target to stop (thread-safe). */
+        bool stopLogTarget() override { return true; }
+
+        /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
+        void logFormattedMsg(const char* formattedLogMsg, size_t length) final {
+            std::unique_lock<std::mutex> lock(m_lock);
+            m_logMessages.push_back(formattedLogMsg);
+        }
+
+        /** @brief Orders a buffered log target to flush it log messages. */
+        bool flushLogTarget() override { return true; }
+
+    private:
+        std::mutex m_lock;
+        std::vector<std::string> m_logMessages;
+    };
+
+    // should be placed in the source file
+    ELOG_IMPLEMENT_LOG_TARGET(StringArrayLogTarget)
+
+Points to note:
+
+- The ELOG_DECLARE_LOG_TARGET() macro is required for enforcing controlled object life-cycle, and is recommended to be put in the public section of the class declaration
+- The StringArrayLogTarget does not declare a destructor, as this is already done by the ELOG_DECLARE_LOG_TARGET() macro
+- The string log target implements the minimum required from a log target:
+    - startLogTarget()
+    - stopLogTarget()
+    - flushLogTarget()
+    - logFormattedMsg()
+
+ELogTarget provides a default implementation for writeLogTarget(), which formats a log message into a log buffer, so that derived classes only need to log the formatted message with logFormattedMsg(). In case the derived log target needs to do more than that, then consider override the writeLogTarget() instead.
+
+Now the log target can be added to the ELog, and later removed, with standard API:
+
+    StringArrayLogTarget* logTarget = new (std::nothrow) StringArrayLogTarget();
+    elog::ELogTargetId targetId = elog::addLogTarget(logTarget);
+    ...
+    elog::removeLogTarget(logTarget);
+    delete logTarget;
+
+If not removed from ELog, the log target will be deleted during elog::terminate(). Make sure that your custom log target's life-cycle does not conflict with ELog's life-cycle in such a case.
+
+In order to enable loading the log target from configuration, it must be connected to a schema handler, a topic covered in the next section.
 
 ### Adding New Schema Handler Type
 
-TBD
+A schema handler is required for loading log targets by schema name. For instance file log target has a 'file' schema in configuration:
+
+    log_target = file:///./logs/app.log
+
+In order to enable loading custom log targets from configuration, they must be attached to a new schema handler. Existing schema handlers within ELog are not open for registering new log target types (and are not exposed in header files either).
+
+Following is an example for a schema handler that can load the string log target from the previous section:
+
+    class StringSchemaHandler : public ELogSchemaHandler {
+    public:
+        StringSchemaHandler() : ELogSchemaHandler(SCHEME_NAME) {}
+        StringSchemaHandler(const StringSchemaHandler&) = delete;
+        StringSchemaHandler(StringSchemaHandler&&) = delete;
+        StringSchemaHandler& operator=(const StringSchemaHandler&) = delete;
+
+        static constexpr const char* SCHEME_NAME = "string";
+
+        /**
+         * @brief Loads a log target from a configuration object.
+         * @param logTargetCfg The log target configuration object.
+         * @return ELogTarget* The resulting log target or null if failed.
+         */
+        ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final {
+            return new (std::nothrow) StringArrayLogTarget();
+        }
+
+        ELOG_DECLARE_SCHEMA_HANDLER(StringSchemaHandler)
+    };
+
+    // should be placed in the source file
+    ELOG_IMPLEMENT_SCHEMA_HANDLER(StringSchemaHandler)
+
+One more crucial step is needed:
+
+    // register the schema handler under schem
+    elog::registerSchemaHandler(new (std::nothrow) StringSchemaHandler());
+
+This the most basic form of a schema handler, and it can load log targets from configuration by the scheme 'string':
+
+    log_target = string://string_array?log_format=string:${time} ${msg}
+
+It should be noted that the string_array part is not really used in this example, and is there just for clarity. The string schema handler created the string array log target without considering the configuration map node passed to loadTarget(). The actual loading of the log format for hte target, takes place afterwards in ELog target loading sequence, so the schema handler does not to bother about common attributes, such filters, formatter, flush policies, etc.
+
+Now suppose we do want to add another type of string log target, name string map log target, which gathers log messages un a multi map by the logger's name. Here is the log target:
+
+    class StringMapLogTarget : public elog::ELogTarget {
+    public:
+        StringMapLogTarget() : ELogTarget("string") {}
+        StringMapLogTarget(const StringMapLogTarget&) = delete;
+        StringMapLogTarget(StringMapLogTarget&&) = delete;
+        StringMapLogTarget& operator=(const StringMapLogTarget&) = delete;
+
+        ELOG_DECLARE_LOG_TARGET(StringMapLogTarget)
+
+        const std::vector<std::string>& getLogMessages(const char* loggerName) const { return m_logMessages[loggerName]; }
+
+        void clearLogMessages() { m_logMessages.clear(); }
+
+        std::mutex& getLock() { return m_lock; };
+
+    protected:
+        /** @brief Order the log target to start (required for threaded targets). */
+        bool startLogTarget() override { return true; }
+
+        /** @brief Order the log target to stop (thread-safe). */
+        bool stopLogTarget() override { return true; }
+
+        /**
+        * @brief Order the log target to write a log record (thread-safe).
+        * @return The number of bytes written to log.
+        */
+        uint32_t writeLogRecord(const ELogRecord& logRecord) final {
+            ELogBuffer logBuffer;
+            formatLogBuffer(logRecord, logBuffer);
+            std::unique_lock<std::mutex> lock(m_lock);
+            const char* qName = logRecord.m_logger->getLogSource()->getQualifiedName();
+            m_logMessages[qName].push_back(logBuffer.getRef());
+        }
+
+        /** @brief Orders a buffered log target to flush it log messages. */
+        bool flushLogTarget() override { return true; }
+
+    private:
+        std::mutex m_lock;
+        std::unordered_map<std::string, std::vector<std::string>> m_logMessages;
+    };
+
+    // should be placed in the source file
+    ELOG_IMPLEMENT_LOG_TARGET(StringMapLogTarget)
+
+Now we have to modify the schema handler to support both types. The schema handler parent class provides built-in factory method for this use case, but a target provider must be registered for each log target type:
+
+    class StringArrayLogTargetProvider : public ELogTargetProvider {
+    public:
+        ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final {
+            // no need for nay configuration
+            return new (std::nothrow) StringArrayLogTarget();
+        }
+    };
+
+    class StringMapLogTargetProvider : public ELogTargetProvider {
+    public:
+        ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final {
+            // no need for nay configuration
+            return new (std::nothrow) StringMapLogTarget();
+        }
+    };
+
+With both providers in hand, we can present the modified string schema handler:
+
+    class StringSchemaHandler : public ELogSchemaHandler {
+    public:
+        StringSchemaHandler() : ELogSchemaHandler(SCHEME_NAME) {}
+        StringSchemaHandler(const StringSchemaHandler&) = delete;
+        StringSchemaHandler(StringSchemaHandler&&) = delete;
+        StringSchemaHandler& operator=(const StringSchemaHandler&) = delete;
+
+        static constexpr const char* SCHEME_NAME = "string";
+
+        /** @brief Allow derived classes to registers predefined target providers. */
+        bool registerPredefinedProviders() { 
+            registerTargetProvider("string_array", new (std::nothrow) StringArrayLogTargetProvider());
+            registerTargetProvider("string_map", new (std::nothrow) StringMapLogTargetProvider());
+            return true; 
+        }
+
+        // this time we do not override loadTarget()
+
+        ELOG_DECLARE_SCHEMA_HANDLER(StringSchemaHandler)
+    };
+
+    // should be placed in the source file
+    ELOG_IMPLEMENT_SCHEMA_HANDLER(StringSchemaHandler)
+
+Note that this time we override registerPredefinedProviders() instead of loadTarget(), and there we register a target provider for each log target type supported by this schema handler.
+
+Now the log targets can be loaded as follows:
+
+    log_target = string://string_array?log_format=string:${time} ${msg}
+    
+    log_target = string://string_map?log_format=string:${time} ${msg}
+
+As mentioned already above, do not forget to register the schema handler:
+
+    // register the schema handler under schem
+    elog::registerSchemaHandler(new (std::nothrow) StringSchemaHandler());
 
 ### Using Proprietary Protocol for gRPC Log Target
 

@@ -2,24 +2,18 @@
 #define __ELOG_ASYNC_TARGET_PROVIDER_H__
 
 #include "elog_async_target.h"
+#include "elog_target_provider.h"
 #include "elog_target_spec.h"
 
 namespace elog {
 
 /** @brief Parent interface for all asynchronous log target providers. */
-class ELOG_API ELogAsyncTargetProvider {
+class ELOG_API ELogAsyncTargetProvider : public ELogTargetProvider {
 public:
     ELogAsyncTargetProvider(const ELogAsyncTargetProvider&) = delete;
     ELogAsyncTargetProvider(ELogAsyncTargetProvider&&) = delete;
     virtual ~ELogAsyncTargetProvider() {}
     ELogAsyncTargetProvider& operator=(const ELogAsyncTargetProvider&) = delete;
-
-    /**
-     * @brief Loads a target from configuration object.
-     * @param logTargetCfg The configuration object.
-     * @return ELogAsyncTarget* The resulting log target, or null if failed.
-     */
-    virtual ELogAsyncTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) = 0;
 
 protected:
     ELogAsyncTargetProvider() {}

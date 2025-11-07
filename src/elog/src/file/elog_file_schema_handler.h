@@ -8,10 +8,14 @@ namespace elog {
 /** @brief Handler for loading internally supported log target from configuration. */
 class ELogFileSchemaHandler : public ELogSchemaHandler {
 public:
-    ELogFileSchemaHandler() {}
+    ELogFileSchemaHandler() : ELogSchemaHandler(SCHEME_NAME) {}
     ELogFileSchemaHandler(const ELogFileSchemaHandler&) = delete;
     ELogFileSchemaHandler(ELogFileSchemaHandler&&) = delete;
     ELogFileSchemaHandler& operator=(ELogFileSchemaHandler&) = delete;
+
+    static constexpr const char* SCHEME_NAME = "file";
+
+    ELOG_DECLARE_SCHEMA_HANDLER(ELogFileSchemaHandler)
 
     /** @brief Registers predefined target providers. */
     bool registerPredefinedProviders() final { return true; }
@@ -22,11 +26,6 @@ public:
      * @return ELogTarget* The resulting log target or null if failed.
      */
     ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) final;
-
-    /**
-     * @brief Let every schema handler implement object destruction and finally call "delete this".
-     */
-    void destroy() final;
 
     /**
      * @brief Create a file log target object.
@@ -49,10 +48,6 @@ public:
                                        bool useFileLock, uint64_t segmentSizeBytes,
                                        uint32_t segmentRingSize, uint32_t segmentCount,
                                        bool enableStats);
-
-private:
-    /** @brief Private destructor, do not allow direct call to delete. */
-    ~ELogFileSchemaHandler() final {}
 };
 
 }  // namespace elog

@@ -13,7 +13,7 @@ public:
     static const uint32_t ELOG_SCHEMA_LEN;
 
     /** @brief Registers a schema handler by name. */
-    static bool registerSchemaHandler(const char* schemeName, ELogSchemaHandler* schemaHandler);
+    static bool registerSchemaHandler(ELogSchemaHandler* schemaHandler);
 
     /** @brief Retrieves a schema handler by name. */
     static ELogSchemaHandler* getSchemaHandler(const char* schemeName);

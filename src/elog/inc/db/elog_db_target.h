@@ -19,55 +19,79 @@ namespace elog {
 /** @def Attempt reconnect every second. */
 #define ELOG_DB_RECONNECT_TIMEOUT_MILLIS 1000
 
+/** @brief Database threading model constants. */
+enum class ELogDbThreadModel : uint32_t {
+    /**
+     * @brief No threading model employed by the db target. The caller is responsible for
+     * multi-threaded access to underlying database objects (connection, prepared statement,
+     * etc.).
+     */
+    TM_NONE,
+
+    /**
+     * @brief All access to database objects will be serialized with a single lock and will use
+     * a single database connection.
+     */
+    TM_LOCK,
+
+    /**
+     * @brief Database objects (connection, prepared statement, etc.) will be duplicated on a
+     * per-thread basis. No lock is used.
+     */
+    TM_CONN_PER_THREAD,
+
+    /**
+     * @brief A fixed-size pool of database connections will be used to communicate with the
+     * database. Each log record sending will use any available connection at the moment of
+     * sending log data to the database.
+     */
+    TM_CONN_POOL
+};
+
+/** @brief Common database target configuration. */
+struct ELOG_API ELogDbConfig {
+    /** @brief The database connection string. May contain just host name or IP address. */
+    std::string m_connString;
+
+    /** @brief The insert query used to insert log records into the target database. */
+    std::string m_insertQuery;
+
+    /** @brief The thread model being used to access the database (e.g. connection pooling). */
+    ELogDbThreadModel m_threadModel;
+
+    /**
+     * @brief The connection pool size used to access the database. When using thread model
+     * other than @ref ELogDbThreadModel::TM_CONN_POOL, this value is ignored, and the maximum
+     * number of threads specified during @ref elog::initialize() is used.
+     */
+    uint32_t m_poolSize;
+
+    /** @brief The reconnect timeout used by the background reconnect task. */
+    uint64_t m_reconnectTimeoutMillis;
+
+    ELogDbConfig()
+        : m_threadModel(ELogDbThreadModel::TM_LOCK),
+          m_poolSize(0),
+          m_reconnectTimeoutMillis(ELOG_DB_RECONNECT_TIMEOUT_MILLIS) {}
+    ELogDbConfig(const ELogDbConfig&) = default;
+    ELogDbConfig(ELogDbConfig&&) = default;
+    ELogDbConfig& operator=(const ELogDbConfig&) = default;
+    ~ELogDbConfig() {}
+};
+
 /** @brief Abstract parent class for DB log targets. */
 class ELOG_API ELogDbTarget : public ELogTarget {
 public:
-    /** @brief Threading model constants. */
-    enum class ThreadModel : uint32_t {
-        /**
-         * @brief No threading model employed by the db target. The caller is responsible for
-         * multi-threaded access to underlying database objects (connection, prepared statement,
-         * etc.).
-         */
-        TM_NONE,
-
-        /**
-         * @brief All access to database objects will be serialized with a single lock and will use
-         * a single database connection.
-         */
-        TM_LOCK,
-
-        /**
-         * @brief Database objects (connection, prepared statement, etc.) will be duplicated on a
-         * per-thread basis. No lock is used.
-         */
-        TM_CONN_PER_THREAD,
-
-        /**
-         * @brief A fixed-size pool of database connections will be used to communicate with the
-         * database. Each log record sending will use any available connection at the moment of
-         * sending log data to the database.
-         */
-        TM_CONN_POOL
-    };
-
 protected:
     /**
      * @brief Construct a new ELogDbTarget object
      *
      * @param dbName The database name (for logging purposes only).
-     * @param rawInsertStatement The insert statement.
+     * @param dbConfig Common database access attributes.
      * @param queryStyle The query style used to prepare the insert statement.
-     * @param threadModel The thread model used in connection pooling.
-     * @param poolSize The connection pool size. When using thread model @ref TM_LOCK, this value is
-     * ignored. When using thread model @ref TM_CONN_PER_THREAD, this value is ignored as well, and
-     * the maximum number of threads specified during @ref elog::initialize() is used.
-     * @param reconnectTimeoutMillis The reconnect timeout used by the background reconnect task.
      */
-    ELogDbTarget(const char* dbName, const char* rawInsertStatement,
-                 ELogDbFormatter::QueryStyle queryStyle,
-                 ThreadModel threadModel = ThreadModel::TM_LOCK, uint32_t poolSize = 0,
-                 uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS);
+    ELogDbTarget(const char* dbName, const ELogDbConfig& dbConfig,
+                 ELogDbFormatter::QueryStyle queryStyle);
     ELogDbTarget(const ELogDbTarget&) = delete;
     ELogDbTarget(ELogDbTarget&&) = delete;
     ELogDbTarget& operator=(const ELogDbTarget&) = delete;
@@ -78,7 +102,7 @@ protected:
      * @brief Notifies the log target that it has turned thread-safe. Derived class may take
      * special measures. The DB log target removes all threading considerations in this case.
      */
-    void onThreadSafe() override { m_threadModel = ThreadModel::TM_NONE; }
+    void onThreadSafe() override { m_threadModel = ELogDbThreadModel::TM_NONE; }
 
     /** @brief Order the log target to start (required for threaded targets). */
     bool startLogTarget() override;
@@ -151,7 +175,7 @@ private:
     ELogDbFormatter::QueryStyle m_queryStyle;
     std::vector<ELogDbFormatter::ParamType> m_paramTypes;
 
-    ThreadModel m_threadModel;
+    ELogDbThreadModel m_threadModel;
     uint32_t m_poolSize;
     uint64_t m_reconnectTimeoutMillis;
 

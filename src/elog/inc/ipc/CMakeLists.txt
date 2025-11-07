@@ -5,5 +5,4 @@ target_sources(
         FILE_SET publicheaders
         TYPE HEADERS
         FILES
-            elog_ipc_schema_handler.h
-            elog_ipc_target_provider.h)
+            elog_ipc_schema_handler.h)

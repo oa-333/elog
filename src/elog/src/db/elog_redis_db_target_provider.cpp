@@ -12,18 +12,14 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogRedisDbTargetProvider)
 
-ELogDbTarget* ELogRedisDbTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg,
-                                                    const std::string& connString,
-                                                    const std::string& insertQuery,
-                                                    ELogDbTarget::ThreadModel threadModel,
-                                                    uint32_t maxThreads,
-                                                    uint64_t reconnectTimeoutMillis) {
+ELogTarget* ELogRedisDbTargetProvider::loadDbTarget(const ELogConfigMapNode* logTargetCfg,
+                                                    const ELogDbConfig& dbConfig) {
     // the connection string actually contains the host name/ip
     std::string host;
     int port;
-    if (!ELogConfigParser::parseHostPort(connString, host, port)) {
+    if (!ELogConfigParser::parseHostPort(dbConfig.m_connString, host, port)) {
         ELOG_REPORT_ERROR("Invalid redis log target connection string, expecting <host:port>: %s",
-                          connString.c_str());
+                          dbConfig.m_connString.c_str());
         return nullptr;
     }
 
@@ -44,8 +40,7 @@ ELogDbTarget* ELogRedisDbTargetProvider::loadTarget(const ELogConfigMapNode* log
     tokenize(indexInserts.c_str(), insertStmts, ";");
 
     ELogDbTarget* target =
-        new (std::nothrow) ELogRedisDbTarget(host, port, passwd, insertQuery, insertStmts,
-                                             threadModel, maxThreads, reconnectTimeoutMillis);
+        new (std::nothrow) ELogRedisDbTarget(dbConfig, host, port, passwd, insertStmts);
     if (target == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate Redis log target, out of memory");
     }

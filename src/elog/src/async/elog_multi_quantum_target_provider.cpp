@@ -9,7 +9,7 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogMultiQuantumTargetProvider)
 
-ELogAsyncTarget* ELogMultiQuantumTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
+ELogTarget* ELogMultiQuantumTargetProvider::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // make sure that we have quantum_buffer_size and
 
     // parse quantum buffer size property

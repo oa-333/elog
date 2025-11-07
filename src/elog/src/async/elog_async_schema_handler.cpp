@@ -8,81 +8,30 @@
 #include "async/elog_queued_target_provider.h"
 #include "elog_config_loader.h"
 #include "elog_report.h"
+#include "elog_schema_handler_internal.h"
 
 namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogAsyncSchemaHandler)
 
-template <typename T>
-static bool initAsyncTargetProvider(ELogAsyncSchemaHandler* schemaHandler, const char* name) {
-    T* provider = new (std::nothrow) T();
-    if (provider == nullptr) {
-        ELOG_REPORT_ERROR("Failed to create %s asynchronous target provider, out of memory", name);
-        return false;
-    }
-    if (!schemaHandler->registerAsyncTargetProvider(name, provider)) {
-        ELOG_REPORT_ERROR("Failed to register %s asynchronous target provider, duplicate name",
-                          name);
-        delete provider;
-        return false;
-    }
-    return true;
-}
-
-ELogAsyncSchemaHandler::~ELogAsyncSchemaHandler() {
-    for (auto& entry : m_providerMap) {
-        delete entry.second;
-    }
-    m_providerMap.clear();
-}
+ELOG_IMPLEMENT_SCHEMA_HANDLER(ELogAsyncSchemaHandler)
 
 bool ELogAsyncSchemaHandler::registerPredefinedProviders() {
     // register predefined providers
-    if (!initAsyncTargetProvider<ELogDeferredTargetProvider>(this, "deferred")) {
+    if (!initTargetProvider<ELogDeferredTargetProvider>(ELOG_REPORT_LOGGER, this, "deferred")) {
         return false;
     }
-    if (!initAsyncTargetProvider<ELogQueuedTargetProvider>(this, "queued")) {
+    if (!initTargetProvider<ELogQueuedTargetProvider>(ELOG_REPORT_LOGGER, this, "queued")) {
         return false;
     }
-    if (!initAsyncTargetProvider<ELogQuantumTargetProvider>(this, "quantum")) {
+    if (!initTargetProvider<ELogQuantumTargetProvider>(ELOG_REPORT_LOGGER, this, "quantum")) {
         return false;
     }
-    if (!initAsyncTargetProvider<ELogMultiQuantumTargetProvider>(this, "multi_quantum")) {
+    if (!initTargetProvider<ELogMultiQuantumTargetProvider>(ELOG_REPORT_LOGGER, this,
+                                                            "multi_quantum")) {
         return false;
     }
     return true;
 }
-
-bool ELogAsyncSchemaHandler::registerAsyncTargetProvider(const char* asyncName,
-                                                         ELogAsyncTargetProvider* provider) {
-    return m_providerMap.insert(ProviderMap::value_type(asyncName, provider)).second;
-}
-
-ELogTarget* ELogAsyncSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
-    // the path represents the asynchronous target type name
-    // current predefined types are supported:
-    // deferred
-    // queued
-    // quantum
-    std::string asyncType;
-    if (!ELogConfigLoader::getLogTargetStringProperty(logTargetCfg, "asynchronous", "type",
-                                                      asyncType)) {
-        return nullptr;
-    }
-
-    // get the provider and create the target
-    ProviderMap::iterator providerItr = m_providerMap.find(asyncType);
-    if (providerItr != m_providerMap.end()) {
-        ELogAsyncTargetProvider* provider = providerItr->second;
-        return provider->loadTarget(logTargetCfg);
-    }
-
-    ELOG_REPORT_ERROR(
-        "Invalid asynchronous log target specification, unsupported async type %s (context: %s)",
-        asyncType.c_str(), logTargetCfg->getFullContext());
-    return nullptr;
-}
-
-void ELogAsyncSchemaHandler::destroy() { delete this; }
 
 }  // namespace elog

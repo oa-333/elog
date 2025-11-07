@@ -17,9 +17,9 @@ public:
     ELogPGSQLDbTargetProvider& operator=(const ELogPGSQLDbTargetProvider&) = delete;
     ~ELogPGSQLDbTargetProvider() final {}
 
-    ELogDbTarget* loadTarget(const ELogConfigMapNode* logTargetCfg, const std::string& connString,
-                             const std::string& insertQuery, ELogDbTarget::ThreadModel threadModel,
-                             uint32_t maxThreads, uint64_t reconnectTimeoutMillis) final;
+protected:
+    ELogTarget* loadDbTarget(const ELogConfigMapNode* logTargetCfg,
+                             const ELogDbConfig& dbConfig) final;
 };
 
 }  // namespace elog

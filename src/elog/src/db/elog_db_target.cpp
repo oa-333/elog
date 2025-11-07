@@ -74,25 +74,22 @@ static const uint32_t ELOG_DB_INVALID_SLOT_ID = 0xFFFFFFFF;
 
 static thread_local uint32_t sThreadSlotId = ELOG_DB_INVALID_SLOT_ID;
 
-ELogDbTarget::ELogDbTarget(const char* dbName, const char* rawInsertStatement,
-                           ELogDbFormatter::QueryStyle queryStyle,
-                           ThreadModel threadModel /* = ThreadModel::TM_LOCK */,
-                           uint32_t poolSize /* = 0 */,
-                           uint64_t reconnectTimeoutMillis /* = ELOG_DB_RECONNECT_TIMEOUT_MILLIS */)
+ELogDbTarget::ELogDbTarget(const char* dbName, const ELogDbConfig& dbConfig,
+                           ELogDbFormatter::QueryStyle queryStyle)
     : ELogTarget("db"),
       m_dbName(dbName),
       m_dbFormatter(nullptr),
-      m_rawInsertStatement(rawInsertStatement),
+      m_rawInsertStatement(dbConfig.m_insertQuery),
       m_queryStyle(queryStyle),
-      m_threadModel(threadModel),
-      m_poolSize(poolSize),
-      m_reconnectTimeoutMillis(reconnectTimeoutMillis),
+      m_threadModel(dbConfig.m_threadModel),
+      m_poolSize(dbConfig.m_poolSize),
+      m_reconnectTimeoutMillis(dbConfig.m_reconnectTimeoutMillis),
       m_shouldStop(false),
       m_shouldWakeUp(false) {
     // fix pool size according to thread model
-    if (threadModel == ThreadModel::TM_CONN_PER_THREAD) {
+    if (m_threadModel == ELogDbThreadModel::TM_CONN_PER_THREAD) {
         m_poolSize = elog::getMaxThreads();
-    } else if (threadModel == ThreadModel::TM_LOCK) {
+    } else if (m_threadModel == ELogDbThreadModel::TM_LOCK) {
         m_poolSize = 1;
     }
 }
@@ -136,7 +133,7 @@ bool ELogDbTarget::startLogTarget() {
 
     // in lock mode and connection pool mode we allocate connections and try to connect
     m_connectionPool.resize(m_poolSize);
-    if (m_threadModel != ThreadModel::TM_CONN_PER_THREAD) {
+    if (m_threadModel != ELogDbThreadModel::TM_CONN_PER_THREAD) {
         if (!initConnectionPool()) {
             return false;
         }
@@ -163,7 +160,7 @@ bool ELogDbTarget::stopLogTarget() {
 
 uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
     uint32_t slotId = ELOG_DB_INVALID_SLOT_ID;
-    if (m_threadModel == ThreadModel::TM_CONN_PER_THREAD) {
+    if (m_threadModel == ELogDbThreadModel::TM_CONN_PER_THREAD) {
         slotId = sThreadSlotId;
         if (slotId == ELOG_DB_INVALID_SLOT_ID) {
             // do a full initialize/connect
@@ -175,7 +172,7 @@ uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
                 sThreadSlotId = slotId;
             }
         }
-    } else if (m_threadModel == ThreadModel::TM_CONN_POOL) {
+    } else if (m_threadModel == ELogDbThreadModel::TM_CONN_POOL) {
         // grab a free connection or give up
         for (uint32_t i = 0; i < m_connectionPool.size(); ++i) {
             if (m_connectionPool[i].isConnected() && m_connectionPool[i].setExecuting()) {
@@ -201,7 +198,7 @@ uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
     ConnectionData& connData = m_connectionPool[slotId];
 
     bool res = true;
-    if (m_threadModel == ThreadModel::TM_LOCK) {
+    if (m_threadModel == ELogDbThreadModel::TM_LOCK) {
         std::unique_lock<std::mutex> lock(m_lock);
         res = execInsert(logRecord, connData.getDbData());
         if (!res) {
@@ -216,7 +213,7 @@ uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
     }
 
     // reset executing flag in connection pool
-    if (res && m_threadModel == ThreadModel::TM_CONN_POOL) {
+    if (res && m_threadModel == ELogDbThreadModel::TM_CONN_POOL) {
         connData.setNotExecuting();
     }
 
@@ -290,7 +287,7 @@ void ELogDbTarget::termConnection(uint32_t slotId) {
     disconnectDb(dbData);
     connData.setDisconnected();
     // from this point onward the reconnect task can operate on the connection
-    if (m_threadModel == ThreadModel::TM_CONN_POOL) {
+    if (m_threadModel == ELogDbThreadModel::TM_CONN_POOL) {
         connData.setNotExecuting();
     }
     // from this point onward, in connection pool mode, other thread can try to grab this connection

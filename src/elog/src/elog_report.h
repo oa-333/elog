@@ -65,9 +65,15 @@ private:
 /** @brief Helper macro for declaring internal logger by name. */
 #define ELOG_DECLARE_REPORT_LOGGER(name) static ELogReportLogger sLogger(#name);
 
+/** @brief Helper macro for getting a reference to the internal logger. */
+#define ELOG_REPORT_LOGGER sLogger
+
 /** @brief Generic reporting macro. */
-#define ELOG_REPORT(level, fmt, ...) \
-    ELogReport::report(sLogger, level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
+#define ELOG_REPORT_EX(logger, level, fmt, ...) \
+    ELogReport::report(logger, level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
+
+/** @brief Generic reporting macro. */
+#define ELOG_REPORT(level, fmt, ...) ELOG_REPORT_EX(sLogger, level, fmt, ##__VA_ARGS__)
 
 /** @brief Report error message to enclosing application/library. */
 #define ELOG_REPORT_FATAL(fmt, ...) ELOG_REPORT(ELEVEL_FATAL, fmt, ##__VA_ARGS__)

@@ -2,12 +2,13 @@
 #define __ELOG_DB_TARGET_PROVIDER_H__
 
 #include "elog_db_target.h"
+#include "elog_target_provider.h"
 #include "elog_target_spec.h"
 
 namespace elog {
 
 /** @brief Parent interface for all DB log targets. */
-class ELOG_API ELogDbTargetProvider {
+class ELOG_API ELogDbTargetProvider : public ELogTargetProvider {
 public:
     ELogDbTargetProvider(const ELogDbTargetProvider&) = delete;
     ELogDbTargetProvider(ELogDbTargetProvider&&) = delete;
@@ -17,21 +18,24 @@ public:
     /**
      * @brief Loads a target from configuration.
      * @param logTargetCfg The configuration object.
-     * @param connString The extracted connection string.
-     * @param insertQuery The extracted insert query.
-     * @param threadModel The threading model to use with db access.
-     * @param maxThreads The maximum number of concurrent threads sending log messages to the
-     * database at any given point in time.
-     * @param reconnectTimeoutMillis Database reconnect timeout in millisecond.
-     * @return ELogDbTarget* The resulting DB log target, or null of failed.
+     * @return ELogTarget* The resulting log target, or null of failed.
      */
-    virtual ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg,
-                                   const std::string& connString, const std::string& insertQuery,
-                                   ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads,
-                                   uint64_t reconnectTimeoutMillis) = 0;
+    ELogTarget* loadTarget(const ELogConfigMapNode* logTargetCfg) override;
 
 protected:
     ELogDbTargetProvider() {}
+
+    /**
+     * @brief Loads a target from configuration.
+     * @param logTargetCfg The configuration object.
+     * @param dbConfig Common database target attributes.
+     * @return ELogTarget* The resulting DB log target, or null of failed.
+     */
+    virtual ELogTarget* loadDbTarget(const ELogConfigMapNode* logTargetCfg,
+                                     const ELogDbConfig& dbConfig) = 0;
+
+private:
+    bool loadDbAttributes(const ELogConfigMapNode* logTargetCfg, ELogDbConfig& dbConfig);
 };
 
 }  // namespace elog

@@ -28,17 +28,14 @@ class ELOG_API ELogMySqlDbTarget : public ELogDbTarget {
 public:
     // if maxThreads is zero, then the number configured during elog::initialize() will be used
     // the user is allowed here to override the value specified during elog::initialize()
-    ELogMySqlDbTarget(const std::string& url, const std::string& db, const std::string& user,
-                      const std::string& passwd, const std::string& insertStmt,
-                      ELogDbTarget::ThreadModel threadModel, uint32_t maxThreads = 0,
-                      uint64_t reconnectTimeoutMillis = ELOG_DB_RECONNECT_TIMEOUT_MILLIS)
-        : ELogDbTarget("MySQL", insertStmt.c_str(), ELogDbFormatter::QueryStyle::QS_QMARK,
-                       threadModel, maxThreads, reconnectTimeoutMillis),
-          m_url(url),
+    ELogMySqlDbTarget(const ELogDbConfig& dbConfig, const std::string& db, const std::string& user,
+                      const std::string& passwd)
+        : ELogDbTarget("MySQL", dbConfig, ELogDbFormatter::QueryStyle::QS_QMARK),
+          m_url(dbConfig.m_connString),
           m_db(db),
           m_user(user),
           m_passwd(passwd),
-          m_insertStmtText(insertStmt) {}
+          m_insertStmtText(dbConfig.m_insertQuery) {}
 
     ELogMySqlDbTarget(const ELogMySqlDbTarget&) = delete;
     ELogMySqlDbTarget(ELogMySqlDbTarget&&) = delete;

@@ -10,6 +10,8 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogSysSchemaHandler)
 
+ELOG_IMPLEMENT_SCHEMA_HANDLER(ELogSysSchemaHandler)
+
 ELogTarget* ELogSysSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetCfg) {
     // load target type
     std::string providerType;
@@ -65,7 +67,5 @@ ELogTarget* ELogSysSchemaHandler::loadTarget(const ELogConfigMapNode* logTargetC
     }
     return logTarget;
 }
-
-void ELogSysSchemaHandler::destroy() { delete this; }
 
 }  // namespace elog
