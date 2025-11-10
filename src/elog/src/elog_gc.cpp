@@ -7,11 +7,10 @@
 #include "elog_field_selector_internal.h"
 #include "elog_report.h"
 
+// the maximum number of GC objects in ELog
+#define ELOG_MAX_GC_OBJECTS 64
 #define ELOG_INVALID_GC_SLOT_ID ((uint64_t)-1)
 #define ELOG_WORD_SIZE sizeof(uint64_t)
-
-// TODO: this should be defined in interface header somewhere
-#define ELOG_MAX_THREADS_UPPER_BOUND 8192
 
 // TODO: this GC needs much more testing
 
@@ -19,25 +18,74 @@ namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogGC)
 
-// TODO: using global slot id per-thread does not allow to use more than one GC, so either make the
-// GC a singleton, or use some per-thread array for that, so each GC can manage its own per-thread
-// slot id. Currently we don't have use for GC except for group flush, so this is not fixed for now
-static thread_local uint64_t sCurrentThreadGCSlotId = ELOG_INVALID_GC_SLOT_ID;
+// atomic bit set of GC ids
+static std::atomic<uint64_t> sGcIds = 0;
+
+inline bool allocGcId(uint32_t& gcId) {
+    uint64_t gcIds = sGcIds.load(std::memory_order_acquire);
+    while (gcIds != 0xFFFFFFFFFFFFFFFF) {
+        // find vacant id
+        int pos = std::countr_one(gcIds);
+        uint64_t newGcIds = gcIds | (1ull << pos);
+        if (sGcIds.compare_exchange_strong(gcIds, newGcIds, std::memory_order_seq_cst)) {
+            gcId = (uint64_t)pos;
+            return true;
+        }
+        // lost race
+        gcIds = sGcIds.load(std::memory_order_acquire);
+    }
+
+    // NOTE: it is highly improbable to get stuck in infinite loop, because GC's allocate id for
+    // entire application life-time, so the ids are not expected to be released while some GC tries
+    // to obtain an id
+
+    // no vacant slot
+    return false;
+}
+
+inline void freeGcId(uint32_t gcId) {
+    if (gcId >= ELOG_MAX_GC_OBJECTS) {
+        // silently ignore invalid parameter
+        return;
+    }
+
+    uint64_t gcIds = sGcIds.load(std::memory_order_acquire);
+    uint64_t newGcIds = gcIds & ~(1ull << gcId);
+    while (!sGcIds.compare_exchange_strong(gcIds, newGcIds, std::memory_order_seq_cst)) {
+        gcIds = sGcIds.load(std::memory_order_relaxed);
+        newGcIds = gcIds & ~(1ull << gcId);
+        // continue as long as we lose the race, at some point we will win
+    }
+}
+
+// use per-thread array for allowing current thread access multiple GCs, so each GC can manage its
+// own per-thread slot id
+static thread_local uint64_t sCurrentThreadGCSlotId[ELOG_MAX_GC_OBJECTS] = {
+    ELOG_INVALID_GC_SLOT_ID};
 
 bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency,
                         uint32_t gcPeriodMillis, uint32_t gcThreadCount) {
-    if (maxThreads > ELOG_MAX_THREADS_UPPER_BOUND) {
+    if (maxThreads == 0) {
+        maxThreads = getMaxThreads();
+    }
+    if (maxThreads > getMaxThreads()) {
         ELOG_REPORT_ERROR(
             "Cannot initialize %s garbage collector, maximum number of threads %u exceeds allowed "
             "limit %u",
-            name, maxThreads, (unsigned)ELOG_MAX_THREADS_UPPER_BOUND);
+            name, maxThreads, getMaxThreads());
         return false;
     }
     if (gcFrequency == 0 && gcPeriodMillis == 0) {
         ELOG_REPORT_ERROR(
             "Cannot initialize %s garbage collector, when GC frequency is zero, the background GC "
-            "task period cannot be zero as well");
+            "task period cannot be zero as well",
+            name);
         return false;
+    }
+
+    if (!allocGcId(m_id)) {
+        ELOG_REPORT_ERROR(
+            "Cannot initialize %s garbage collection, failed to allocate GC identifier", name);
     }
 
     m_name = name;
@@ -123,7 +171,7 @@ bool ELogGC::retire(ELogManagedObject* object, uint64_t epoch) {
     // consider release slot if we can get thread-finish event (we have already win32 support for
     // that, we can use special TLS destructor for that on Linux)
     // then just add the group to an internal data structure
-    uint64_t slotId = sCurrentThreadGCSlotId;
+    uint64_t slotId = sCurrentThreadGCSlotId[m_id];
     if (slotId == ELOG_INVALID_GC_SLOT_ID) {
         slotId = obtainSlot();
         if (slotId == ELOG_INVALID_GC_SLOT_ID) {
@@ -133,7 +181,7 @@ bool ELogGC::retire(ELogManagedObject* object, uint64_t epoch) {
                 m_name.c_str(), m_maxThreads);
             return false;
         }
-        sCurrentThreadGCSlotId = slotId;
+        sCurrentThreadGCSlotId[m_id] = slotId;
     }
 
     // allocate new list item to push on head
@@ -247,9 +295,9 @@ void ELogGC::processObjectList(ManagedObjectList& objectList, uint64_t minActive
 }
 
 void ELogGC::onThreadExit(void* param) {
-    if (sCurrentThreadGCSlotId != ELOG_INVALID_GC_SLOT_ID) {
-        ELogGC* gc = (ELogGC*)param;
-        gc->setListInactive(sCurrentThreadGCSlotId);
+    ELogGC* gc = (ELogGC*)param;
+    if (sCurrentThreadGCSlotId[gc->m_id] != ELOG_INVALID_GC_SLOT_ID) {
+        gc->setListInactive(sCurrentThreadGCSlotId[gc->m_id]);
     }
 }
 

@@ -24,6 +24,7 @@ class ELOG_API ELogGC {
 public:
     ELogGC()
         : m_name("elog-gc"),
+          m_id(0),
           m_gcFrequency(0),
           m_gcPeriodMillis(0),
           m_maxThreads(0),
@@ -45,7 +46,10 @@ public:
     /**
      * @brief Initializes the garbage collector.
      * @param name The garbage collector name (user may define several).
-     * @param maxThreads The maximum number of threads supported by the garbage collector.
+     * @param maxThreads The maximum number of threads that can access the garbage collector
+     * concurrently. This value cannot exceed the number of threads configured during initialization
+     * of ELog (@see ELogParams::m_maxThreads). Specify zero to use the value passed to ELog during
+     * library initialization.
      * @param gcFrequency The frequency of running cooperative GC on caller's side when calling @ref
      * endEpoch() (once per each gcFrequency calls to endEpoch()). Zero disables cooperative garbage
      * collection. Instead a positive garbage collection period must be specified.
@@ -54,6 +58,9 @@ public:
      * recycling. This can be specified in addition to cooperative garbage collection frequency.
      * @param gcThreadCount Optionally specify the number of background garbage collection tasks.
      * This parameter is ignored when @ref gcPeriodMillis is zero.
+     *
+     * @note Either one or both of cooperative and background garbage collectioncan can be
+     * configured.
      */
     bool initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency,
                     uint32_t gcPeriodMillis = 0, uint32_t gcThreadCount = 0);
@@ -93,6 +100,7 @@ private:
 
     // the private garbage collector's name
     std::string m_name;
+    uint32_t m_id;  // global GC id, unique among all GCs
     uint32_t m_gcFrequency;
     uint32_t m_gcPeriodMillis;
     uint32_t m_maxThreads;
