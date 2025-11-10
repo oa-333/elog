@@ -14,10 +14,12 @@ namespace elog {
 class ELOG_API ELogTarget;
 class ELOG_API ELogLogger;
 
-/** @brief A single log counter. */
+/** @brief A single log counter, designed for one writer thread and many reader threads. */
 struct ELOG_API ELogCounter {
-    /** @brief A volatile log counter (avoid caching, so reader sees correct values). */
-    // TODO: check this further, is there another way to ensure reader sees correct value?
+    /**
+     * @brief A volatile log counter (avoid caching, so reader sees correct values).
+     * @note Since there is only one writer that is enough.
+     */
     volatile uint64_t m_counter;
 
     ELogCounter() : m_counter(0) {}

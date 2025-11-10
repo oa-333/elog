@@ -185,12 +185,21 @@ extern ELOG_API size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer&
                                         ELogTimeUnits timeUnits = ELogTimeUnits::TU_MILLI_SECONDS,
                                         bool showZone = false, const char* formatStr = nullptr);
 
-/** @brief Retrieves a time stamp. */
-// TODO: change this name, it is too much similar to elogGetCurrentTime()
-inline uint64_t getCurrentTimeMillis() {
-    return (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+/**
+ * @brief Retrieves a time stamp as ticks since the epoch, in a given resolution.
+ * @tparam Duration The time-stamp resolution.
+ * @return The timestamp.
+ */
+template <typename Duration = std::chrono::milliseconds>
+inline uint64_t getCurrentTimeEpoch() {
+    return (uint64_t)std::chrono::duration_cast<Duration>(
                std::chrono::system_clock::now().time_since_epoch())
         .count();
+}
+
+/** @brief Retrieves a time stamp as milliseconds since the epoch. */
+inline uint64_t getCurrentTimeEpochMillis() {
+    return getCurrentTimeEpoch<std::chrono::milliseconds>();
 }
 
 }  // namespace elog

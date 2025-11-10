@@ -108,12 +108,17 @@ protected:
         delete;
 };
 
-// TODO: for sake of being able to externally extend elog, the ELOG_API should be replaced with
-// macro parameter, so it can be set to dll export, or to nothing
-
-/** @def Utility macro for declaring binary format provider factory method registration. */
-#define ELOG_DECLARE_BINARY_FORMAT_PROVIDER(BinaryFormatProviderType, Name)                      \
-    class ELOG_API BinaryFormatProviderType##Constructor final                                   \
+/**
+ * @def Utility macro for declaring binary format provider factory method registration.
+ * @param BinaryFormatProviderType Type name of binary format provider class.
+ * @param Name Configuration name of binary format provider (for factory function and to allow
+ * loading from configuration).
+ * @param ImportExportSpec Window import/export specification. If exporting from a library then
+ * specify a macro that will expand correctly within the library and from outside as well. If not
+ * relevant then pass ELOG_NO_EXPORT.
+ */
+#define ELOG_DECLARE_BINARY_FORMAT_PROVIDER(BinaryFormatProviderType, Name, ImportExportSpec)    \
+    class ImportExportSpec BinaryFormatProviderType##Constructor final                           \
         : public elog::ELogBinaryFormatProviderConstructor {                                     \
     public:                                                                                      \
         BinaryFormatProviderType##Constructor()                                                  \
@@ -174,7 +179,7 @@ public:
                              uint32_t length) override;
 
 private:
-    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogInternalBinaryFormatProvider, elog)
+    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogInternalBinaryFormatProvider, elog, ELOG_API)
 };
 
 /** @brief Binary format provider for protobuf based messages. */
@@ -215,7 +220,7 @@ public:
                              uint32_t length) override;
 
 private:
-    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogProtobufBinaryFormatProvider, protobuf)
+    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogProtobufBinaryFormatProvider, protobuf, ELOG_API)
 };
 
 /** @brief Binary format provider for Thrift based messages. */
@@ -256,7 +261,7 @@ public:
                              uint32_t length) override;
 
 private:
-    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogThriftBinaryFormatProvider, thrift)
+    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogThriftBinaryFormatProvider, thrift, ELOG_API)
 };
 
 /** @brief Binary format provider for Avro based messages. */
@@ -297,7 +302,7 @@ public:
                              uint32_t length) override;
 
 private:
-    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogAvroBinaryFormatProvider, avro)
+    ELOG_DECLARE_BINARY_FORMAT_PROVIDER(ELogAvroBinaryFormatProvider, avro, ELOG_API)
 };
 
 }  // namespace elog

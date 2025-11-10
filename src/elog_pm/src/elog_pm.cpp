@@ -1087,7 +1087,7 @@ void updateGuardedSegment(const std::string& segName, ShmSegmentData& segData,
             }
         } else {
             segData.m_hdr->m_isProcessAlive = 1;
-            segData.m_hdr->m_lastProcessTimeEpochMillis = elog::getCurrentTimeMillis();
+            segData.m_hdr->m_lastProcessTimeEpochMillis = elog::getCurrentTimeEpochMillis();
             ELOG_TRACE_EX(sLogger, "Owning process of shared memory segment %s is still alive",
                           segName.c_str());
         }
@@ -1095,7 +1095,7 @@ void updateGuardedSegment(const std::string& segName, ShmSegmentData& segData,
 
     // sync and advance state
     if (syncSegment(segName, segData)) {
-        segData.m_hdr->m_lastSyncTimeEpochMillis = elog::getCurrentTimeMillis();
+        segData.m_hdr->m_lastSyncTimeEpochMillis = elog::getCurrentTimeEpochMillis();
         if (segData.m_state == SEG_DEAD) {
             segData.m_state = SEG_SYNCED;
             segData.m_hdr->m_isFullySynced = 1;

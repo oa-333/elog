@@ -271,7 +271,7 @@ ELogFilter* ELogConfigLoader::loadLogFilter(const ELogConfigMapNode* logTargetCf
         // such as: ((log_source == core.files) OR (tname == main) OR (file LIKE .*cpp))
         // this will be distinguished from normal case by the presence of parenthesis
         if (filterCfg[0] == '(') {
-            // TODO: in case of a string we need to parse it and build a filter object
+            // in case of a string we need to parse it and build a filter object
             return loadLogFilterExprStr(filterCfg);
         }
 

@@ -115,7 +115,7 @@ bool ELogRateLimitFilter::filterLogRecord(const ELogRecord& logRecord) {
         return true;
     }
 
-    uint64_t tstamp = getCurrentTimeMillis();
+    uint64_t tstamp = getCurrentTimeEpochMillis();
 
     // we are not expecting negative value here
     uint64_t wholeInterval = tstamp / m_intervalMillis;

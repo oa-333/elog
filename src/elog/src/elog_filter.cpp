@@ -165,8 +165,6 @@ inline bool compareString(ELogCmpOp cmpOp, const char* lhs, const char* rhs) {
         // rhs is the pattern to be matched that was loaded from configuration
         std::regex pattern(rhs);
         return std::regex_match(lhs, pattern);
-        // TODO: we can use regex replace for transforming log lines before shipping to external
-        // sources (e.g. field/record obfuscation)
     }
     // otherwise do normal string comparison
     int cmpRes = strcmp(lhs, rhs);
@@ -794,12 +792,10 @@ bool ELogMsgFilter::filterLogRecord(const ELogRecord& logRecord) {
 }
 
 bool ELogCountFilter::load(const ELogConfigMapNode* filterCfg) {
-    // TODO: ignoring comparison operator
     return loadIntFilter(filterCfg, "count", "count", m_count);
 }
 
 bool ELogCountFilter::loadExpr(const ELogExpression* expr) {
-    // TODO: ignoring comparison operator
     return loadIntFilter(expr, "count", m_count);
 }
 

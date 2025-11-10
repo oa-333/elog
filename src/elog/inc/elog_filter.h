@@ -507,7 +507,6 @@ public:
     ELogProcessIdFilter(ELogProcessIdFilter&&) = delete;
     ELogProcessIdFilter& operator=(const ELogProcessIdFilter&) = delete;
 
-    // TODO: it might be better to separate this into two classes, when for regex, one for numbers
     /** 
      * @brief Configure the filter. 
      * @note Process id is used a string to allow for regular expressions.
