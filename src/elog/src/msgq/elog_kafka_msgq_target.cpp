@@ -50,24 +50,25 @@ public:
     }
 
     bool prepareHeaders(rd_kafka_headers_t* headers, const std::vector<std::string>& headerNames,
-                        uint32_t& bytesWritten) {
+                        uint64_t& bytesWritten) {
         if (m_headerValues.size() != headerNames.size()) {
-            ELOG_REPORT_ERROR("Mismatching header names a values (%u names, %u values)",
-                              headerNames.size(), m_headerValues.size());
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT(
+                "Mismatching header names a values (%u names, %u values)", headerNames.size(),
+                m_headerValues.size());
             return false;
         }
+        bytesWritten = 0;
         for (uint32_t i = 0; i < m_headerValues.size(); ++i) {
             rd_kafka_resp_err_t res = rd_kafka_header_add(
                 headers, headerNames[i].c_str(), (ssize_t)headerNames[i].length(),
                 (void*)m_headerValues[i].c_str(), (ssize_t)m_headerValues[i].length());
             if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
-                ELOG_REPORT_ERROR("Failed to add kafka message header %s=%s: %s",
-                                  headerNames[i].c_str(), m_headerValues[i].c_str(),
-                                  rd_kafka_err2name(res));
+                ELOG_REPORT_MODERATE_ERROR_DEFAULT(
+                    "Failed to add kafka message header %s=%s: %s", headerNames[i].c_str(),
+                    m_headerValues[i].c_str(), rd_kafka_err2name(res));
                 return false;
             } else {
-                // NOTE: no overflow is expected here
-                bytesWritten += (uint32_t)m_headerValues[i].length();
+                bytesWritten += m_headerValues[i].length();
             }
         }
         return true;
@@ -164,29 +165,29 @@ bool ELogKafkaMsgQTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // prepare headers if any
     // NOTE: receptor must live until message sending, because it holds value strings
-    uint32_t bytesWritten = 0;
+    bytesWritten = 0;
     ELogKafkaMsgQFieldReceptor receptor;
     rd_kafka_headers_t* headers = nullptr;
     if (!m_headers.empty()) {
         headers = rd_kafka_headers_new(getHeaderCount());
         if (headers == nullptr) {
-            ELOG_REPORT_ERROR("Failed to allocate kafka headers, out of memory");
-            return 0;
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to allocate kafka headers, out of memory");
+            return false;
         }
         fillInHeaders(logRecord, &receptor);
         if (!receptor.prepareHeaders(headers, getHeaderNames(), bytesWritten)) {
-            ELOG_REPORT_ERROR("Failed to prepare kafka message headers");
-            return 0;
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to prepare kafka message headers");
+            return false;
         }
     }
 
     // prepare formatted log message
     std::string logMsg;
     formatLogMsg(logRecord, logMsg);
-    bytesWritten += (uint32_t)logMsg.length();
+    bytesWritten += logMsg.length();
 
     // unassigned partition, copy payload, no key specification, payload is formatted string
     // headers include specific log record fields
@@ -219,20 +220,22 @@ uint32_t ELogKafkaMsgQTarget::writeLogRecord(const ELogRecord& logRecord) {
         rd_kafka_error_t* res = rd_kafka_produceva(m_producer, vus, VU_COUNT);
         if (res != nullptr) {
             const char* errMsg = rd_kafka_err2name(rd_kafka_error_code(res));
-            ELOG_REPORT_ERROR("Failed to produce message on kafka topic %s: %s",
-                              m_topicName.c_str(), errMsg);
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to produce message on kafka topic %s: %s",
+                                               m_topicName.c_str(), errMsg);
             rd_kafka_error_destroy(res);
+            return false;
         }
     } else {
         if (rd_kafka_produce(m_topic, partition, RD_KAFKA_MSG_F_COPY, (void*)logMsg.c_str(),
                              logMsg.length(), nullptr, 0, nullptr) == -1) {
             const char* errMsg = rd_kafka_err2name(rd_kafka_last_error());
-            ELOG_REPORT_ERROR("Failed to produce message on kafka topic %s: %s",
-                              m_topicName.c_str(), errMsg);
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to produce message on kafka topic %s: %s",
+                                               m_topicName.c_str(), errMsg);
+            return false;
         }
     }
 
-    return bytesWritten;
+    return true;
 }
 
 bool ELogKafkaMsgQTarget::flushLogTarget() {
@@ -242,7 +245,8 @@ bool ELogKafkaMsgQTarget::flushLogTarget() {
     }
     rd_kafka_resp_err_t res = rd_kafka_flush(m_producer, (int)flushTimeoutMillis);
     if (res != RD_KAFKA_RESP_ERR_NO_ERROR) {
-        ELOG_REPORT_ERROR("Failed to flush kafka topic producer: %s", rd_kafka_err2name(res));
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to flush kafka topic producer: %s",
+                                           rd_kafka_err2name(res));
         return false;
     }
     return true;

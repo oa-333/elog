@@ -132,9 +132,10 @@ protected:
     bool stopLogTarget() override { return true; }
 
     /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
-    virtual void logFormattedMsg(const char* formattedLogMsg, size_t length) {
+    virtual bool logFormattedMsg(const char* formattedLogMsg, size_t length) {
         std::unique_lock<std::mutex> lock(m_lock);
         m_logMessages.push_back(formattedLogMsg);
+        return true;
     }
 
     /** @brief Orders a buffered log target to flush it log messages. */

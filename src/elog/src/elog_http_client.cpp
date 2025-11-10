@@ -139,8 +139,9 @@ std::pair<bool, int> ELogHttpClient::sendHttpMsg(HttpMethod method, const char* 
     httplib::Result res = execHttpRequest(method, endpoint, headers, body, len, contentType);
     ELOG_REPORT_TRACE("%s done", methodName);
     if (!res) {
-        ELOG_REPORT_ERROR("Failed to %s HTTP request to %s: %s", methodName,
-                          m_logTargetName.c_str(), httplib::to_string(res.error()).c_str());
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to %s HTTP request to %s: %s", methodName,
+                                           m_logTargetName.c_str(),
+                                           httplib::to_string(res.error()).c_str());
         // no need to consult result handler, this is a clear network error
         if (!m_disableResend) {
             addBacklog(endpoint, headers, body, len, contentType);
@@ -331,8 +332,8 @@ bool ELogHttpClient::resendShippingBacklog(bool duringShutdown /* = false */) {
                                                    msg.m_body.size(), msg.m_contentType);
         ELOG_REPORT_TRACE("POST done");
         if (!res) {
-            ELOG_REPORT_ERROR("Failed to resend POST HTTP request: %s",
-                              httplib::to_string(res.error()).c_str());
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to resend POST HTTP request: %s",
+                                               httplib::to_string(res.error()).c_str());
             // no need to consult result handler, this is a clear network error
             return false;
         }

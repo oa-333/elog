@@ -29,7 +29,7 @@ ELOG_IMPLEMENT_LOG_TARGET(ELogSentryTarget)
 static ELogLogger* sSentryLogger = nullptr;
 
 #ifdef ELOG_ENABLE_STACK_TRACE
-static bool buildStackTrace(sentry_value_t& st) {
+static bool buildStackTrace(sentry_value_t& st, uint64_t& bytesWritten) {
     // since we are able to provide full stack trace information, we bypass the high-level API
     // sentry_value_set_stacktrace(), and instead set the attributes manually
 
@@ -41,6 +41,7 @@ static bool buildStackTrace(sentry_value_t& st) {
     sentry_value_t frames = sentry_value_new_list();
 
     // traverse in reverse order due to sentry requirement (first frame is oldest)
+    bytesWritten = 0;
     for (dbgutil::StackTrace::reverse_iterator itr = stackTrace.rbegin(); itr != stackTrace.rend();
          ++itr) {
         dbgutil::StackEntry& stackEntry = *itr;
@@ -52,8 +53,10 @@ static bool buildStackTrace(sentry_value_t& st) {
         s << "0x";
 #endif
         s << std::hex << stackEntry.m_frameAddress;
+        std::string frameStr = s.str();
         sentry_value_set_by_key(frame, "instruction_addr",
-                                sentry_value_new_string(s.str().c_str()));
+                                sentry_value_new_string(frameStr.c_str()));
+        bytesWritten += frameStr.length();
         s.str(std::string());  // clear string stream
 
         // set image address
@@ -61,32 +64,40 @@ static bool buildStackTrace(sentry_value_t& st) {
         s << "0x";
 #endif
         s << std::hex << stackEntry.m_entryInfo.m_moduleBaseAddress;
-        sentry_value_set_by_key(frame, "image_addr", sentry_value_new_string(s.str().c_str()));
+        std::string imageAddrStr = s.str();
+        sentry_value_set_by_key(frame, "image_addr", sentry_value_new_string(imageAddrStr.c_str()));
+        bytesWritten += imageAddrStr.length();
 
         // set image path
         sentry_value_set_by_key(
             frame, "package", sentry_value_new_string(stackEntry.m_entryInfo.m_moduleName.c_str()));
+        bytesWritten += stackEntry.m_entryInfo.m_moduleName.length();
 
         // set file name
         sentry_value_set_by_key(frame, "filename",
                                 sentry_value_new_string(stackEntry.m_entryInfo.m_fileName.c_str()));
+        bytesWritten += stackEntry.m_entryInfo.m_fileName.length();
 
         // set function
         sentry_value_set_by_key(
             frame, "function",
             sentry_value_new_string(stackEntry.m_entryInfo.m_symbolName.c_str()));
+        bytesWritten += stackEntry.m_entryInfo.m_symbolName.length();
 
         // set module
         sentry_value_set_by_key(
             frame, "module", sentry_value_new_string(stackEntry.m_entryInfo.m_moduleName.c_str()));
+        bytesWritten += stackEntry.m_entryInfo.m_moduleName.length();
 
         // set line number
         sentry_value_set_by_key(
             frame, "lineno", sentry_value_new_int32((int32_t)stackEntry.m_entryInfo.m_lineNumber));
+        bytesWritten += sizeof(uint32_t);
 
         // set column number
         sentry_value_set_by_key(
             frame, "colno", sentry_value_new_int32((int32_t)stackEntry.m_entryInfo.m_columnIndex));
+        bytesWritten += sizeof(uint32_t);
 
         // add the frame to the frame list
         sentry_value_append(frames, frame);
@@ -156,7 +167,7 @@ static void sentryLoggerFunc(sentry_level_t level, const char* message, va_list 
 // field receptor for setting context
 class ELogSentryContextReceptor : public ELogFieldReceptor {
 public:
-    ELogSentryContextReceptor() { m_context = sentry_value_new_object(); }
+    ELogSentryContextReceptor() : m_bytesPrepared(0) { m_context = sentry_value_new_object(); }
     ELogSentryContextReceptor(const ELogSentryContextReceptor&) = delete;
     ELogSentryContextReceptor(ELogSentryContextReceptor&&) = delete;
     ELogSentryContextReceptor& operator=(const ELogSentryContextReceptor&) = delete;
@@ -167,12 +178,18 @@ public:
                             size_t length) final {
         sentry_value_set_by_key(m_context, fieldSpec.m_name.c_str(),
                                 sentry_value_new_string(field));
+        if (length > 0) {
+            m_bytesPrepared += length;
+        } else {
+            m_bytesPrepared += strlen(field);
+        }
     }
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint32_t typeId, uint64_t field, const ELogFieldSpec& fieldSpec) final {
         sentry_value_set_by_key(m_context, fieldSpec.m_name.c_str(),
                                 sentry_value_new_int32((int32_t)field));
+        m_bytesPrepared += sizeof(uint32_t);
     }
 
     /** @brief Receives a time log record field. */
@@ -189,8 +206,11 @@ public:
 
     void applyContext(const char* name) { sentry_set_context(name, m_context); }
 
+    inline uint64_t getBytesPrepared() const { return m_bytesPrepared; }
+
 private:
     sentry_value_t m_context;
+    uint64_t m_bytesPrepared;
 };
 
 // field receptor for setting context
@@ -226,16 +246,17 @@ public:
         m_tagValues.push_back(logLevelStr);
     }
 
-    bool applyTags(const std::vector<std::string>& tagNames, uint32_t& bytesWritten) {
+    bool applyTags(const std::vector<std::string>& tagNames, uint64_t& bytesWritten) {
         if (m_tagValues.size() != tagNames.size()) {
-            ELOG_REPORT_ERROR("Mismatching tag names a values (%u names, %u values)",
-                              tagNames.size(), m_tagValues.size());
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT(
+                "Mismatching tag names a values (%u names, %u values)", tagNames.size(),
+                m_tagValues.size());
             return false;
         }
+        bytesWritten = 0;
         for (uint32_t i = 0; i < m_tagValues.size(); ++i) {
             sentry_set_tag(tagNames[i].c_str(), m_tagValues[i].c_str());
-            // NOTE: no chance of overflow here
-            bytesWritten += (uint32_t)(tagNames[i].length() + m_tagValues[i].length());
+            bytesWritten += tagNames[i].length() + m_tagValues[i].length();
         }
         return true;
     }
@@ -405,7 +426,7 @@ bool ELogSentryTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     std::string logMsg;
     formatLogMsg(logRecord, logMsg);
     sentry_value_t evt = sentry_value_new_message_event(
@@ -414,18 +435,23 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
         /* message */ logMsg.c_str());
 
     // append additional event context if configured to do so
+    bytesWritten = 0;
     if (!m_params.m_context.empty()) {
         ELogSentryContextReceptor contextReceptor;
         m_contextFormatter->fillInProps(logRecord, &contextReceptor);
         contextReceptor.applyContext(m_params.m_contextTitle.c_str());
+        bytesWritten += contextReceptor.getBytesPrepared();
     }
 
     // append additional event as tags if configured to do so
-    uint32_t bytesWritten = 0;
     if (!m_params.m_tags.empty()) {
         ELogSentryTagsReceptor receptor;
         m_tagsFormatter->fillInProps(logRecord, &receptor);
-        receptor.applyTags(m_tagsFormatter->getPropNames(), bytesWritten);
+        uint64_t tagBytes = 0;
+        if (!receptor.applyTags(m_tagsFormatter->getPropNames(), tagBytes)) {
+            return false;
+        }
+        bytesWritten += tagBytes;
     }
 
     // append current thread attributes
@@ -435,6 +461,7 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
     const char* currThreadName = getThreadNameField(logRecord.m_threadId);
     if (currThreadName != nullptr && *currThreadName != 0) {
         sentry_value_set_by_key(thd, "name", sentry_value_new_string(currThreadName));
+        bytesWritten += strlen(currThreadName);
     }
 
     // append additional stack trace if configured to do so
@@ -443,8 +470,10 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
 #ifdef ELOG_ENABLE_STACK_TRACE
         // create a stack trace object and set the frames attribute
         sentry_value_t stackTrace;
-        if (buildStackTrace(stackTrace)) {
+        uint64_t stackSizeBytes = 0;
+        if (buildStackTrace(stackTrace, stackSizeBytes)) {
             sentry_value_set_by_key(thd, "stacktrace", stackTrace);
+            bytesWritten += stackSizeBytes;
         }
 #endif
     }
@@ -452,18 +481,16 @@ uint32_t ELogSentryTarget::writeLogRecord(const ELogRecord& logRecord) {
 
     // hand over the ready event to Sentry background thread
     sentry_capture_event(evt);
-    // TODO: this number a bit misleading, since we may also have stack trace in payload
-    // this will be more critical when using non-trivial flush policy
-    return bytesWritten + (uint32_t)logMsg.length();
 
     // TODO: Currently the native SDK does not support yet new logs interface, when it does we will
     // send it as well
+    return true;
 }
 
 bool ELogSentryTarget::flushLogTarget() {
     int res = sentry_flush(m_params.m_flushTimeoutMillis);
     if (res != 0) {
-        ELOG_REPORT_TRACE("Failed to flush Sentry transport (timeout?)");
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to flush Sentry transport (timeout?)");
         return false;
     }
     return true;

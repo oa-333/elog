@@ -263,9 +263,11 @@ protected:
 
     /**
      * @brief Order the log target to write a log record (thread-safe).
-     * @return The number of bytes written to log.
+     * @param logRecord The log record to write to the log target.
+     * @param bytesWritten The number of bytes written to log.
+     * @return The operation's result.
      */
-    virtual uint32_t writeLogRecord(const ELogRecord& logRecord);
+    virtual bool writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten);
 
     /** @brief Order the log target to flush. */
     virtual bool flushLogTarget() = 0;
@@ -277,7 +279,7 @@ protected:
     void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer);
 
     /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
-    virtual void logFormattedMsg(const char* formattedLogMsg, size_t length) {}
+    virtual bool logFormattedMsg(const char* formattedLogMsg, size_t length) { return true; }
 
     /** @brief Helper method for querying whether the log record can be written to log. */
     bool canLog(const ELogRecord& logRecord);
@@ -306,7 +308,7 @@ private:
     bool flushNoLock(bool allowModeration);
 
     /** @brief Helper method for querying whether the log target should be flushed. */
-    inline bool shouldFlush(uint32_t bytesWritten) {
+    inline bool shouldFlush(uint64_t bytesWritten) {
         return m_flushPolicy != nullptr && m_flushPolicy->shouldFlush(bytesWritten);
     }
 
@@ -373,8 +375,13 @@ protected:
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
 
-    /** @brief Sends a log record to a log target. */
-    uint32_t writeLogRecord(const ELogRecord& logRecord) final;
+    /**
+     * @brief Order the log target to write a log record (thread-safe).
+     * @param logRecord The log record to write to the log target.
+     * @param bytesWritten The number of bytes written to log.
+     * @return The operation's result.
+     */
+    bool writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
     bool flushLogTarget() final;

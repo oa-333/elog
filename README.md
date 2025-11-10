@@ -3119,7 +3119,7 @@ So we begin with this declaration:
         /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
         bool loadExpr(const ELogExpression* expr) final;
 
-        bool shouldFlush(uint32_t msgSizeBytes) final;
+        bool shouldFlush(uint64_t msgSizeBytes) final;
 
     private:
         uint64_t m_normalLimitBytes;
@@ -3136,7 +3136,7 @@ This is no different than adding a new filter type or adding a new token referen
 The flush logic is also straightforward, but the loading part is a bit tricky.  
 First let's take a look at the flush logic:
 
-    bool SystemStateFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+    bool SystemStateFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
         // compute previous and current amount of logged bytes (thread-safe)
         uint64_t prevSizeBytes =
             m_currentLogSizeBytes.fetch_add(msgSizeBytes, std::memory_order_relaxed);
@@ -3329,9 +3329,10 @@ Let's take as an example a log target that accumulates log messages into a strin
         bool stopLogTarget() override { return true; }
 
         /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
-        void logFormattedMsg(const char* formattedLogMsg, size_t length) final {
+        bool logFormattedMsg(const char* formattedLogMsg, size_t length) final {
             std::unique_lock<std::mutex> lock(m_lock);
             m_logMessages.push_back(formattedLogMsg);
+            return true;
         }
 
         /** @brief Orders a buffered log target to flush it log messages. */
@@ -3442,12 +3443,14 @@ Now suppose we do want to add another type of string log target, name string map
         * @brief Order the log target to write a log record (thread-safe).
         * @return The number of bytes written to log.
         */
-        uint32_t writeLogRecord(const ELogRecord& logRecord) final {
+        bool writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) final {
             ELogBuffer logBuffer;
             formatLogBuffer(logRecord, logBuffer);
             std::unique_lock<std::mutex> lock(m_lock);
             const char* qName = logRecord.m_logger->getLogSource()->getQualifiedName();
             m_logMessages[qName].push_back(logBuffer.getRef());
+            bytesWritten = logBuffer.getOffset();
+            return true;
         }
 
         /** @brief Orders a buffered log target to flush it log messages. */

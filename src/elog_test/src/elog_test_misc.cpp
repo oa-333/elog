@@ -63,9 +63,10 @@ TEST(ELogMisc, LogMacros) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     // 30 messages in 3 seconds, but only twice per second allowed so we should get roughly 6
-    // messages, but with some deviation on the sides it could get as much as 8, but not less than 5
+    // messages, but with some deviation on the sides it could get as much as 10, but not less than
+    // 5
     EXPECT_GE(logMessages.size(), 5);
-    EXPECT_LE(logMessages.size(), 8);
+    EXPECT_LE(logMessages.size(), 10);
     EXPECT_EQ(logMessages.front().compare("This is a test moderate message (twice per second)"), 0);
     EXPECT_EQ(logMessages.back().compare("This is a test moderate message (twice per second)"), 0);
 

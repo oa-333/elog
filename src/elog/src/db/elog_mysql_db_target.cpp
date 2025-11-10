@@ -12,7 +12,8 @@ ELOG_IMPLEMENT_LOG_TARGET(ELogMySqlDbTarget)
 
 class ELogMySqlDbFieldReceptor : public ELogFieldReceptor {
 public:
-    ELogMySqlDbFieldReceptor(sql::PreparedStatement* stmt) : m_stmt(stmt), m_fieldNum(0) {}
+    ELogMySqlDbFieldReceptor(sql::PreparedStatement* stmt)
+        : m_stmt(stmt), m_fieldNum(0), m_bytesPrepared(0) {}
     ELogMySqlDbFieldReceptor(const ELogMySqlDbFieldReceptor&) = delete;
     ELogMySqlDbFieldReceptor(ELogMySqlDbFieldReceptor&&) = delete;
     ELogMySqlDbFieldReceptor& operator=(const ELogMySqlDbFieldReceptor&) = delete;
@@ -22,28 +23,45 @@ public:
     void receiveStringField(uint32_t typeId, const char* field, const ELogFieldSpec& fieldSpec,
                             size_t length) final {
         m_stmt->setString(m_fieldNum++, field);
+        if (length > 0) {
+            m_bytesPrepared += length;
+        } else {
+            m_bytesPrepared += strlen(field);
+        }
     }
 
     /** @brief Receives an integer log record field. */
     void receiveIntField(uint32_t typeId, uint64_t field, const ELogFieldSpec& fieldSpec) final {
         m_stmt->setInt64(m_fieldNum++, (int64_t)field);
+        m_bytesPrepared += sizeof(uint64_t);
     }
 
     /** @brief Receives a time log record field. */
     void receiveTimeField(uint32_t typeId, const ELogTime& logTime, const char* timeStr,
                           const ELogFieldSpec& fieldSpec, size_t length) final {
         m_stmt->setDateTime(m_fieldNum++, timeStr);
+        if (length > 0) {
+            m_bytesPrepared += length;
+        } else {
+            m_bytesPrepared += strlen(timeStr);
+        }
     }
 
     /** @brief Receives a log level log record field. */
     void receiveLogLevelField(uint32_t typeId, ELogLevel logLevel,
                               const ELogFieldSpec& fieldSpec) final {
-        m_stmt->setString(m_fieldNum++, elogLevelToStr(logLevel));
+        const char* logLevelStr = elogLevelToStr(logLevel);
+        m_stmt->setString(m_fieldNum++, logLevelStr);
+        m_bytesPrepared += strlen(logLevelStr);
     }
+
+    /** @brief Return the number of bytes written into the prepared statement. */
+    inline uint64_t getBytesPrepared() const { return m_bytesPrepared; }
 
 private:
     std::shared_ptr<sql::PreparedStatement> m_stmt;
     uint32_t m_fieldNum;
+    uint64_t m_bytesPrepared;
 };
 
 bool ELogMySqlDbTarget::connectDb(void* dbData) {
@@ -64,14 +82,14 @@ bool ELogMySqlDbTarget::connectDb(void* dbData) {
         mysqlDbData->m_insertStmt.reset(
             mysqlDbData->m_connection->prepareStatement(processedInsertStmt.c_str()));
     } catch (sql::SQLException& e) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Failed to start MySQL log target. SQL State: %p. Vendor Code: %d. Reason: %p",
             e.getSQLStateCStr(), e.getErrorCode(), e.what());
         mysqlDbData->m_insertStmt.reset();
         mysqlDbData->m_connection.reset();
         return false;
     } catch (std::exception& e) {
-        ELOG_REPORT_ERROR("Failed to start MySQL log target: %s", e.what());
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to start MySQL log target: %s", e.what());
         mysqlDbData->m_insertStmt.reset();
         mysqlDbData->m_connection.reset();
         return false;
@@ -89,13 +107,14 @@ bool ELogMySqlDbTarget::disconnectDb(void* dbData) {
         mysqlDbData->m_insertStmt.reset();
         mysqlDbData->m_connection.reset();
     } catch (sql::SQLException& e) {
-        ELOG_REPORT_ERROR("Failed to stop MySQL log target: %s", e.what());
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to stop MySQL log target: %s", e.what());
         return false;
     }
     return true;
 }
 
-bool ELogMySqlDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
+bool ELogMySqlDbTarget::execInsert(const ELogRecord& logRecord, void* dbData,
+                                   uint64_t& bytesWritten) {
     MySQLDbData* mysqlDbData = validateConnectionState(dbData, true);
     if (mysqlDbData == nullptr) {
         return false;
@@ -106,12 +125,14 @@ bool ELogMySqlDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
         ELogMySqlDbFieldReceptor mySqlFieldReceptor(mysqlDbData->m_insertStmt.get());
         mysqlDbData->m_insertStmt->clearParameters();
         fillInsertStatement(logRecord, &mySqlFieldReceptor);
+        bytesWritten = mySqlFieldReceptor.getBytesPrepared();
         if (mysqlDbData->m_insertStmt->execute()) {
             return true;
         }
-        ELOG_REPORT_ERROR("Failed to send log message to MySQL log target");
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to send log message to MySQL log target");
     } catch (sql::SQLException& e) {
-        ELOG_REPORT_ERROR("Failed to send log message to MySQL log target: %s", e.what());
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to send log message to MySQL log target: %s",
+                                           e.what());
     }
     return false;
 }
@@ -193,19 +214,19 @@ void ELogMySqlDbTarget::log(const ELogRecord& logRecord) {
 ELogMySqlDbTarget::MySQLDbData* ELogMySqlDbTarget::validateConnectionState(void* dbData,
                                                                            bool shouldBeConnected) {
     if (dbData == nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to MySQL database, invalid connection state (internal error, database "
             "object is null)");
         return nullptr;
     }
     MySQLDbData* mysqlDbData = (MySQLDbData*)dbData;
     if (shouldBeConnected && mysqlDbData->m_connection.get() == nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to MySQL database, invalid connection state (internal error, "
             "connection object is null)");
         return nullptr;
     } else if (!shouldBeConnected && mysqlDbData->m_connection.get() != nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to MySQL database, invalid connection state (internal error, "
             "connection object is not null)");
         return nullptr;
@@ -214,7 +235,7 @@ ELogMySqlDbTarget::MySQLDbData* ELogMySqlDbTarget::validateConnectionState(void*
          mysqlDbData->m_insertStmt.get() != nullptr) ||
         (mysqlDbData->m_connection.get() != nullptr &&
          mysqlDbData->m_insertStmt.get() == nullptr)) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to MySQL database, inconsistent connection state (internal error, "
             "connection and statement objects are neither both null nor both non-null)");
         return nullptr;

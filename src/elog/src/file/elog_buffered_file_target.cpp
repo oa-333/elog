@@ -55,10 +55,12 @@ bool ELogBufferedFileTarget::stopLogTarget() {
     return true;
 }
 
-void ELogBufferedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
-    if (!m_fileWriter.logMsg(formattedLogMsg, length)) {
+bool ELogBufferedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
+    bool res = m_fileWriter.logMsg(formattedLogMsg, length);
+    if (!res) {
         ELOG_REPORT_TRACE("Failed to write formatted log message to buffered file writer");
     }
+    return res;
 }
 
 bool ELogBufferedFileTarget::flushLogTarget() {
@@ -67,8 +69,7 @@ bool ELogBufferedFileTarget::flushLogTarget() {
         m_stats->incrementFlushSubmitted(slotId);
     }
     if (fflush(m_fileHandle) == EOF) {
-        // TODO: should log once
-        ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush buffered file");
+        ELOG_REPORT_MODERATE_SYS_ERROR_DEFAULT(fflush, "Failed to flush buffered file");
         if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
             m_stats->incrementFlushFailed(slotId);
         }

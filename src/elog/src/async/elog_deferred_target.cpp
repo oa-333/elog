@@ -23,7 +23,7 @@ bool ELogDeferredTarget::stopLogTarget() {
     return m_subTarget->stop();
 }
 
-uint32_t ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     m_writeCount.fetch_add(1, std::memory_order_relaxed);
     std::unique_lock<std::mutex> lock(m_lock);
     // NOTE: the log record could hold a binary buffer with nulls in intermediate indices
@@ -35,7 +35,8 @@ uint32_t ELogDeferredTarget::writeLogRecord(const ELogRecord& logRecord) {
     }
     m_cv.notify_one();
     // asynchronous log targets do not report byte count
-    return 0;
+    bytesWritten = 0;
+    return true;
 }
 
 bool ELogDeferredTarget::flushLogTarget() {

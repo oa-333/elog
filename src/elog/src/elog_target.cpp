@@ -238,19 +238,25 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
     }
 
     // write log record
-    uint32_t bytesWritten = writeLogRecord(logRecord);
+    uint64_t bytesWritten = 0;
+    bool res = writeLogRecord(logRecord, bytesWritten);
 
     // update statistics counter
     if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
-        m_stats->incrementMsgWritten(slotId);
-        m_stats->addBytesWritten(slotId, bytesWritten);
+        if (res) {
+            m_stats->incrementMsgWritten(slotId);
+            m_stats->addBytesWritten(slotId, bytesWritten);
+        } else {
+            m_stats->incrementMsgFailWrite(slotId);
+            m_stats->addBytesFailWrite(bytesWritten);
+        }
     }
 
     // NOTE: asynchronous log targets return zero here, but log flushing of the end target will
     // be triggered by the async log target anyway
     // NOTE: we call shouldFlush() anyway, even if zero bytes were returned, since some flush
     // policies don't care how many bytes were written, but rather how many calls were made
-    if (m_flushPolicy != nullptr) {
+    if (res && m_flushPolicy != nullptr) {
         // NOTE: we pass to shouldFlush() the currently logged message size
         if (m_flushPolicy->shouldFlush(bytesWritten)) {
             // don't call flush(), but rather flushNoLock() - we already have the lock
@@ -268,7 +274,7 @@ ELogStats* ELogTarget::createStats() {
     return res;
 }
 
-uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // default implementation - format log message and write to log
     // this might not suite all targets, as formatting might take place on a later phase
 
@@ -286,7 +292,7 @@ uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     // For this reason a unified thread local storage was developed, which relies on pthread calls
     ELogBuffer* logBuffer = getOrCreateTlsLogBuffer();
     if (logBuffer == nullptr) {
-        return 0;
+        return false;
     }
     logBuffer->reset();
     formatLogBuffer(logRecord, *logBuffer);
@@ -295,8 +301,9 @@ uint32_t ELogTarget::writeLogRecord(const ELogRecord& logRecord) {
     if (slotId != ELOG_INVALID_STAT_SLOT_ID) {
         m_stats->addBytesSubmitted(bufferSize);
     }
-    logFormattedMsg(logBuffer->getRef(), bufferSize);
-    return (uint32_t)bufferSize;
+
+    bytesWritten = bufferSize;
+    return logFormattedMsg(logBuffer->getRef(), bufferSize);
 }
 
 bool ELogTarget::flush(bool allowModeration /* = false */) {
@@ -458,16 +465,18 @@ bool ELogCombinedTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogCombinedTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogCombinedTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // uint32_t bytesWritten = 0;
     if (logRecord.m_logLevel <= getLogLevel()) {
         for (ELogTarget* target : m_logTargets) {
             target->log(logRecord);
         }
     }
-    // TODO: what should happen here? how do we make sure each target's flush policy operates
-    // correctly?
-    return 0;
+    // TODO: how do we make sure the combined log target collects are reports stats correctly?
+    // option 1: accumulate on each call, but we have no good way of accumulating flush stats
+    // option 2: have parent stats interface virtual, so combined target can answer from sum of all
+    // sub-targets
+    return true;
 }
 
 bool ELogCombinedTarget::flushLogTarget() {

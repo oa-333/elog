@@ -221,7 +221,7 @@ bool ELogMultiQuantumTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogMultiQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogMultiQuantumTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // obtain slot if needed
     uint64_t slotId = getThreadSlotId();
     if (slotId == ELOG_INVALID_THREAD_SLOT_ID) {
@@ -233,7 +233,8 @@ uint32_t ELogMultiQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
     raiseRingBufferBit(slotId);
 
     // NOTE: asynchronous loggers do not report bytes written
-    return 0;
+    bytesWritten = 0;
+    return true;
 }
 
 bool ELogMultiQuantumTarget::flushLogTarget() {
@@ -242,7 +243,8 @@ bool ELogMultiQuantumTarget::flushLogTarget() {
     ELOG_CACHE_ALIGN ELogRecord flushRecord;
     flushRecord.m_logMsg = "";
     flushRecord.m_reserved = ELOG_FLUSH_REQUEST;
-    writeLogRecord(flushRecord);
+    uint64_t dummy = 0;
+    writeLogRecord(flushRecord, dummy);
     return true;
 }
 

@@ -28,7 +28,8 @@ ELOG_IMPLEMENT_LOG_TARGET(ELogSQLiteDbTarget)
 
 class ELogSQLiteDbFieldReceptor : public ELogFieldReceptor {
 public:
-    ELogSQLiteDbFieldReceptor(sqlite3_stmt* stmt) : m_res(0), m_stmt(stmt), m_fieldNum(1) {}
+    ELogSQLiteDbFieldReceptor(sqlite3_stmt* stmt)
+        : m_res(0), m_stmt(stmt), m_fieldNum(1), m_bytesPrepared(0) {}
     ELogSQLiteDbFieldReceptor(const ELogSQLiteDbFieldReceptor&) = delete;
     ELogSQLiteDbFieldReceptor(ELogSQLiteDbFieldReceptor&&) = delete;
     ELogSQLiteDbFieldReceptor& operator=(const ELogSQLiteDbFieldReceptor&) = delete;
@@ -47,6 +48,8 @@ public:
             if (m_res == 0) {
                 m_res = res;
             }
+        } else {
+            m_bytesPrepared += length;
         }
     }
 
@@ -59,6 +62,8 @@ public:
             if (m_res == 0) {
                 m_res = res;
             }
+        } else {
+            m_bytesPrepared += sizeof(uint64_t);
         }
     }
 
@@ -72,6 +77,8 @@ public:
             if (m_res == 0) {
                 m_res = res;
             }
+        } else {
+            m_bytesPrepared += strlen(timeStr);
         }
     }
 
@@ -87,13 +94,18 @@ public:
             if (m_res == 0) {
                 m_res = res;
             }
+        } else {
+            m_bytesPrepared += strlen(logLevelStr);
         }
     }
+
+    inline uint64_t getBytesPrepared() const { return m_bytesPrepared; }
 
 private:
     int m_res;
     sqlite3_stmt* m_stmt;
     int m_fieldNum;
+    uint64_t m_bytesPrepared;
 };
 
 bool ELogSQLiteDbTarget::connectDb(void* dbData) {
@@ -107,8 +119,8 @@ bool ELogSQLiteDbTarget::connectDb(void* dbData) {
     int res = sqlite3_open_v2(m_filePath.c_str(), &sqliteDbData->m_connection,
                               SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nullptr);
     if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to open sqlite db at path %s: %s", m_filePath.c_str(),
-                          sqlite3_errstr(res));
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to open sqlite db at path %s: %s",
+                                           m_filePath.c_str(), sqlite3_errstr(res));
         return false;
     }
     ELOG_REPORT_TRACE("Connected to SQLite3");
@@ -118,8 +130,8 @@ bool ELogSQLiteDbTarget::connectDb(void* dbData) {
                              (int)processedInsertStatement.length(), &sqliteDbData->m_insertStmt,
                              nullptr);
     if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to prepare sqlite statement '%s': %s",
-                          processedInsertStatement.c_str(), sqlite3_errstr(res));
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to prepare sqlite statement '%s': %s",
+                                           processedInsertStatement.c_str(), sqlite3_errstr(res));
         sqlite3_close_v2(sqliteDbData->m_connection);
         sqliteDbData->m_connection = nullptr;
         return false;
@@ -137,7 +149,8 @@ bool ELogSQLiteDbTarget::disconnectDb(void* dbData) {
     if (sqliteDbData->m_insertStmt != nullptr) {
         int res = sqlite3_finalize(sqliteDbData->m_insertStmt);
         if (res != SQLITE_OK) {
-            ELOG_REPORT_ERROR("Failed to destroy sqlite statement: %s", sqlite3_errstr(res));
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to destroy sqlite statement: %s",
+                                               sqlite3_errstr(res));
             return false;
         }
         sqliteDbData->m_insertStmt = nullptr;
@@ -146,7 +159,8 @@ bool ELogSQLiteDbTarget::disconnectDb(void* dbData) {
     if (sqliteDbData->m_connection != nullptr) {
         int res = sqlite3_close_v2(sqliteDbData->m_connection);
         if (res != SQLITE_OK) {
-            ELOG_REPORT_ERROR("Failed to close sqlite connection: %s", sqlite3_errstr(res));
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to close sqlite connection: %s",
+                                               sqlite3_errstr(res));
             return false;
         }
         sqliteDbData->m_connection = nullptr;
@@ -154,7 +168,8 @@ bool ELogSQLiteDbTarget::disconnectDb(void* dbData) {
     return true;
 }
 
-bool ELogSQLiteDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
+bool ELogSQLiteDbTarget::execInsert(const ELogRecord& logRecord, void* dbData,
+                                    uint64_t& bytesWritten) {
     SQLiteDbData* sqliteDbData = validateConnectionState(dbData, true);
     if (sqliteDbData == nullptr) {
         return false;
@@ -163,16 +178,19 @@ bool ELogSQLiteDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
     // reset statement parameters
     int res = sqlite3_reset(sqliteDbData->m_insertStmt);
     if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to reset sqlite statement: %s", sqlite3_errstr(res));
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to reset sqlite statement: %s",
+                                           sqlite3_errstr(res));
         return false;
     }
 
     // this puts each log record field into the correct place in the prepared statement
     ELogSQLiteDbFieldReceptor sqliteFieldReceptor(sqliteDbData->m_insertStmt);
     fillInsertStatement(logRecord, &sqliteFieldReceptor);
+    bytesWritten = sqliteFieldReceptor.getBytesPrepared();
     res = sqliteFieldReceptor.getRes();
     if (res != SQLITE_OK) {
-        ELOG_REPORT_ERROR("Failed to bind sqlite statement parameters: %s", sqlite3_errstr(res));
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to bind sqlite statement parameters: %s",
+                                           sqlite3_errstr(res));
         return false;
     }
 
@@ -187,33 +205,34 @@ bool ELogSQLiteDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
     if (res == SQLITE_DONE) {
         return true;
     }
-    ELOG_REPORT_ERROR("Failed to execute sqlite statement parameters: %s", sqlite3_errstr(res));
+    ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to execute sqlite statement parameters: %s",
+                                       sqlite3_errstr(res));
     return false;
 }
 
 ELogSQLiteDbTarget::SQLiteDbData* ELogSQLiteDbTarget::validateConnectionState(
     void* dbData, bool shouldBeConnected) {
     if (dbData == nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to SQLite database, invalid connection state (internal error, database "
             "object is null)");
         return nullptr;
     }
     SQLiteDbData* sqliteDbData = (SQLiteDbData*)dbData;
     if (shouldBeConnected && sqliteDbData->m_connection == nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to SQLite database, invalid connection state (internal error, "
             "connection object is null)");
         return nullptr;
     } else if (!shouldBeConnected && sqliteDbData->m_connection != nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to SQLite database, invalid connection state (internal error, "
             "connection object is not null)");
         return nullptr;
     }
     if ((sqliteDbData->m_connection == nullptr && sqliteDbData->m_insertStmt != nullptr) ||
         (sqliteDbData->m_connection != nullptr && sqliteDbData->m_insertStmt == nullptr)) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to SQLite database, inconsistent connection state (internal error, "
             "connection and statement objects are neither both null nor both non-null)");
         return nullptr;

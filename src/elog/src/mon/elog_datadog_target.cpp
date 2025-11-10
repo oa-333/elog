@@ -68,7 +68,7 @@ bool ELogDatadogTarget::stopLogTarget() {
     return res;
 }
 
-uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     ELOG_REPORT_TRACE("Preapring log message for Datadog");
     size_t index = m_logItemArray.size();
 
@@ -76,24 +76,34 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     std::string logMsg;
     formatLogMsg(logRecord, logMsg);
     m_logItemArray[index]["message"] = logMsg;
+    bytesWritten = logMsg.length();
 
     // more metadata
-    m_logItemArray[index]["status"] = elogLevelToStr(logRecord.m_logLevel);
+    const char* logLevelStr = elogLevelToStr(logRecord.m_logLevel);
+    m_logItemArray[index]["status"] = logLevelStr;
+    bytesWritten += strlen(logLevelStr);
+
     m_logItemArray[index]["hostname"] = getHostNameField();
+    bytesWritten += strlen(getHostNameField());
+
     // TODO: this is not working well, neither as int, nor as string
     // m_logItemArray[index]["timestamp"] = elogTimeToUnixTimeSeconds(logRecord.m_logTime);
     m_logItemArray[index]["logger.name"] = logRecord.m_logger->getLogSource()->getQualifiedName();
+    bytesWritten += logRecord.m_logger->getLogSource()->getQualifiedNameLength();
 
     const char* threadName = getThreadNameField(logRecord.m_threadId);
     if (threadName != nullptr && *threadName != 0) {
         m_logItemArray[index]["logger.thread_name"] = threadName;
+        bytesWritten += strlen(threadName);
     }
 
     if (!m_source.empty()) {
         m_logItemArray[index]["ddsource"] = m_source.c_str();
+        bytesWritten += m_source.length();
     }
     if (!m_service.empty()) {
         m_logItemArray[index]["service"] = m_service.c_str();
+        bytesWritten += m_service.length();
     }
 
     if (m_stackTrace) {
@@ -101,6 +111,7 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
         std::string stackTrace;
         if (getStackTraceString(stackTrace)) {
             m_logItemArray[index]["error.stack"] = stackTrace;
+            bytesWritten += stackTrace.length();
         }
 #endif
     }
@@ -110,16 +121,17 @@ uint32_t ELogDatadogTarget::writeLogRecord(const ELogRecord& logRecord) {
     fillInTags(logRecord, &receptor);
     std::string tags;
     if (!prepareTagsString(getTagNames(), receptor.getPropValues(), tags)) {
-        ELOG_REPORT_ERROR("Failed to prepare datadog tags");
-        return 0;
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to prepare datadog tags");
+        return false;
     }
     m_logItemArray[index]["ddtags"] = tags;
+    bytesWritten += tags.length();
     /*if (!receptor.prepareJsonMap(m_logItemArray[index]["ddtags"], getTagNames())) {
         return 0;
     }*/
 
     ELOG_REPORT_TRACE("Log message for Datadog is ready, body: %s", m_logItemArray.dump().c_str());
-    return (uint32_t)logMsg.size();
+    return true;
 }
 
 bool ELogDatadogTarget::flushLogTarget() {

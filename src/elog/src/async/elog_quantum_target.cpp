@@ -74,7 +74,8 @@ bool ELogQuantumTarget::stopLogTarget() {
     ELOG_CACHE_ALIGN ELogRecord poison;
     poison.m_logMsg = "";
     poison.m_reserved = ELOG_STOP_REQUEST;
-    writeLogRecord(poison);
+    uint64_t dummy = 0;
+    writeLogRecord(poison, dummy);
 
     // now wait for log thread to finish
     m_logThread.join();
@@ -90,7 +91,7 @@ bool ELogQuantumTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     uint64_t writePos = m_writePos.fetch_add(1, std::memory_order_acquire);
     uint64_t readPos = m_readPos.load(std::memory_order_relaxed);
 
@@ -117,7 +118,8 @@ uint32_t ELogQuantumTarget::writeLogRecord(const ELogRecord& logRecord) {
     recordData.m_entryState.store(ES_READY, std::memory_order_release);
 
     // NOTE: asynchronous loggers do not report bytes written
-    return 0;
+    bytesWritten = 0;
+    return true;
 }
 
 bool ELogQuantumTarget::flushLogTarget() {
@@ -126,7 +128,8 @@ bool ELogQuantumTarget::flushLogTarget() {
     ELOG_CACHE_ALIGN ELogRecord flushRecord;
     flushRecord.m_logMsg = "";
     flushRecord.m_reserved = ELOG_FLUSH_REQUEST;
-    writeLogRecord(flushRecord);
+    uint64_t dummy = 0;
+    writeLogRecord(flushRecord, dummy);
     return true;
 }
 

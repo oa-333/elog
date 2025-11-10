@@ -50,7 +50,8 @@ class ELogOtelReceptor : public ELogFieldReceptor {
 public:
     ELogOtelReceptor(nostd::unique_ptr<logs_api::LogRecord>& otelLogRecord)
         : ELogFieldReceptor(ELogFieldReceptor::ReceiveStyle::RS_BY_NAME),
-          m_otelLogRecord(otelLogRecord) {}
+          m_otelLogRecord(otelLogRecord),
+          m_bytesPrepared(0) {}
     ELogOtelReceptor(const ELogOtelReceptor&) = delete;
     ELogOtelReceptor(ELogOtelReceptor&&) = delete;
     ELogOtelReceptor& operator=(const ELogOtelReceptor&) = delete;
@@ -69,91 +70,108 @@ public:
             opentelemetry::common::SystemTimestamp(std::chrono::microseconds(timeEpochMicros)));
         m_otelLogRecord->SetObservedTimestamp(
             opentelemetry::common::SystemTimestamp(std::chrono::microseconds(timeEpochMicros)));
+        m_bytesPrepared += sizeof(uint64_t);
     }
 
     /** @brief Receives the log record id. */
     void receiveRecordId(uint32_t typeId, uint64_t recordId, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("log.record.uid", recordId);
+        m_bytesPrepared += sizeof(uint64_t);
     }
 
     /** @brief Receives the host name. */
     void receiveHostName(uint32_t typeId, const char* hostName, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("client.address", hostName);
+        m_bytesPrepared += strlen(hostName);
     }
 
     /** @brief Receives the user name. */
     void receiveUserName(uint32_t typeId, const char* userName, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("user.name", userName);
+        m_bytesPrepared += strlen(userName);
     }
 
     /** @brief Receives the OS name. */
     void receiveOsName(uint32_t typeId, const char* osName, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("os.name", osName);
+        m_bytesPrepared += strlen(osName);
     }
 
     /** @brief Receives the OS version. */
     void receiveOsVersion(uint32_t typeId, const char* osVersion, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("os.version", osVersion);
+        m_bytesPrepared += strlen(osVersion);
     }
 
     /** @brief Receives the application name. */
     void receiveAppName(uint32_t typeId, const char* appName, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("app.name", appName);
+        m_bytesPrepared += strlen(appName);
     }
 
     /** @brief Receives the program name. */
     void receiveProgramName(uint32_t typeId, const char* programName,
                             const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("prog.name", programName);
+        m_bytesPrepared += strlen(programName);
     }
 
     /** @brief Receives the process id. */
     void receiveProcessId(uint32_t typeId, uint64_t processId, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("process.id", processId);
+        m_bytesPrepared += sizeof(uint64_t);
     }
 
     /** @brief Receives the thread id. */
     void receiveThreadId(uint32_t typeId, uint64_t threadId, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("thread.id", threadId);
+        m_bytesPrepared += sizeof(uint64_t);
     }
 
     /** @brief Receives the thread name. */
     void receiveThreadName(uint32_t typeId, const char* threadName,
                            const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("thread.name", threadName);
+        m_bytesPrepared += strlen(threadName);
     }
 
     /** @brief Receives the log source name. */
     void receiveLogSourceName(uint32_t typeId, const char* logSourceName,
                               const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("log.source", logSourceName);
+        m_bytesPrepared += strlen(logSourceName);
     }
 
     /** @brief Receives the module name. */
     void receiveModuleName(uint32_t typeId, const char* moduleName,
                            const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("log.module", moduleName);
+        m_bytesPrepared += strlen(moduleName);
     }
 
     /** @brief Receives the file name. */
     void receiveFileName(uint32_t typeId, const char* fileName, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("log.file.path", fileName);
+        m_bytesPrepared += strlen(fileName);
     }
 
     /** @brief Receives the logging line. */
     void receiveLineNumber(uint32_t typeId, uint64_t lineNumber, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("log.line", lineNumber);
+        m_bytesPrepared += sizeof(uint64_t);
     }
 
     /** @brief Receives the function name. */
     void receiveFunctionName(uint32_t typeId, const char* functionName,
                              const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("log.function", functionName);
+        m_bytesPrepared += strlen(functionName);
     }
 
     /** @brief Receives the log msg. */
     void receiveLogMsg(uint32_t typeId, const char* logMsg, const ELogFieldSpec& fieldSpec) {
         m_otelLogRecord->SetAttribute("log.record.original", logMsg);
+        m_bytesPrepared += strlen(logMsg);
     }
 
     /** @brief Receives a string log record field. */
@@ -179,8 +197,11 @@ public:
         // log level cannot be part of context
     }
 
+    inline uint64_t getBytesPrepared() const { return m_bytesPrepared; }
+
 private:
     nostd::unique_ptr<logs_api::LogRecord>& m_otelLogRecord;
+    uint64_t m_bytesPrepared;
 };
 
 // field receptor for setting exporter headers
@@ -338,7 +359,7 @@ bool ELogOtelTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogOtelTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogOtelTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // create log record and fill in attributes
     nostd::unique_ptr<logs_api::LogRecord> otelLogRecord = m_logger->CreateLogRecord();
     ELogOtelReceptor receptor(otelLogRecord);
@@ -352,7 +373,8 @@ uint32_t ELogOtelTarget::writeLogRecord(const ELogRecord& logRecord) {
     m_logger->EmitLogRecord(std::move(otelLogRecord));
 
     // no statistics yet
-    return 0;
+    bytesWritten = receptor.getBytesPrepared();
+    return true;
 }
 
 bool ELogOtelTarget::flushLogTarget() {
@@ -363,7 +385,8 @@ bool ELogOtelTarget::flushLogTarget() {
         dynamic_cast<logs_sdk::LoggerProvider*>(loggerProvider.get());
     if (sdkLoggerProvider != nullptr) {
         if (!sdkLoggerProvider->ForceFlush(std::chrono::milliseconds(m_flushTimeoutMillis))) {
-            ELOG_REPORT_WARN("Failed to flush Open Telemetry log target, operation timed out");
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT(
+                "Failed to flush Open Telemetry log target, operation timed out");
         }
     }
     return true;

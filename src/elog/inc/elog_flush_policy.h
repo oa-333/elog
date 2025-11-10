@@ -65,7 +65,7 @@ public:
      * @param msgSizeBytes The current logged message size.
      * @return true If the log target should be flushed.
      */
-    virtual bool shouldFlush(uint32_t msgSizeBytes) = 0;
+    virtual bool shouldFlush(uint64_t msgSizeBytes) = 0;
 
     /**
      * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group
@@ -268,7 +268,7 @@ public:
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
     bool loadExpr(const ELogExpression* expr) final;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
 private:
     ELOG_DECLARE_FLUSH_POLICY(ELogAndFlushPolicy, AND, ELOG_API)
@@ -285,7 +285,7 @@ public:
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
     bool loadExpr(const ELogExpression* expr) final;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
 private:
     ELOG_DECLARE_FLUSH_POLICY(ELogOrFlushPolicy, OR, ELOG_API)
@@ -311,7 +311,7 @@ public:
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
     bool loadExpr(const ELogExpression* expr) final;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final {
+    bool shouldFlush(uint64_t msgSizeBytes) final {
         return !m_flushPolicy->shouldFlush(msgSizeBytes);
     }
 
@@ -337,7 +337,7 @@ public:
     ELogImmediateFlushPolicy(ELogImmediateFlushPolicy&&) = delete;
     ELogImmediateFlushPolicy& operator=(const ELogImmediateFlushPolicy&) = delete;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
 private:
     ELOG_DECLARE_FLUSH_POLICY(ELogImmediateFlushPolicy, immediate, ELOG_API)
@@ -354,7 +354,7 @@ public:
     ELogNeverFlushPolicy(ELogNeverFlushPolicy&&) = delete;
     ELogNeverFlushPolicy& operator=(const ELogNeverFlushPolicy&) = delete;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
 private:
     ELOG_DECLARE_FLUSH_POLICY(ELogNeverFlushPolicy, never, ELOG_API)
@@ -381,7 +381,7 @@ public:
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
     bool loadExpr(const ELogExpression* expr) final;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
 private:
     uint64_t m_logCountLimit;
@@ -411,7 +411,7 @@ public:
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
     bool loadExpr(const ELogExpression* expr) final;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
 private:
     uint64_t m_logSizeLimitBytes;
@@ -450,7 +450,7 @@ public:
     /** @brief Orders an active flush policy to stop (by default no action takes place). */
     bool stop() final;
 
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
 private:
     inline ELogTime getTimestamp() const {
@@ -519,7 +519,7 @@ public:
      * @param msgSizeBytes The current logged message size.
      * @return true If the log target should be flushed.
      */
-    bool shouldFlush(uint32_t msgSizeBytes) final {
+    bool shouldFlush(uint64_t msgSizeBytes) final {
         return m_controlPolicy->shouldFlush(msgSizeBytes);
     }
 
@@ -585,7 +585,7 @@ public:
      * @param msgSizeBytes The current logged message size.
      * @return true If the log target should be flushed.
      */
-    bool shouldFlush(uint32_t msgSizeBytes) final;
+    bool shouldFlush(uint64_t msgSizeBytes) final;
 
     /**
      * @brief Allow flush policy also to moderate flush (i.e. hold back for a while, as in group

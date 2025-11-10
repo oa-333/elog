@@ -26,6 +26,20 @@ ELogRateLimitFilter::ELogRateLimitFilter(uint64_t maxMsg /* = 0 */, uint64_t tim
     }
 }
 
+ELogRateLimitFilter::ELogRateLimitFilter(const ELogRateLimitParams& params)
+    : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ),
+      m_maxMsg(params.m_maxMsgs),
+      m_timeout(params.m_timeout),
+      m_timeoutUnits(params.m_units),
+      m_intervalMillis(0),
+      m_currInterval(0),
+      m_currIntervalCount(0),
+      m_prevIntervalCount(0) {
+    if (m_timeout != 0 && m_timeoutUnits != ELogTimeUnits::TU_NONE) {
+        prepareInterval();
+    }
+}
+
 bool ELogRateLimitFilter::prepareInterval() {
     if (!convertTimeUnit(m_timeout, m_timeoutUnits, ELogTimeUnits::TU_MILLI_SECONDS,
                          m_intervalMillis)) {
@@ -150,6 +164,10 @@ ELogRateLimiter::ELogRateLimiter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* 
                                  ELogTimeUnits timeoutUnits /* = ELogTimeUnits::TU_NONE */)
     : m_filter(nullptr) {
     m_filter = new (m_rateLimiterBuf) ELogRateLimitFilter(maxMsg, timeout, timeoutUnits);
+}
+
+ELogRateLimiter::ELogRateLimiter(const ELogRateLimitParams& params) : m_filter(nullptr) {
+    m_filter = new (m_rateLimiterBuf) ELogRateLimitFilter(params);
 }
 
 ELogRateLimiter::~ELogRateLimiter() {

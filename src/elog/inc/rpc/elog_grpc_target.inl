@@ -137,8 +137,8 @@ void ELogGRPCBaseReceptor<MessageType>::receiveLogLevelField(uint32_t typeId, EL
 // should be made ready
 
 template <typename StubType, typename MessageType, typename ReceptorType>
-uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecord(
-    const ELogRecord& logRecord) {
+bool ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecord(
+    const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // this is thread-safe with respect to other calls to WriteLogRecord() and Flush(), but
     // not with respect to OnWriteDone() and onDone()
 
@@ -147,10 +147,10 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
     if (callData == nullptr) {
         m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
                                   "Failed to allocate gRPC call data");
-        return 0;
+        return false;
     }
     m_rpcFormatter->fillInParams(logRecord, &callData->m_receptor);
-    uint32_t bytesWritten = (uint32_t)callData->m_logRecordMsg->ByteSizeLong();
+    bytesWritten = callData->m_logRecordMsg->ByteSizeLong();
 
     ReactorState state = m_state.load(std::memory_order_acquire);
     if (state == ReactorState::RS_INIT) {
@@ -225,7 +225,7 @@ uint32_t ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>::writeLogRecor
         assert(false);
     }
 
-    return bytesWritten;
+    return true;
 }
 
 // TODO: make this lock-free implementation as "experimental" and add another with a proper lock
@@ -564,21 +564,22 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                            ReceptorType>::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
+                        ReceptorType>::writeLogRecord(const ELogRecord& logRecord,
+                                                      uint64_t& bytesWritten) {
     // NOTE: we do not need to format the entire log msg
 
     // send message to gRPC server
     if (m_clientMode == ELogGRPCClientMode::GRPC_CM_UNARY) {
-        return writeLogRecordUnary(logRecord);
+        return writeLogRecordUnary(logRecord, bytesWritten);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_STREAM) {
-        return writeLogRecordStream(logRecord);
+        return writeLogRecordStream(logRecord, bytesWritten);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC) {
-        return writeLogRecordAsync(logRecord);
+        return writeLogRecordAsync(logRecord, bytesWritten);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_UNARY) {
-        return writeLogRecordAsyncCallbackUnary(logRecord);
+        return writeLogRecordAsyncCallbackUnary(logRecord, bytesWritten);
     } else if (m_clientMode == ELogGRPCClientMode::GRPC_CM_ASYNC_CALLBACK_STREAM) {
-        return writeLogRecordAsyncCallbackStream(logRecord);
+        return writeLogRecordAsyncCallbackStream(logRecord, bytesWritten);
     }
 
     std::string errorMsg = "Cannot write log record, invalid gRPC client mode: ";
@@ -639,8 +640,9 @@ bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                            ReceptorType>::writeLogRecordUnary(const ELogRecord& logRecord) {
+bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
+                        ReceptorType>::writeLogRecordUnary(const ELogRecord& logRecord,
+                                                           uint64_t& bytesWritten) {
     // prepare log record message
     // NOTE: receptor must live until message sending, because it holds value strings
     ELogGRPCBaseReceptor<> receptor;
@@ -660,29 +662,25 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     if (!callStatus.ok()) {
         std::string errorMsg = "Failed to send log record over gRPC (synchronous unary): ";
         errorMsg += callStatus.error_message();
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  errorMsg.c_str());
+        static ELogModerate mod(errorMsg.c_str(), 1, ELOG_DEFAULT_ERROR_RATE_SECONDS,
+                                ELogTimeUnits::TU_SECONDS);
+        if (mod.moderate()) {
+            m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+                                      errorMsg.c_str());
+        }
         // TODO: what now?
-        return 0;
+        return false;
     }
 
-    // check for overflow
-    size_t bytesWritten = msg.ByteSizeLong();
-    if (bytesWritten > UINT32_MAX) {
-        std::string errorMsg = "Invalid gRPC payload size: ";
-        errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  errorMsg.c_str());
-        bytesWritten = UINT32_MAX;
-        // nevertheless we continue, but size will be incorrect
-    }
-    return (uint32_t)bytesWritten;
+    bytesWritten = msg.ByteSizeLong();
+    return true;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                            ReceptorType>::writeLogRecordStream(const ELogRecord& logRecord) {
+bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
+                        ReceptorType>::writeLogRecordStream(const ELogRecord& logRecord,
+                                                            uint64_t& bytesWritten) {
     // prepare log record message
     // NOTE: receptor must live until message sending, because it holds value strings
     ELogGRPCBaseReceptor<> receptor;
@@ -695,35 +693,31 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     // make sure we have a valid writer
     if (m_clientWriter.get() == nullptr) {
         // previous flush failed, we just silently drop the request
-        return 0;
+        return false;
     }
 
     // write next message in current RPC stream
     if (!m_clientWriter->Write(msg)) {
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  "Failed to stream log record over gRPC");
+        const char* errorMsg = "Failed to stream log record over gRPC";
+        static ELogModerate mod(errorMsg, 1, ELOG_DEFAULT_ERROR_RATE_SECONDS,
+                                ELogTimeUnits::TU_SECONDS);
+        if (mod.moderate()) {
+            m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+                                      errorMsg);
+        }
         // TODO: what now?
-        return 0;
+        return false;
     }
 
-    // TODO: fix this: we need to separate submitted/written counters
-    // check for overflow
-    size_t bytesWritten = msg.ByteSizeLong();
-    if (bytesWritten > UINT32_MAX) {
-        std::string errorMsg = "Invalid gRPC payload size: ";
-        errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  errorMsg.c_str());
-        bytesWritten = UINT32_MAX;
-        // nevertheless we continue, but size will be incorrect
-    }
-    return (uint32_t)bytesWritten;
+    bytesWritten = msg.ByteSizeLong();
+    return true;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                            ReceptorType>::writeLogRecordAsync(const ELogRecord& logRecord) {
+bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
+                        ReceptorType>::writeLogRecordAsync(const ELogRecord& logRecord,
+                                                           uint64_t& bytesWritten) {
     // prepare log record message
     // NOTE: receptor must live until message sending, because it holds value strings
     ELogGRPCBaseReceptor<> receptor;
@@ -752,45 +746,49 @@ uint32_t ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     void* tag = nullptr;
     bool ok = false;
     if (!m_cq.Next(&tag, &ok) || !ok) {
-        m_reportHandler->onReport(
-            m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-            "Failed to get completion queue response in asynchronous mode gRPC");
+        const char* errorMsg = "Failed to get completion queue response in asynchronous mode gRPC";
+        static ELogModerate mod(errorMsg, 1, ELOG_DEFAULT_ERROR_RATE_SECONDS,
+                                ELogTimeUnits::TU_SECONDS);
+        if (mod.moderate()) {
+            m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+                                      errorMsg);
+        }
         // TODO: what now?
-        return 0;
+        return false;
     }
 
     if (tag != (void*)1) {
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  "Unexpected response tag in asynchronous mode gRPC");
-        return 0;
+        const char* errorMsg = "Unexpected response tag in asynchronous mode gRPC";
+        static ELogModerate mod(errorMsg, 1, ELOG_DEFAULT_ERROR_RATE_SECONDS,
+                                ELogTimeUnits::TU_SECONDS);
+        if (mod.moderate()) {
+            m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+                                      errorMsg);
+        }
+        return false;
     }
 
     if (!callStatus.ok()) {
         std::string errorMsg = "Asynchronous mode gRPC call ended with status FAIL: ";
         errorMsg += callStatus.error_message();
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  errorMsg.c_str());
-        return 0;
+        static ELogModerate mod(errorMsg.c_str(), 1, ELOG_DEFAULT_ERROR_RATE_SECONDS,
+                                ELogTimeUnits::TU_SECONDS);
+        if (mod.moderate()) {
+            m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
+                                      errorMsg.c_str());
+        }
+        return false;
     }
 
-    // check for overflow
-    size_t bytesWritten = msg.ByteSizeLong();
-    if (bytesWritten > UINT32_MAX) {
-        std::string errorMsg = "Invalid gRPC payload size: ";
-        errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  errorMsg.c_str());
-        bytesWritten = UINT32_MAX;
-        // nevertheless we continue, but size will be incorrect
-    }
-    return (uint32_t)bytesWritten;
+    bytesWritten = msg.ByteSizeLong();
+    return true;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-uint32_t
-ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                   ReceptorType>::writeLogRecordAsyncCallbackUnary(const ELogRecord& logRecord) {
+bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
+                        ReceptorType>::writeLogRecordAsyncCallbackUnary(const ELogRecord& logRecord,
+                                                                        uint64_t& bytesWritten) {
     // NOTE: receptor must live until message sending, because it holds value strings
     ELogGRPCBaseReceptor<> receptor;
     MessageType msg;
@@ -829,37 +827,27 @@ ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
     std::unique_lock<std::mutex> lock(responseLock);
     responseCV.wait(lock, [&done] { return done; });
     if (!result) {
-        return 0;
+        return false;
     }
 
-    // check for overflow
-    size_t bytesWritten = msg.ByteSizeLong();
-    if (bytesWritten > UINT32_MAX) {
-        std::string errorMsg = "Invalid gRPC payload size: ";
-        errorMsg += std::to_string(bytesWritten);
-        m_reportHandler->onReport(m_logger, ELEVEL_ERROR, __FILE__, __LINE__, ELOG_FUNCTION,
-                                  errorMsg.c_str());
-        bytesWritten = UINT32_MAX;
-        // nevertheless we continue, but size will be incorrect
-    }
-    return (uint32_t)bytesWritten;
+    bytesWritten = msg.ByteSizeLong();
+    return false;
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,
           typename ReceptorType>
-uint32_t
-ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType,
-                   ReceptorType>::writeLogRecordAsyncCallbackStream(const ELogRecord& logRecord) {
+bool ELogGRPCBaseTarget<ServiceType, StubType, MessageType, ResponseType, ReceptorType>::
+    writeLogRecordAsyncCallbackStream(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // make sure we have a valid reactor
     if (m_reactor == nullptr) {
         // previous flush failed, we just silently drop the request
-        return 0;
+        return false;
     }
 
     // NOTE: deadline already set once during stream construction
 
     // just pass on to the reactor to deal with it
-    return m_reactor->writeLogRecord(logRecord);
+    return m_reactor->writeLogRecord(logRecord, bytesWritten);
 }
 
 template <typename ServiceType, typename StubType, typename MessageType, typename ResponseType,

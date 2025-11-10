@@ -190,9 +190,10 @@ public:
     /**
      * @brief Writes a log record through the reactor (outside reactor flow).
      * @param logRecord The log record to pass to the reactor.
-     * @return uint32_t The number of bytes written.
+     * @param[out] bytesWritten The number of bytes written.
+     * @return The operation's result.
      */
-    uint32_t writeLogRecord(const ELogRecord& logRecord);
+    bool writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten);
 
     /**
      * @brief Submits a flush request to the log reactor. In effects marks the end of a single RPC
@@ -307,8 +308,13 @@ protected:
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() final;
 
-    /** @brief Sends a log record to a log target. */
-    uint32_t writeLogRecord(const ELogRecord& logRecord) final;
+    /**
+     * @brief Order the log target to write a log record (thread-safe).
+     * @param logRecord The log record to write to the log target.
+     * @param bytesWritten The number of bytes written to log.
+     * @return The operation's result.
+     */
+    bool writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) final;
 
     /** @brief Orders a buffered log target to flush it log messages. */
     bool flushLogTarget() final;
@@ -340,11 +346,11 @@ private:
     ELogGRPCBaseReactor<StubType, MessageType, ReceptorType>* m_reactor;
 
     /** @brief Sends a log record to a log target. */
-    uint32_t writeLogRecordUnary(const ELogRecord& logRecord);
-    uint32_t writeLogRecordStream(const ELogRecord& logRecord);
-    uint32_t writeLogRecordAsync(const ELogRecord& logRecord);
-    uint32_t writeLogRecordAsyncCallbackUnary(const ELogRecord& logRecord);
-    uint32_t writeLogRecordAsyncCallbackStream(const ELogRecord& logRecord);
+    bool writeLogRecordUnary(const ELogRecord& logRecord, uint64_t& bytesWritten);
+    bool writeLogRecordStream(const ELogRecord& logRecord, uint64_t& bytesWritten);
+    bool writeLogRecordAsync(const ELogRecord& logRecord, uint64_t& bytesWritten);
+    bool writeLogRecordAsyncCallbackUnary(const ELogRecord& logRecord, uint64_t& bytesWritten);
+    bool writeLogRecordAsyncCallbackStream(const ELogRecord& logRecord, uint64_t& bytesWritten);
 
     // helper method to set single RPC call deadline
     inline void setDeadline(grpc::ClientContext& context) {

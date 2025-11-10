@@ -49,8 +49,9 @@ bool ELogWin32EventLogTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogWin32EventLogTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogWin32EventLogTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     WORD eventType = 0;
+    bytesWritten = 0;
     if (logLevelToEventType(logRecord.m_logLevel, eventType)) {
         std::string logMsg;
         formatLogMsg(logRecord, logMsg);
@@ -65,12 +66,16 @@ uint32_t ELogWin32EventLogTarget::writeLogRecord(const ELogRecord& logRecord) {
                           &msg,                       // Array of strings
                           nullptr                     // No binary data
                           )) {
-            // silently ignore
-            // TODO: should update some counter
+            // NOTE: this error report will be directed only to stderr, and will not be reported
+            // recursively into this log target
+            ELOG_REPORT_MODERATE_WIN32_ERROR_DEFAULT(
+                "Failed to report to event log message of size %zu", logMsg.c_str());
+
+            return false;
         }
-        return (uint32_t)logMsg.length();
+        bytesWritten = logMsg.length();
     }
-    return 0;
+    return true;
 }
 
 bool ELogWin32EventLogTarget::flushLogTarget() { return true; }

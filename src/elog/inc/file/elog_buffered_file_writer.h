@@ -34,6 +34,11 @@ struct ELOG_API ELogBufferedStats : public ELogStats {
     inline void incrementBufferWriteCount() { m_bufferWriteCount.add(getSlotId(), 1); }
     inline void addBufferBytesCount(uint64_t bytes) { m_bufferByteCount.add(getSlotId(), bytes); }
 
+    inline void incrementBufferWriteFailCount() { m_bufferWriteFailCount.add(getSlotId(), 1); }
+    inline void addBufferBytesFailCount(uint64_t bytes) {
+        m_bufferByteFailCount.add(getSlotId(), bytes);
+    }
+
     /**
      * @brief Prints log target statistics into a string buffer, adding the log buffer statistics.
      * @param buffer The output string buffer.
@@ -46,10 +51,15 @@ struct ELOG_API ELogBufferedStats : public ELogStats {
     void addStats(const ELogBufferedStats& stats) {
         m_bufferWriteCount.addVar(stats.m_bufferByteCount);
         m_bufferByteCount.addVar(stats.m_bufferByteCount);
+        m_bufferWriteFailCount.addVar(stats.m_bufferWriteFailCount);
+        m_bufferByteFailCount.addVar(stats.m_bufferByteFailCount);
     }
 
     inline const ELogStatVar& getBufferWriteCount() const { return m_bufferWriteCount; }
     inline const ELogStatVar& getBufferByteCount() const { return m_bufferByteCount; }
+
+    inline const ELogStatVar& getBufferWriteFailCount() const { return m_bufferWriteFailCount; }
+    inline const ELogStatVar& getBufferByteFailCount() const { return m_bufferByteFailCount; }
 
     /** @brief Releases the statistics slot for the current thread. */
     void resetThreadCounters(uint64_t slotId) override;
@@ -60,6 +70,12 @@ private:
 
     /** @brief The total number of buffered bytes written to log. */
     ELogStatVar m_bufferByteCount;
+
+    /** @brief The total number of failed writing buffered log data to file/transport-layer. */
+    ELogStatVar m_bufferWriteFailCount;
+
+    /** @brief The total number of failed buffered bytes written to log. */
+    ELogStatVar m_bufferByteFailCount;
 };
 
 /** @brief A utility class for writing data to file with internal buffering. */

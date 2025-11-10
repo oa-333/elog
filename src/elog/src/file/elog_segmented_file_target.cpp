@@ -398,7 +398,7 @@ bool ELogSegmentedFileTarget::stopLogTarget() {
     return true;
 }
 
-void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
+bool ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
     // first thing, increment the epoch
     uint64_t epoch = m_epoch.fetch_add(1, std::memory_order_acquire);
 
@@ -415,26 +415,24 @@ void ELogSegmentedFileTarget::logFormattedMsg(const char* formattedLogMsg, size_
         advanceSegment(segmentData->m_segmentId + 1, formattedLogMsg, epoch);
         // NOTE: current thread's epoch is already closed by call to advanceSegment()
         // NOTE: after segment is advanced the log message is already logged
-        return;
+        return true;
     } else if (bytesLogged > m_segmentLimitBytes) {
         // new segment is not ready yet, so push into pending queue
         segmentData->m_pendingMsgs.push(formattedLogMsg);
         // don't forget to mark transaction epoch end
         m_epochSet.insert(epoch);
-        return;
+        return true;
     }
 
     // write data to current log segment
-    if (!segmentData->log(formattedLogMsg, length)) {
-        // TODO: in order to avoid log flooding, this error message must be emitted only once!
-        // alternatively, the log target should be marked as unusable and reject all requests to log
-        // messages. This is true for all log targets.
-        // for the time being we avoid emitting this error message
-        // ELOG_REPORT_ERROR("Failed to write to segment log file");
+    bool res = segmentData->log(formattedLogMsg, length);
+    if (!res) {
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to write to segment log file");
     }
 
     // mark log finish
     m_epochSet.insert(epoch);
+    return res;
 }
 
 bool ELogSegmentedFileTarget::flushLogTarget() {

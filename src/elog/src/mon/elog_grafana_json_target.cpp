@@ -55,15 +55,17 @@ bool ELogGrafanaJsonTarget::stopLogTarget() {
     return ELogGrafanaTarget::stopLogTarget();
 }
 
-uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     ELOG_REPORT_TRACE("Preapring log message for Grafana Loki");
+    bytesWritten = 0;
     if (m_logEntry.empty()) {
         // apply labels (once per batch)
         ELogJsonReceptor receptor;
         fillInLabels(logRecord, &receptor);
         if (!receptor.prepareJsonMap(m_logEntry["streams"][0]["stream"], getLabelNames())) {
-            return 0;
+            return false;
         }
+        bytesWritten += receptor.getBytesPrepared();
     }
 
     // log line time, common to all log lines until flush
@@ -71,27 +73,31 @@ uint32_t ELogGrafanaJsonTarget::writeLogRecord(const ELogRecord& logRecord) {
     size_t logLineCount = values.size();
     auto& logLine = values[logLineCount];
     // need to send local time, other Loki complains that timestamp is too new
-    logLine[0] = std::to_string(
+    std::string unixTimeNanoStr = std::to_string(
         std::chrono::nanoseconds(elogTimeToUnixTimeNanos(logRecord.m_logTime, false)).count());
+    logLine[0] = unixTimeNanoStr;
+    bytesWritten += unixTimeNanoStr.length();
 
     // log line
     std::string logMsg;
     formatLogMsg(logRecord, logMsg);
     logLine[1] = logMsg;
+    bytesWritten += logMsg.length();
 
     // fill int log line attributes
     if (m_metadataFormatter->getPropCount() > 0) {
         ELogJsonReceptor receptor;
         fillInMetadata(logRecord, &receptor);
         if (!receptor.prepareJsonMap(logLine[2], getMetadataNames())) {
-            return 0;
+            return false;
         }
+        bytesWritten += receptor.getBytesPrepared();
     }
 
     // NOTE: log data is being aggregated until flush, which sends HTTP message to server
 
     ELOG_REPORT_TRACE("Log message for Grafana Loki is ready");
-    return (uint32_t)logMsg.size();
+    return true;
 }
 
 bool ELogGrafanaJsonTarget::flushLogTarget() {

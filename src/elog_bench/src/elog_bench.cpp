@@ -2360,7 +2360,7 @@ public:
     /** @brief Loads flush policy from a free-style predicate-like parsed expression. */
     bool loadExpr(const elog::ELogExpression* expr) final { return true; }
 
-    bool shouldFlush(uint32_t msgSizeBytes) final {
+    bool shouldFlush(uint64_t msgSizeBytes) final {
         if ((++m_counter) % 2 == 0) {
             fprintf(stderr, "Test flush PASS\n");
             return true;

@@ -361,7 +361,7 @@ bool ELogAndFlushPolicy::loadExpr(const ELogExpression* expr) {
     return loadCompositeExpr((const ELogCompositeExpression*)expr);
 }
 
-bool ELogAndFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+bool ELogAndFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
     // even through we can stop early, each flush policy may need to accumulate log message size in
     // order to make decisions
     bool res = true;
@@ -381,7 +381,7 @@ bool ELogOrFlushPolicy::loadExpr(const ELogExpression* expr) {
     return loadCompositeExpr((const ELogCompositeExpression*)expr);
 }
 
-bool ELogOrFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+bool ELogOrFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
     // even through we can stop early, each flush policy may need to accumulate log message size in
     // order to make decisions
     bool res = false;
@@ -476,9 +476,9 @@ bool ELogNotFlushPolicy::loadExpr(const ELogExpression* expr) {
 
 void ELogNotFlushPolicy::terminate() { setSubPolicy(nullptr); }
 
-bool ELogImmediateFlushPolicy::shouldFlush(uint32_t msgSizeBytes) { return true; }
+bool ELogImmediateFlushPolicy::shouldFlush(uint64_t msgSizeBytes) { return true; }
 
-bool ELogNeverFlushPolicy::shouldFlush(uint32_t msgSizeBytes) { return false; }
+bool ELogNeverFlushPolicy::shouldFlush(uint64_t msgSizeBytes) { return false; }
 
 bool ELogCountFlushPolicy::load(const ELogConfigMapNode* flushPolicyCfg) {
     return loadIntFlushPolicy(flushPolicyCfg, "count", "flush_count", m_logCountLimit);
@@ -488,7 +488,7 @@ bool ELogCountFlushPolicy::loadExpr(const ELogExpression* expr) {
     return loadIntFlushPolicy(expr, "count", m_logCountLimit);
 }
 
-bool ELogCountFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+bool ELogCountFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
     uint64_t logCount = m_currentLogCount.fetch_add(1, std::memory_order_relaxed);
     return ((logCount + 1) % m_logCountLimit == 0);
 }
@@ -502,7 +502,7 @@ bool ELogSizeFlushPolicy::loadExpr(const ELogExpression* expr) {
     return loadSizeFlushPolicy(expr, "size", m_logSizeLimitBytes, ELogSizeUnits::SU_BYTES);
 }
 
-bool ELogSizeFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+bool ELogSizeFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
     uint64_t prevSizeBytes =
         m_currentLogSizeBytes.fetch_add(msgSizeBytes, std::memory_order_relaxed);
     uint64_t currSizeBytes = prevSizeBytes + msgSizeBytes;
@@ -549,7 +549,7 @@ bool ELogTimedFlushPolicy::stop() {
     return true;
 }
 
-bool ELogTimedFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+bool ELogTimedFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
     // get timestamp
     ELogTime now = getTimestamp();
 
@@ -777,7 +777,7 @@ bool ELogGroupFlushPolicy::stop() {
     return true;
 }
 
-bool ELogGroupFlushPolicy::shouldFlush(uint32_t msgSizeBytes) {
+bool ELogGroupFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
     // this is a moderating flush policy, so we always return true
     return true;
 }

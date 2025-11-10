@@ -1,6 +1,7 @@
 #ifndef __ELOG_COMMON_DEF_H__
 #define __ELOG_COMMON_DEF_H__
 
+#include <atomic>
 #include <cstdint>
 
 #include "elog_def.h"
@@ -132,6 +133,29 @@ enum class ELogSizeUnits : uint32_t {
     /** @brief Giga-Bytes. */
     SU_GIGA_BYTES
 };
+
+/** @brief Helper class for implementing "once" macros. */
+class ELOG_API ELogOnce {
+public:
+    ELogOnce() : m_once(false) {}
+    ELogOnce(const ELogOnce&) = delete;
+    ELogOnce(ELogOnce&&) = delete;
+    ELogOnce& operator=(ELogOnce&) = delete;
+    ~ELogOnce() {}
+
+    /** @brief Boolean evaluation operator overload (allow class to act as a boolean flag). */
+    inline operator bool() {
+        bool onceValue = m_once.load(std::memory_order_acquire);
+        return (onceValue == false &&
+                m_once.compare_exchange_strong(onceValue, true, std::memory_order_seq_cst));
+    }
+
+private:
+    std::atomic<bool> m_once;
+};
+
+/** @brief The default error rate limit (once in 10 seconds). */
+#define ELOG_DEFAULT_ERROR_RATE_SECONDS 10
 
 /** @def Default maximum number of threads used by ELog. */
 #define ELOG_DEFAULT_MAX_THREADS 256

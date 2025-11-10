@@ -21,16 +21,17 @@ bool ELogSysLogTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogSysLogTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogSysLogTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     // first translate log level
     int sysLevel = 0;
+    bytesWritten = 0;
     if (logLevelToSysLevel(logRecord.m_logLevel, sysLevel)) {
         std::string logMsg;
         formatLogMsg(logRecord, logMsg);
         syslog(sysLevel | LOG_USER, "%s", logMsg.c_str());
-        return logMsg.length();
+        bytesWritten = logMsg.length();
     }
-    return 0;
+    return true;
 }
 
 bool ELogSysLogTarget::flushLogTarget() { return true; }

@@ -108,8 +108,8 @@ bool ELogRedisDbTarget::connectDb(void* dbData) {
     // connect to database
     redisDbData->m_context = redisConnect(m_host.c_str(), m_port);
     if (redisDbData->m_context == nullptr) {
-        ELOG_REPORT_ERROR("Failed to open Redis db connection to %s:%d: %s", m_host.c_str(),
-                          m_port);
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to open Redis db connection to %s:%d: %s",
+                                           m_host.c_str(), m_port);
         return false;
     }
     ELOG_REPORT_TRACE("Connected to Redis");
@@ -118,7 +118,8 @@ bool ELogRedisDbTarget::connectDb(void* dbData) {
         redisReply* reply =
             (redisReply*)redisCommand(redisDbData->m_context, "AUTH %s", m_passwd.c_str());
         if (reply == NULL || reply->type == REDIS_REPLY_ERROR) {
-            ELOG_REPORT_ERROR("Redis authentication error: %s", redisDbData->m_context->errstr);
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Redis authentication error: %s",
+                                               redisDbData->m_context->errstr);
             if (reply != nullptr) {
                 freeReplyObject(reply);
             }
@@ -145,7 +146,8 @@ bool ELogRedisDbTarget::disconnectDb(void* dbData) {
     return true;
 }
 
-bool ELogRedisDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
+bool ELogRedisDbTarget::execInsert(const ELogRecord& logRecord, void* dbData,
+                                   uint64_t& bytesWritten) {
     RedisDbData* redisDbData = validateConnectionState(dbData, true);
     if (redisDbData == nullptr) {
         return false;
@@ -166,6 +168,7 @@ bool ELogRedisDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
     if (!executeRedisCommand(redisDbData, redisFieldReceptor.getBuffer())) {
         return false;
     }
+    bytesWritten = redisFieldReceptor.getBufferSize();
 
     // now execute additional "index" statements
     for (uint32_t i = 0; i < m_indexStmtFormatters.size(); ++i) {
@@ -175,10 +178,11 @@ bool ELogRedisDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
         indexReceptor.finalize();
 
         if (!executeRedisCommand(redisDbData, indexReceptor.getBuffer())) {
-            ELOG_REPORT_ERROR("Failed to execute Redis index insert command: %s",
-                              indexReceptor.getBuffer());
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to execute Redis index insert command: %s",
+                                               indexReceptor.getBuffer());
             return false;
         }
+        bytesWritten += indexReceptor.getBufferSize();
     }
     return true;
 }
@@ -186,19 +190,19 @@ bool ELogRedisDbTarget::execInsert(const ELogRecord& logRecord, void* dbData) {
 ELogRedisDbTarget::RedisDbData* ELogRedisDbTarget::validateConnectionState(void* dbData,
                                                                            bool shouldBeConnected) {
     if (dbData == nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to Redis database, invalid connection state (internal error, database "
             "object is null)");
         return nullptr;
     }
     RedisDbData* redisDbData = (RedisDbData*)dbData;
     if (shouldBeConnected && redisDbData->m_context == nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to Redis database, invalid connection state (internal error, Redis "
             "connection is null)");
         return nullptr;
     } else if (!shouldBeConnected && redisDbData->m_context != nullptr) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Cannot connect to Redis database, invalid connection state (internal error, Redis "
             "connection is NOT null as expected)");
         return nullptr;
@@ -227,7 +231,8 @@ bool ELogRedisDbTarget::executeRedisCommand(RedisDbData* redisDbData, const char
     size_t argc = cmdTokens.size();
     const char** argv = new (std::nothrow) const char*[argc];
     if (argv == nullptr) {
-        ELOG_REPORT_ERROR("Failed to allocate Redis argument array of size %zu", argc);
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to allocate Redis argument array of size %zu",
+                                           argc);
         return false;
     }
     for (uint32_t i = 0; i < argc; ++i) {
@@ -239,7 +244,7 @@ bool ELogRedisDbTarget::executeRedisCommand(RedisDbData* redisDbData, const char
         (redisReply*)redisCommandArgv(redisDbData->m_context, (int)argc, argv, argvlen);
     if (reply == nullptr || reply->type == REDIS_REPLY_ERROR) {
         const char* errStr = reply ? (const char*)reply->str : "N/A";
-        ELOG_REPORT_ERROR("Failed to execute Redis command '%s': %s", cmd, errStr);
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to execute Redis command '%s': %s", cmd, errStr);
         res = false;
     }
 

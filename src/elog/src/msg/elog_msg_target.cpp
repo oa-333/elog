@@ -127,17 +127,18 @@ bool ELogMsgTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogMsgTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogMsgTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     ELOG_REPORT_DEBUG("Preapring log message");
 
     // use the binary format provider to convert the log record into a byte array
     // and put it in the data buffer array
     commutil::MsgBuffer& msgBuffer = m_msgBufferArray.emplace_back();
     if (!m_binaryFormatProvider->logRecordToBuffer(logRecord, getLogFormatter(), msgBuffer)) {
-        ELOG_REPORT_ERROR("Failed to serialize log record into buffer");
-        return 0;
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to serialize log record into buffer");
+        return false;
     }
-    return (uint32_t)msgBuffer.size();
+    bytesWritten = msgBuffer.size();
+    return true;
 }
 
 bool ELogMsgTarget::flushLogTarget() {
@@ -149,16 +150,16 @@ bool ELogMsgTarget::flushLogTarget() {
                 ELOG_RECORD_MSG_ID, m_msgBufferArray, m_compress, COMMUTIL_MSG_FLAG_BATCH,
                 m_msgConfig.m_sendTimeoutMillis);
             if (rc != commutil::ErrorCode::E_OK) {
-                ELOG_REPORT_ERROR("Failed to transact message: %s",
-                                  commutil::errorCodeToString(rc));
+                ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to transact message batch: %s",
+                                                   commutil::errorCodeToString(rc));
                 res = false;
             }
         } else {
             commutil::ErrorCode rc = m_msgSender.sendMsgBatch(ELOG_RECORD_MSG_ID, m_msgBufferArray,
                                                               m_compress, COMMUTIL_MSG_FLAG_BATCH);
             if (rc != commutil::ErrorCode::E_OK) {
-                ELOG_REPORT_ERROR("Failed to transact message: %s",
-                                  commutil::errorCodeToString(rc));
+                ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to send message batch: %s",
+                                                   commutil::errorCodeToString(rc));
                 res = false;
             }
         }

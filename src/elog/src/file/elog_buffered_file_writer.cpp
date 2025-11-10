@@ -20,7 +20,9 @@ bool ELogBufferedStats::initialize(uint32_t maxThreads) {
     if (!ELogStats::initialize(maxThreads)) {
         return false;
     }
-    if (!m_bufferWriteCount.initialize(maxThreads) || !m_bufferByteCount.initialize(maxThreads)) {
+    if (!m_bufferWriteCount.initialize(maxThreads) || !m_bufferByteCount.initialize(maxThreads) ||
+        !m_bufferWriteFailCount.initialize(maxThreads) ||
+        !m_bufferByteFailCount.initialize(maxThreads)) {
         ELOG_REPORT_ERROR("Failed to initialize buffered file target statistics variables");
         terminate();
         return false;
@@ -32,6 +34,8 @@ void ELogBufferedStats::terminate() {
     ELogStats::terminate();
     m_bufferWriteCount.terminate();
     m_bufferByteCount.terminate();
+    m_bufferWriteFailCount.terminate();
+    m_bufferByteFailCount.terminate();
 }
 
 void ELogBufferedStats::toString(ELogBuffer& buffer, ELogTarget* logTarget,
@@ -43,7 +47,13 @@ void ELogBufferedStats::toString(ELogBuffer& buffer, ELogTarget* logTarget,
         uint64_t avgBufferBytes = m_bufferByteCount.getSum() / bufferWriteCount;
         buffer.appendArgs("\tAverage buffer size: %" PRIu64 " bytes\n", avgBufferBytes);
     } else {
-        buffer.appendArgs("\tAverage buffer size: N/A\n");
+        buffer.append("\tAverage buffer size: N/A\n");
+    }
+    uint64_t bufferWriteFailCount = m_bufferWriteFailCount.getSum();
+    if (bufferWriteFailCount > 0) {
+        buffer.appendArgs("\tBuffer write fail count: %" PRIu64 "\n", bufferWriteFailCount);
+        uint64_t avgBufferBytes = m_bufferWriteFailCount.getSum() / bufferWriteFailCount;
+        buffer.appendArgs("\tAverage failed buffer size: %" PRIu64 " bytes\n", avgBufferBytes);
     }
 }
 
@@ -77,10 +87,6 @@ bool ELogBufferedFileWriter::flushLogBuffer() {
     if (m_bufferOffset > 0) {
         if (!writeToFile(&m_logBuffer[0], m_bufferOffset)) {
             return false;
-        }
-        if (m_stats != nullptr && m_enableStats) {
-            m_stats->incrementBufferWriteCount();
-            m_stats->addBufferBytesCount(m_bufferOffset);
         }
         m_bufferOffset = 0;
     }
@@ -130,7 +136,7 @@ bool ELogBufferedFileWriter::writeToFile(const char* buffer, size_t length) {
     while (pos < length) {
 #ifdef ELOG_MSVC
         if (length > UINT32_MAX) {
-            ELOG_REPORT_ERROR(
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT(
                 "Cannot write more than %u bytes to a file at once on Windows/MSVC (requested for "
                 "%zu)",
                 (unsigned)UINT32_MAX, length);
@@ -142,14 +148,20 @@ bool ELogBufferedFileWriter::writeToFile(const char* buffer, size_t length) {
         ssize_t res = write(m_fd, buffer + pos, length - pos);
 #endif
         if (res == -1) {
-            // TODO: this might cause log flooding, consider a better way, i.e. some
-            // attenuation/aggregation (log 1 message in X time) as well statistics counter update
-            int errCode = errno;
-            ELOG_REPORT_ERROR("Failed to write %u bytes to log file: system error %d", length,
-                              errCode);
+            if (m_stats != nullptr && m_enableStats) {
+                m_stats->incrementBufferWriteFailCount();
+                m_stats->addBufferBytesFailCount(length);
+            }
+            ELOG_REPORT_MODERATE_SYS_ERROR_DEFAULT(write, "Failed to write %zu bytes to log file",
+                                                   length - pos);
             return false;
         }
         pos += (pos_type_t)res;
+    }
+
+    if (m_stats != nullptr && m_enableStats) {
+        m_stats->incrementBufferWriteCount();
+        m_stats->addBufferBytesCount(length);
     }
     return true;
 }

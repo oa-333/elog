@@ -20,7 +20,7 @@ ELOG_DECLARE_REPORT_LOGGER(ELogJsonReceptor)
 bool ELogJsonReceptor::prepareJsonMap(nlohmann::json& logAttributes,
                                       const std::vector<std::string>& propNames) {
     if (m_propValues.size() != propNames.size()) {
-        ELOG_REPORT_ERROR(
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT(
             "Mismatching JSON property names and values (%u names, %u values) in JSON receptor",
             propNames.size(), m_propValues.size());
         return false;

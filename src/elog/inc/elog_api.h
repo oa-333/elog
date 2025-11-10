@@ -1123,51 +1123,6 @@ inline ELogLogger* getValidLogger(ELogLogger* logger) {
     }
 }
 
-/** @brief Helper class for implementing "once" macros. */
-class ELOG_API ELogOnce {
-public:
-    ELogOnce() : m_once(false) {}
-    ELogOnce(const ELogOnce&) = delete;
-    ELogOnce(ELogOnce&&) = delete;
-    ELogOnce& operator=(ELogOnce&) = delete;
-    ~ELogOnce() {}
-
-    inline operator bool() {
-        bool onceValue = m_once.load(std::memory_order_acquire);
-        return (onceValue == false &&
-                m_once.compare_exchange_strong(onceValue, true, std::memory_order_seq_cst));
-    }
-
-private:
-    std::atomic<bool> m_once;
-};
-
-/** @brief Helper class for implementing "moderate" macros. */
-class ELOG_API ELogModerate {
-public:
-    ELogModerate(const char* fmt, uint64_t maxMsgs, uint64_t timeout, ELogTimeUnits units)
-        : m_fmt(fmt),
-          m_rateLimiter(maxMsgs, timeout, units),
-          m_discardCount(0),
-          m_isDiscarding(false),
-          m_startDiscardCount(0) {}
-    ELogModerate(const ELogModerate&) = delete;
-    ELogModerate(ELogModerate&&) = delete;
-    ELogModerate& operator=(ELogModerate&) = delete;
-    ~ELogModerate() {}
-
-    bool moderate();
-
-private:
-    const char* m_fmt;
-    ELogRateLimiter m_rateLimiter;
-    static ELogRecord m_dummy;
-    std::atomic<uint64_t> m_discardCount;
-    std::atomic<bool> m_isDiscarding;
-    std::chrono::steady_clock::time_point m_startDiscardTime;
-    uint64_t m_startDiscardCount;
-};
-
 /**************************************************************************************
  *                          Logging Statistics
  **************************************************************************************/
@@ -1191,6 +1146,7 @@ extern ELOG_API void resetLogStatistics();
  *
  **************************************************************************************/
 
+/** @brief Basic log formatting macro (unconditional).  */
 #define ELOG_BASE(logger, level, fmt, ...) \
     logger->logFormat(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
 
@@ -1238,6 +1194,7 @@ extern ELOG_API void resetLogStatistics();
 
 #ifdef ELOG_ENABLE_FMT_LIB
 
+/** @brief Basic log formatting macro (unconditional, fmtlib style).  */
 #define ELOG_FMT_BASE(logger, level, fmtStr, ...)                                      \
     {                                                                                  \
         std::string logMsg = fmt::format(fmtStr, ##__VA_ARGS__);                       \
@@ -1296,6 +1253,8 @@ extern ELOG_API void resetLogStatistics();
  **************************************************************************************/
 
 #ifdef ELOG_ENABLE_FMT_LIB
+
+/** @brief Basic log formatting macro (unconditional, fmtlib style, binary form).  */
 #define ELOG_BIN_BASE(logger, level, fmt, ...) \
     logger->logBinary(level, __FILE__, __LINE__, ELOG_FUNCTION, fmt, ##__VA_ARGS__)
 
@@ -1351,6 +1310,8 @@ extern ELOG_API void resetLogStatistics();
  **************************************************************************************/
 
 #ifdef ELOG_ENABLE_FMT_LIB
+
+/** @brief Basic log formatting macro (unconditional, fmtlib style, binary form, auto-cached).  */
 #define ELOG_CACHE_BASE(logger, level, fmt, ...)                                                  \
     {                                                                                             \
         static thread_local elog::ELogCacheEntryId cacheEntryId = elog::getOrCacheFormatMsg(fmt); \
@@ -1410,6 +1371,8 @@ extern ELOG_API void resetLogStatistics();
  **************************************************************************************/
 
 #ifdef ELOG_ENABLE_FMT_LIB
+
+/** @brief Basic log formatting macro (unconditional, fmtlib style, binary form, pre-cached).  */
 #define ELOG_ID_BASE(logger, level, cacheEntryId, ...) \
     logger->logBinaryCached(level, __FILE__, __LINE__, ELOG_FUNCTION, cacheEntryId, ##__VA_ARGS__);
 

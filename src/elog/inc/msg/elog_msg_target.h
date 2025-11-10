@@ -111,9 +111,11 @@ protected:
 
     /**
      * @brief Order the log target to write a log record (thread-safe).
-     * @return The number of bytes written to log.
+     * @param logRecord The log record to write to the log target.
+     * @param bytesWritten The number of bytes written to log.
+     * @return The operation's result.
      */
-    uint32_t writeLogRecord(const ELogRecord& logRecord) override;
+    bool writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) override;
 
     /** @brief Order the log target to flush. */
     bool flushLogTarget() override;

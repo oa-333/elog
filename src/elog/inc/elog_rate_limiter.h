@@ -16,11 +16,35 @@
 
 namespace elog {
 
+/** @brief Rate limit parameters. */
+struct ELOG_API ELogRateLimitParams {
+    /**
+     * @brief Maximum number of messages allowed to pass through the rate limiter in the given time
+     * frame.
+     */
+    uint64_t m_maxMsgs;
+
+    /** @brief The timeout used for each rate limit window.  */
+    uint64_t m_timeout;
+
+    /** @brief The timeout units. */
+    ELogTimeUnits m_units;
+
+    ELogRateLimitParams(uint64_t maxMsg = 0, uint64_t timeout = 0,
+                        ELogTimeUnits units = ELogTimeUnits::TU_NONE)
+        : m_maxMsgs(maxMsg), m_timeout(timeout), m_units(units) {}
+    ELogRateLimitParams(const ELogRateLimitParams&) = default;
+    ELogRateLimitParams(ELogRateLimitParams&&) = default;
+    ELogRateLimitParams& operator=(const ELogRateLimitParams&) = default;
+    ~ELogRateLimitParams() {}
+};
+
 /** @brief Log rate limit filter. */
 class ELOG_API ELogRateLimitFilter final : public ELogCmpFilter {
 public:
     ELogRateLimitFilter(uint64_t maxMsg = 0, uint64_t timeout = 0,
                         ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE);
+    ELogRateLimitFilter(const ELogRateLimitParams& params);
     ELogRateLimitFilter(const ELogRateLimitFilter&) = delete;
     ELogRateLimitFilter(ELogRateLimitFilter&&) = delete;
     ELogRateLimitFilter& operator=(const ELogRateLimitFilter&) = delete;
@@ -59,6 +83,7 @@ class ELOG_API ELogRateLimiter {
 public:
     ELogRateLimiter(uint64_t maxMsg = 0, uint64_t timeout = 0,
                     ELogTimeUnits timeoutUnits = ELogTimeUnits::TU_NONE);
+    ELogRateLimiter(const ELogRateLimitParams& params);
     ELogRateLimiter(const ELogRateLimiter&) = delete;
     ELogRateLimiter(ELogRateLimiter&&) = delete;
     ELogRateLimiter& operator=(const ELogRateLimiter&) = delete;
@@ -78,6 +103,39 @@ private:
     // buffer for in-place allocation
     char m_rateLimiterBuf[sizeof(ELogRateLimitFilter)];
     ELogRateLimitFilter* m_filter;
+};
+
+/** @brief Helper class for implementing "moderate" macros. */
+class ELOG_API ELogModerate {
+public:
+    ELogModerate(const char* fmt, uint64_t maxMsgs, uint64_t timeout, ELogTimeUnits units)
+        : m_fmt(fmt),
+          m_rateLimiter(maxMsgs, timeout, units),
+          m_discardCount(0),
+          m_isDiscarding(false),
+          m_startDiscardCount(0) {}
+    ELogModerate(const char* fmt, const ELogRateLimitParams& params)
+        : m_fmt(fmt),
+          m_rateLimiter(params),
+          m_discardCount(0),
+          m_isDiscarding(false),
+          m_startDiscardCount(0) {}
+    ELogModerate(const ELogModerate&) = delete;
+    ELogModerate(ELogModerate&&) = delete;
+    ELogModerate& operator=(ELogModerate&) = delete;
+    ~ELogModerate() {}
+
+    /** @brief Moderate call. Returns true if call can be made. */
+    bool moderate();
+
+private:
+    const char* m_fmt;
+    ELogRateLimiter m_rateLimiter;
+    static ELogRecord m_dummy;
+    std::atomic<uint64_t> m_discardCount;
+    std::atomic<bool> m_isDiscarding;
+    std::chrono::steady_clock::time_point m_startDiscardTime;
+    uint64_t m_startDiscardCount;
 };
 
 }  // namespace elog

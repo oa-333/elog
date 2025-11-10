@@ -7,6 +7,7 @@
 #include "elog_atomic.h"
 #include "elog_common_def.h"
 #include "elog_def.h"
+#include "elog_rate_limiter.h"
 #include "elog_report_handler.h"
 
 #ifdef ELOG_ENABLE_LIFE_SIGN
@@ -50,6 +51,9 @@ struct ELOG_API ELogParams {
      */
     ELogLevel m_reportLevel;
 
+    /** @brief ELog's internal error moderation/rate-limiting parameters. */
+    ELogRateLimitParams m_errorModerationRate;
+
     /**
      * @brief Specifies the maximum number of threads that are able to concurrently access ELog. If
      * this number is exceeded, then some statistics may not be collected, and the garbage collector
@@ -86,6 +90,7 @@ struct ELOG_API ELogParams {
 #endif
           m_reportHandler(nullptr),
           m_reportLevel(ELEVEL_WARN),
+          m_errorModerationRate(1, ELOG_DEFAULT_ERROR_RATE_SECONDS, ELogTimeUnits::TU_SECONDS),
           m_maxThreads(ELOG_DEFAULT_MAX_THREADS),
           m_enableLogStatistics(ELOG_DEFAULT_ENABLE_LOG_STATISTICS),
           m_enableTimeSource(ELOG_DEFAULT_ENABLE_TIME_SOURCE),

@@ -38,7 +38,7 @@ protected:
     bool disconnectDb(void* dbData) final;
 
     /** @brief Sends a log record to a log target. */
-    bool execInsert(const ELogRecord& logRecord, void* dbData) final;
+    bool execInsert(const ELogRecord& logRecord, void* dbData, uint64_t& bytesWritten) final;
 
 private:
     std::string m_filePath;

@@ -133,35 +133,44 @@ bool ELogFileTarget::stopLogTarget() {
     return true;
 }
 
-void ELogFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
+bool ELogFileTarget::logFormattedMsg(const char* formattedLogMsg, size_t length) {
     // NOTE: according to https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_concurrency.html
     // gcc documentations states that: "POSIX standard requires that C stdio FILE* operations are
     // atomic. POSIX-conforming C libraries (e.g, on Solaris and GNU/Linux) have an internal mutex
     // to serialize operations on FILE*s."
     // therefore no lock is required here when NOT running in thread-safe conditions
+    int res = 0;
     if (isExternallyThreadSafe()) {
         // unlocked stdio is available only if _GNU_SOURCE is defined, regardless of Unix/Linux
         // platform/flavor
 #ifdef _GNU_SOURCE
-        fputs_unlocked(formattedLogMsg, m_fileHandle);
+        res = fputs_unlocked(formattedLogMsg, m_fileHandle);
 #else
         // NOTE: On Windows/MinGW platforms we do not have the stdio unlocked API, and implementing
         // it here directly (through the file descriptor) will bypass internal buffering offered by
         // fputs. Therefore on these platforms it is advised to use buffered file target instead.
-        // NOTE: there is nothing we can do if the call fails, since reporting it would cause
-        // flooding of error messages. Instead statistics can be maintained, and/or object state
-        // TODO: add ticket/feature-request for statistics
-        fputs(formattedLogMsg, m_fileHandle);
+        res = fputs(formattedLogMsg, m_fileHandle);
 #endif
     } else {
-        fputs(formattedLogMsg, m_fileHandle);
+        res = fputs(formattedLogMsg, m_fileHandle);
     }
+
+    // check for error
+    if (res == EOF) {
+        // issue error only once in 10 seconds to avoid log flooding
+        ELOG_REPORT_MODERATE_SYS_ERROR_DEFAULT(
+            fputs, "Failed to write to file log target log message of %zu bytes", length);
+
+        // TODO: we may need to render the log target as unusable
+        return false;
+    }
+
+    return true;
 }
 
 bool ELogFileTarget::flushLogTarget() {
     if (fflush(m_fileHandle) == EOF) {
-        // TODO: should log once
-        ELOG_REPORT_SYS_ERROR(fflush, "Failed to flush log file");
+        ELOG_REPORT_MODERATE_SYS_ERROR_DEFAULT(fflush, "Failed to flush log file");
         return false;
     }
     return true;

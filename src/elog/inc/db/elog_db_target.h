@@ -110,8 +110,13 @@ protected:
     /** @brief Order the log target to stop (required for threaded targets). */
     bool stopLogTarget() override;
 
-    /** @brief Sends a log record to a log target. */
-    uint32_t writeLogRecord(const ELogRecord& logRecord) override;
+    /**
+     * @brief Order the log target to write a log record (thread-safe).
+     * @param logRecord The log record to write to the log target.
+     * @param bytesWritten The number of bytes written to log.
+     * @return The operation's result.
+     */
+    bool writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) override;
 
     /** @brief Orders a buffered log target to flush it log messages. */
     bool flushLogTarget() final { return true; }
@@ -163,7 +168,7 @@ protected:
     virtual bool disconnectDb(void* dbData) = 0;
 
     /** @brief Sends a log record to a log target. */
-    virtual bool execInsert(const ELogRecord& logRecord, void* dbData) = 0;
+    virtual bool execInsert(const ELogRecord& logRecord, void* dbData, uint64_t& bytesWritten) = 0;
 
 private:
     // identification

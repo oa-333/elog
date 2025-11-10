@@ -158,15 +158,16 @@ bool ELogDbTarget::stopLogTarget() {
     return true;
 }
 
-uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
+bool ELogDbTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& bytesWritten) {
     uint32_t slotId = ELOG_DB_INVALID_SLOT_ID;
     if (m_threadModel == ELogDbThreadModel::TM_CONN_PER_THREAD) {
         slotId = sThreadSlotId;
         if (slotId == ELOG_DB_INVALID_SLOT_ID) {
             // do a full initialize/connect
             if (!initConnection(slotId)) {
-                ELOG_REPORT_ERROR("Failed to initialize DB connection for current thread");
-                return 0;
+                ELOG_REPORT_MODERATE_ERROR_DEFAULT(
+                    "Failed to initialize DB connection for current thread");
+                return false;
             } else {
                 // save slot id
                 sThreadSlotId = slotId;
@@ -186,27 +187,27 @@ uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
 
     if (slotId == ELOG_DB_INVALID_SLOT_ID) {
         ELOG_REPORT_TRACE("Failed to obtain valid slot id");
-        return 0;
+        return false;
     }
 
     // check if connected to database, otherwise discard log record
     // (wait until reconnected in the background)
     if (!isConnected(slotId)) {
         ELOG_REPORT_TRACE("Log record dropped, not connected");
-        return 0;
+        return false;
     }
     ConnectionData& connData = m_connectionPool[slotId];
 
     bool res = true;
     if (m_threadModel == ELogDbThreadModel::TM_LOCK) {
         std::unique_lock<std::mutex> lock(m_lock);
-        res = execInsert(logRecord, connData.getDbData());
+        res = execInsert(logRecord, connData.getDbData(), bytesWritten);
         if (!res) {
             // must be done while lock is still held
             termConnection(slotId);
         }
     } else {
-        res = execInsert(logRecord, connData.getDbData());
+        res = execInsert(logRecord, connData.getDbData(), bytesWritten);
         if (!res) {
             termConnection(slotId);
         }
@@ -218,7 +219,7 @@ uint32_t ELogDbTarget::writeLogRecord(const ELogRecord& logRecord) {
     }
 
     // NOTE: DB log target does not flush, so the byte count is meaningless
-    return 0;
+    return res;
 }
 
 bool ELogDbTarget::parseInsertStatement(const std::string& insertStatement) {
@@ -245,7 +246,7 @@ bool ELogDbTarget::initConnection(uint32_t& slotId) {
         slotId = allocSlot();
     }
     if (slotId == ELOG_DB_INVALID_SLOT_ID) {
-        ELOG_REPORT_ERROR("No available thread slot");
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("No available thread slot");
         return false;
     }
 
@@ -255,13 +256,13 @@ bool ELogDbTarget::initConnection(uint32_t& slotId) {
     if (connData.setConnecting()) {
         void* dbData = allocDbData();
         if (dbData == nullptr) {
-            ELOG_REPORT_ERROR("Failed to allocate DB data, out of memory");
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to allocate DB data, out of memory");
             connData.setDisconnected();
             freeSlot(slotId);
             return false;
         }
         if (!connectDb(dbData)) {
-            ELOG_REPORT_ERROR("Failed to connect to %s", m_dbName.c_str());
+            ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to connect to %s", m_dbName.c_str());
             freeDbData(dbData);
             connData.setDisconnected();
             freeSlot(slotId);
@@ -270,7 +271,7 @@ bool ELogDbTarget::initConnection(uint32_t& slotId) {
         connData.setDbData(dbData);
         setConnected(slotId);
     } else if (!connData.waitConnect()) {
-        ELOG_REPORT_ERROR("Failed to wait for connect to %s", m_dbName.c_str());
+        ELOG_REPORT_MODERATE_ERROR_DEFAULT("Failed to wait for connect to %s", m_dbName.c_str());
         freeSlot(slotId);
         return false;
     }
