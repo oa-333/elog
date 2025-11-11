@@ -18,7 +18,7 @@ ELogRateLimitFilter::ELogRateLimitFilter(uint64_t maxMsg /* = 0 */, uint64_t tim
       m_timeout(timeout),
       m_timeoutUnits(timeoutUnits),
       m_intervalMillis(0),
-      m_currInterval(0),
+      m_currIntervalId(0),
       m_currIntervalCount(0),
       m_prevIntervalCount(0) {
     if (m_timeout != 0 && m_timeoutUnits != ELogTimeUnits::TU_NONE) {
@@ -32,7 +32,7 @@ ELogRateLimitFilter::ELogRateLimitFilter(const ELogRateLimitParams& params)
       m_timeout(params.m_timeout),
       m_timeoutUnits(params.m_units),
       m_intervalMillis(0),
-      m_currInterval(0),
+      m_currIntervalId(0),
       m_currIntervalCount(0),
       m_prevIntervalCount(0) {
     if (m_timeout != 0 && m_timeoutUnits != ELogTimeUnits::TU_NONE) {
@@ -101,26 +101,42 @@ bool ELogRateLimitFilter::loadExpr(const ELogExpression* expr) {
 
 // TODO: consider providing several types of rate limiters
 bool ELogRateLimitFilter::filterLogRecord(const ELogRecord& logRecord) {
-    // TODO: fix this comment, it is too unclear
-    // we get a sample timestamp and associate it with a whole interval boundary
-    // next we check the current count. If it is associated with the current whole interval, then we
-    // check for rate limit, and if ok we just increase current interval count. otherwise, it is
-    // associated with a previous whole interval, then there are two options: (1) it belongs to the
-    // previous interval, and so we just set the previous interval count and the whole interval with
-    // which it is associated. (2) it belongs to a too far previous whole interval, in which case
-    // the previous interval count is reset to zero.
+    // this is an interpolation-based rate-limiter
+    // within each continuous time interval an estimation is made whether another call can be made.
+    // the method to do so is by dividing time to whole intervals. When the rate limiter is
+    // consulted, it checks whether the number of samples in the current interval added to the
+    // estimated number of samples in the previous interval (according to the portion of the
+    // interval left) allows for a call to be made.
+    // in simpler words, assume I is the interval size and T is the timestamp, then we have:
+    //
+    //      i = T / I    ==> absolute interval association
+    //      S(i)         ==> Sample count in interval i
+    //      t = T % I    ==> current interval portion
+    //      1 - t        ==> previous interval portion
+    //
+    // so we compute, the continuous estimated sample count:
+    //
+    //      S(i) + S(i-1) * (1-t) / I
+    //
+    // if this sum exceeds the rate limit then the call is denied, otherwise it is granted.
+    //
+    // pay attention that sometimes the previous interval may have no samples at all
+    // this situation is detected by comparing absolute interval ids
 
     // guard against bad construction
     if (m_intervalMillis == 0) {
         return true;
     }
 
-    uint64_t tstamp = getCurrentTimeEpochMillis();
+    // take time stamp from steady/monotonic clock to avoid negative time diffs
+    uint64_t tstamp = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now().time_since_epoch())
+                          .count();
 
     // we are not expecting negative value here
     uint64_t wholeInterval = tstamp / m_intervalMillis;
-    uint64_t currInterval = m_currInterval.load(std::memory_order_acquire);
-    if (currInterval == wholeInterval) {
+    uint64_t currIntervalId = m_currIntervalId.load(std::memory_order_acquire);
+    if (currIntervalId == wholeInterval) {
         // compute sliding window rate
         uint64_t prevCount = m_prevIntervalCount.load(std::memory_order_relaxed);
         uint64_t currCount = m_currIntervalCount.load(std::memory_order_relaxed);
@@ -128,10 +144,10 @@ bool ELogRateLimitFilter::filterLogRecord(const ELogRecord& logRecord) {
         // part covering the previous interval. no interpolation is required for current interval
         // message count, since it is being currently counted
         // NOTE: carefully compute, first multiply, then divide, otherwise value is truncated
-        uint64_t count =
-            prevCount * (m_intervalMillis - (tstamp % m_intervalMillis)) / m_intervalMillis;
-        count += currCount;
-        if (count < m_maxMsg) {
+        uint64_t currIntervalPortion = tstamp % m_intervalMillis;
+        uint64_t prevIntervalPortion = m_intervalMillis - currIntervalPortion;
+        uint64_t estimatedCount = prevCount * prevIntervalPortion / m_intervalMillis + currCount;
+        if (estimatedCount < m_maxMsg) {
             // NOTE: there might be a small breach here (due to possible sudden thundering herd),
             // but we are ok with that, because this is not a strict rate limiter
             m_currIntervalCount.fetch_add(1, std::memory_order_release);
@@ -144,9 +160,9 @@ bool ELogRateLimitFilter::filterLogRecord(const ELogRecord& logRecord) {
     // a whole interval passed
     // NOTE: we CAS here to avoid race conditions, first wins, the others do nothing, in the expense
     // of slight inaccuracy (since they should have increased the current interval count)
-    if (m_currInterval.compare_exchange_strong(currInterval, wholeInterval,
-                                               std::memory_order_seq_cst)) {
-        if (currInterval == (wholeInterval - 1)) {
+    if (m_currIntervalId.compare_exchange_strong(currIntervalId, wholeInterval,
+                                                 std::memory_order_seq_cst)) {
+        if (currIntervalId == (wholeInterval - 1)) {
             // store current interval count in previous interval
             uint64_t currIntervalCount = m_currIntervalCount.load(std::memory_order_relaxed);
             m_prevIntervalCount.store(currIntervalCount, std::memory_order_release);
@@ -154,7 +170,7 @@ bool ELogRateLimitFilter::filterLogRecord(const ELogRecord& logRecord) {
             // otherwise previous interval is zero
             m_prevIntervalCount.store(0, std::memory_order_relaxed);
         }
-        // in any case we put
+        // in any case we count first sample in current interval
         m_currIntervalCount.store(1, std::memory_order_release);
     }
     return true;

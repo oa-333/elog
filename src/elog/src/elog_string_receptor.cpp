@@ -73,7 +73,7 @@ void ELogStringReceptor::applySpec(const ELogFieldSpec& fieldSpec, const char* s
 
     // auto-reset text formatting if required
     if (fieldSpec.m_textSpec != nullptr && fieldSpec.m_textSpec->m_autoReset) {
-        m_logMsg.append(ELogTextSpec::m_resetSpec);
+        m_logMsg.append(fieldSpec.m_textSpec->m_resetSpec);
     }
 
     // apply left justification if needed

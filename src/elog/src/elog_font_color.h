@@ -19,8 +19,8 @@
 // Terminal Text utility macros (predefined SGR codes)
 // see https://en.wikipedia.org/wiki/ANSI_escape_code#SGR for more details
 
-// reset all previous settings
-#define ELOG_TT_RESET ELOG_SGR(0)
+// reset all previous settings to default
+#define ELOG_TT_DEFAULT ELOG_SGR(0)
 
 // font settings
 #define ELOG_TT_BOLD ELOG_SGR(1)

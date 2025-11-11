@@ -68,7 +68,7 @@ protected:
     uint64_t m_timeout;
     ELogTimeUnits m_timeoutUnits;
     uint64_t m_intervalMillis;
-    std::atomic<uint64_t> m_currInterval;
+    std::atomic<uint64_t> m_currIntervalId;
     std::atomic<uint64_t> m_currIntervalCount;
     std::atomic<uint64_t> m_prevIntervalCount;
 

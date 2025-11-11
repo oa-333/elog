@@ -52,7 +52,7 @@ void ELogStringStreamReceptor::applySpec(const ELogFieldSpec& fieldSpec) {
 void ELogStringStreamReceptor::applyPostSpec(const ELogFieldSpec& fieldSpec) {
     // auto reset text formatting if required
     if (fieldSpec.m_textSpec != nullptr && fieldSpec.m_textSpec->m_autoReset) {
-        m_msgStream << ELogTextSpec::m_resetSpec;
+        m_msgStream << fieldSpec.m_textSpec->m_resetSpec;
     }
 }
 

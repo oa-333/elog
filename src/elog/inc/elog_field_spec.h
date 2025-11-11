@@ -154,8 +154,11 @@ struct ELOG_API ELogTextSpec {
     /** @brief The actual ANSI C resolved specification escape codes. */
     std::string m_resolvedSpec;
 
+    /** @brief The specification required to undo all formatting. */
+    std::string m_resetSpec;
+
     /** @brief Reset all test formatting specification. */
-    static const char* m_resetSpec;
+    static const char* m_defaultSpec;
 
     ELogTextSpec() : m_resetTextSpec(0), m_autoReset(1) {}
     ELogTextSpec(const ELogTextSpec&) = default;

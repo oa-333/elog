@@ -184,8 +184,7 @@ ELogRecordBuilder* ELogLogger::startBinaryLogRecord(ELogLevel logLevel, const ch
 
 #ifdef ELOG_ENABLE_FMT_LIB
 bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
-    // prepare parameter array (use implicit alloca by compiler)
-    // TODO: this must be made a safe read buffer with length restrictions
+    // prepare parameter array for fmtlib
     ELogReadBuffer readBuffer(logRecord.m_logMsg, logRecord.m_logMsgLen);
     uint8_t paramCount = 0;
     if (!readBuffer.read(paramCount)) {
@@ -236,6 +235,7 @@ bool ELogLogger::resolveLogRecord(const ELogRecord& logRecord, ELogBuffer& logBu
     // log buffer, such that if size limit is breached it will realloc
     // currently it is no possible to do so with libfmt. we can optimize here with our own allocator
     // maybe even use alloca to do faster than malloc/free
+    // the effort is probably not worth it, as most high-performance logging is done via async log
     auto text = fmt::vformat(fmtStr, store);
     logBuffer.append(text.c_str(), text.length());
     return true;

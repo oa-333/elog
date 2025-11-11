@@ -2756,7 +2756,7 @@ Note that strike-through is a synonym for cross-out, although it has not been po
 
 #### Spanning Formatting over Several Fields
 
-When specifying formatting within a field reference token, the formatting applies only to that field, and formatting is automatically reset to default for the rest of the formatted log message.  
+When specifying formatting within a field reference token, the formatting applies only to that field, and formatting is automatically reset for the rest of the formatted log message.  
 If it is desired to span formatting over a few fields, then the "begin" prefix may be used, terminated with a default/reset specifier:
 
     ${time:font=begin-bold} [${level:6:font=default}]
@@ -2771,6 +2771,12 @@ Here is where usage of normal, no-italic, no-underline, etc. makes sense:
     ${fmt:font=begin-bold,begin-italic}${time} [${level:6}]${fmt:normal}
 
 When 'normal' (resets bold/faint specification) is specified, 'italic' is still in effect.
+
+Please note that auto-reset refers only to the formatted attributes of the current field. For instance:
+
+    ${fmt:font=begin-bold,begin-italic}${time:fg-color=yellow} [${level:6}]${fmt:normal}
+
+In this example, the time field's foreground color is set to yellow, and will immediately be reset back to default color after emitting the current time, but the font will remain bold and italic for the next field (level).
 
 #### Conditional Formatting Syntax
 

@@ -109,12 +109,12 @@ static bool allocEnvSpec(ELogFieldSpec& fieldSpec);
 static bool parseEnvNameAttribute(const std::string& specToken, std::string& envVarName,
                                   std::string& envVarValue);
 
-const char* ELogTextSpec::m_resetSpec = ELOG_TT_RESET;
+const char* ELogTextSpec::m_defaultSpec = ELOG_TT_DEFAULT;
 
 void ELogTextSpec::resolve() {
     // NOTE: if reset was specified we stop immediately
     if (m_resetTextSpec) {
-        m_resolvedSpec = ELOG_TT_RESET;
+        m_resolvedSpec = ELOG_TT_DEFAULT;
         return;
     }
 
@@ -124,10 +124,12 @@ void ELogTextSpec::resolve() {
     switch (m_fontSpec.m_boldSpec) {
         case ELogFontSpec::BoldSpec::ELOG_FONT_BOLD:
             m_resolvedSpec.append(ELOG_TT_BOLD);
+            m_resetSpec.append(ELOG_TT_NORMAL);
             break;
 
         case ELogFontSpec::BoldSpec::ELOG_FONT_FAINT:
             m_resolvedSpec.append(ELOG_TT_FAINT);
+            m_resetSpec.append(ELOG_TT_NORMAL);
             break;
 
         case ELogFontSpec::BoldSpec::ELOG_FONT_NORMAL:
@@ -143,6 +145,7 @@ void ELogTextSpec::resolve() {
     switch (m_fontSpec.m_italicSpec) {
         case ELogFontSpec::ItalicSpec::ELOG_ITALIC_SET:
             m_resolvedSpec.append(ELOG_TT_ITALIC);
+            m_resetSpec.append(ELOG_TT_NO_ITALIC);
             break;
 
         case ELogFontSpec::ItalicSpec::ELOG_ITALIC_RESET:
@@ -158,6 +161,7 @@ void ELogTextSpec::resolve() {
     switch (m_fontSpec.m_underline) {
         case ELogFontSpec::UnderlineSpec::ELOG_UNDERLINE_SET:
             m_resolvedSpec.append(ELOG_TT_UNDERLINE);
+            m_resetSpec.append(ELOG_TT_NO_UNDERLINE);
             break;
 
         case ELogFontSpec::UnderlineSpec::ELOG_UNDERLINE_RESET:
@@ -173,6 +177,7 @@ void ELogTextSpec::resolve() {
     switch (m_fontSpec.m_crossOut) {
         case ELogFontSpec::CrossOutSpec::ELOG_CROSSOUT_SET:
             m_resolvedSpec.append(ELOG_TT_CROSS_OUT);
+            m_resetSpec.append(ELOG_TT_NO_CROSS_OUT);
             break;
 
         case ELogFontSpec::CrossOutSpec::ELOG_CROSSOUT_RESET:
@@ -188,10 +193,12 @@ void ELogTextSpec::resolve() {
     switch (m_fontSpec.m_blinkSpec) {
         case ELogFontSpec::BlinkSpec::ELOG_BLINK_SET_RAPID:
             m_resolvedSpec.append(ELOG_TT_RAPID_BLINK);
+            m_resetSpec.append(ELOG_TT_NO_BLINK);
             break;
 
         case ELogFontSpec::BlinkSpec::ELOG_BLINK_SET_SLOW:
             m_resolvedSpec.append(ELOG_TT_SLOW_BLINK);
+            m_resetSpec.append(ELOG_TT_NO_BLINK);
             break;
 
         case ELogFontSpec::BlinkSpec::ELOG_BLINK_RESET:
@@ -228,6 +235,10 @@ void ELogTextSpec::resolve() {
         m_resolvedSpec.append(formatForegroundGreyVga(m_fgColorSpec.m_greyScale));
     }
 
+    if (m_fgColorSpec.m_colorSpecType != ELogColorSpec::SpecType::COLOR_SPEC_NONE) {
+        m_resetSpec.append(ELOG_TT_FG_DEFAULT);
+    }
+
     // background color
     if (m_bgColorSpec.m_colorSpecType == ELogColorSpec::SpecType::COLOR_SPEC_SIMPLE) {
         if (m_bgColorSpec.m_simpleSpec.m_color == ELOG_COLOR_DEFAULT) {
@@ -243,14 +254,18 @@ void ELogTextSpec::resolve() {
         // SVGA color
         const ELogRGBColorSpec& rgbSpec = m_bgColorSpec.m_rgbSpec;
         m_resolvedSpec.append(formatBackgroundRgb(rgbSpec.m_red, rgbSpec.m_green, rgbSpec.m_blue));
-    } else if (m_fgColorSpec.m_colorSpecType == ELogColorSpec::SpecType::COLOR_SPEC_RGB_VGA) {
+    } else if (m_bgColorSpec.m_colorSpecType == ELogColorSpec::SpecType::COLOR_SPEC_RGB_VGA) {
         // VGA color
-        const ELogRGBColorSpec& rgbSpec = m_fgColorSpec.m_rgbSpec;
+        const ELogRGBColorSpec& rgbSpec = m_bgColorSpec.m_rgbSpec;
         m_resolvedSpec.append(
-            formatForegroundRgbVga(rgbSpec.m_red, rgbSpec.m_green, rgbSpec.m_blue));
-    } else if (m_fgColorSpec.m_colorSpecType == ELogColorSpec::SpecType::COLOR_SPEC_GREY) {
+            formatBackgroundRgbVga(rgbSpec.m_red, rgbSpec.m_green, rgbSpec.m_blue));
+    } else if (m_bgColorSpec.m_colorSpecType == ELogColorSpec::SpecType::COLOR_SPEC_GREY) {
         // VGA grayscale
-        m_resolvedSpec.append(formatForegroundGreyVga(m_fgColorSpec.m_greyScale));
+        m_resolvedSpec.append(formatBackgroundGreyVga(m_bgColorSpec.m_greyScale));
+    }
+
+    if (m_bgColorSpec.m_colorSpecType != ELogColorSpec::SpecType::COLOR_SPEC_NONE) {
+        m_resetSpec.append(ELOG_TT_BG_DEFAULT);
     }
 }
 

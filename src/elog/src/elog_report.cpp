@@ -83,10 +83,15 @@ public:
                    int line, const char* function, const char* fmt, va_list args) override {
         // special case: logging before elog has initialized or after it has terminated
         if (!elog::isInitialized()) {
-            // TODO: this may get scattered if other threads are also writing to stderr
-            fprintf(stderr, "<ELOG> %s: ", elogLevelToStr(logLevel));
-            vfprintf(stderr, fmt, args);
-            fprintf(stderr, "\n");
+            // NOTE: a log buffer is used for formatting in order to emit full message in one call
+            // and avoid intermixing messages from several threads
+            ELogBuffer buffer;
+            buffer.appendArgs("<ELOG> %s: ", elogLevelToStr(logLevel));
+            buffer.appendV(fmt, args);
+            buffer.append(1, '\n');
+            buffer.finalize();
+            fputs(buffer.getRef(), stderr);
+            fflush(stderr);
             return;
         }
 
@@ -110,10 +115,14 @@ public:
                   int line, const char* function, const char* msg) override {
         // special case: logging before elog has initialized or after it has terminated
         if (!elog::isInitialized()) {
-            // TODO: this may get scattered if other threads are also writing to stderr
-            fprintf(stderr, "<ELOG> %s: %s\n", elogLevelToStr(logLevel), msg);
-            fprintf(stderr, "Error location: file: %s, line: %d, function: %s\n", file, line,
-                    function);
+            // NOTE: a log buffer is used for formatting in order to emit full message in one call
+            // and avoid intermixing messages from several threads
+            ELogBuffer buffer;
+            buffer.appendArgs("<ELOG> %s: %s\n", elogLevelToStr(logLevel), msg);
+            buffer.appendArgs("Error location: file: %s, line: %d, function: %s\n", file, line,
+                              function);
+            buffer.finalize();
+            fputs(buffer.getRef(), stderr);
             fflush(stderr);
             return;
         }
@@ -234,13 +243,9 @@ private:
             "   ${case: ${const-level: WARN}: ${fmt:begin-fg-color=yellow}} :"
             "   ${case: ${const-level: ERROR}: ${fmt:begin-fg-color=red}} :"
             "   ${case: ${const-level: FATAL}: ${fmt:begin-fg-color=red}}}"
-            "${level:6}${fmt:default} "
-            "${fmt:begin-font=faint}"
+            "${level:6}${fmt:fg-color=default} "
             "[${tid}] ${src:font=underline} "
-            "${fmt:begin-font=faint}"  // TODO: fix this, reset only set attributes in each
-                                       // token
             "[${tname}] "
-            "${fmt:begin-font=faint}"
             "${msg}"
             "${fmt:default}&"
             "enable_stats=no&"

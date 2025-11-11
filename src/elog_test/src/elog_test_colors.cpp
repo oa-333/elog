@@ -5,7 +5,8 @@ int testColors() {
     const char* cfg =
         "sys://stderr?log_format=${time:font=faint} ${level:6:fg-color=green:bg-color=blue} "
         "[${tid:font=italic}] ${src:font=underline:fg-color=bright-red} "
-        "${msg:font=cross-out,blink-rapid:fg-color=#993983}";
+        "${msg:font=cross-out,blink-rapid:fg-color=#993983}"
+        "${fmt:default}";
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         return 1;
@@ -19,7 +20,8 @@ int testColors() {
         "${if: (log_level == INFO): ${fmt:begin-fg-color=green}: ${fmt:begin-fg-color=red}}"
         "${level:6}${fmt:default} "
         "[${tid:font=italic}] ${src:font=underline:fg-color=bright-red} "
-        "${msg:font=cross-out,blink-rapid:fg-color=#993983}";
+        "${msg:font=cross-out,blink-rapid:fg-color=#993983}"
+        "${fmt:default}";
     logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         return 2;
@@ -38,7 +40,8 @@ int testColors() {
         "   ${default: ${fmt:begin-fg-color=yellow}}}"
         "${level:6}${fmt:default} "
         "[${tid:font=italic}] ${src:font=underline:fg-color=bright-red} "
-        "${msg:font=cross-out,blink-rapid:fg-color=#993983}";
+        "${msg:font=cross-out,blink-rapid:fg-color=#993983}"
+        "${fmt:default}";
     logTarget = initElog(cfg);
     if (logTarget == nullptr) {
         return 3;
@@ -59,7 +62,8 @@ int testColors() {
         "   ${default: ${fmt:begin-fg-color=yellow}}}"
         "${level:6}${fmt:default} "
         "[${tid:font=italic}] ${src:font=underline:fg-color=bright-red} "
-        "${msg:font=cross-out,blink-rapid:fg-color=#993983}";
+        "${msg:font=cross-out,blink-rapid:fg-color=#993983}"
+        "${fmt:default}";
     logTarget = initElog(cfg);
     logger = elog::getPrivateLogger("elog_test_logger");
     ELOG_INFO_EX(logger, "This is a test message");
