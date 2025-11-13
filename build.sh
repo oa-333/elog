@@ -33,7 +33,11 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # set default values
-PLATFORM=$(uname -s)
+if [[ $(uname -r) =~ WSL ]]; then
+    PLATFORM=WSL
+else
+    PLATFORM=$(uname -s)
+fi
 BUILD_TYPE=Debug
 OS=`uname -o`
 if [ "$OS" = "Msys" ]; then

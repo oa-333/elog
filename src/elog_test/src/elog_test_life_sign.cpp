@@ -288,29 +288,34 @@ static int testLifeSign() {
     // app-scope test
     int res = testAppLifeSign(5);
     if (res != 0) {
+        termELog();
         return res;
     }
 
     // current thread test
     res = testThreadLifeSign(5);
     if (res != 0) {
+        termELog();
         return res;
     }
 
     // log source test
     res = testLogSourceLifeSign(5);
     if (res != 0) {
+        termELog();
         return res;
     }
 
     // test target thread life-sign
     res = testTargetThreadLifeSign();
     if (res != 0) {
+        termELog();
         return res;
     }
 
     // TODO: required death test
     // abort();
+    termELog();
     return 0;
 }
 

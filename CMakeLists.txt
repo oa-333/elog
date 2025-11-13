@@ -17,6 +17,12 @@ if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(ELOG_BUILD_INTERNAL ON)
 endif()
 
+# detect if WSL is used
+option(WSL "Windows Sub-system for Linux" OFF)
+if(DEFINED ENV{WSL_DISTRO_NAME})
+    set(WSL ON)
+endif()
+
 # build executables benchmark and test suite
 if (ELOG_BUILD_INTERNAL)
     add_executable(elog_bench)
@@ -55,7 +61,11 @@ elseif(ELOG_CLANG_MINGW)
     # this is temporary until we standardize output folder names, probably should be MinGW
     set(SYSTEM_NAME "Windows_mingw")
 else()
-    set(SYSTEM_NAME "${CMAKE_SYSTEM_NAME}")
+    if(WSL)
+        set(SYSTEM_NAME "WSL")
+    else() 
+        set(SYSTEM_NAME "${CMAKE_SYSTEM_NAME}")
+    endif()
 endif()
 
 # fix error "IMPORTED_LOCATION not set" On Windows/vcpkg

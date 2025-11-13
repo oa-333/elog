@@ -251,7 +251,6 @@ void ELogConfigServiceEtcdPublisher::renewExpiryV2() {
     std::string endpoint = std::string("/v2/keys/") + m_dir + m_serviceSpec;
     endpoint += std::string("?ttl=") + std::to_string(m_params.m_expirySeconds) + "&refresh=true";
     std::string responseBody;
-    // TODO: refactor this part
     std::pair<bool, int> res =
         m_etcdClient.put(endpoint.c_str(), "", 0, "text/plain", false, &responseBody);
     if (!res.first) {

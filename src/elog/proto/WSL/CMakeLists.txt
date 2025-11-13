@@ -1,4 +1,4 @@
-if(LINUX AND NOT WSL AND ELOG_USING_PROTOBUF)
+if(WSL AND ELOG_USING_PROTOBUF)
     target_sources(
         elog
         PUBLIC

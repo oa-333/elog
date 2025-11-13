@@ -39,6 +39,7 @@ static int testConfigService() {
     if (!etcdApiVersion.empty()) {
         elog::ELogEtcdApiVersion apiVersion;
         if (!elog::convertEtcdApiVersion(etcdApiVersion.c_str(), apiVersion)) {
+            termELog();
             return 2;
         }
         etcdPublisher->setApiVersion(apiVersion);
@@ -48,11 +49,13 @@ static int testConfigService() {
     if (publisher != nullptr) {
         if (!publisher->initialize()) {
             fprintf(stderr, "Failed to initialize redis publisher\n");
+            termELog();
             return 2;
         }
         if (!elog::stopConfigService()) {
             fprintf(stderr, "Failed to stop configuration service\n");
             publisher->terminate();
+            termELog();
             return 2;
         }
         elog::setConfigServiceDetails("subnet:192.168.1.0", 0);
@@ -61,6 +64,7 @@ static int testConfigService() {
             fprintf(stderr, "Failed to restart configuration service\n");
             elog::setConfigServicePublisher(nullptr);
             publisher->terminate();
+            termELog();
             return 2;
         }
     }

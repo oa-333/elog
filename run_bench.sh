@@ -9,6 +9,12 @@ else
 fi
 export INSTALL_DIR
 
+if [[ $(uname -r) =~ WSL ]]; then
+    PLATFORM=WSL
+else
+    PLATFORM=$(uname -s)
+fi
+
 # build elog (enable fmtlib for binary quantum test)
 ./build.sh --rel-with-debug-info --fmt-lib --reconfigure --verbose
 if [ $? -ne 0 ]; then
@@ -23,7 +29,7 @@ DEV_DIR=`readlink -f .`
 if [ "$OS" = "Msys" ]; then
     pushd $INSTALL_DIR/bin/Windows_mingw-RelWithDebInfo
 else
-    pushd $INSTALL_DIR/bin/Linux-RelWithDebInfo
+    pushd $INSTALL_DIR/bin/${PLATFORM}-RelWithDebInfo
 fi
 
 mkdir -p bench_data

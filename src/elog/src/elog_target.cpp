@@ -124,10 +124,6 @@ bool ELogTarget::startNoLock() {
     }
     bool res = startLogTarget();
     if (!res) {
-        // TODO: is it ok to delete flush policy here? what is the contract? should it be deleted
-        // only during dtor? or it doesn't really matter? this seems out of order
-        destroyFlushPolicy(m_flushPolicy);
-        m_flushPolicy = nullptr;
         if (m_stats != nullptr) {
             m_stats->terminate();
             delete m_stats;
@@ -472,7 +468,7 @@ bool ELogCombinedTarget::writeLogRecord(const ELogRecord& logRecord, uint64_t& b
             target->log(logRecord);
         }
     }
-    // TODO: how do we make sure the combined log target collects are reports stats correctly?
+    // TODO: how do we make sure the combined log target collects and reports stats correctly?
     // option 1: accumulate on each call, but we have no good way of accumulating flush stats
     // option 2: have parent stats interface virtual, so combined target can answer from sum of all
     // sub-targets

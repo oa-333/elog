@@ -61,7 +61,7 @@ inline T* elogAlignedAllocObjectArray(size_t align, size_t count, const Args&...
     size_t totalSize = sizeof(T) * count;
     if ((totalSize % align) != 0) {
         // must be a multiple of align
-        return nullptr;
+        totalSize = (totalSize + align - 1) / align * align;
     }
     void* buf = elogAlignedAlloc(sizeof(T) * count, align);
     if (buf == nullptr) {

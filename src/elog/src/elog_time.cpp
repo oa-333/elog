@@ -6,6 +6,7 @@
 #include <ctime>
 #include <new>
 
+#include "elog_aligned_alloc.h"
 #include "elog_common.h"
 #include "elog_report.h"
 #include "elog_time_internal.h"
@@ -62,8 +63,7 @@ const time_t sUnixTimeRef = getUnixTimeRef();
 
 // initialize the date table
 bool initDateTable() {
-    // TODO: have this aligned to cache line or 8 bytes at least
-    sDateTable = new (std::nothrow) IntStr[ELOG_MAX_DATE_INT];
+    sDateTable = elogAlignedAllocObjectArray<IntStr>(ELOG_CACHE_LINE, ELOG_MAX_DATE_INT);
     if (sDateTable == nullptr) {
         ELOG_REPORT_ERROR("Failed to allocate int-string table fo size %u", ELOG_MAX_DATE_INT);
         return false;
@@ -76,6 +76,7 @@ bool initDateTable() {
             ELOG_REPORT_ERROR(
                 "Internal error in data table initialization, year %s length is too long",
                 sDateTable[i].m_buf);
+            termDateTable();
             return false;
         }
         sDateTable[i].m_len = (uint16_t)len;
@@ -86,7 +87,7 @@ bool initDateTable() {
 // destroy the date table
 void termDateTable() {
     if (sDateTable != nullptr) {
-        delete[] sDateTable;
+        elogAlignedFreeObjectArray(sDateTable, ELOG_MAX_DATE_INT);
         sDateTable = nullptr;
     }
 }
@@ -251,7 +252,7 @@ uint64_t elogTimeToUnixTimeNanos(const ELogTime& logTime, bool useLocalTime /* =
 
 uint64_t elogTimeToInt64(const ELogTime& elogTime) {
 #ifdef ELOG_TIME_USE_CHRONO
-    return (uint64_t)elogTime.count();
+    return elogTimeToUnixTimeNanos(elogTime);
 #elif defined(ELOG_MSVC)
 #ifdef ELOG_TIME_USE_SYSTEMTIME
     // convert from system time
@@ -277,8 +278,9 @@ uint64_t elogTimeToInt64(const ELogTime& elogTime) {
 
 void elogTimeFromInt64(uint64_t timeStamp, ELogTime& elogTime) {
 #ifdef ELOG_TIME_USE_CHRONO
-    // TODO: required some duration cast probably (time since epoch)
-    return (uint64_t)elogTime.count();
+    // since we have no assignment operator in time point, we use in-place constructor
+    // although ugly, there is no other way around it right now
+    new ((void*)&elogTime) ELogTime(std::chrono::nanoseconds(timeStamp));
 #elif defined(ELOG_MSVC)
 #ifdef ELOG_TIME_USE_SYSTEMTIME
     // convert to system time

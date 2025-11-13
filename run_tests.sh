@@ -9,6 +9,12 @@ else
 fi
 export INSTALL_DIR
 
+if [[ $(uname -r) =~ WSL ]]; then
+    PLATFORM=WSL
+else
+    PLATFORM=$(uname -s)
+fi
+
 # build elog (enable all extensions and etcd publishing)
 # NOTE: on Windows we test instead for Redis publishing
 ./build.sh --full --config-publish etcd --doc
@@ -24,7 +30,7 @@ DEV_DIR=`readlink -f .`
 if [ "$OS" = "Msys" ]; then
     pushd $INSTALL_DIR/bin/Windows_mingw-Debug
 else
-    pushd $INSTALL_DIR/bin/Linux-Debug
+    pushd $INSTALL_DIR/bin/${PLATFORM}-Debug
 fi
 
 # prepare SQLite db file
@@ -43,7 +49,7 @@ if [ "$OS" = "Msys" ]; then
     #export ELOG_TIME_SOURCE_RESOLUTION=100millis
     ./elog_test_mingw.exe $*
 else
-    export LD_LIBRARY_PATH=.
+    #export LD_LIBRARY_PATH=.
     echo "[DEBUG] Running command ./elog_test $*"
     ./elog_test $*
 fi
