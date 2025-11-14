@@ -520,6 +520,29 @@ if (ELOG_USING_COMM_UTIL)
     endif()
 endif()
 
+
+#############################################################
+# get Isocline if needed
+#############################################################
+if (MSVC AND (ELOG_ENABLE_LIFE_SIGN OR ELOG_ENABLE_CONFIG_SERVICE))
+    message(STATUS "Fetching Isocline from github")
+    FetchContent_Declare(isocline SYSTEM
+        GIT_REPOSITORY https://github.com/daanx/isocline.git
+        GIT_TAG v1.0.9
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(isocline)
+
+    if (ELOG_ENABLE_LIFE_SIGN)
+        target_include_directories(elog_pm PRIVATE ${isocline_SOURCE_DIR}/include)
+        target_link_libraries(elog_pm isocline)
+    endif()
+
+    if (ELOG_ENABLE_CONFIG_SERVICE)
+        target_include_directories(elog_cli PRIVATE ${isocline_SOURCE_DIR}/include)
+        target_link_libraries(elog_cli isocline)
+    endif()
+endif()
+
 #############################################################
 # get googletest
 #############################################################

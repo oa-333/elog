@@ -6,7 +6,9 @@
 #include <Windows.h>
 #endif
 
-#ifndef ELOG_MSVC
+#ifdef ELOG_MSVC
+#include <isocline.h>
+#else
 #include <readline/history.h>
 #include <readline/readline.h>
 #endif
@@ -45,14 +47,12 @@
 #define CMD_QUERY_LOG_LEVEL "query-log-level"
 #define CMD_UPDATE_LOG_LEVEL "update-log-level"
 
-#ifndef ELOG_MSVC
 static const char* sCommands[] = {
     CMD_EXIT, CMD_HELP, CMD_CONNECT, CMD_DISCONNECT, CMD_QUERY_LOG_LEVEL, CMD_UPDATE_LOG_LEVEL,
 #ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
     CMD_LIST,
 #endif
     nullptr};
-#endif
 
 // error codes
 #define ERR_INIT 1
@@ -67,9 +67,15 @@ static const char* sCommands[] = {
 #define ERR_EXEC 10
 
 // CLI prompt
+#ifdef ELOG_MSVC
+#define ELOG_CLI_PROMPT "<elog-cli> "
+#else
 #define ELOG_CLI_PROMPT "<elog-cli> $ "
+#endif
 
-#ifndef ELOG_MSVC
+#ifdef ELOG_MSVC
+static void elog_cli_complete_func(ic_completion_env_t* cenv, const char* prefix);
+#else
 static char** elog_cli_complete_func(const char* text, int start, int end);
 static char* elog_cli_cmd_generator_func(const char* text, int state);
 static char* elog_cli_completion_entry_func(const char* text, int state);
@@ -227,6 +233,10 @@ int main(int argc, char* argv[]) {
         runCliLoop();
     }
 
+    if (sConnected) {
+        disconnectFromELogProcess();
+    }
+
     termELog();
     return res;
 }
@@ -270,8 +280,10 @@ static int initELog() {
 }
 
 static void termELog() {
-    sLogger = nullptr;
-    elog::terminate();
+    if (elog::isInitialized()) {
+        sLogger = nullptr;
+        elog::terminate();
+    }
 }
 
 static void printLogo() {
@@ -625,8 +637,10 @@ void runCliLoop() {
     rl_attempted_completion_function = elog_cli_complete_func;
     rl_completion_entry_function = elog_cli_completion_entry_func;
     char* line = nullptr;
+    printLogo();
     printf("\n");
-    while ((line = readline("<elog_cli> $ ")) != nullptr) {
+    fflush(stdout);
+    while ((line = readline(ELOG_CLI_PROMPT)) != nullptr) {
         if (line == nullptr || *line == 0) {
             continue;
         }
@@ -641,23 +655,119 @@ void runCliLoop() {
 }
 #else
 void runCliLoop() {
-    char* input = nullptr;
+    // configure isocline
+    // configure usage of history (do not persist history to disk, use default of 200 entries)
+    ic_set_history(nullptr, -1);
+    ic_set_default_completer(&elog_cli_complete_func, NULL);
+    ic_enable_auto_tab(true);
+    ic_set_prompt_marker("$ ", nullptr);
+    ic_enable_multiline(false);
+
+    char* line = nullptr;
     printLogo();
     printf("\n");
-    while (true) {
-        printf(ELOG_CLI_PROMPT);
-        std::string strCmd;
-        while (strCmd.empty()) {
-            std::getline(std::cin, strCmd);
-        }
-        if (!execCommand(trim(strCmd))) {
+    fflush(stdout);
+    while ((line = ic_readline(ELOG_CLI_PROMPT)) != nullptr) {
+        bool shouldContinue = execCommand(trim(line));
+        free(line);
+        line = nullptr;
+        if (!shouldContinue) {
             break;
         }
     }
 }
 #endif
 
-#ifndef ELOG_MSVC
+#ifdef ELOG_MSVC
+
+// this is a nasty workaround since isocline did not implement ic_completion_input(), so we
+// externalize the type
+struct ic_completion_env_stub {
+    void* env;           // the isocline environment
+    const char* input;   // current full input
+    long cursor;         // current cursor position
+    void* arg;           // argument given to `ic_set_completer`
+    void* closure;       // free variables for function composition
+    void* completeFunc;  // function that adds a completion
+};
+
+static void elog_cli_word_completer(ic_completion_env_t* cenv, const char* word) {
+    // check entire input so we can tell whether we should list services or log sources
+    size_t cursor = (size_t)((ic_completion_env_stub*)cenv)->cursor;
+    const char* input =
+        ((ic_completion_env_stub*)cenv)->input;  // ic_completion_input(cenv, &cursor);
+    size_t inputLen = strlen(input);
+
+#ifdef ELOG_CLI_HAS_SERVICE_DISCOVERY
+    bool shouldListServices = false;
+    size_t connectCmdLen = strlen(CMD_CONNECT);
+    if (cursor >= connectCmdLen + 1 && strncmp(input, CMD_CONNECT, connectCmdLen) == 0 &&
+        input[connectCmdLen] == ' ') {
+        shouldListServices = true;
+    }
+
+    if (shouldListServices) {
+        if (listServices() != 0) {
+            return;
+        }
+
+        std::vector<const char*> nameArray;
+        for (const auto& entry : sServiceList) {
+            const char* name = entry.c_str();
+            nameArray.push_back(name);
+        }
+        nameArray.push_back(nullptr);
+        ic_add_completions(cenv, word, &nameArray[0]);
+        return;
+        // NOTE: we do not add commands in this case
+    }
+#endif
+
+    // now we check for log sources completion
+    bool shouldListLogSources = false;
+    size_t queryCmdLen = strlen(CMD_QUERY_LOG_LEVEL);
+    size_t updateCmdLen = strlen(CMD_UPDATE_LOG_LEVEL);
+    if (cursor >= queryCmdLen + 1 && strncmp(input, CMD_QUERY_LOG_LEVEL, queryCmdLen) == 0 &&
+        input[queryCmdLen] == ' ') {
+        shouldListLogSources = true;
+    } else if (cursor >= updateCmdLen + 1 &&
+               strncmp(input, CMD_UPDATE_LOG_LEVEL, updateCmdLen) == 0 &&
+               input[updateCmdLen] == ' ') {
+        shouldListLogSources = true;
+    }
+
+    // add log sources
+    if (shouldListLogSources) {
+        if (!listAllLogSources()) {
+            return;
+        }
+
+        std::vector<const char*> nameArray;
+        for (const auto& entry : sLogSources) {
+            const char* name = entry.c_str();
+            nameArray.push_back(name);
+        }
+        nameArray.push_back(nullptr);
+        ic_add_completions(cenv, word, &nameArray[0]);
+        return;
+        // NOTE: we do not add commands in this case
+    }
+
+    // if we already have one word, then we avoid completion altogether
+    if (inputLen > strlen(word)) {
+        return;
+    }
+
+    // provide normal command completion
+    ic_add_completions(cenv, word, sCommands);
+}
+
+void elog_cli_complete_func(ic_completion_env_t* cenv, const char* prefix) {
+    // if we have part of a command or an empty string, we add matching commands
+    ic_complete_word(cenv, prefix, &elog_cli_word_completer,
+                     ic_char_is_nonwhite /* all non-whitespace chars form a word */);
+}
+#else
 char** elog_cli_complete_func(const char* text, int start, int end) {
     // attempt completion only at start of line
     // if we are at start of line, then we give back command names
@@ -862,6 +972,7 @@ bool listAllLogSources() {
     for (const auto& pair : logLevels) {
         sLogSources.push_back(pair.first);
     }
+    std::sort(sLogSources.begin(), sLogSources.end());
     sLogSources.push_back("ELOG_REPORT_LEVEL");
     return true;
 }
