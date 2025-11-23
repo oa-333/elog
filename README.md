@@ -16,7 +16,7 @@ The following table summarizes the main features of the ELog Logging Framework:
 | [Logging Macros](#logging-macros) | - [Per-level macros](#log-levels)</br>- [Binary logging](#binary-logging)</br>- [Cached logging](#cached-logging)</br>- [Log sampling](#every-n-logging)</br>- [Log once](#once-logging)</br>- [Rate limiting](#moderated-logging)</br> | ELog provides a wide variety of logging macros for different situations, providing developers the ability to execute complex functionality within a one liner macro. Both printf and fmtlib styles are supported. Future versions may support insertion operator style for legacy systems. |
 | [Log Targets (Appenders)](#log-targets) | - [File Targets](#configuring-file-log-targets) ([Buffered File Target](#configuring-buffered-file-log-targets), [Segmented File Target](#configuring-segmented-file-log-targets), [Rotating File Target](#configuring-rotating-file-log-target))</br>- [System Log Targets](#configuring-system-log-targets) ([Syslog Target](#configuring-syslog-log-target), [Windows Event Log Target](#configuring-windows-event-log-target), [Standard Error/Output Stream Target](#configuring-terminal-log-target))</br>- [Database Log Targets](#configuring-database-log-targets) ([PostgreSQL Log Target](#connecting-to-postgresql), [MySQL Log Target (experimental, Windows only)](#connecting-to-mysql-experimental), [Redis Log Target](#connecting-to-redis), [SQLite Log Target](#connecting-to-sqlite))</br>- Message Queue Log Targets ([Kafka Log Target](#connecting-to-kafka-topic))</br>-  RPC Log Targets ([gRPC Log Target](#connecting-to-grpc-endpoint))</br>- Network Log Targets ([TCP/UDP Log Target](#connecting-to-tcpudp-server))</br>- IPC Log Targets ([Pipe Log Target](#connecting-to-pipeunix-domain-socket-server))<br>- Monitoring Tools Log Targets ([Grafana-Loki Log Target](#connecting-to-grafana-loki), [Datadog Log Target](#connecting-to-datadog), [Sentry Log Target](#connecting-to-sentry), [Open Telemetry Log Target](#connecting-to-open-telemetry-collector))</br>- [Asynchronous Logging](#configuring-asynchronous-log-targets) (Deferred Log Target, Queued Log Target, Quantum Log Target, Multi-Quantum Log Target)</br> | ELog provides a wide range of predefined log targets (appenders) ready to use out of the box, fully configurable from file. This includes lock-free scalable asynchronous log targets that can be composed with regular log targets to achieve minimum latency at the logging application.|
 | Debugging | - [Call Stack Dumping Macros](#call-stack-logging)</br>- [Crash Handling](#crash-handling)</br>- [Life Signs](#life-sign-management)</br>- [Post Mortem](#post-mortem) | ELog supports out of the box various debugging scenarios, starting from dumping call stack (with file/line information) for the current thread or the entire application (as in pstack), continuing with crash handling and exception reporting to log, and in addition supports emitting periodic life-signs to a post-mortem shared memory segment. An additional tool is provided that can inspect shared memory segments of crashed and live applications. |
-| Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration)</br>- [Publishing to Redis cluster for service discovery](#configuration-service-publishing-to-redis-cluster)</br>- [Publishing to etcd cluster for service discovery](#configuration-service-publishing-to-etcd-cluster) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. |
+| Configuration | - [Periodic Configuration Reloading from file](#configuration-reloading)</br>- [Live Remote Configuration of Log Levels](#live-remote-configuration)</br>- [Publishing to Redis cluster for service discovery](#configuration-service-publishing-to-redis-cluster)</br>- [Publishing to etcd cluster for service discovery](#configuration-service-publishing-to-etcd-cluster)</br>- [Live Update of Log Targets](#dynamic-configuration) | ELog enables to periodically check and update all log levels according to changes in a specified configuration file, as well as querying remotely for log levels and updating them in live processes. In addition, live update of log targets (adding, removing, editing) is supported (thread-safe, currently through API only). |
 | Configurability | - [Loggers Log level](#configuring-log-level)</br>- [Log targets](#configuring-log-targets)</br>- [Asynchronous logging schemes](#configuring-asynchronous-log-targets)</br>- [Log formatting](#log-line-format)</br>- [Log filters](#configuring-log-filters)</br>- [Flush Policies](#configuring-flush-policy)<br>- [Logger hierarchy](#log-sources-and-loggers)</br>- [Rate limiting](#limiting-log-rate) | The entire library is **fully configurable** from file or string, including very complex scenarios (see [basic examples](#basic-examples)). All configurable parameters can be set either globally and/or per log target. |
 | [Extendibility](#extending-the-library) | The following entities can be extended:</br>- [Log targets](#adding-new-log-target-types)</br>- [Flush policies](#adding-new-flush-policy-types)</br>- [Filters](#adding-new-log-filter-types)</br>- [Formatters](#adding-new-log-formatter-types)</br>- [Log Record Fields](#extending-the-formatting-scheme) | All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file). This requires static registration, which is normally achieved through helper macros. |
 | Misc. | - [Pre-initialization log queueing](#pre-initialization-log-queueing)</br>- [Structured Logging](#structured-logging)<br>- [Lazy Time Source](#lazy-time-source) | |
@@ -213,6 +213,9 @@ The ELog library provides the following notable features:
     - Utility CLI tool also provided (elog_cli)
     - Publish remote configuration service to a Redis cluster (for service discovery)
     - Publish remote configuration service to a etcd cluster (for service discovery)
+- Dynamic Configuration
+    - Add, remove or edit log target while the application is logging (thread-safe)
+    - Replace global format and filter while the application is logging (thread-safe)
 - Extendibility
     - All entities in the library are extendible such that they can also be loaded from configuration (i.e. if you extend the library, there is provision to have your extensions to be loadable from configuration file)
         - log targets
@@ -387,6 +390,7 @@ This project is licensed under the Apache 2.0 License - see the LICENSE file for
     - [Moderated Logging](#moderated-logging)
     - [Every-N Logging](#every-n-logging)
     - [Call Stack Logging](#call-stack-logging)
+    - [Dynamic Configuration](#dynamic-configuration)
     - [Configuration Reloading](#configuration-reloading)
     - [Live Remote Configuration](#live-remote-configuration)
     - [Configuration Service Publishing to Redis Cluster](#configuration-service-publishing-to-redis-cluster)
@@ -1117,6 +1121,48 @@ It is also possible to send to log call stack of all active threads, but be awar
     ELOG_APP_STACK_TRACE_EX(logger, elog::ELEVEL_INFO, "", 0, "Testing application stack trace");
     
 The output will be similar to pstack, listing all active threads and their respective call stack information, including file and line.
+
+
+### Dynamic Configuration
+
+ELog supports dynamic (i.e. concurrent and thread-safe) configuration of log targets and some global aspects of ELog, including formatters, filters and flush policies.
+
+In order to use this feature (i.e. enduring that configuration changes made during operation of ELog are thread-safe and will not lead to a crash), ELog should be compiled with ELOG_ENABLE_DYNAMIC_CONFIG=ON.
+
+With dynamic configuration enabled, the following operations can be done safely while the application is logging:
+
+- Add log targets
+- Remove log targets
+- Modify log target's formatter, filter and flush policy
+
+In addition the following global objects can be modified:
+
+- Global (default) filter
+- Global (default) formatter
+
+It should be noted though that using this feature may incur some performance penalty and background overhead, due to usage of a garbage collection mechanism and some atomic variables.
+
+In order to modify a log target's attributes, care should be taken, and the general access pattern should follow this:
+
+    elog::ELogTargetId id = /* define log target and get id */;
+    ...
+
+    // acquire log target, if not null then until released can be used safely
+    uint64_t epoch = 0;
+    elog::ELogTarget* logTarget = elog::acquireLogTarget(id, epoch);
+    if (logTarget != nullptr) {
+        logTarget->setLogFormat("${msg}"); 
+        elog::releaseLogTarget(epoch);
+    }
+
+The following ELogTarget member functions can be used safely within acquire/release pair:
+
+- setLogLevel()
+- setLogFormat(), setLogFormatter()
+- setLogFilter()
+- setFlushPolicy()
+
+In case the target is removed concurrently by another thread while within acquire/release pair, then the log target is safe to use, and will be deleted only after releaseLogTarget() is called. Also many threads can safely replace concurrently the log format, filter and flush policy, while the application is logging, since older objects will be deleted only after releaseLogTarget() is called (and logging itself is guarded such that the garbage collector will not recycle objects that are still in use).
 
 ### Configuration Reloading
 
