@@ -11,6 +11,7 @@
 #define ELOG_MAX_GC_OBJECTS 64
 #define ELOG_INVALID_GC_SLOT_ID ((uint64_t)-1)
 #define ELOG_WORD_SIZE sizeof(uint64_t)
+#define ELOG_MAX_TXN_PER_THREAD 64
 
 // TODO: this GC needs much more testing
 
@@ -64,7 +65,8 @@ static thread_local uint64_t sCurrentThreadGCSlotId[ELOG_MAX_GC_OBJECTS] = {
     ELOG_INVALID_GC_SLOT_ID};
 
 bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency,
-                        uint32_t gcPeriodMillis, uint32_t gcThreadCount) {
+                        uint32_t gcPeriodMillis /* = 0 */, uint32_t gcThreadCount /* = 0 */,
+                        uint32_t maxTxnSpan /* = 0 */) {
     if (maxThreads == 0) {
         maxThreads = getMaxThreads();
     }
@@ -91,11 +93,15 @@ bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFreque
     m_name = name;
     m_gcFrequency = gcFrequency;
     m_gcPeriodMillis = gcPeriodMillis;
+    m_gcThreadCount = gcThreadCount;
     m_maxThreads = maxThreads;
     m_retireCount = 0;
-    // TODO: this is incorrect. if one thread is slow and all other threads are fast, then the epoch
-    // set needs to be much larger than maximum number of threads
-    uint32_t wordCount = (maxThreads + ELOG_WORD_SIZE - 1) / ELOG_WORD_SIZE;
+    if (maxTxnSpan == 0) {
+        // by default we allow for each thread in average to use ELOG_MAX_TXN_PER_THREAD object
+        // retiring before getting blocked due to a long running transaction
+        maxTxnSpan = maxThreads * ELOG_MAX_TXN_PER_THREAD;
+    }
+    uint32_t wordCount = (maxTxnSpan + ELOG_WORD_SIZE - 1) / ELOG_WORD_SIZE;
     m_epochSet.resizeRing(wordCount + 1);
     m_objectLists.resize(maxThreads);
     m_activeLists.resize(wordCount);
@@ -103,10 +109,13 @@ bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFreque
         ELOG_REPORT_ERROR("Failed to create TLS key used for GC thread exit notification");
         return false;
     }
+    return true;
+}
 
+void ELogGC::start() {
     // background GC tasks
-    if (gcPeriodMillis > 0) {
-        for (uint32_t i = 0; i < gcThreadCount; ++i) {
+    if (m_gcPeriodMillis > 0) {
+        for (uint32_t i = 0; i < m_gcThreadCount; ++i) {
             m_gcThreads.emplace_back(std::thread([this, i]() {
                 std::string threadName = m_name + "-gc-thread-" + std::to_string(i);
                 setCurrentThreadNameField(threadName.c_str());
@@ -125,10 +134,9 @@ bool ELogGC::initialize(const char* name, uint32_t maxThreads, uint32_t gcFreque
             }));
         }
     }
-    return true;
 }
 
-bool ELogGC::destroy() {
+void ELogGC::stop() {
     // stop all GC threads
     {
         std::unique_lock<std::mutex> lock(m_lock);
@@ -138,7 +146,9 @@ bool ELogGC::destroy() {
     for (uint32_t i = 0; i < m_gcThreads.size(); ++i) {
         m_gcThreads[i].join();
     }
+}
 
+bool ELogGC::destroy() {
     // destroy TLS key
     if (!elogDestroyTls(m_tlsKey)) {
         ELOG_REPORT_ERROR("Failed to destroy TLS key used for GC thread exit notification");

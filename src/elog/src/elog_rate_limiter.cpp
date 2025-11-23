@@ -13,7 +13,7 @@ ELOG_IMPLEMENT_FILTER(ELogRateLimitFilter)
 
 ELogRateLimitFilter::ELogRateLimitFilter(uint64_t maxMsg /* = 0 */, uint64_t timeout /* = 0 */,
                                          ELogTimeUnits timeoutUnits /* = ELogTimeUnits::TU_NONE */)
-    : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ),
+    : ELogCmpFilter(ELogRateLimitFilter::TYPE_NAME, ELogCmpOp::CMP_OP_EQ),
       m_maxMsg(maxMsg),
       m_timeout(timeout),
       m_timeoutUnits(timeoutUnits),
@@ -27,7 +27,7 @@ ELogRateLimitFilter::ELogRateLimitFilter(uint64_t maxMsg /* = 0 */, uint64_t tim
 }
 
 ELogRateLimitFilter::ELogRateLimitFilter(const ELogRateLimitParams& params)
-    : ELogCmpFilter(ELogCmpOp::CMP_OP_EQ),
+    : ELogCmpFilter(ELogRateLimitFilter::TYPE_NAME, ELogCmpOp::CMP_OP_EQ),
       m_maxMsg(params.m_maxMsgs),
       m_timeout(params.m_timeout),
       m_timeoutUnits(params.m_units),

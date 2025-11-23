@@ -12,8 +12,6 @@ public:
     ELogRpcFormatter(ELogRpcFormatter&&) = delete;
     ELogRpcFormatter& operator=(const ELogRpcFormatter&) = delete;
 
-    static constexpr const char* TYPE_NAME = "msg";
-
     inline bool parseParams(const std::string& params) { return initialize(params.c_str()); }
 
     inline void fillInParams(const ELogRecord& logRecord, ELogFieldReceptor* receptor) {

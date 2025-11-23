@@ -571,7 +571,7 @@ size_t elogTimeToString(const ELogTime& logTime, ELogTimeBuffer& timeBuffer,
                                   (unsigned)(logTime.m_100nanos / 10000UL));
     }
     std::chrono::system_clock::time_point logTimeChrono =
-        unixTimeToChrono(logTime.m_seconds, logTime.m_100nanos * 100);
+        unixTimeToChrono(logTime.m_seconds + sUnixTimeRef, logTime.m_100nanos * 100);
     return elogTimeToStringChrono(logTimeChrono, timeBuffer, useLocalTime, timeUnits, showZone,
                                   formatStr);
 #endif

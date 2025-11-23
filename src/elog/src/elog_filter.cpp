@@ -123,9 +123,9 @@ void destroyFilter(ELogFilter* filter) {
     }
 
     // locate the constructor
-    ELogFilterConstructorMap::iterator itr = sFilterConstructorMap.find(filter->getName());
+    ELogFilterConstructorMap::iterator itr = sFilterConstructorMap.find(filter->getTypeName());
     if (itr == sFilterConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Cannot destroy filter %s: not found", filter->getName());
+        ELOG_REPORT_ERROR("Cannot destroy filter %s: not found", filter->getTypeName());
         return;
     }
 

@@ -82,12 +82,18 @@ static bool sIsTerminating = false;
 static ELogParams sParams;
 
 static ELogPreInitLogger sPreInitLogger;
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+static std::atomic<ELogFilter*> sGlobalFilter = nullptr;
+static std::atomic<ELogFormatter*> sGlobalFormatter = nullptr;
+#else
 static ELogFilter* sGlobalFilter = nullptr;
-static ELogLogger* sDefaultLogger = nullptr;
 static ELogFormatter* sGlobalFormatter = nullptr;
+#endif
+static ELogLogger* sDefaultLogger = nullptr;
 
 static std::atomic<bool> sEnableStatistics = false;
 static std::atomic<uint64_t> sMsgCount[ELEVEL_COUNT];
+static thread_local std::atomic<uint64_t> sThreadMsgCount[ELEVEL_COUNT];
 
 // these functions are defined as external because they are friends of some classes
 extern bool initGlobals();
@@ -189,12 +195,8 @@ bool initGlobals() {
         return false;
     }
 
-    sGlobalFormatter = new (std::nothrow) ELogFormatter();
-    if (!sGlobalFormatter->initialize()) {
-        ELOG_REPORT_ERROR("Failed to initialize log formatter");
-        termGlobals();
-        return false;
-    }
+    // create global formatter
+    resetLogFormat();
     ELOG_REPORT_TRACE("Global formatter initialized");
 
     // format message cache
@@ -221,7 +223,7 @@ bool initGlobals() {
 #endif
 
 #ifdef ELOG_USING_COMM_UTIL
-    // connect to debug util library
+    // connect to comm util library
     ELOG_REPORT_TRACE("Initializing Communication utility library");
     commutil::ErrorCode rc2 = commutil::initCommUtil(&sCommUtilLogHandler, commutil::LS_INFO);
     if (rc2 != commutil::ErrorCode::E_OK) {
@@ -251,6 +253,12 @@ bool initGlobals() {
         }
         ELOG_REPORT_TRACE("Life-sign report initialized");
     }
+#endif
+
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    // now, after the life sign manager was created, we can start the log target background GC
+    // threads running
+    startLogTargetGC();
 #endif
 
 #ifdef ELOG_ENABLE_MSG
@@ -522,6 +530,10 @@ bool configureLogLevelFormat(const char* logLevelConfig) {
 // log formatting
 bool configureLogFormat(const char* logFormat) {
     ELogFormatter* logFormatter = new (std::nothrow) ELogFormatter();
+    if (logFormatter == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate log formatter, out of memory");
+        return false;
+    }
     if (!logFormatter->initialize(logFormat)) {
         destroyLogFormatter(logFormatter);
         return false;
@@ -531,11 +543,23 @@ bool configureLogFormat(const char* logFormat) {
 }
 
 void setLogFormatter(ELogFormatter* logFormatter) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    ELogFormatter* currLogFormatter = sGlobalFormatter.load(std::memory_order_acquire);
+    // NOTE: object can be retired only after being detached, otherwise we may have a race condition
+    // and possible core dump
+    sGlobalFormatter.store(logFormatter, std::memory_order_release);
+    if (currLogFormatter != nullptr) {
+        retireLogTargetFormatter(currLogFormatter);
+    }
+#else
     if (sGlobalFormatter != nullptr) {
         destroyLogFormatter(sGlobalFormatter);
     }
     sGlobalFormatter = logFormatter;
+#endif
 }
+
+void resetLogFormat() { configureLogFormat(ELOG_DEFAULT_LOG_FORMAT_SPEC); }
 
 const ELogParams& getParams() { return sParams; }
 
@@ -552,11 +576,29 @@ void refreshCommUtilLogLevelCfg() { sCommUtilLogHandler.refreshLogLevelCfg(); }
 #endif
 
 void formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
-    sGlobalFormatter->formatLogMsg(logRecord, logMsg);
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    // TODO: consider change macro name to something like ELOG_GC_SCOPED_GUARD, and then move the
+    // epoch counter into ELogGC, so it will be managed inside
+    ELOG_SCOPED_EPOCH(getLogTargetGC(), getLogTargetEpoch());
+    ELogFormatter* logFormatter = sGlobalFormatter.load(std::memory_order_relaxed);
+#else
+    ELogFormatter* logFormatter = sGlobalFormatter;
+#endif
+    if (logFormatter != nullptr) {
+        logFormatter->formatLogMsg(logRecord, logMsg);
+    }
 }
 
 void formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
-    sGlobalFormatter->formatLogBuffer(logRecord, logBuffer);
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    ELOG_SCOPED_EPOCH(getLogTargetGC(), getLogTargetEpoch());
+    ELogFormatter* logFormatter = sGlobalFormatter.load(std::memory_order_relaxed);
+#else
+    ELogFormatter* logFormatter = sGlobalFormatter;
+#endif
+    if (logFormatter != nullptr) {
+        logFormatter->formatLogBuffer(logRecord, logBuffer);
+    }
 }
 
 ELogFormatter* getDefaultLogFormatter() { return sGlobalFormatter; }
@@ -598,11 +640,23 @@ bool configureLogFilter(const char* logFilterCfg) {
 
 // global log filtering
 void setLogFilter(ELogFilter* logFilter) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    ELogFilter* currLogFilter = sGlobalFilter.load(std::memory_order_acquire);
+    // NOTE: object can be retired only after being detached, otherwise we may have a race condition
+    // and possible core dump
+    sGlobalFilter.store(logFilter, std::memory_order_release);
+    if (currLogFilter != nullptr) {
+        retireLogTargetFilter(currLogFilter);
+    }
+#else
     if (sGlobalFilter != nullptr) {
         destroyFilter(sGlobalFilter);
     }
     sGlobalFilter = logFilter;
+#endif
 }
+
+void clearLogFilter() { setLogFilter(nullptr); }
 
 bool setRateLimit(uint64_t maxMsg, uint64_t timeout, ELogTimeUnits timeoutUnits,
                   bool replaceGlobalFilter /* = true */) {
@@ -633,9 +687,15 @@ bool setRateLimit(uint64_t maxMsg, uint64_t timeout, ELogTimeUnits timeoutUnits,
 }
 
 bool filterLogMsg(const ELogRecord& logRecord) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    ELOG_SCOPED_EPOCH(getLogTargetGC(), getLogTargetEpoch());
+    ELogFilter* logFilter = sGlobalFilter.load(std::memory_order_relaxed);
+#else
+    ELogFilter* logFilter = sGlobalFilter;
+#endif
     bool res = true;
-    if (sGlobalFilter != nullptr) {
-        res = sGlobalFilter->filterLogRecord(logRecord);
+    if (logFilter != nullptr) {
+        res = logFilter->filterLogRecord(logRecord);
     }
     return res;
 }
@@ -718,11 +778,12 @@ void logMsg(const ELogRecord& logRecord,
     }
 #endif
     // send log record to all log targets
-    logMsgTarget(logRecord, logTargetAffinityMask);
+    bool msgLogged = logMsgTarget(logRecord, logTargetAffinityMask);
 
     // update global statistics
-    if (sEnableStatistics.load(std::memory_order_relaxed)) {
+    if (msgLogged && sEnableStatistics.load(std::memory_order_relaxed)) {
         sMsgCount[logRecord.m_logLevel].fetch_add(1, std::memory_order_relaxed);
+        sThreadMsgCount[logRecord.m_logLevel].fetch_add(1, std::memory_order_relaxed);
     }
 }
 
@@ -739,6 +800,18 @@ void getLogStatistics(ELogStatistics& stats) {
 void resetLogStatistics() {
     for (uint32_t i = 0; i < ELEVEL_COUNT; ++i) {
         sMsgCount[i].store(0, std::memory_order_relaxed);
+    }
+}
+
+void getThreadLogStatistics(ELogStatistics& stats) {
+    for (uint32_t i = 0; i < ELEVEL_COUNT; ++i) {
+        stats.m_msgCount[i] = sThreadMsgCount[i].load(std::memory_order_relaxed);
+    }
+}
+
+void resetThreadLogStatistics() {
+    for (uint32_t i = 0; i < ELEVEL_COUNT; ++i) {
+        sThreadMsgCount[i].store(0, std::memory_order_relaxed);
     }
 }
 

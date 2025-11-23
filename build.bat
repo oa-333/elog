@@ -14,11 +14,12 @@ REM -n|--life-sign
 REM -p|--reload-config
 REM -q|--config-service
 REM -u|--config-publish redis|etcd
+REM -o|--dynamic-config
 REM -f|--full
 REM -c|--conn sqlite|mysql|postgresql|redis|kafka|grafana|sentry|datadog|otel|grpc|net|ipc
 REM -i|--install-dir <INSTALL_DIR>
 REM -l|--clean
-REM -r|--rebuild (no reconfigure)
+REM -k|--rebuild (no reconfigure)
 REM -g|--reconfigure
 REM -m|--mem-check
 REM -a|--clang
@@ -38,6 +39,7 @@ SET LIFE_SIGN=0
 SET RELOAD_CONFIG=0
 SET CONFIG_SERVICE=0
 SET CONFIG_PUBLISH=
+SET DYNAMIC_CONFIG=0
 SET VERBOSE=0
 SET FULL=0
 SET CLEAN=0
@@ -83,6 +85,8 @@ IF /I "%ARG1%" == "-q" SET CONFIG_SERVICE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--config-service" SET CONFIG_SERVICE=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-u" SET CONFIG_PUBLISH=%ARG2% & shift & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--config-publish" SET CONFIG_PUBLISH=%ARG2% & shift & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-o" SET DYNAMIC_CONFIG=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "--dynamic-config" SET DYNAMIC_CONFIG=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-f" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--full" SET FULL=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-c" SET CONNS[!CONN_INDEX!]=%ARG2% & SET /A CONN_INDEX+=1 & shift & GOTO CHECK_OPTS
@@ -91,7 +95,7 @@ IF /I "%ARG1%" == "-i" SET INSTALL_DIR=%ARG2% & shift & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--install-dir" SET INSTALL_DIR=%ARG2% & shift & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-l" SET CLEAN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--clean" SET CLEAN=1 & GOTO CHECK_OPTS
-IF /I "%ARG1%" == "-r" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
+IF /I "%ARG1%" == "-k" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--rebuild" SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "-g" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
 IF /I "%ARG1%" == "--reconfigure" SET RE_CONFIG=1 & SET REBUILD=1 & SET CLEAN=1 & GOTO CHECK_OPTS
@@ -134,6 +138,7 @@ echo [DEBUG] LIFE_SIGN=%LIFE_SIGN%
 echo [DEBUG] RELOAD_CONFIG=%RELOAD_CONFIG%
 echo [DEBUG] CONFIG_SERVICE=%CONFIG_SERVICE%
 echo [DEBUG] CONFIG_PUBLISH=%CONFIG_PUBLISH%
+echo [DEBUG] DYNAMIC_CONFIG=%DYNAMIC_CONFIG%
 echo [DEBUG] VERBOSE=%VERBOSE%
 echo [DEBUG] FULL=%FULL%
 echo [DEBUG] CLEAN=%CLEAN%
@@ -153,6 +158,7 @@ IF %FULL% EQU 1 (
     SET LIFE_SIGN=1
     SET RELOAD_CONFIG=1
     SET CONFIG_SERVICE=1
+    SET DYNAMIC_CONFIG=1
     SET CONNS[0]=all
     SET CONN_INDEX=1
 )
@@ -184,6 +190,7 @@ IF "%CONFIG_PUBLISH%" NEQ "" (
     GOTO HANDLE_ERROR
 )
 :CONFIG_PUBLISH_SET
+IF %DYNAMIC_CONFIG% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_DYNAMIC_CONFIG=ON
 IF %MEM_CHECK% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_MEM_CHECK=ON
 IF %TRACE% EQU 1 SET OPTS=%OPTS% -DELOG_ENABLE_GROUP_FLUSH_GC_TRACE=ON
 IF %DOC% EQU 1 SET OPTS=%OPTS% -DELOG_BUILD_DOC=ON
@@ -425,6 +432,7 @@ echo       -n^|--life-sign              Enables periodic life-sign reports.
 echo       -p^|--reload-config          Enables periodic configuration reloading.
 echo       -q^|--config-service         Enables configuring ELog via TCP/pipe channel.
 echo       -u^|--config-publish PLUGIN  Uses the specified plugin to publish the configuration service details.
+echo       -o^|--dynamic-config         Enables dynamic concurrent configuration support.
 echo       -f^|--full                   Enables all connectors and stack trace logging API.
 echo.
 echo By default no connector is enabled, and stack trace logging is disabled.

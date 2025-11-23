@@ -2300,7 +2300,7 @@ int testSelector() {
 
 class TestFilter final : public elog::ELogFilter {
 public:
-    TestFilter() {}
+    TestFilter() : elog::ELogFilter(TestFilter::TYPE_NAME) {}
     TestFilter(const TestFilter&) = delete;
     TestFilter(TestFilter&&) = delete;
     TestFilter& operator=(const TestFilter&) = delete;
@@ -2349,7 +2349,7 @@ int testFilter() {
  */
 class TestFlushPolicy final : public elog::ELogFlushPolicy {
 public:
-    TestFlushPolicy() : m_counter(0) {}
+    TestFlushPolicy() : elog::ELogFlushPolicy(TestFlushPolicy::TYPE_NAME), m_counter(0) {}
     TestFlushPolicy(const TestFlushPolicy&) = delete;
     TestFlushPolicy(TestFlushPolicy&&) = delete;
     TestFlushPolicy& operator=(const TestFlushPolicy&) = delete;
@@ -2401,8 +2401,6 @@ public:
     TestFormatter(const TestFormatter&) = delete;
     TestFormatter(TestFormatter&&) = delete;
     TestFormatter& operator=(const TestFormatter&) = delete;
-
-    static constexpr const char* TYPE_NAME = "test";
 
 protected:
     bool handleText(const std::string& text) override {

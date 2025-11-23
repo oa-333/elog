@@ -4,6 +4,7 @@
 
 #include "elog_aligned_alloc.h"
 #include "elog_api.h"
+#include "elog_api_log_target.h"
 #include "elog_common.h"
 #include "elog_filter.h"
 #include "elog_flush_policy.h"
@@ -112,8 +113,10 @@ bool ELogTarget::startNoLock() {
             return false;
         }
     }
-    if (m_flushPolicy != nullptr) {
-        if (!m_flushPolicy->start()) {
+
+    ELogFlushPolicy* flushPolicy = getFlushPolicy();
+    if (flushPolicy != nullptr) {
+        if (!flushPolicy->start()) {
             if (m_stats != nullptr) {
                 m_stats->terminate();
                 delete m_stats;
@@ -122,6 +125,7 @@ bool ELogTarget::startNoLock() {
             return false;
         }
     }
+
     bool res = startLogTarget();
     if (!res) {
         if (m_stats != nullptr) {
@@ -148,8 +152,9 @@ bool ELogTarget::stopNoLock() {
         ELOG_REPORT_ERROR("Cannot stop log target %s/%s, not running");
         return false;
     }
-    if (m_flushPolicy != nullptr) {
-        if (!m_flushPolicy->stop()) {
+    ELogFlushPolicy* flushPolicy = getFlushPolicy();
+    if (flushPolicy != nullptr) {
+        if (!flushPolicy->stop()) {
             return false;
         }
     }
@@ -252,9 +257,10 @@ void ELogTarget::logNoLock(const ELogRecord& logRecord) {
     // be triggered by the async log target anyway
     // NOTE: we call shouldFlush() anyway, even if zero bytes were returned, since some flush
     // policies don't care how many bytes were written, but rather how many calls were made
-    if (res && m_flushPolicy != nullptr) {
+    ELogFlushPolicy* flushPolicy = getFlushPolicy();
+    if (res && flushPolicy != nullptr) {
         // NOTE: we pass to shouldFlush() the currently logged message size
-        if (m_flushPolicy->shouldFlush(bytesWritten)) {
+        if (flushPolicy->shouldFlush(bytesWritten)) {
             // don't call flush(), but rather flushNoLock() - we already have the lock
             // also allow flush moderation to take place if needed
             flushNoLock(true);
@@ -325,7 +331,10 @@ bool ELogTarget::flushNoLock(bool allowModeration) {
     }
     bool res = false;
     if (m_isNativelyThreadSafe && allowModeration) {
-        res = m_flushPolicy->moderateFlush(this);
+        ELogFlushPolicy* flushPolicy = getFlushPolicy();
+        if (flushPolicy != nullptr) {
+            res = flushPolicy->moderateFlush(this);
+        }
     } else {
         res = flushLogTarget();
     }
@@ -341,17 +350,37 @@ bool ELogTarget::flushNoLock(bool allowModeration) {
 }
 
 void ELogTarget::setLogFilter(ELogFilter* logFilter) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    ELogFilter* currLogFilter = m_logFilter.load(std::memory_order_acquire);
+    // NOTE: object can be retired only after member has been replaced, otherwise we may have a race
+    // condition and possible core dump
+    m_logFilter.store(logFilter, std::memory_order_release);
+    if (currLogFilter != nullptr) {
+        retireLogTargetFilter(currLogFilter);
+    }
+#else
     if (m_logFilter != nullptr) {
         destroyFilter(m_logFilter);
     }
     m_logFilter = logFilter;
+#endif
 }
 
 void ELogTarget::setLogFormatter(ELogFormatter* logFormatter) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    ELogFormatter* currLogFormatter = m_logFormatter.load(std::memory_order_acquire);
+    // NOTE: object can be retired only after member has been replaced, otherwise we may have a race
+    // condition and possible core dump
+    m_logFormatter.store(logFormatter, std::memory_order_release);
+    if (currLogFormatter != nullptr) {
+        retireLogTargetFormatter(currLogFormatter);
+    }
+#else
     if (m_logFormatter != nullptr) {
         destroyLogFormatter(m_logFormatter);
     }
     m_logFormatter = logFormatter;
+#endif
 }
 
 bool ELogTarget::setLogFormat(const char* logFormat) {
@@ -370,11 +399,22 @@ bool ELogTarget::setLogFormat(const char* logFormat) {
 }
 
 void ELogTarget::setFlushPolicy(ELogFlushPolicy* flushPolicy) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    ELogFlushPolicy* currFlushPolicy = m_flushPolicy.load(std::memory_order_acquire);
+    // NOTE: object can be retired only after member has been replaced, otherwise we may have a race
+    // condition and possible core dump
+    m_flushPolicy.store(flushPolicy, std::memory_order_release);
+    if (currFlushPolicy != nullptr) {
+        retireLogTargetFlushPolicy(currFlushPolicy);
+    }
+#else
     if (m_flushPolicy != nullptr) {
         destroyFlushPolicy(m_flushPolicy);
     }
     m_flushPolicy = flushPolicy;
+#endif
 }
+
 uint64_t ELogTarget::getBytesWritten() {
     uint64_t bytesWritten = 0;
     ELogStats* stats = getEndLogTarget()->getStats();
@@ -406,8 +446,9 @@ bool ELogTarget::isCaughtUp(uint64_t targetMsgCount, bool& caughtUp) {
 }
 
 void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) {
-    if (m_logFormatter != nullptr) {
-        m_logFormatter->formatLogMsg(logRecord, logMsg);
+    ELogFormatter* logFormatter = getLogFormatter();
+    if (logFormatter != nullptr) {
+        logFormatter->formatLogMsg(logRecord, logMsg);
     } else {
         elog::formatLogMsg(logRecord, logMsg);
     }
@@ -417,8 +458,9 @@ void ELogTarget::formatLogMsg(const ELogRecord& logRecord, std::string& logMsg) 
 }
 
 void ELogTarget::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuffer) {
-    if (m_logFormatter != nullptr) {
-        m_logFormatter->formatLogBuffer(logRecord, logBuffer);
+    ELogFormatter* logFormatter = getLogFormatter();
+    if (logFormatter != nullptr) {
+        logFormatter->formatLogBuffer(logRecord, logBuffer);
     } else {
         elog::formatLogBuffer(logRecord, logBuffer);
     }
@@ -429,8 +471,9 @@ void ELogTarget::formatLogBuffer(const ELogRecord& logRecord, ELogBuffer& logBuf
 }
 
 bool ELogTarget::canLog(const ELogRecord& logRecord) {
+    ELogFilter* logFilter = getLogFilter();
     return logRecord.m_logLevel <= m_logLevel &&
-           (m_logFilter == nullptr || m_logFilter->filterLogRecord(logRecord));
+           (logFilter == nullptr || logFilter->filterLogRecord(logRecord));
 }
 
 ELogPassKey ELogTarget::generatePassKey() {

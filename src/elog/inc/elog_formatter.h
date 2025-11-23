@@ -16,6 +16,8 @@ namespace elog {
 
 #define ELOG_DEFAULT_FORMATTER_TYPE_NAME "default"
 
+#define ELOG_DEFAULT_LOG_FORMAT_SPEC "${time} ${level:6} [${tid:-5}] ${src} ${msg}"
+
 /** @class Utility class for formatting log messages. */
 class ELOG_API ELogFormatter : public ELogManagedObject {
 public:
@@ -33,8 +35,7 @@ public:
      * extension), ${pid} for current process id, and ${mod} for module name.
      * @return true If the log line format specification was parsed successfully, otherwise false.
      */
-    inline bool initialize(
-        const char* logLineFormatSpec = "${time} ${level:6} [${tid:5}] ${src} ${msg}") {
+    inline bool initialize(const char* logLineFormatSpec = ELOG_DEFAULT_LOG_FORMAT_SPEC) {
         return parseFormatSpec(logLineFormatSpec);
     }
 
@@ -184,22 +185,24 @@ protected:
  * @def Utility macro for declaring log formatter factory method registration. Using this macro is
  * mandatory for every log formatter class that wishes to be loadable from configuration.
  * @param FormatterType Type name of log formatter.
- * @param Name Configuration name of log formatter (for dynamic loading from configuration).
+ * @param TypeName Configuration type name of log formatter (for dynamic loading from
+ * configuration).
  * @param ImportExportSpec Window import/export specification. If exporting from a library then
  * specify a macro that will expand correctly within the library and from outside as well. If not
  * relevant then pass ELOG_NO_EXPORT.
  */
-#define ELOG_DECLARE_LOG_FORMATTER(FormatterType, Name, ImportExportSpec)                  \
+#define ELOG_DECLARE_LOG_FORMATTER(FormatterType, TypeName, ImportExportSpec)              \
 public:                                                                                    \
     static FormatterType* create();                                                        \
     static void destroy(FormatterType* formatter);                                         \
+    static constexpr const char* TYPE_NAME = #TypeName;                                    \
                                                                                            \
 private:                                                                                   \
     ~FormatterType() final {}                                                              \
     class ImportExportSpec FormatterType##Constructor final                                \
         : public elog::ELogFormatterConstructor {                                          \
     public:                                                                                \
-        FormatterType##Constructor() : elog::ELogFormatterConstructor(#Name) {}            \
+        FormatterType##Constructor() : elog::ELogFormatterConstructor(#TypeName) {}        \
         elog::ELogFormatter* constructFormatter() final;                                   \
         void destroyFormatter(elog::ELogFormatter* formatter) final;                       \
         ~FormatterType##Constructor() final {}                                             \

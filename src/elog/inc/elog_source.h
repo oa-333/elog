@@ -24,8 +24,9 @@
 
 namespace elog {
 
-// forward declaration
-class ELogLogger;
+// forward declarations
+class ELOG_API ELogLogger;
+class ELOG_API ELogTarget;
 
 /**
  * @brief A log source represents a logical module with a designated log level, and managed loggers.
@@ -172,6 +173,15 @@ public:
     /** @brief Retrieves the life sign filter associated with the log source.  */
     ELogLifeSignFilter* getLifeSignFilter() { return &m_lifeSignFilter; }
 #endif
+
+    /**
+     * @brief Pairs this log source with the specified log target, such that messages logged through
+     * this log source will be directed only to the specified log target, and the log target can
+     * receive messages only from this log source.
+     *
+     * @param logTarget The log target.
+     */
+    void pairWithLogTarget(ELogTarget* logTarget);
 
 private:
     ELogSourceId m_sourceId;

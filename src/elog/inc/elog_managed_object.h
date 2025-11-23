@@ -53,6 +53,59 @@ private:
     std::atomic<ELogManagedObject*> m_next;
 };
 
+/**
+ * @brief Utility helper class for assisting in recycling objects that are not derived from
+ * @ref ELogManagedObject.
+ */
+template <typename T>
+class ELogManagedObjectWrapper : public ELogManagedObject {
+public:
+    ELogManagedObjectWrapper(T* object) : m_object(object) {}
+    ~ELogManagedObjectWrapper() override { destroyObject(m_object); }
+
+protected:
+    /** @brief Disallow copy constructor. */
+    ELogManagedObjectWrapper(const ELogManagedObjectWrapper&) = delete;
+
+    /** @brief Disallow move constructor.*/
+    ELogManagedObjectWrapper(ELogManagedObjectWrapper&&) = delete;
+
+    /** @brief Disallow assignment operator.*/
+    ELogManagedObjectWrapper& operator=(const ELogManagedObjectWrapper&) = delete;
+
+    /** @brief Destroys object. By default deletes it. */
+    virtual void destroyObject(T* object) { delete object; }
+
+private:
+    T* m_object;
+};
+
+/**
+ * @def Helper macro for implementing recycling of object not derived from @ref ELogManagedObject.
+ * Should be used as follows:
+ *
+ *      ELOG_IMPLEMENT_RECYCLE(ClassName) {
+ *          // the parameter name to recycle is object, and it has type ClassName*
+ *          delete object;
+ *      }
+ */
+#define ELOG_IMPLEMENT_RECYCLE(ClassName) \
+    template <>                           \
+    void ELogManagedObjectWrapper<ClassName>::destroyObject(ClassName* object)
+
+/**
+ * @def Helper macro: retires an object not derived from @ref ELogManagedObject, for asynchronous
+ * reclamation.
+ */
+#define ELOG_RETIRE(gc, ClassName, object, epoch)                           \
+    {                                                                       \
+        ELogManagedObjectWrapper<ClassName>* managedObject =                \
+            new (std::nothrow) ELogManagedObjectWrapper<ClassName>(object); \
+        if (managedObject != nullptr) {                                     \
+            gc->retire(managedObject, epoch);                               \
+        }                                                                   \
+    }
+
 }  // namespace elog
 
 #endif  // __ELOG_MANAGED_OBJECT_H__

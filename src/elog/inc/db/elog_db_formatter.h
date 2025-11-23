@@ -52,8 +52,6 @@ public:
     ELogDbFormatter(ELogDbFormatter&&) = delete;
     ELogDbFormatter& operator=(const ELogDbFormatter&) = delete;
 
-    static constexpr const char* TYPE_NAME = "db";
-
     inline void setQueryStyle(QueryStyle queryStyle) { m_queryStyle = queryStyle; }
 
     inline const std::string& getProcessedStatement() const { return m_processedStatement; }

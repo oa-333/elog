@@ -17,7 +17,7 @@ fi
 
 # build elog (enable all extensions and etcd publishing)
 # NOTE: on Windows we test instead for Redis publishing
-./build.sh --full --config-publish etcd --doc
+./build.sh --full --config-publish etcd
 if [ $? -ne 0 ]; then
     echo "ERROR: Build failed"
     exit 1
@@ -28,14 +28,16 @@ DEV_DIR=`readlink -f .`
 
 # exec tests
 if [ "$OS" = "Msys" ]; then
-    pushd $INSTALL_DIR/bin/Windows_mingw-Debug
+    pushd $INSTALL_DIR/bin/Windows_mingw-Debug &> /dev/null
 else
-    pushd $INSTALL_DIR/bin/${PLATFORM}-Debug
+    pushd $INSTALL_DIR/bin/${PLATFORM}-Debug &> /dev/null
 fi
 
 # prepare SQLite db file
+echo -n "[INFO] Preparing sqlite database file... "
 rm -f test.db
 sqlite3 test.db "create table log_records (rid int64, time varchar(64), level varchar(64), host varchar(64), user varchar(64), prog varchar(64), pid int64, tid int64, mod varchar(64), src varchar(64), msg varchar(1024));"
+echo "DONE"
 
 # set env var used by test
 export TEST_ENV_VAR=TEST_ENV_VALUE
@@ -53,5 +55,7 @@ else
     echo "[DEBUG] Running command ./elog_test $*"
     ./elog_test $*
 fi
+RES=$?
+echo "Test result: $RES"
 
-popd
+popd &> /dev/null

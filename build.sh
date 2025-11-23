@@ -13,11 +13,12 @@
 # -p|--reload-config
 # -q|--config-service
 # -u|--config-publish redis|etcd
+# -o|--dynamic-config
 # -f|--full
 # -c|--conn sqlite|mysql|postgresql|redis|kafka|grafana|sentry|datadog|otel|grpc|net|ipc
 # -i|--install-dir <INSTALL_DIR>
 # -l|--clean
-# -r|--rebuild (no reconfigure)
+# -k|--rebuild (no reconfigure)
 # -g|--reconfigure
 # -m|--mem-check
 # -a|--clang
@@ -53,6 +54,7 @@ LIFE_SIGN=0
 RELOAD_CONFIG=0
 CONFIG_SERVICE=0
 CONFIG_PUBLISH=
+DYNAMIC_CONFIG=0
 VERBOSE=0
 FULL=0
 CLEAN=0
@@ -65,7 +67,7 @@ DOC=0
 HELP=0
 
 # parse options
-TEMP=$(getopt -o vdrwexsbnpqufc:i:lrgmatjh -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,reload-config,config-service,config-publish:,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,doc,help -- "$@")
+TEMP=$(getopt -o vdrwexsbnpquofc:i:lkgmatjh -l verbose,debug,release,rel-with-debug-info,secure,cxx-ver:,stack-trace,fmt-lib,life-sign,reload-config,config-service,config-publish:,config-target,full,conn:,install-dir:,clean,rebuild,reconfigure,mem-check,clang,trace,doc,help -- "$@")
 eval set -- "$TEMP"
 
 declare -a CONNS=()
@@ -83,11 +85,12 @@ while true; do
     -p | --reload-config ) RELOAD_CONFIG=1; shift ;;
     -q | --config-service ) CONFIG_SERVICE=1; shift ;;
     -u | --config-publish ) CONFIG_PUBLISH=$2; shift 2 ;;
+    -o | --config-target ) DYNAMIC_CONFIG=1; shift ;;
     -f | --full ) FULL=1; shift;;
     -c | --conn ) CONNS+=($2); shift 2 ;;
     -i | --install-dir) INSTALL_DIR="$2"; shift 2 ;;
     -l | --clean) CLEAN=1; shift ;;
-    -r | --rebuild) REBUILD=1; CLEAN=1; shift ;;
+    -k | --rebuild) REBUILD=1; CLEAN=1; shift ;;
     -g | --reconfigure) RE_CONFIG=1; REBUILD=1; CLEAN=1; shift ;;
     -m | --mem-check) MEM_CHECK=1; shift ;;
     -a | --clang) CLANG=1; shift ;;
@@ -124,6 +127,7 @@ if [ "$HELP" -eq "1" ]; then
     echo "      -p|--reload-config          Enables periodic configuration reloading."
     echo "      -q|--config-service         Enables configuring ELog via TCP/pipe channel."
     echo "      -u|--config-publish PLUGIN  Uses the specified plugin to publish the configuration service details."
+    echo "      -o|--dynamic-config         Enables dynamic concurrent configuration support."
     echo "      -f|--full                   Enables all connectors and stack trace logging API."
     echo ""
     echo "By default no connector is enabled, and stack trace logging is disabled."
@@ -184,6 +188,7 @@ if [ "$FULL" -eq "1" ]; then
     LIFE_SIGN=1
     RELOAD_CONFIG=1
     CONFIG_SERVICE=1
+    DYNAMIC_CONFIG=1
     CONNS=(all)
 fi
 
@@ -198,6 +203,7 @@ echo "[INFO] Life sign: $LIFE_SIGN"
 echo "[INFO] Reload config: $RELOAD_CONFIG"
 echo "[INFO] Config service: $CONFIG_SERVICE"
 echo "[INFO] Config publish plugin: $CONFIG_PUBLISH"
+echo "[INFO] Dynamic config: $DYNAMIC_CONFIG"
 echo "[INFO] Verbose: $VERBOSE"
 echo "[INFO] Full: $FULL"
 echo "[INFO] Clean: $CLEAN"
@@ -240,6 +246,9 @@ if [ -n "$CONFIG_PUBLISH" ]; then
         echo -e "${RED}[ERROR] Unsupported configuration service publisher '$CONFIG_PUBLISH', aborting[$NC]"
         exit 1
     fi
+fi
+if [ "$DYNAMIC_CONFIG" == "1" ]; then
+    OPTS+=" -DELOG_ENABLE_DYNAMIC_CONFIG=ON"
 fi
 if [ "$MEM_CHECK" == "1" ]; then
     OPTS+=" -DELOG_ENABLE_MEM_CHECK=ON"

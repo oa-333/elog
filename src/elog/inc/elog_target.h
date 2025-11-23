@@ -102,7 +102,11 @@ public:
     inline ELogTargetId getId() { return m_id; }
 
     /** @brief Generates a pass key to the target. */
-    inline void setPassKey() { m_passKey = generatePassKey(); }
+    inline void setPassKey() {
+        if (m_passKey == ELOG_NO_PASSKEY) {
+            m_passKey = generatePassKey();
+        }
+    }
 
     /** @brief Retrieves the pass key associated with the log target. */
     inline ELogPassKey getPassKey() const { return m_passKey; }
@@ -120,10 +124,22 @@ public:
      * @brief Sets the log level of the log target. Derived classes should take into consideration
      * this value, and filter out messages without high enough log level.
      */
-    inline void setLogLevel(ELogLevel logLevel) { m_logLevel = logLevel; }
+    inline void setLogLevel(ELogLevel logLevel) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+        m_logLevel.store(logLevel, std::memory_order_relaxed);
+#else
+        m_logLevel = logLevel;
+#endif
+    }
 
     /** @brief Retrieves the log level associated with this log target. */
-    inline ELogLevel getLogLevel() const { return m_logLevel; }
+    inline ELogLevel getLogLevel() const {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+        return m_logLevel.load(std::memory_order_relaxed);
+#else
+        return m_logLevel;
+#endif
+    }
 
     /**
      * @brief Sets the log filter for the log target. Derived classes should take into
@@ -133,7 +149,13 @@ public:
     void setLogFilter(ELogFilter* logFilter);
 
     /** @brief Retrieves the log filter associated with this log target. */
-    inline ELogFilter* getLogFilter() { return m_logFilter; }
+    inline ELogFilter* getLogFilter() {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+        return m_logFilter.load(std::memory_order_relaxed);
+#else
+        return m_logFilter;
+#endif
+    }
 
     /**
      * @brief Sets the log formatter for the log target. Derived classes should take into
@@ -142,7 +164,13 @@ public:
     void setLogFormatter(ELogFormatter* logFormatter);
 
     /** @brief Retrieves the log formatter associated with this log target. */
-    inline ELogFormatter* getLogFormatter() { return m_logFormatter; }
+    inline ELogFormatter* getLogFormatter() {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+        return m_logFormatter.load(std::memory_order_relaxed);
+#else
+        return m_logFormatter;
+#endif
+    }
 
     /** @brief Sets a default formatter with the given log format. */
     bool setLogFormat(const char* logFormat);
@@ -163,7 +191,13 @@ public:
     void setFlushPolicy(ELogFlushPolicy* flushPolicy);
 
     /** @brief Retrieve the installed flush policy. */
-    inline ELogFlushPolicy* getFlushPolicy() { return m_flushPolicy; }
+    inline ELogFlushPolicy* getFlushPolicy() {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+        return m_flushPolicy.load(std::memory_order_relaxed);
+#else
+        return m_flushPolicy;
+#endif
+    }
 
     /**
      * @brief Detaches the log target from its flush-policy/fiter/formatter without deleting them.
@@ -289,7 +323,11 @@ private:
     std::string m_name;
     ELogTargetId m_id;
     ELogPassKey m_passKey;
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    std::atomic<ELogLevel> m_logLevel;
+#else
     ELogLevel m_logLevel;
+#endif
     std::atomic<bool> m_isRunning;
     bool m_isNativelyThreadSafe;
     bool m_isExternallyThreadSafe;
@@ -297,9 +335,15 @@ private:
     alignas(8) uint64_t m_addNewLine;
     // this member is pretty hot, so we avoid using 1 byte boolean, and use instead aligned uint64
     alignas(8) uint64_t m_requiresLock;
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    std::atomic<ELogFilter*> m_logFilter;
+    std::atomic<ELogFormatter*> m_logFormatter;
+    std::atomic<ELogFlushPolicy*> m_flushPolicy;
+#else
     ELogFilter* m_logFilter;
     ELogFormatter* m_logFormatter;
     ELogFlushPolicy* m_flushPolicy;
+#endif
     std::recursive_mutex m_lock;
 
     bool startNoLock();
@@ -309,7 +353,8 @@ private:
 
     /** @brief Helper method for querying whether the log target should be flushed. */
     inline bool shouldFlush(uint64_t bytesWritten) {
-        return m_flushPolicy != nullptr && m_flushPolicy->shouldFlush(bytesWritten);
+        ELogFlushPolicy* flushPolicy = getFlushPolicy();
+        return flushPolicy != nullptr && flushPolicy->shouldFlush(bytesWritten);
     }
 
     ELogPassKey generatePassKey();

@@ -32,7 +32,9 @@ TEST(ELogMisc, StackTrace) {
     logTarget->setLogFormat("${msg}");
     elog::addLogTarget(logTarget);
 
-    const auto& logMessages = logTarget->getLogMessages();
+    // since error messages may slip in from other threads (e.g. publish thread), we use info log
+    // messages
+    const auto& logMessages = logTarget->getInfoLogMessages();
 
     logTarget->clearLogMessages();
     ELOG_STACK_TRACE(elog::ELEVEL_INFO, "some test title 1", 0, "Testing stack trace for thread %u",

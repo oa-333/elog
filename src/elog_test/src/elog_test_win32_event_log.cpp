@@ -113,6 +113,7 @@ static bool testWin32EventLog() {
     // otherwise the test fails
     class ELogTestFilter : public elog::ELogFilter {
     public:
+        ELogTestFilter() : elog::ELogFilter("test") {}
         bool filterLogRecord(const elog::ELogRecord& logRecord) final {
             return logRecord.m_logLevel <= elog::ELEVEL_INFO;
         }

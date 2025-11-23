@@ -36,9 +36,8 @@ static std::atomic<bool> sTerminating = false;
 static void cleanupThreadLifeSignFilter(void* key);
 static ELogLifeSignFilter* initThreadLifeSignFilter();
 static ELogLifeSignFilter* getThreadLifeSignFilter();
-static bool setAppLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
-                                 uint64_t currentEpoch);
-static bool removeAppLifeSignReport(ELogLevel level, uint64_t currentEpoch);
+static bool setAppLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec);
+static bool removeAppLifeSignReport(ELogLevel level);
 static bool setCurrentThreadLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec);
 static bool removeCurrentThreadLifeSignReport(ELogLevel level);
 static bool setThreadLifeSignReport(uint32_t threadId, const char* name, ELogLevel level,
@@ -52,18 +51,18 @@ static bool removeNamedThreadLifeSignReport(ELogLevel level, const char* name);
 static bool setThreadLifeSignReportByRegEx(ELogLevel level, const ELogFrequencySpec& frequencySpec,
                                            const char* nameRegEx);
 static bool removeThreadLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx);
-static bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
-                                       ELogSource* logSource, uint64_t currentEpoch);
-static bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource,
-                                          uint64_t currentEpoch);
-static bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
-                                       const char* name, uint64_t currentEpoch);
-static bool removeLogSourceLifeSignReport(ELogLevel level, const char* name, uint64_t currentEpoch);
+static bool setLogSourceLifeSignReportInternal(ELogLevel level,
+                                               const ELogFrequencySpec& frequencySpec,
+                                               ELogSource* logSource);
+static bool removeLogSourceLifeSignReportInternal(ELogLevel level, ELogSource* logSource);
+static bool setLogSourceLifeSignReportByName(ELogLevel level,
+                                             const ELogFrequencySpec& frequencySpec,
+                                             const char* name);
+static bool removeLogSourceLifeSignReportByName(ELogLevel level, const char* name);
 static bool setLogSourceLifeSignReportByRegEx(ELogLevel level,
                                               const ELogFrequencySpec& frequencySpec,
-                                              const char* nameRegEx, uint64_t currentEpoch);
-static bool removeLogSourceLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx,
-                                                 uint64_t currentEpoch);
+                                              const char* nameRegEx);
+static bool removeLogSourceLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx);
 
 bool initLifeSignReport() {
     ELOG_REPORT_DEBUG("Creating life-sign shared memory segment");
@@ -101,6 +100,8 @@ bool initLifeSignReport() {
         termLifeSignReport();
         return false;
     }
+    // NOTE: we need to call start() since background garbage collection is used
+    sLifeSignGC->start();
 
     // create TLS for thread-scope filter
     if (!elogCreateTls(sThreadLifeSignKey, cleanupThreadLifeSignFilter)) {
@@ -114,7 +115,7 @@ bool initLifeSignReport() {
 }
 
 bool termLifeSignReport() {
-    if (sTerminating.load(std::memory_order_relaxed)) {
+    if (sTerminating.load(std::memory_order_acquire)) {
         ELOG_REPORT_WARN(
             "Cannot terminate life-sign reporting, already terminating (cyclic dependency?)");
         return false;
@@ -122,7 +123,7 @@ bool termLifeSignReport() {
 
     // stop periodic syncing if any
     setLifeSignSyncPeriod(0);
-    sTerminating.store(true, std::memory_order_relaxed);
+    sTerminating.store(true, std::memory_order_release);
 
     // delete formatter
     ELogFormatter* formatter = sLifeSignFormatter.load(std::memory_order_acquire);
@@ -142,6 +143,8 @@ bool termLifeSignReport() {
 
     // terminate GC
     if (sLifeSignGC != nullptr) {
+        // NOTE: we need to call stop() since background garbage collection is used
+        sLifeSignGC->stop();
         if (!sLifeSignGC->destroy()) {
             ELOG_REPORT_ERROR("Failed to destroy life-sign reports garbage collector");
             return false;
@@ -205,8 +208,7 @@ ELogLifeSignFilter* getThreadLifeSignFilter() {
     return sThreadLifeSignFilter;
 }
 
-bool setAppLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
-                          uint64_t currentEpoch) {
+bool setAppLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec) {
     // set filter
     ELogFilter* prevFilter = nullptr;
     if (!sAppLifeSignFilter->setLevelFilter(level, frequencySpec, prevFilter)) {
@@ -215,19 +217,23 @@ bool setAppLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpe
     }
 
     // retire previous filter if any and finish
+    // NOTE: the epoch must be incremented only after the pointer was detached
     if (prevFilter != nullptr) {
-        sLifeSignGC->retire(prevFilter, currentEpoch);
+        ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+        sLifeSignGC->retire(prevFilter, ELOG_CURRENT_EPOCH);
     }
     return true;
 }
 
-bool removeAppLifeSignReport(ELogLevel level, uint64_t currentEpoch) {
+bool removeAppLifeSignReport(ELogLevel level) {
     // remove filter
     ELogFilter* prevFilter = sAppLifeSignFilter->removeLevelFilter(level);
 
     // retire previous filter if any and finish
+    // NOTE: the epoch must be incremented only after the pointer was detached
     if (prevFilter != nullptr) {
-        sLifeSignGC->retire(prevFilter, currentEpoch);
+        ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+        sLifeSignGC->retire(prevFilter, ELOG_CURRENT_EPOCH);
     }
     return true;
 }
@@ -389,8 +395,8 @@ bool removeThreadLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx) {
     return res;
 }
 
-bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
-                                ELogSource* logSource, uint64_t currentEpoch) {
+bool setLogSourceLifeSignReportInternal(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                        ELogSource* logSource) {
     // set filter
     ELogFilter* prevFilter = nullptr;
     if (!logSource->getLifeSignFilter()->setLevelFilter(level, frequencySpec, prevFilter)) {
@@ -400,46 +406,50 @@ bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& freque
     }
 
     // retire previous filter if any and finish
+    // NOTE: the epoch must be incremented only after the pointer was detached
     if (prevFilter != nullptr) {
-        sLifeSignGC->retire(prevFilter, currentEpoch);
+        ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+        sLifeSignGC->retire(prevFilter, ELOG_CURRENT_EPOCH);
     }
     return true;
 }
 
-bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource, uint64_t currentEpoch) {
+bool removeLogSourceLifeSignReportInternal(ELogLevel level, ELogSource* logSource) {
     // remove filter
     ELogFilter* prevFilter = logSource->getLifeSignFilter()->removeLevelFilter(level);
 
     // retire previous filter if any and finish
+    // NOTE: the epoch must be incremented only after the pointer was detached
     if (prevFilter != nullptr) {
-        sLifeSignGC->retire(prevFilter, currentEpoch);
+        ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+        sLifeSignGC->retire(prevFilter, ELOG_CURRENT_EPOCH);
     }
     return true;
 }
 
-bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& frequencySpec,
-                                const char* name, uint64_t currentEpoch) {
+bool setLogSourceLifeSignReportByName(ELogLevel level, const ELogFrequencySpec& frequencySpec,
+                                      const char* name) {
     ELogSource* logSource = getLogSource(name);
     if (logSource == nullptr) {
         ELOG_REPORT_ERROR("Cannot set life-sign report for log source %s, log source not found",
                           name);
         return false;
     }
-    return setLogSourceLifeSignReport(level, frequencySpec, logSource, currentEpoch);
+    return setLogSourceLifeSignReportInternal(level, frequencySpec, logSource);
 }
 
-bool removeLogSourceLifeSignReport(ELogLevel level, const char* name, uint64_t currentEpoch) {
+bool removeLogSourceLifeSignReportByName(ELogLevel level, const char* name) {
     ELogSource* logSource = getLogSource(name);
     if (logSource == nullptr) {
         ELOG_REPORT_ERROR("Cannot remove life-sign report for log source %s, log source not found",
                           name);
         return false;
     }
-    return removeLogSourceLifeSignReport(level, logSource, currentEpoch);
+    return removeLogSourceLifeSignReportInternal(level, logSource);
 }
 
 bool setLogSourceLifeSignReportByRegEx(ELogLevel level, const ELogFrequencySpec& frequencySpec,
-                                       const char* nameRegEx, uint64_t currentEpoch) {
+                                       const char* nameRegEx) {
     std::vector<ELogSource*> logSources;
     getLogSources(nameRegEx, logSources);
     if (logSources.empty()) {
@@ -452,15 +462,14 @@ bool setLogSourceLifeSignReportByRegEx(ELogLevel level, const ELogFrequencySpec&
 
     bool res = true;
     for (ELogSource* logSource : logSources) {
-        if (!setLogSourceLifeSignReport(level, frequencySpec, logSource, currentEpoch)) {
+        if (!setLogSourceLifeSignReportInternal(level, frequencySpec, logSource)) {
             res = false;
         }
     }
     return res;
 }
 
-bool removeLogSourceLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx,
-                                          uint64_t currentEpoch) {
+bool removeLogSourceLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx) {
     std::vector<ELogSource*> logSources;
     getLogSources(nameRegEx, logSources);
     if (logSources.empty()) {
@@ -473,7 +482,7 @@ bool removeLogSourceLifeSignReportByRegEx(ELogLevel level, const char* nameRegEx
 
     bool res = true;
     for (ELogSource* logSource : logSources) {
-        if (!removeLogSourceLifeSignReport(level, logSource, currentEpoch)) {
+        if (!removeLogSourceLifeSignReport(level, logSource)) {
             res = false;
         }
     }
@@ -489,9 +498,6 @@ bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
         return false;
     }
 
-    // increment epoch
-    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
-
     // application scope
     if (scope == ELogLifeSignScope::LS_APP) {
         if (name != nullptr && *name != 0) {
@@ -502,7 +508,7 @@ bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
             ELOG_REPORT_WARN(
                 "Ignoring regular expression flag in application-scope life-sign report");
         }
-        return setAppLifeSignReport(level, frequencySpec, ELOG_CURRENT_EPOCH);
+        return setAppLifeSignReport(level, frequencySpec);
     }
 
     // thread scope
@@ -526,10 +532,9 @@ bool setLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
     // log source scope
     if (scope == ELogLifeSignScope::LS_LOG_SOURCE) {
         if (isRegex) {
-            return setLogSourceLifeSignReportByRegEx(level, frequencySpec, name,
-                                                     ELOG_CURRENT_EPOCH);
+            return setLogSourceLifeSignReportByRegEx(level, frequencySpec, name);
         } else {
-            return setLogSourceLifeSignReport(level, frequencySpec, name, ELOG_CURRENT_EPOCH);
+            return setLogSourceLifeSignReportByName(level, frequencySpec, name);
         }
     }
 
@@ -545,9 +550,6 @@ bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
         return false;
     }
 
-    // increment epoch
-    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
-
     // application scope
     if (scope == ELogLifeSignScope::LS_APP) {
         if (name != nullptr && *name != 0) {
@@ -560,7 +562,7 @@ bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
                 "Ignoring regular expression flag when removing application-scope life-sign "
                 "report");
         }
-        return removeAppLifeSignReport(level, ELOG_CURRENT_EPOCH);
+        return removeAppLifeSignReport(level);
     }
 
     // thread scope
@@ -585,9 +587,9 @@ bool removeLifeSignReport(ELogLifeSignScope scope, ELogLevel level,
     // log source scope
     if (scope == ELogLifeSignScope::LS_LOG_SOURCE) {
         if (isRegex) {
-            return removeLogSourceLifeSignReportByRegEx(level, name, ELOG_CURRENT_EPOCH);
+            return removeLogSourceLifeSignReportByRegEx(level, name);
         } else {
-            return removeLogSourceLifeSignReport(level, name, ELOG_CURRENT_EPOCH);
+            return removeLogSourceLifeSignReportByName(level, name);
         }
     }
 
@@ -605,9 +607,7 @@ bool setLogSourceLifeSignReport(ELogLevel level, const ELogFrequencySpec& freque
         return false;
     }
 
-    // increment epoch and execute
-    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
-    return setLogSourceLifeSignReport(level, frequencySpec, logSource, ELOG_CURRENT_EPOCH);
+    return setLogSourceLifeSignReportInternal(level, frequencySpec, logSource);
 }
 
 bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource) {
@@ -619,9 +619,7 @@ bool removeLogSourceLifeSignReport(ELogLevel level, ELogSource* logSource) {
         return false;
     }
 
-    // increment epoch and execute
-    ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
-    return removeLogSourceLifeSignReport(level, logSource, ELOG_CURRENT_EPOCH);
+    return removeLogSourceLifeSignReportInternal(level, logSource);
 }
 
 bool setLifeSignLogFormat(const char* logFormat) {
@@ -647,20 +645,15 @@ bool setLifeSignLogFormat(const char* logFormat) {
     }
 
     // exchange pointers with much caution (not deleting, but retiring to GC)
-
-    // first increment epoch
-    uint64_t epoch = sLifeSignEpoch.fetch_add(1, std::memory_order_relaxed);
-    sLifeSignGC->beginEpoch(epoch);
-
-    // next, exchange pointers
     ELogFormatter* oldFormatter = sLifeSignFormatter.load(std::memory_order_acquire);
     sLifeSignFormatter.store(newFormatter, std::memory_order_release);
 
     // finally, retire the old formatter to GC and finish
+    // NOTE: the epoch must be incremented only after the pointer was detached
     if (oldFormatter != nullptr) {
-        sLifeSignGC->retire(oldFormatter, epoch);
+        ELOG_SCOPED_EPOCH(sLifeSignGC, sLifeSignEpoch);
+        sLifeSignGC->retire(oldFormatter, ELOG_CURRENT_EPOCH);
     }
-    sLifeSignGC->endEpoch(epoch);
     return true;
 }
 

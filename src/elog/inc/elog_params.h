@@ -63,6 +63,25 @@ struct ELOG_API ELogParams {
      */
     uint32_t m_maxThreads;
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    /**
+     * @brief Specifies the maximum number of log targets that can be defined, when log target
+     * dynamic configuration is enabled.
+     */
+    uint32_t m_maxLogTargets;
+
+    /**
+     * @brief The period in milliseconds of each log target background garbage collection task,
+     * which wakes up and recycles all objects ready for recycling.
+     */
+    uint32_t m_logTargetGCPeriodMillis;
+
+    /**
+     * @brief The number of log target background garbage collection tasks.
+     */
+    uint32_t m_logTargetGCTaskCount;
+#endif
+
     /** @brief Specifies whether log statistics are enabled (per-level counters). */
     ELogAtomic<bool> m_enableLogStatistics;
 
@@ -92,6 +111,11 @@ struct ELOG_API ELogParams {
           m_reportLevel(ELEVEL_WARN),
           m_errorModerationRate(1, ELOG_DEFAULT_ERROR_RATE_SECONDS, ELogTimeUnits::TU_SECONDS),
           m_maxThreads(ELOG_DEFAULT_MAX_THREADS),
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+          m_maxLogTargets(ELOG_DEFAULT_MAX_TARGET_COUNT),
+          m_logTargetGCPeriodMillis(ELOG_DEFAULT_LOG_TARGET_GC_PERIOD_MILLIS),
+          m_logTargetGCTaskCount(ELOG_DEFAULT_LOG_TARGET_GC_TASK_COUNT),
+#endif
           m_enableLogStatistics(ELOG_DEFAULT_ENABLE_LOG_STATISTICS),
           m_enableTimeSource(ELOG_DEFAULT_ENABLE_TIME_SOURCE),
           m_timeSourceResolution(ELOG_DEFAULT_TIME_SOURCE_RESOLUTION),

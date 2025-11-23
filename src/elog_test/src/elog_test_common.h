@@ -16,6 +16,7 @@
 #define MAX_THREAD_COUNT 16ul
 #define DEFAULT_CFG "file:///./test_data/elog_test.log"
 
+// logger attached to source elog.test
 extern elog::ELogLogger* sTestLogger;
 
 #ifdef ELOG_USING_DBG_UTIL
@@ -120,7 +121,14 @@ public:
 
     const std::vector<std::string>& getLogMessages() const { return m_logMessages; }
 
-    void clearLogMessages() { m_logMessages.clear(); }
+    const std::vector<std::string>& getInfoLogMessages() const { return m_infoLogMessages; }
+
+    void clearLogMessages() {
+        m_logMessages.clear();
+        m_infoLogMessages.clear();
+    }
+
+    inline uint64_t getFlushCount() const { return m_flushCount.load(std::memory_order_relaxed); }
 
     std::mutex& getLock() { return m_lock; };
 
@@ -131,19 +139,39 @@ protected:
     /** @brief Order the log target to stop (thread-safe). */
     bool stopLogTarget() override { return true; }
 
+    /**
+     * @brief Order the log target to write a log record (thread-safe).
+     * @param logRecord The log record to write to the log target.
+     * @param bytesWritten The number of bytes written to log.
+     * @return The operation's result.
+     */
+    bool writeLogRecord(const elog::ELogRecord& logRecord, uint64_t& bytesWritten) override {
+        m_isInfo = logRecord.m_logLevel == elog::ELEVEL_INFO;
+        return elog::ELogTarget::writeLogRecord(logRecord, bytesWritten);
+    }
+
     /** @brief If not overriding @ref writeLogRecord(), then this method must be implemented. */
-    virtual bool logFormattedMsg(const char* formattedLogMsg, size_t length) {
+    bool logFormattedMsg(const char* formattedLogMsg, size_t length) override {
         std::unique_lock<std::mutex> lock(m_lock);
         m_logMessages.push_back(formattedLogMsg);
+        if (m_isInfo) {
+            m_infoLogMessages.push_back(formattedLogMsg);
+        }
         return true;
     }
 
     /** @brief Orders a buffered log target to flush it log messages. */
-    bool flushLogTarget() override { return true; }
+    bool flushLogTarget() override {
+        m_flushCount.fetch_add(1, std::memory_order_relaxed);
+        return true;
+    }
 
 private:
     std::mutex m_lock;
+    bool m_isInfo;
     std::vector<std::string> m_logMessages;
+    std::vector<std::string> m_infoLogMessages;
+    std::atomic<uint64_t> m_flushCount;
 };
 
 #endif  // __ELOG_TEST_COMMON_H__

@@ -82,11 +82,12 @@ public:
      */
     virtual void terminate() {}
 
-    /** @brief Retrieves the flush policy's name. */
-    inline const char* getName() const { return m_name.c_str(); }
+    /** @brief Retrieves the flush policy's type name. */
+    inline const char* getTypeName() const { return m_typeName.c_str(); }
 
 protected:
-    ELogFlushPolicy(bool isActive = false) : m_isActive(isActive), m_logTarget(nullptr) {}
+    ELogFlushPolicy(const char* typeName, bool isActive = false)
+        : m_isActive(isActive), m_logTarget(nullptr), m_typeName(typeName) {}
     ELogFlushPolicy(const ELogFlushPolicy&) = delete;
     ELogFlushPolicy(ELogFlushPolicy&&) = delete;
     ELogFlushPolicy& operator=(const ELogFlushPolicy&) = delete;
@@ -117,13 +118,10 @@ protected:
                              uint64_t& value, ELogSizeUnits targetUnits,
                              const char* propName = nullptr);
 
-    // let subclasses to set the flush policy name
-    inline void setName(const char* name) { m_name = name; }
-
 private:
     bool m_isActive;
     ELogTarget* m_logTarget;
-    std::string m_name;
+    std::string m_typeName;
 };
 
 // forward declaration
@@ -179,22 +177,23 @@ private:
 /**
  * @def Utility macro for declaring flush policy factory method registration.
  * @param FlushPolicyType Type name of flush policy.
- * @param Name Configuration name of flush policy (for dynamic loading from configuration).
+ * @param TypeName Configuration type name of flush policy (for dynamic loading from configuration).
  * @param ImportExportSpec Window import/export specification. If exporting from a library then
  * specify a macro that will expand correctly within the library and from outside as well. If not
  * relevant then pass ELOG_NO_EXPORT.
  */
-#define ELOG_DECLARE_FLUSH_POLICY(FlushPolicyType, Name, ImportExportSpec)                     \
+#define ELOG_DECLARE_FLUSH_POLICY(FlushPolicyType, TypeName, ImportExportSpec)                 \
 public:                                                                                        \
     static FlushPolicyType* create();                                                          \
     static void destroy(FlushPolicyType* flushPolicy);                                         \
+    static constexpr const char* TYPE_NAME = #TypeName;                                        \
                                                                                                \
 private:                                                                                       \
     ~FlushPolicyType() final {}                                                                \
     class ImportExportSpec FlushPolicyType##Constructor final                                  \
         : public elog::ELogFlushPolicyConstructor {                                            \
     public:                                                                                    \
-        FlushPolicyType##Constructor() : elog::ELogFlushPolicyConstructor(#Name) {}            \
+        FlushPolicyType##Constructor() : elog::ELogFlushPolicyConstructor(#TypeName) {}        \
         elog::ELogFlushPolicy* constructFlushPolicy() final;                                   \
         void destroyFlushPolicy(elog::ELogFlushPolicy* flushPolicy) final;                     \
         ~FlushPolicyType##Constructor() final {}                                               \
@@ -215,11 +214,7 @@ private:                                                                        
     }                                                                                              \
     FlushPolicyType::FlushPolicyType##Constructor FlushPolicyType::sConstructor;                   \
     elog::ELogFlushPolicy* FlushPolicyType::FlushPolicyType##Constructor::constructFlushPolicy() { \
-        FlushPolicyType* flushPolicy = new (std::nothrow) FlushPolicyType();                       \
-        if (flushPolicy != nullptr) {                                                              \
-            flushPolicy->setName(getFlushPolicyName());                                            \
-        }                                                                                          \
-        return flushPolicy;                                                                        \
+        return new (std::nothrow) FlushPolicyType();                                               \
     }                                                                                              \
     void FlushPolicyType::FlushPolicyType##Constructor::destroyFlushPolicy(                        \
         elog::ELogFlushPolicy* flushPolicy) {                                                      \
@@ -231,7 +226,7 @@ private:                                                                        
 /** @class A compound flush policy, for enforcing several flush policies. */
 class ELOG_API ELogCompoundFlushPolicy : public ELogFlushPolicy {
 public:
-    ELogCompoundFlushPolicy() {}
+    ELogCompoundFlushPolicy(const char* name) : ELogFlushPolicy(name) {}
     ELogCompoundFlushPolicy(const ELogCompoundFlushPolicy&) = delete;
     ELogCompoundFlushPolicy(ELogCompoundFlushPolicy&&) = delete;
     ELogCompoundFlushPolicy& operator=(const ELogCompoundFlushPolicy&) = delete;
@@ -260,7 +255,7 @@ protected:
 /** @class A combined flush policy, for enforcing all specified flush policies. */
 class ELOG_API ELogAndFlushPolicy final : public ELogCompoundFlushPolicy {
 public:
-    ELogAndFlushPolicy() {}
+    ELogAndFlushPolicy() : ELogCompoundFlushPolicy(ELogAndFlushPolicy::TYPE_NAME) {}
     ELogAndFlushPolicy(const ELogAndFlushPolicy&) = delete;
     ELogAndFlushPolicy(ELogAndFlushPolicy&&) = delete;
     ELogAndFlushPolicy& operator=(const ELogAndFlushPolicy&) = delete;
@@ -277,7 +272,7 @@ private:
 /** @class A combined flush policy, for enforcing one of many flush policies. */
 class ELOG_API ELogOrFlushPolicy final : public ELogCompoundFlushPolicy {
 public:
-    ELogOrFlushPolicy() {}
+    ELogOrFlushPolicy() : ELogCompoundFlushPolicy(ELogOrFlushPolicy::TYPE_NAME) {}
     ELogOrFlushPolicy(const ELogOrFlushPolicy&) = delete;
     ELogOrFlushPolicy(ELogOrFlushPolicy&&) = delete;
     ELogOrFlushPolicy& operator=(const ELogOrFlushPolicy&) = delete;
@@ -294,7 +289,8 @@ private:
 /** @brief A log flush policy that negates the result of another log flush policy. */
 class ELOG_API ELogNotFlushPolicy final : public ELogFlushPolicy {
 public:
-    ELogNotFlushPolicy(ELogFlushPolicy* flushPolicy = nullptr) : m_flushPolicy(flushPolicy) {}
+    ELogNotFlushPolicy(ELogFlushPolicy* flushPolicy = nullptr)
+        : ELogFlushPolicy(ELogNotFlushPolicy::TYPE_NAME), m_flushPolicy(flushPolicy) {}
     ELogNotFlushPolicy(const ELogNotFlushPolicy&) = delete;
     ELogNotFlushPolicy(ELogNotFlushPolicy&&) = delete;
     ELogNotFlushPolicy& operator=(const ELogNotFlushPolicy&) = delete;
@@ -332,7 +328,7 @@ private:
 /** @class A immediate flush policy, for enforcing log target flush after every log message.  */
 class ELOG_API ELogImmediateFlushPolicy final : public ELogFlushPolicy {
 public:
-    ELogImmediateFlushPolicy() {}
+    ELogImmediateFlushPolicy() : ELogFlushPolicy(ELogImmediateFlushPolicy::TYPE_NAME) {}
     ELogImmediateFlushPolicy(const ELogImmediateFlushPolicy&) = delete;
     ELogImmediateFlushPolicy(ELogImmediateFlushPolicy&&) = delete;
     ELogImmediateFlushPolicy& operator=(const ELogImmediateFlushPolicy&) = delete;
@@ -349,7 +345,7 @@ private:
  */
 class ELOG_API ELogNeverFlushPolicy final : public ELogFlushPolicy {
 public:
-    ELogNeverFlushPolicy() {}
+    ELogNeverFlushPolicy() : ELogFlushPolicy(ELogNeverFlushPolicy::TYPE_NAME) {}
     ELogNeverFlushPolicy(const ELogNeverFlushPolicy&) = delete;
     ELogNeverFlushPolicy(ELogNeverFlushPolicy&&) = delete;
     ELogNeverFlushPolicy& operator=(const ELogNeverFlushPolicy&) = delete;
@@ -367,7 +363,9 @@ private:
 class ELOG_API ELogCountFlushPolicy final : public ELogFlushPolicy {
 public:
     ELogCountFlushPolicy(uint64_t logCountLimit = 0)
-        : m_logCountLimit(logCountLimit), m_currentLogCount(0) {}
+        : ELogFlushPolicy(ELogCountFlushPolicy::TYPE_NAME),
+          m_logCountLimit(logCountLimit),
+          m_currentLogCount(0) {}
     ELogCountFlushPolicy(const ELogCountFlushPolicy&) = delete;
     ELogCountFlushPolicy(ELogCountFlushPolicy&&) = delete;
     ELogCountFlushPolicy& operator=(const ELogCountFlushPolicy&) = delete;
@@ -397,7 +395,9 @@ private:
 class ELOG_API ELogSizeFlushPolicy final : public ELogFlushPolicy {
 public:
     ELogSizeFlushPolicy(uint64_t logSizeLimitBytes = 0)
-        : m_logSizeLimitBytes(logSizeLimitBytes), m_currentLogSizeBytes(0) {}
+        : ELogFlushPolicy(ELogSizeFlushPolicy::TYPE_NAME),
+          m_logSizeLimitBytes(logSizeLimitBytes),
+          m_currentLogSizeBytes(0) {}
     ELogSizeFlushPolicy(const ELogSizeFlushPolicy&) = delete;
     ELogSizeFlushPolicy(ELogSizeFlushPolicy&&) = delete;
     ELogSizeFlushPolicy& operator=(const ELogSizeFlushPolicy&) = delete;
@@ -481,7 +481,9 @@ class ELOG_API ELogChainedFlushPolicy final : public ELogFlushPolicy {
 public:
     ELogChainedFlushPolicy(ELogFlushPolicy* controlPolicy = nullptr,
                            ELogFlushPolicy* moderatePolicy = nullptr)
-        : m_controlPolicy(controlPolicy), m_moderatePolicy(moderatePolicy) {}
+        : ELogFlushPolicy(ELogChainedFlushPolicy::TYPE_NAME),
+          m_controlPolicy(controlPolicy),
+          m_moderatePolicy(moderatePolicy) {}
     ELogChainedFlushPolicy(const ELogChainedFlushPolicy&) = delete;
     ELogChainedFlushPolicy(ELogChainedFlushPolicy&&) = delete;
     ELogChainedFlushPolicy& operator=(const ELogChainedFlushPolicy&) = delete;
@@ -554,7 +556,8 @@ class ELOG_API ELogGroupFlushPolicy final : public ELogFlushPolicy {
 public:
     ELogGroupFlushPolicy(uint32_t groupSize = ELOG_DEFAULT_GROUP_FLUSH_SIZE,
                          uint32_t groupTimeoutMicros = ELOG_DEFAULT_GROUP_FLUSH_TIME_MICROS)
-        : m_groupSize(groupSize),
+        : ELogFlushPolicy(ELogGroupFlushPolicy::TYPE_NAME),
+          m_groupSize(groupSize),
           m_groupTimeoutMicros(groupTimeoutMicros),
           m_currentGroup(nullptr),
           m_epoch(0) {}

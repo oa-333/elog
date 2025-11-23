@@ -40,7 +40,8 @@
                 "ELOG_ENABLE_CONFIG_PUBLISH_REDIS",
                 "ELOG_ENABLE_CONFIG_PUBLISH_ETCD",
                 "ELOG_ENABLE_HTTP",
-                "ELOG_ENABLE_JSON"
+                "ELOG_ENABLE_JSON",
+                "ELOG_ENABLE_DYNAMIC_CONFIG"
             ],
             "windowsSdkVersion": "10.0.22621.0",
             "cStandard": "c23",

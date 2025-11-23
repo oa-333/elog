@@ -119,9 +119,9 @@ void destroyFlushPolicy(ELogFlushPolicy* flushPolicy) {
 
     // locate the constructor
     ELogFlushPolicyConstructorMap::iterator itr =
-        sFlushPolicyConstructorMap.find(flushPolicy->getName());
+        sFlushPolicyConstructorMap.find(flushPolicy->getTypeName());
     if (itr == sFlushPolicyConstructorMap.end()) {
-        ELOG_REPORT_ERROR("Cannot destroy flush policy %s: not found", flushPolicy->getName());
+        ELOG_REPORT_ERROR("Cannot destroy flush policy %s: not found", flushPolicy->getTypeName());
         return;
     }
 
@@ -510,13 +510,13 @@ bool ELogSizeFlushPolicy::shouldFlush(uint64_t msgSizeBytes) {
 }
 
 ELogTimedFlushPolicy::ELogTimedFlushPolicy()
-    : ELogFlushPolicy(true),
+    : ELogFlushPolicy(ELogTimedFlushPolicy::TYPE_NAME, true),
       m_logTimeLimitMillis(0),
       m_prevFlushTime(getTimestamp()),
       m_stopTimer(false) {}
 
 ELogTimedFlushPolicy::ELogTimedFlushPolicy(uint64_t logTimeLimitMillis, ELogTarget* logTarget)
-    : ELogFlushPolicy(true),
+    : ELogFlushPolicy(ELogTimedFlushPolicy::TYPE_NAME, true),
       m_logTimeLimitMillis(logTimeLimitMillis),
       m_prevFlushTime(getTimestamp()),
       m_stopTimer(false) {}
@@ -758,6 +758,7 @@ bool ELogGroupFlushPolicy::start() {
         ELOG_REPORT_ERROR("Failed to initialize private garbage collector for group flush policy");
         return false;
     }
+    // NOTE: there is no background garbage collection here, so we dont need to call start/stop
 #ifdef ELOG_ENABLE_GROUP_FLUSH_GC_TRACE
     sGCLogger = getGCTraceLogger();
     m_gc.setTraceLogger(sGCLogger);

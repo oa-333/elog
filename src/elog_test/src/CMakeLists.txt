@@ -4,6 +4,7 @@ target_sources(elog_test PRIVATE
     elog_test_config_service.cpp
     elog_test_core.cpp
     elog_test_db.cpp
+    elog_test_dynamic_config.cpp
     elog_test_extend.cpp
     elog_test_fmtlib.cpp
     elog_test_grpc.cpp

@@ -589,9 +589,12 @@ extern ELOG_API bool configure(ELogConfig* config, bool defineLogSources = true,
 
 /**
  * @brief Adds a log target to existing log targets.
- * @note This API call is not thread-safe, and is recommended to take place during application
- * initialization phase.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
  * @param target The target to add
+ *
  * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
  * failed.
  */
@@ -600,9 +603,15 @@ extern ELOG_API ELogTargetId addLogTarget(ELogTarget* target);
 /**
  * @brief Configures a log target from a configuration string. This could be in URL form or as a
  * configuration string (see configuration function above for more details).
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
  * @note This is the recommended API for adding log targets, as it allows for adding log
  * targets, with very complex configuration, in just one connection-string/URL like parameter.
+ *
  * @param logTargetCfg The configuration string.
+ *
  * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
  * failed.
  */
@@ -610,7 +619,16 @@ extern ELOG_API ELogTargetId configureLogTarget(const char* logTargetCfg);
 
 /**
  * @brief Adds a file log target, optionally buffered, segmented or rotating.
- * @param logFilePath The log file path (including lgo file name).
+ *
+ * @note In case of success, the log target object becomes the owner of the flush policy, filter
+ * and log formatter, such that during termination, the log target is responsible for deleting
+ * these objects. In case of failure to create the log target, the caller is STILL the owner of
+ * these objects, and is responsible for deleting them.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
+ * @param logFilePath The log file path (including log file name).
  * @param bufferSize Optional buffer size for file buffering. Specify zero to disable buffering.
  * @param useLock (Relevant only for buffered logging) Optionally specify use of lock. By
  * default none is used. If it is known that logging will take place in a thread-safe manner
@@ -626,19 +644,16 @@ extern ELOG_API ELogTargetId configureLogTarget(const char* logTargetCfg);
  * discarding old segments' log data).
  * @param enableStats Specifies whether log target statistics should be collected.
  * @param logLevel Optional log level restriction. All messages with lower log level will not be
- * passed to the lgo target.
+ * passed to the log target.
  * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
  * in which case flushing takes place autonomously (e.g. when an internal buffer is full).
  * @param logFilter Optional log filter. If none specified, all messages are passed to the log
  * target.
  * @param logFormatter Optional log formatter. If none specified the global log line formatter
  * is used.
+ *
  * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
  * failed.
- * @note In case of success, the log target object becomes the owner of the flush policy, filter
- * and log formatter, such that during termination, the log target is responsible for deleting
- * these objects. In case of failure to create the log target, the caller is STILL the owner of
- * these objects, and is responsible for deleting them.
  */
 extern ELOG_API ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize = 0,
                                               bool useLock = false, uint32_t segmentLimitMB = 0,
@@ -650,6 +665,15 @@ extern ELOG_API ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t 
 
 /**
  * @brief Adds a file log target, while attaching to an open file object.
+ *
+ * @note In case of success, the log target object becomes the owner of the flush policy, filter
+ * and log formatter, such that during termination, the log target is responsible for deleting
+ * these objects. In case of failure to create the log target, the caller is STILL the owner of
+ * these objects, and is responsible for deleting them.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
  * @param fileHandle The open file handle. Caller is responsible for closing the file handle
  * when done, unless @ref closeHandleWhenDone is passed as true.
  * @param closeHandleWhenDone Specifies whether to close the file handle when done.
@@ -662,19 +686,16 @@ extern ELOG_API ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t 
  * mandatory, and without a lock behavior is undefined.
  * @param enableStats Specifies whether log target statistics should be collected.
  * @param logLevel Optional log level restriction. All messages with lower log level will not be
- * passed to the lgo target.
+ * passed to the log target.
  * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
  * in which case flushing takes place autonomously (e.g. when an internal buffer is full).
  * @param logFilter Optional log filter. If none specified, all messages are passed to the log
  * target.
  * @param logFormatter Optional log formatter. If none specified the global log line formatter
  * is used.
+ *
  * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
  * failed.
- * @note In case of success, the log target object becomes the owner of the flush policy, filter
- * and log formatter, such that during termination, the log target is responsible for deleting
- * these objects. In case of failure to create the log target, the caller is STILL the owner of
- * these objects, and is responsible for deleting them.
  */
 extern ELOG_API ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone = false,
                                                  uint32_t bufferSize = 0, bool useLock = false,
@@ -684,23 +705,80 @@ extern ELOG_API ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHan
                                                  ELogFilter* logFilter = nullptr,
                                                  ELogFormatter* logFormatter = nullptr);
 
-/** @brief Adds standard error stream log target. */
+/**
+ * @brief Adds standard error stream log target.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
+ * @param logLevel Optional log level restriction. All messages with lower log level will not be
+ * passed to the log target.
+ * @param logFilter Optional log filter. If none specified, all messages are passed to the log
+ * target.
+ * @param logFormatter Optional log formatter. If none specified the global log line formatter
+ * is used.
+ * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
+ * in which case flushing takes place autonomously (e.g. when an internal buffer is full).
+ *
+ * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+ * failed.
+ */
 extern ELOG_API ELogTargetId addStdErrLogTarget(ELogLevel logLevel = ELEVEL_INFO,
                                                 ELogFilter* logFilter = nullptr,
-                                                ELogFormatter* logFormatter = nullptr);
+                                                ELogFormatter* logFormatter = nullptr,
+                                                ELogFlushPolicy* flushPolicy = nullptr);
 
-/** @brief Adds standard output stream log target. */
+/**
+ * @brief Adds standard output stream log target.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
+ * @param logLevel Optional log level restriction. All messages with lower log level will not be
+ * passed to the log target.
+ * @param logFilter Optional log filter. If none specified, all messages are passed to the log
+ * target.
+ * @param logFormatter Optional log formatter. If none specified the global log line formatter
+ * is used.
+ * @param flushPolicy Optional flush policy. If not specified, no explicit flushing takes place,
+ * in which case flushing takes place autonomously (e.g. when an internal buffer is full).
+ *
+ * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+ * failed.
+ */
 extern ELOG_API ELogTargetId addStdOutLogTarget(ELogLevel logLevel = ELEVEL_INFO,
                                                 ELogFilter* logFilter = nullptr,
-                                                ELogFormatter* logFormatter = nullptr);
+                                                ELogFormatter* logFormatter = nullptr,
+                                                ELogFlushPolicy* flushPolicy = nullptr);
 
-/** @brief Adds syslog target. */
+/**
+ * @brief Adds syslog target.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
+ * @param logLevel Optional log level restriction. All messages with lower log level will not be
+ * passed to the log target.
+ * @param logFilter Optional log filter. If none specified, all messages are passed to the log
+ * target.
+ * @param logFormatter Optional log formatter. If none specified the global log line formatter
+ * is used.
+ *
+ * @return ELogTargetId The resulting log target identifier or @ref ELOG_INVALID_TARGET_ID if
+ * failed.
+ */
 extern ELOG_API ELogTargetId addSysLogTarget(ELogLevel logLevel = ELEVEL_INFO,
                                              ELogFilter* logFilter = nullptr,
                                              ELogFormatter* logFormatter = nullptr);
 
 /**
  * @brief Adds Windows Event Log target.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
+ * @note Unless being explicitly overridden by the user, the Windows Event Log target can be
+ * obtained by the name "win32eventlog" (see @ref getLogTarget()).
  *
  * @param logLevel Restrict reports to the event log by log level.
  * @param eventSourceName The event source name to use in the event log reports. If this
@@ -715,10 +793,9 @@ extern ELOG_API ELogTargetId addSysLogTarget(ELogLevel logLevel = ELEVEL_INFO,
  * event log.
  * @param logFormatter Alternate messages formatting. Since event log records already contain a
  * time stamp, it may be desired to use a simpler log format, without a time stamp.
+ *
  * @return ELogTargetId The resulting log target id, or @ref ELOG_INVALID_TARGET_ID in case of
  * failure.
- * @note Unless being explicitly overridden by the user, the Windows Event Log target can be
- * obtained by the name "win32eventlog" (see @ref getLogTarget()).
  */
 extern ELOG_API ELogTargetId addWin32EventLogTarget(ELogLevel logLevel = ELEVEL_INFO,
                                                     const char* eventSourceName = "",
@@ -729,6 +806,13 @@ extern ELOG_API ELogTargetId addWin32EventLogTarget(ELogLevel logLevel = ELEVEL_
 /**
  * @brief Adds a dedicated tracer, that receives messages only from a specific logger and directs
  * all logs only to a specified log target.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application initialization phase.
+ *
+ * @note The resulting trace log target will not receive log messages from any log source except
+ * for the log source configured for this target. This is done via dedicated random passkeys.
+ *
  * @param traceFilePath The trace file path.
  * @param traceBufferSize The trace buffer size. If buffer is full then tracing blocks until
  * buffer has more free space (as trace messages are being written to the trace file).
@@ -736,44 +820,128 @@ extern ELOG_API ELogTargetId addWin32EventLogTarget(ELogLevel logLevel = ELEVEL_
  * @param sourceName The log source name used to send messages to the trace target. All loggers
  * originating from this source can send messages only to the trace target (bound by target
  * affinity).
+ *
  * @return ELogTargetId The resulting log target identifier, or @ref ELOG_INVALID_TARGET_ID in
  * case of failure.
- * @note The resulting trace log target will not receive log messages from any log source except
- * for the log source configured for this target. This is done via dedicated random passkeys.
  */
 extern ELOG_API ELogTargetId addTracer(const char* traceFilePath, uint32_t traceBufferSize,
                                        const char* targetName, const char* sourceName);
 
-/** @brief Retrieves a log target by id. Returns null if not found. */
+/**
+ * @brief Retrieves a log target by id.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe.
+ *
+ * @note When ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this call may still be unsafe
+ * in a multi-threaded environment, when a concurrent call to @ref removeLogTarget() or @ref
+ * clearAllLogTargets() may cause the log target pointer to become invalid. In such cases of race
+ * conditions, consider instead calling @ref acquireLogTarget() and @ref releaseLogTarget().
+ *
+ * @return The log target, or null if not found.
+ */
 extern ELOG_API ELogTarget* getLogTarget(ELogTargetId targetId);
 
-/** @brief Retrieves a log target by name. Returns null if not found. */
+/**
+ * @brief Retrieves a log target by name.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe.
+ *
+ * @note When ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this call may still be unsafe
+ * in a multi-threaded environment, when a concurrent call to @ref removeLogTarget() or @ref
+ * clearAllLogTargets() may cause the log target pointer to become invalid. In such cases of race
+ * conditions, consider instead calling @ref acquireLogTarget() and @ref releaseLogTarget().
+ *
+ * @return The log target, or null if not found.
+ */
 extern ELOG_API ELogTarget* getLogTarget(const char* logTargetName);
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
 /**
- * @brief Retrieves a log target id by name. Returns @ref ELOG_INVALID_TARGET_ID if not found.
+ * @brief Acquires a log target by id.
+ *
+ * @note It is guaranteed that the log target pointer is valid at least until @ref
+ * releaseLogTarget() is called with the corresponding epoch. It is allowed to make many calls to
+ * @ref acquireLogTarget(), even nested, as long as each call is matched with @ref
+ * releaseLogTarget() with the appropriate epoch. Each such pair of calls is guaranteed to provide
+ * safe pointer to the log target.
+ *
+ * @param targetId The log target identifier.
+ * @param[out] epoch The resulting epoch, should be used during call to @ref releaseLogTarget().
+ *
+ * @return The log target, or null if not found.
+ */
+extern ELOG_API ELogTarget* acquireLogTarget(ELogTargetId targetId, uint64_t& epoch);
+
+/**
+ * @brief Acquires a log target by name.
+ *
+ * @note It is guaranteed that the log target pointer is valid at least until @ref
+ * releaseLogTarget() is called with the corresponding epoch. It is allowed to make many calls to
+ * @ref acquireLogTarget(), even nested, as long as each call is matched with @ref
+ * releaseLogTarget() with the appropriate epoch. Each such pair of calls is guaranteed to provide
+ * safe pointer to the log target.
+ *
+ * @param logTargetName The log target name.
+ * @param[out] epoch The resulting epoch, should be used during call to @ref releaseLogTarget().
+ *
+ * @return The log target, or null if not found.
+ */
+extern ELOG_API ELogTarget* acquireLogTarget(const char* logTargetName, uint64_t& epoch);
+
+/**
+ * @brief Release a log target previously acquired by a call to @ref acquireLogTarget().
+ *
+ * @param epoch The release epoch, as obtained when calling @ref acquireLogTarget().
+ */
+extern ELOG_API void releaseLogTarget(uint64_t epoch);
+#endif
+
+/**
+ * @brief Retrieves a log target id by name.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe.
+ *
+ * @return The log target id, or @ref ELOG_INVALID_TARGET_ID if not found.
  */
 extern ELOG_API ELogTargetId getLogTargetId(const char* logTargetName);
 
 /**
  * @brief Removes an existing log target.
- * @note This API call is not thread-safe, and is recommended to take place during application
- * termination phase.
+ *
+ * TODO: remove this note comment when inverse id is added
+ * @note It is preferable to use the other @ref removeLogTarget() method, as it runs faster.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application termination phase.
+ *
  * @param target The log target to remove.
- * @note It is preferable to use to other @ref removeLogTarget() method, as it runs faster.
+ *
+ * @return True if the log target was found and removed, otherwise false.
  */
-extern ELOG_API void removeLogTarget(ELogTarget* target);
+extern ELOG_API bool removeLogTarget(ELogTarget* target);
 
 /**
  * @brief Removes an existing log target.
- * @note This API call is not thread-safe, and is recommended to take place during application
- * termination phase.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application termination phase.
+ *
  * @param targetId The identifier of the log target to removed as obtained when adding or
  * setting the log target.
+ *
+ * @return True if the log target was found and removed, otherwise false.
  */
-extern ELOG_API void removeLogTarget(ELogTargetId targetId);
+extern ELOG_API bool removeLogTarget(ELogTargetId targetId);
 
-/** @brief Removes all log targets. */
+/**
+ * @brief Removes all log targets.
+ *
+ * @note Unless ELog is compiled with @ref ELOG_ENABLE_DYNAMIC_CONFIG, this API call is not
+ * thread-safe, and is recommended to take place during application termination phase.
+ */
 extern ELOG_API void clearAllLogTargets();
 
 /**************************************************************************************
@@ -945,6 +1113,9 @@ extern ELOG_API bool configureLogFormat(const char* logFormat);
 /** @brief Installs a custom log formatter. */
 extern ELOG_API void setLogFormatter(ELogFormatter* logFormatter);
 
+/** @brief Reset log format back to its default settings. */
+extern ELOG_API void resetLogFormat();
+
 /**************************************************************************************
  *
  *                      Format Message Caching Interface
@@ -1015,6 +1186,9 @@ extern ELOG_API bool configureLogFilter(const char* logFilterCfg);
 
 /** @brief Installs a custom log filter. */
 extern ELOG_API void setLogFilter(ELogFilter* logFilter);
+
+/** @brief Clears log filter settings. */
+extern ELOG_API void clearLogFilter();
 
 /** @brief Configures top-level rate limiter form configuration string. */
 extern ELOG_API bool configureRateLimit(const char* rateLimitCfg, bool replaceGlobalFilter = true);
@@ -1137,6 +1311,12 @@ extern ELOG_API void disableLogStatistics();
 extern ELOG_API void getLogStatistics(ELogStatistics& stats);
 
 extern ELOG_API void resetLogStatistics();
+
+/** @brief Retrieves the per-level message count statistics (current thread scope). */
+extern ELOG_API void getThreadLogStatistics(ELogStatistics& stats);
+
+/** @brief Retrieves the per-level message count statistics (current thread scope). */
+extern ELOG_API void resetThreadLogStatistics();
 
 }  // namespace elog
 

@@ -12,8 +12,6 @@ public:
     ELogPropsFormatter(ELogPropsFormatter&&) = delete;
     ELogPropsFormatter& operator=(const ELogPropsFormatter&) = delete;
 
-    static constexpr const char* TYPE_NAME = "props";
-
     bool parseProps(const std::string& props);
 
     inline void fillInProps(const ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {

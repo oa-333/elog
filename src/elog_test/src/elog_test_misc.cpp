@@ -37,7 +37,9 @@ TEST(ELogMisc, LogMacros) {
     logTarget->setLogFormat("${msg}");
     elog::addLogTarget(logTarget);
 
-    const auto& logMessages = logTarget->getLogMessages();
+    // since error messages may slip in from other threads (e.g. publish thread), we use info log
+    // messages
+    const auto& logMessages = logTarget->getInfoLogMessages();
 
     // test once macro
     logTarget->clearLogMessages();

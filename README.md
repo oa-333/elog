@@ -3006,7 +3006,7 @@ the current system state to some given value:
     class SystemStateFilter : public ELogCmpFilter {
     public:
         SystemStateFilter(SystemState sysState, ELogCmpOp cmpOp = ELogCmpOp::CMP_OP_EQ)
-            : ELogCmpFilter(cmpOp), m_sysState(sysState) {}
+            : ELogCmpFilter(SystemStateFilter::TYPE_NAME, cmpOp), m_sysState(sysState) {}
         ~SystemStateFilter() final {}
 
         /** @brief Loads filter from configuration. */
@@ -3031,6 +3031,7 @@ the current system state to some given value:
 
 A few points to note:
 
+- The filter must pass to parent class its type name, implicitly defined by the helper macro ELOG_DECLARE_FILTER
 - The filter must pass to parent class what kind of comparison operator it uses (this will be overridden later during load phase)
 - In order to be loadable from configuration, the new filter needs to declare its reference name (sys_state) using the helper macro ELOG_DECLARE_FILTER().
 - If the filter needs to be exported from a Windows DLL, then replace ELOG_NO_EXPORT with the import/export macro for the DLL
@@ -3114,7 +3115,8 @@ So we begin with this declaration:
     public:
         SystemStateFlushPolicy(uint64_t normalLimitBytes = 0, uint64_t urgentLimitBytes = 0, 
             uint64_t overloadedLimitBytes = 0)
-            : m_normalLimitBytes(normalLimitBytes), 
+            : ELogFlushPolicy(SystemStateFlushPolicy::TYPE_NAME),
+              m_normalLimitBytes(normalLimitBytes), 
               m_urgentLimitBytes(urgentLimitBytes),
               m_overloadedLimitBytes(overloadedLimitBytes) {}
         ~SystemStateFlushPolicy() override {}
@@ -3238,12 +3240,10 @@ So for our example let's take a formatter that surrounds each token field with s
 
     class TestFormatter : public elog::ELogFormatter {
     public:
-        TestFormatter() : ELogFormatter(TYPE_NAME), m_firstField(true) {}
+        TestFormatter() : ELogFormatter(TestFormatter::TYPE_NAME), m_firstField(true) {}
         TestFormatter(const TestFormatter&) = delete;
         TestFormatter(TestFormatter&&) = delete;
         TestFormatter& operator=(const TestFormatter&) = delete;
-
-        static constexpr const char* TYPE_NAME = "test";
 
     protected:
         bool handleText(const std::string& text) override {

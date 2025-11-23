@@ -22,16 +22,21 @@ static int testPipe();
 #include "transport/pipe_server.h"
 #endif
 
-static std::mutex sNetCoutLock;
-
 std::atomic<uint64_t> sNetMsgCount;
 static std::atomic<bool> sPrintNetMsg(false);
+static std::mutex sNetLock;
+static std::vector<std::string> sNetMsgList;
 static void handleNetLogRecord(const elog_grpc::ELogRecordMsg* msg) {
     // TODO: conduct a real test - collect messages, verify they match the log messages
-    sNetMsgCount.fetch_add(1, std::memory_order_relaxed);
-    if (!sPrintNetMsg.load()) {
+
+    // we need to filter out some noise, so make sure all accumulated messages come from the correct
+    // logger and not internal loggers
+    if (msg->has_logsourcename() && msg->logsourcename().compare("elog.test.bench") != 0) {
+        // discard message not from elog.test.bench logger
         return;
     }
+
+    sNetMsgCount.fetch_add(1, std::memory_order_relaxed);
     std::stringstream s;
     uint32_t fieldCount = 0;
     s << "Received log record: [";
@@ -99,8 +104,12 @@ static void handleNetLogRecord(const elog_grpc::ELogRecordMsg* msg) {
         if (fieldCount++ > 0) s << ", ";
         s << "msg = " << msg->logmsg();
     }
-    std::unique_lock<std::mutex> lock(sNetCoutLock);
-    std::cout << s.str() << std::endl;
+    std::string strMsg = s.str();
+    std::unique_lock<std::mutex> lock(sNetLock);
+    sNetMsgList.push_back(strMsg);
+    if (sPrintNetMsg.load()) {
+        std::cout << strMsg << std::endl;
+    }
 }
 
 class TestServer : public elog::ELogMsgServer {
@@ -183,11 +192,11 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
                   const char* address, bool compress = false, int opts = 0,
                   uint32_t stMsgCount = 1000, uint32_t mtMsgCount = 1000) {
     if (!server.initTestServer()) {
-        ELOG_DEBUG_EX(sTestLogger, "Failed to initialize test server");
+        ELOG_ERROR_EX(sTestLogger, "Failed to initialize test server");
         return 1;
     }
     if (server.start() != commutil::ErrorCode::E_OK) {
-        ELOG_DEBUG_EX(sTestLogger, "Failed to start test server");
+        ELOG_ERROR_EX(sTestLogger, "Failed to start test server");
         server.terminate();
         return 2;
     }
@@ -195,7 +204,7 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
     //  prepare log target URL and test name
     std::string cfg = std::string(schema) + "://" + serverType + "?mode=" + mode +
                       "&address=" + address + "&" +
-                      "log_format=msg:${rid}, ${time}, ${level}, ${msg}&"
+                      "log_format=msg:${rid}, ${time}, ${level}, ${src}, ${msg}&"
                       "binary_format=protobuf&compress=" +
                       (compress ? "yes" : "no") +
                       "&max_concurrent_requests=1024&"
@@ -208,6 +217,7 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
     double ioPerf = 0.0f;
 
     sNetMsgCount.store(0, std::memory_order_relaxed);
+    sNetMsgList.clear();
 
     if (opts & MSG_OPT_TRACE) {
         elog::setReportLevel(elog::ELEVEL_TRACE);
@@ -216,23 +226,28 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
     runSingleThreadedTest(testName.c_str(), cfg.c_str(), msgPerf, ioPerf, TT_NORMAL, stMsgCount);
     uint32_t receivedMsgCount = (uint32_t)sNetMsgCount.load(std::memory_order_relaxed);
     // total: 2 pre-init + stMsgCount single-thread messages
-    uint32_t totalMsg = stMsgCount;
-    totalMsg += elog::getAccumulatedMessageCount();
-    if (receivedMsgCount != totalMsg) {
+    uint32_t expectedMsgCount = stMsgCount;
+    // expectedMsgCount += elog::getAccumulatedMessageCount();
+    if (receivedMsgCount != expectedMsgCount) {
         ELOG_ERROR_EX(
             sTestLogger,
             "%s client single-thread test failed, missing messages on server side, expected "
             "%u, got %u",
-            testName.c_str(), totalMsg, receivedMsgCount);
+            testName.c_str(), expectedMsgCount, receivedMsgCount);
         server.stop();
         server.terminate();
-        ELOG_DEBUG_EX(sTestLogger, "%s client test FAILED", testName.c_str());
-        return 1;
+        ELOG_ERROR_EX(sTestLogger, "%s client test FAILED", testName.c_str());
+        fprintf(stderr, "Message dump: \n\n");
+        for (const std::string& msgStr : sNetMsgList) {
+            fprintf(stderr, "%s\n", msgStr.c_str());
+        }
+        return 3;
     }
 
     // multi-threaded test
     sMsgCnt = mtMsgCount;
     sNetMsgCount.store(0, std::memory_order_relaxed);
+    sNetMsgList.clear();
     runMultiThreadTest(testName.c_str(), mtResultFileName.c_str(), cfg.c_str(), TT_NORMAL,
                        mtMsgCount, 1, 4);
     sMsgCnt = 0;
@@ -247,17 +262,21 @@ int testMsgClient(TestServer& server, const char* schema, const char* serverType
     // we run total 10 threads  in 4 phases(1 + 2 + 3 + 4)
     const uint32_t threadCount = 10;
     const uint32_t phaseCount = 4;
-    const uint32_t exMsgPerPhase = 2;
-    totalMsg = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
-    totalMsg += elog::getAccumulatedMessageCount();
-    if (receivedMsgCount != totalMsg) {
+    const uint32_t exMsgPerPhase = 0;  // 2;
+    expectedMsgCount = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
+    // expectedMsgCount += elog::getAccumulatedMessageCount();
+    if (receivedMsgCount != expectedMsgCount) {
         ELOG_ERROR_EX(
             sTestLogger,
             "%s client multi-thread test failed, missing messages on server side, expected %u, "
             "got %u",
-            testName.c_str(), totalMsg, receivedMsgCount);
-        ELOG_DEBUG_EX(sTestLogger, "%s client test FAILED", testName.c_str());
-        return 2;
+            testName.c_str(), expectedMsgCount, receivedMsgCount);
+        ELOG_ERROR_EX(sTestLogger, "%s client test FAILED", testName.c_str());
+        fprintf(stderr, "Message dump: \n\n");
+        for (const std::string& msgStr : sNetMsgList) {
+            fprintf(stderr, "%s\n", msgStr.c_str());
+        }
+        return 4;
     }
 
     if (compress) {
@@ -279,7 +298,7 @@ static int testUdpAsync(bool compress);
 TEST(ELogNet, TcpSync) {
     int res = testTcpSync(false);
     EXPECT_EQ(res, 0);
-    elog::discardAccumulatedLogMessages();
+    // elog::discardAccumulatedLogMessages();
 }
 TEST(ELogNet, TcpSyncCompress) {
     int res = testTcpSync(true);
@@ -342,7 +361,7 @@ static int testPipeAsync(bool compress);
 TEST(ELogIpc, PipeSync) {
     int res = testPipeSync(false);
     EXPECT_EQ(res, 0);
-    elog::discardAccumulatedLogMessages();
+    // elog::discardAccumulatedLogMessages();
 }
 TEST(ELogIpc, PipeSyncCompress) {
     int res = testPipeSync(true);
@@ -351,7 +370,7 @@ TEST(ELogIpc, PipeSyncCompress) {
 TEST(ELogIpc, PipeAsync) {
     int res = testPipeAsync(false);
     EXPECT_EQ(res, 0);
-    elog::discardAccumulatedLogMessages();
+    // elog::discardAccumulatedLogMessages();
 }
 TEST(ELogIpc, PipeAsyncCompress) {
     int res = testPipeAsync(true);

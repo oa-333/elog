@@ -273,10 +273,7 @@ private:
 
     inline void restrictToStdErr(ELogLogger* logger) {
         // bind the logger to this specific target
-        ELogTargetAffinityMask mask = 0;
-        ELOG_ADD_TARGET_AFFINITY_MASK(mask, m_logTarget->getId());
-        logger->getLogSource()->setLogTargetAffinity(mask);
-        logger->getLogSource()->addPassKey(m_logTarget->getPassKey());
+        logger->getLogSource()->pairWithLogTarget(m_logTarget);
     }
 };
 

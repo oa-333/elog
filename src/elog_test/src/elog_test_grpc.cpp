@@ -36,13 +36,22 @@ static int testGRPCAsyncCallbackStream();
 #include <grpcpp/server_builder.h>
 #include <grpcpp/server_context.h>
 
-static std::mutex sGrpcCoutLock;
+static std::mutex sGrpcLock;
+static std::atomic<uint64_t> sGrpcMsgCount;
+static std::atomic<bool> sPrintGrpcMsg(false);
+static std::vector<std::string> sGrpcMsgList;
 
-std::atomic<uint64_t> sGrpcMsgCount;
 static void handleGrpcLogRecord(const elog_grpc::ELogRecordMsg* msg) {
     // TODO: conduct a real test - collect messages, verify they match the log messages
+
+    // we need to filter out some noise, so make sure all accumulated messages come from the correct
+    // logger and not internal loggers
+    if (msg->has_logsourcename() && msg->logsourcename().compare("elog.test.bench") != 0) {
+        // discard message not from elog.test.bench logger
+        return;
+    }
+
     sGrpcMsgCount.fetch_add(1, std::memory_order_relaxed);
-    return;
     std::stringstream s;
     uint32_t fieldCount = 0;
     s << "Received log record: [";
@@ -106,8 +115,12 @@ static void handleGrpcLogRecord(const elog_grpc::ELogRecordMsg* msg) {
         if (fieldCount++ > 0) s << ", ";
         s << "msg = " << msg->logmsg();
     }
-    std::unique_lock<std::mutex> lock(sGrpcCoutLock);
-    std::cout << s.str() << std::endl;
+    std::string strMsg = s.str();
+    std::unique_lock<std::mutex> lock(sGrpcLock);
+    sGrpcMsgList.push_back(strMsg);
+    if (sPrintGrpcMsg.load()) {
+        std::cout << strMsg << std::endl;
+    }
 }
 
 class TestGRPCServer final : public elog_grpc::ELogService::Service {
@@ -295,7 +308,7 @@ public:
 TEST(ELogGRPC, Simple) {
     int res = testGRPCSimple();
     EXPECT_EQ(res, 0);
-    elog::discardAccumulatedLogMessages();
+    // elog::discardAccumulatedLogMessages();
 }
 TEST(ELogGRPC, Stream) {
     int res = testGRPCStream();
@@ -354,7 +367,7 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
 
     // prepare log target URL and test name
     std::string cfg =
-        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${level}, "
+        "rpc://grpc?rpc_server=localhost:5051&rpc_call=dummy(${rid}, ${time}, ${src}, ${level}, "
         "${msg})&grpc_max_inflight_calls=20000&flush_policy=count&flush_count=1024&"
         "grpc_client_mode=";
     cfg += clientType;
@@ -366,6 +379,7 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
     double ioPerf = 0.0f;
 
     sGrpcMsgCount.store(0, std::memory_order_relaxed);
+    sGrpcMsgList.clear();
 
     if (opts & GRPC_OPT_TRACE) {
         elog::setReportLevel(elog::ELEVEL_TRACE);
@@ -374,22 +388,24 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
     runSingleThreadedTest(testName.c_str(), cfg.c_str(), msgPerf, ioPerf, TT_NORMAL, stMsgCount);
     uint32_t receivedMsgCount = (uint32_t)sGrpcMsgCount.load(std::memory_order_relaxed);
     // total: 2 pre-init + stMsgCount single-thread messages
-    uint32_t totalMsg = stMsgCount;
-    totalMsg += elog::getAccumulatedMessageCount();
-    if (receivedMsgCount != totalMsg) {
-        ELOG_ERROR(
+    uint32_t expectedMsgCount = stMsgCount;
+    // expectedMsgCount += elog::getAccumulatedMessageCount();
+    if (receivedMsgCount != expectedMsgCount) {
+        ELOG_ERROR_EX(
+            sTestLogger,
             "%s gRPC client test failed, missing messages on server side, expected %u, got "
             "%u",
-            clientType, totalMsg, receivedMsgCount);
+            clientType, expectedMsgCount, receivedMsgCount);
         server->Shutdown();
         t.join();
-        ELOG_DEBUG_EX(sTestLogger, "%s gRPC client test FAILED\n", clientType);
+        ELOG_ERROR_EX(sTestLogger, "%s gRPC client test FAILED\n", clientType);
         return 1;
     }
 
     // multi-threaded test
     sMsgCnt = mtMsgCount;
     sGrpcMsgCount.store(0, std::memory_order_relaxed);
+    sGrpcMsgList.clear();
     runMultiThreadTest(testName.c_str(), mtResultFileName.c_str(), cfg.c_str(), TT_NORMAL,
                        mtMsgCount, 1, 4);
     sMsgCnt = 0;
@@ -403,16 +419,16 @@ int testGRPCClient(const char* clientType, int opts = 0, uint32_t stMsgCount = 1
     // we run total 10 threads  in 4 phases(1 + 2 + 3 + 4)
     const uint32_t threadCount = 10;
     const uint32_t phaseCount = 4;
-    const uint32_t exMsgPerPhase = 2;
-    totalMsg = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
-    totalMsg += elog::getAccumulatedMessageCount();
-    if (receivedMsgCount != totalMsg) {
+    const uint32_t exMsgPerPhase = 0;  // 2;
+    expectedMsgCount = threadCount * mtMsgCount + exMsgPerPhase * phaseCount;
+    // expectedMsgCount += elog::getAccumulatedMessageCount();
+    if (receivedMsgCount != expectedMsgCount) {
         ELOG_ERROR_EX(
             sTestLogger,
             "%s gRPC client test failed, missing messages on server side, expected %u, got "
             "%u\n",
-            clientType, totalMsg, receivedMsgCount);
-        ELOG_DEBUG_EX(sTestLogger, "%s gRPC client test FAILED\n", clientType);
+            clientType, expectedMsgCount, receivedMsgCount);
+        ELOG_ERROR_EX(sTestLogger, "%s gRPC client test FAILED\n", clientType);
         return 2;
     }
 

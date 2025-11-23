@@ -274,6 +274,20 @@ struct ELogFrequencySpec {
 #define ELOG_DEFAULT_ETCD_EXPIRY_RENEW_SECONDS 2
 #endif
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+/**
+ * @brief Default value for maximum number of log targets, when dynamic log target configuration is
+ * enabled.
+ */
+#define ELOG_DEFAULT_MAX_TARGET_COUNT 64
+
+/** @def Default period in milliseconds of each log target GC task. */
+#define ELOG_DEFAULT_LOG_TARGET_GC_PERIOD_MILLIS 500
+
+/** @def Default number of log target GC tasks. */
+#define ELOG_DEFAULT_LOG_TARGET_GC_TASK_COUNT 1
+#endif
+
 }  // namespace elog
 
 #endif  // __ELOG_COMMON_DEF_H__

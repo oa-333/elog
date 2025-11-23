@@ -111,7 +111,14 @@ extern bool initTestEnv() {
         fprintf(stderr, "Failed to initialize elog system\n");
         return false;
     }
+    // sTestLogger = elog::getSharedLogger("elog.test");
+
+    // prepare a logger that sends only to stderr so we don't interfere with test counters
     sTestLogger = elog::getSharedLogger("elog.test");
+    elog::ELogTargetId id = elog::addStdErrLogTarget();
+    elog::ELogTarget* stdErrTarget = elog::getLogTarget(id);
+    sTestLogger->getLogSource()->pairWithLogTarget(stdErrTarget);
+
     elog::setCurrentThreadName("elog_test_main");
     return true;
 }
@@ -126,12 +133,12 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
     std::string namedCfg = cfg;
     std::string::size_type nonSpacePos = namedCfg.find_first_not_of(" \t\r\n");
     if (nonSpacePos == std::string::npos) {
-        ELOG_DEBUG_EX(sTestLogger, "Invalid log target configuration, all white space\n");
+        ELOG_ERROR_EX(sTestLogger, "Invalid log target configuration, all white space\n");
         return nullptr;
     }
     bool res = false;
     elog::ELogStatistics startStats;
-    elog::getLogStatistics(startStats);
+    elog::getThreadLogStatistics(startStats);
     if (namedCfg[nonSpacePos] != '{') {
         if (namedCfg.find("name=elog_test") == std::string::npos) {
             if (namedCfg.find('?') != std::string::npos) {
@@ -157,12 +164,12 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
         res = elog::configureByStr(cfg, true, true);
     }
     if (!res) {
-        ELOG_DEBUG_EX(sTestLogger, "Failed to initialize elog system with log target config: %s\n",
+        ELOG_ERROR_EX(sTestLogger, "Failed to initialize elog system with log target config: %s\n",
                       cfg);
         return nullptr;
     }
     elog::ELogStatistics endStats;
-    elog::getLogStatistics(endStats);
+    elog::getThreadLogStatistics(endStats);
     if (!verifyNoErrors(startStats, endStats)) {
         ELOG_ERROR_EX(
             sTestLogger,
@@ -174,7 +181,7 @@ elog::ELogTarget* initElog(const char* cfg /* = DEFAULT_CFG */) {
 
     elog::ELogTarget* logTarget = elog::getLogTarget("elog_test");
     if (logTarget == nullptr) {
-        ELOG_DEBUG_EX(sTestLogger, "Failed to find logger by name elog_test, aborting\n");
+        ELOG_ERROR_EX(sTestLogger, "Failed to find logger by name elog_test, aborting\n");
         return nullptr;
     }
     elog::ELogSource* logSource = elog::defineLogSource("elog_test_logger");
@@ -237,7 +244,7 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
                            uint32_t msgCount /* = ST_MSG_COUNT */, bool enableTrace /* = false */) {
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
-        ELOG_DEBUG_EX(sTestLogger, "Failed to init %s test, aborting\n", title);
+        ELOG_ERROR_EX(sTestLogger, "Failed to init %s test, aborting\n", title);
         return;
     }
 
@@ -245,11 +252,16 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
         elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
-    ELOG_DEBUG_EX(sTestLogger, "\nRunning %s single-thread test\n", title);
-    elog::ELogSource* logSource = elog::defineLogSource("elog.bench", true);
+    ELOG_DEBUG_EX(sTestLogger, "Running %s single-thread test", title);
+    elog::ELogSource* logSource = elog::defineLogSource("elog.test.bench", true);
     elog::ELogLogger* logger = logSource->createPrivateLogger();
 
+    // in order to avoid interference we pair the logger with the test target
+    logger->getLogSource()->pairWithLogTarget(logTarget);
+
+#ifdef ELOG_ENABLE_FMT_LIB
     elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg("Single thread Test log {}");
+#endif
 
     uint64_t bytesStart = logTarget->getBytesWritten();
     pinThread(0);
@@ -276,7 +288,7 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
         }
     }
     auto end0 = std::chrono::high_resolution_clock::now();
-    ELOG_DEBUG_EX(sTestLogger, "Finished logging, waiting for logger to catch up\n");
+    ELOG_DEBUG_EX(sTestLogger, "Finished logging, waiting for logger to catch up");
     logTarget->flush();
     while (!isCaughtUp(logTarget, msgCount)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
@@ -292,13 +304,11 @@ void runSingleThreadedTest(const char* title, const char* cfg, double& msgThroug
     msgThroughput = msgCount / (double)testTime0.count() * 1000000.0f;
     ioThroughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
 #ifdef ELOG_MSVC
-    ELOG_DEBUG_EX(sTestLogger, "Throughput: %s MSg/Sec\n",
-                  win32FormatNumber(msgThroughput).c_str());
-    ELOG_DEBUG_EX(sTestLogger, "Throughput: %s KB/Sec\n\n",
-                  win32FormatNumber(ioThroughput).c_str());
+    ELOG_DEBUG_EX(sTestLogger, "Throughput: %s MSg/Sec", win32FormatNumber(msgThroughput).c_str());
+    ELOG_DEBUG_EX(sTestLogger, "Throughput: %s KB/Sec", win32FormatNumber(ioThroughput).c_str());
 #else
-    ELOG_DEBUG_EX(sTestLogger, "Throughput: %'.3f MSg/Sec\n", msgThroughput);
-    ELOG_DEBUG_EX(sTestLogger, "Throughput: %'.3f KB/Sec\n\n", ioThroughput);
+    ELOG_DEBUG_EX(sTestLogger, "Throughput: %'.3f MSg/Sec", msgThroughput);
+    ELOG_DEBUG_EX(sTestLogger, "Throughput: %'.3f KB/Sec", ioThroughput);
 #endif
 
     termELog();
@@ -312,7 +322,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
                         bool privateLogger /* = true */, bool enableTrace /* = false */) {
     elog::ELogTarget* logTarget = initElog(cfg);
     if (logTarget == nullptr) {
-        ELOG_DEBUG_EX(sTestLogger, "Failed to init %s test, aborting\n", title);
+        ELOG_ERROR_EX(sTestLogger, "Failed to init %s test, aborting\n", title);
         return;
     }
 
@@ -320,12 +330,18 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         elog::setReportLevel(elog::ELEVEL_TRACE);
     }
 
-    ELOG_DEBUG_EX(sTestLogger, "\nRunning %s thread test [%u-%u]\n", title, minThreads, maxThreads);
+    ELOG_DEBUG_EX(sTestLogger, "Running %s thread test [%u-%u]", title, minThreads, maxThreads);
     std::vector<double> msgThroughput;
     std::vector<double> byteThroughput;
     std::vector<double> accumThroughput;
     elog::ELogLogger* sharedLogger =
-        privateLogger ? nullptr : elog::getSharedLogger("elog_test_logger");
+        privateLogger ? nullptr : elog::getSharedLogger("elog.test.bench");
+
+    // in order to avoid interference we pair the logger with the test target
+    if (sharedLogger != nullptr) {
+        sharedLogger->getLogSource()->pairWithLogTarget(logTarget);
+    }
+
     for (uint32_t i = MIN_THREAD_COUNT; i < minThreads; ++i) {
         msgThroughput.push_back(0);
         byteThroughput.push_back(0);
@@ -337,8 +353,8 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         accumThroughput.push_back(0);
     }
     for (uint32_t threadCount = minThreads; threadCount <= maxThreads; ++threadCount) {
-        // ELOG_DEBUG_EX(sTestLogger, "Running %u threads test\n", threadCount);
-        ELOG_INFO("Running %u Thread Test", threadCount);
+        ELOG_DEBUG_EX(sTestLogger, "Running %u threads test", threadCount);
+        // ELOG_INFO("Running %u Thread Test", threadCount);
         std::vector<std::thread> threads;
         std::vector<double> resVec(threadCount, 0.0);
         auto start = std::chrono::high_resolution_clock::now();
@@ -347,12 +363,19 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         // (log source is not thread-safe)
         for (uint32_t i = 0; i < threadCount; ++i) {
             loggers[i] =
-                sharedLogger != nullptr ? sharedLogger : elog::getPrivateLogger("elog_test_logger");
+                sharedLogger != nullptr ? sharedLogger : elog::getPrivateLogger("elog.test.bench");
+            if (sharedLogger == nullptr) {
+                loggers[i]->getLogSource()->pairWithLogTarget(logTarget);
+            }
         }
         uint64_t bytesStart = logTarget->getBytesWritten();
         uint64_t initMsgCount = logTarget->getProcessedMsgCount();
         // ELOG_DEBUG_EX(sTestLogger, "Init msg count = %" PRIu64 "\n", initMsgCount);
+
+#ifdef ELOG_ENABLE_FMT_LIB
         elog::ELogCacheEntryId msgId = elog::getOrCacheFormatMsg("Thread {} Test log {}");
+#endif
+
         for (uint32_t i = 0; i < threadCount; ++i) {
             elog::ELogLogger* logger = loggers[i];
             threads.emplace_back(std::thread([i, &resVec, logger, msgCount, testType, msgId]() {
@@ -395,7 +418,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
             threads[i].join();
         }
         auto end0 = std::chrono::high_resolution_clock::now();
-        ELOG_DEBUG_EX(sTestLogger, "Finished logging, waiting for logger to catch up\n");
+        ELOG_DEBUG_EX(sTestLogger, "Finished logging, waiting for logger to catch up");
         uint64_t targetMsgCount = initMsgCount + threadCount * msgCount;
         // ELOG_DEBUG_EX(sTestLogger, "Waiting for target msg count %" PRIu64 "\n",
         // targetMsgCount);
@@ -405,17 +428,17 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         }
 
         auto end = std::chrono::high_resolution_clock::now();
-        ELOG_INFO("%u Thread Test ended", threadCount);
+        ELOG_INFO_EX(sTestLogger, "%u Thread Test ended", threadCount);
         uint64_t bytesEnd = logTarget->getBytesWritten();
         double throughput = 0;
         for (double val : resVec) {
             throughput += val;
         }
 #ifdef ELOG_MSVC
-        ELOG_DEBUG_EX(sTestLogger, "%u thread accumulated throughput: %s Msg/Sec\n", threadCount,
+        ELOG_DEBUG_EX(sTestLogger, "%u thread accumulated throughput: %s Msg/Sec", threadCount,
                       win32FormatNumber(throughput, 2).c_str());
 #else
-        ELOG_DEBUG_EX(sTestLogger, "%u thread accumulated throughput: %'.2f Msg/Sec\n", threadCount,
+        ELOG_DEBUG_EX(sTestLogger, "%u thread accumulated throughput: %'.2f Msg/Sec", threadCount,
                       throughput);
 #endif
         accumThroughput.push_back(throughput);
@@ -428,11 +451,10 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         /*ELOG_DEBUG_EX(sTestLogger, "%u thread Test time: %u usec, msg count: %u\n", threadCount,
                 (unsigned)testTime.count(), (unsigned)MSG_COUNT);*/
 #ifdef ELOG_MSVC
-        ELOG_DEBUG_EX(sTestLogger, "%u thread Throughput: %s MSg/Sec\n", threadCount,
+        ELOG_DEBUG_EX(sTestLogger, "%u thread Throughput: %s MSg/Sec", threadCount,
                       win32FormatNumber(throughput).c_str());
 #else
-        ELOG_DEBUG_EX(sTestLogger, "%u thread Throughput: %'.3f MSg/Sec\n", threadCount,
-                      throughput);
+        ELOG_DEBUG_EX(sTestLogger, "%u thread Throughput: %'.3f MSg/Sec", threadCount, throughput);
 #endif
         msgThroughput.push_back(throughput);
         throughput = (bytesEnd - bytesStart) / (double)testTime.count() * 1000000.0f / 1024;
@@ -440,8 +462,7 @@ void runMultiThreadTest(const char* title, const char* fileName, const char* cfg
         ELOG_DEBUG_EX(sTestLogger, "%u thread Throughput: %s KB/Sec\n\n", threadCount,
                       win32FormatNumber(throughput).c_str());
 #else
-        ELOG_DEBUG_EX(sTestLogger, "%u thread Throughput: %'.3f KB/Sec\n\n", threadCount,
-                      throughput);
+        ELOG_DEBUG_EX(sTestLogger, "%u thread Throughput: %'.3f KB/Sec", threadCount, throughput);
 #endif
         byteThroughput.push_back(throughput);
     }

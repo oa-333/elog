@@ -21,8 +21,6 @@ public:
     ELogJsonFormatter(ELogJsonFormatter&&) = delete;
     ELogJsonFormatter& operator=(const ELogJsonFormatter&) = delete;
 
-    static constexpr const char* TYPE_NAME = "json";
-
     bool parseJson(const std::string& jsonStr);
 
     inline void fillInProps(const ELogRecord& logRecord, elog::ELogFieldReceptor* receptor) {

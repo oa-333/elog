@@ -1,3 +1,5 @@
+#include "elog_api_log_target.h"
+
 #include "elog_api.h"
 #include "elog_internal.h"
 #include "elog_report.h"
@@ -8,19 +10,30 @@
 #include "sys/elog_syslog_target.h"
 #include "sys/elog_win32_event_log_target.h"
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+#include "elog_atomic.h"
+#include "elog_gc.h"
+#endif
+
 #define ELOG_MAX_TARGET_COUNT 256ul
 
 namespace elog {
 
 ELOG_DECLARE_REPORT_LOGGER(ELogTargetApi)
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+static std::vector<ELogAtomic<ELogTarget*>> sLogTargets;
+static ELogGC* sLogTargetGC = nullptr;
+static std::atomic<uint64_t> sLogTargetEpoch = 0;
+#else
 static std::vector<ELogTarget*> sLogTargets;
+#endif
 static ELogTarget* sDefaultLogTarget = nullptr;
 
 /** @def A log target pointer denoting a reserved slot. */
 #define ELOG_TARGET_RESERVED ((ELogTarget*)(-1ll))
 
-extern bool initLogTargets() {
+bool initLogTargets() {
     // NOTE: statistics disabled
     sDefaultLogTarget = new (std::nothrow) ELogFileTarget(stderr, nullptr, false);
     if (sDefaultLogTarget == nullptr) {
@@ -35,10 +48,45 @@ extern bool initLogTargets() {
         return false;
     }
     ELOG_REPORT_TRACE("Default log target initialized");
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    sLogTargets.resize(getParams().m_maxLogTargets);
+
+    // create garbage collector
+    sLogTargetEpoch.store(0, std::memory_order_relaxed);
+    sLogTargetGC = new (std::nothrow) ELogGC();
+    if (sLogTargetGC == nullptr) {
+        ELOG_REPORT_ERROR("Failed to allocate log target garbage collector, out of memory");
+        termLogTargets();
+        return false;
+    }
+
+    // initialize garbage collector
+    if (!sLogTargetGC->initialize("elog_target_gc", getMaxThreads(), 0,
+                                  getParams().m_logTargetGCPeriodMillis,
+                                  getParams().m_logTargetGCTaskCount)) {
+        ELOG_REPORT_ERROR("Failed to initialize log target garbage collector");
+        termLogTargets();
+        return false;
+    }
+    // NOTE: starting the background GC threads is postponed to a later phase, otherwise we get an
+    // early call to the life sign manager before it was started
+#endif
     return true;
 }
 
-extern void termLogTargets() {
+void termLogTargets() {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    // terminate GC
+    if (sLogTargetGC != nullptr) {
+        sLogTargetGC->stop();
+        if (!sLogTargetGC->destroy()) {
+            ELOG_REPORT_ERROR("Failed to destroy log target garbage collector");
+            return;
+        }
+        delete sLogTargetGC;
+        sLogTargetGC = nullptr;
+    }
+#endif
     if (sDefaultLogTarget != nullptr) {
         sDefaultLogTarget->stop();
         sDefaultLogTarget->destroy();
@@ -46,6 +94,88 @@ extern void termLogTargets() {
     }
 }
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+void startLogTargetGC() {
+    if (sLogTargetGC != nullptr) {
+        sLogTargetGC->start();
+    }
+}
+
+ELOG_IMPLEMENT_RECYCLE(ELogFormatter) { destroyLogFormatter(object); }
+ELOG_IMPLEMENT_RECYCLE(ELogFilter) { destroyFilter(object); }
+ELOG_IMPLEMENT_RECYCLE(ELogFlushPolicy) { destroyFlushPolicy(object); }
+
+void retireLogTargetFormatter(ELogFormatter* logFormatter) {
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+    ELOG_RETIRE(sLogTargetGC, ELogFormatter, logFormatter, ELOG_CURRENT_EPOCH);
+}
+
+void retireLogTargetFilter(ELogFilter* logFilter) {
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+    ELOG_RETIRE(sLogTargetGC, ELogFilter, logFilter, ELOG_CURRENT_EPOCH);
+}
+
+void retireLogTargetFlushPolicy(ELogFlushPolicy* flushPolicy) {
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+    ELOG_RETIRE(sLogTargetGC, ELogFlushPolicy, flushPolicy, ELOG_CURRENT_EPOCH);
+}
+
+ELogGC* getLogTargetGC() { return sLogTargetGC; }
+
+std::atomic<uint64_t>& getLogTargetEpoch() { return sLogTargetEpoch; }
+
+#endif
+
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+ELogTargetId addLogTarget(ELogTarget* logTarget) {
+    ELOG_REPORT_TRACE("Adding log target: %s", logTarget->getName());
+
+    // NOTE: we must start the log target early because of statistics dependency (if started after
+    // adding to array, then any ELOG_REPORT_XXX in between would trigger logging for the new target
+    // before the statistics object was created) but some log targets require they have an id
+    // allocated early, before start is called (e.g. Grafana), so that they can set up a debug
+    // logger that does not send logs to itself
+
+    // find vacant slot and reserve it for the log target
+    ELogTargetId logTargetId = ELOG_INVALID_TARGET_ID;
+    for (uint32_t i = 0; i < sLogTargets.size(); ++i) {
+        ELogTarget* target = sLogTargets[i].m_atomicValue.load(std::memory_order_relaxed);
+        if (target == nullptr && sLogTargets[i].m_atomicValue.compare_exchange_strong(
+                                     target, ELOG_TARGET_RESERVED, std::memory_order_seq_cst)) {
+            ELOG_REPORT_TRACE("Reserved slot %u to log target %s", i, logTarget->getName());
+            logTargetId = i;
+            break;
+        }
+    }
+
+    // check if found
+    if (logTargetId == ELOG_INVALID_TARGET_ID) {
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    // set target id and start it
+    logTarget->setId(logTargetId);
+
+    // start target id
+    if (!logTarget->start()) {
+        ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
+        logTarget->setId(ELOG_INVALID_TARGET_ID);
+        sLogTargets[logTargetId].m_atomicValue.store(nullptr, std::memory_order_release);
+        return ELOG_INVALID_TARGET_ID;
+    }
+
+    // NOTE: we must increment epoch before putting the log target in the global array, since we are
+    // about to write messages into it (and a concurrent remove may destroy it)
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+
+    // now we can replace the reserved pointer to the real pointer
+    sLogTargets[logTargetId].m_atomicValue.store(logTarget, std::memory_order_release);
+
+    // write accumulated log messages if there are such
+    getPreInitLoggerRef().writeAccumulatedLogMessages(logTarget);
+    return logTargetId;
+}
+#else
 ELogTargetId addLogTarget(ELogTarget* logTarget) {
     // TODO: should we guard against duplicate names (they are used in search by name and in log
     // affinity mask building) - this might require API change (returning at least bool)
@@ -76,7 +206,6 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
         if (sLogTargets.size() == ELOG_MAX_TARGET_COUNT) {
             ELOG_REPORT_ERROR("Cannot add log target, reached hard limit of log targets %u",
                               ELOG_MAX_TARGET_COUNT);
-            logTarget->stop();
             return ELOG_INVALID_TARGET_ID;
         }
         logTargetId = (ELogTargetId)sLogTargets.size();
@@ -91,6 +220,7 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
     if (!logTarget->start()) {
         ELOG_REPORT_ERROR("Failed to start log target %s", logTarget->getName());
         logTarget->setId(ELOG_INVALID_TARGET_ID);
+        sLogTargets[logTargetId] = nullptr;
         return ELOG_INVALID_TARGET_ID;
     }
 
@@ -101,6 +231,7 @@ ELogTargetId addLogTarget(ELogTarget* logTarget) {
     getPreInitLoggerRef().writeAccumulatedLogMessages(logTarget);
     return logTargetId;
 }
+#endif
 
 ELogTargetId addLogFileTarget(const char* logFilePath, uint32_t bufferSize /* = 0 */,
                               bool useLock /* = false */, uint32_t segmentLimitMB /* = 0 */,
@@ -182,15 +313,17 @@ ELogTargetId attachLogFileTarget(FILE* fileHandle, bool closeHandleWhenDone /* =
 
 ELogTargetId addStdErrLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
                                 ELogFilter* logFilter /* = nullptr */,
-                                ELogFormatter* logFormatter /* = nullptr */) {
-    return attachLogFileTarget(stderr, false, 0, false, false, logLevel, nullptr, logFilter,
+                                ELogFormatter* logFormatter /* = nullptr */,
+                                ELogFlushPolicy* flushPolicy /* = nullptr */) {
+    return attachLogFileTarget(stderr, false, 0, false, false, logLevel, flushPolicy, logFilter,
                                logFormatter);
 }
 
 ELogTargetId addStdOutLogTarget(ELogLevel logLevel /* = ELEVEL_INFO */,
                                 ELogFilter* logFilter /* = nullptr */,
-                                ELogFormatter* logFormatter /* = nullptr */) {
-    return attachLogFileTarget(stdout, false, 0, false, false, logLevel, nullptr, logFilter,
+                                ELogFormatter* logFormatter /* = nullptr */,
+                                ELogFlushPolicy* flushPolicy /* = nullptr */) {
+    return attachLogFileTarget(stdout, false, 0, false, false, logLevel, flushPolicy, logFilter,
                                logFormatter);
 }
 
@@ -276,14 +409,19 @@ ELogTargetId addTracer(const char* traceFilePath, uint32_t traceBufferSize, cons
     if (id == ELOG_INVALID_TARGET_ID) {
         return id;
     }
+
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    // NOTE: we must increment epoch before getting the log target and using it, to guard against
+    // concurrent remove
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+#endif
+
+    // now get the log target
     ELogTarget* logTarget = getLogTarget(id);
     if (logTarget == nullptr) {
         ELOG_REPORT_ERROR("Internal error while adding tracer, log target by id %u not found", id);
         return false;
     }
-
-    // define a pass key to the trace target, so that normal log messages will not reach the tracer
-    logTarget->setPassKey();
 
     // define log source
     ELogSource* logSource = defineLogSource(sourceName, true);
@@ -294,13 +432,7 @@ ELogTargetId addTracer(const char* traceFilePath, uint32_t traceBufferSize, cons
     }
 
     // bind log source to target using affinity mask
-    ELogTargetAffinityMask mask;
-    ELOG_CLEAR_TARGET_AFFINITY_MASK(mask);
-    ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
-    logSource->setLogTargetAffinity(mask);
-
-    // add pass key to the log source
-    logSource->addPassKey(logTarget->getPassKey());
+    logSource->pairWithLogTarget(logTarget);
     return id;
 }
 
@@ -308,9 +440,26 @@ ELogTarget* getLogTarget(ELogTargetId targetId) {
     if (targetId >= sLogTargets.size()) {
         return nullptr;
     }
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+    return sLogTargets[targetId].m_atomicValue.load(std::memory_order_relaxed);
+#else
     return sLogTargets[targetId];
+#endif
 }
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+ELogTarget* getLogTarget(const char* logTargetName) {
+    for (ELogAtomic<ELogTarget*>& logTargetRef : sLogTargets) {
+        ELogTarget* logTarget = logTargetRef.m_atomicValue.load(std::memory_order_relaxed);
+        if (logTarget != nullptr) {
+            if (strcmp(logTarget->getName(), logTargetName) == 0) {
+                return logTarget;
+            }
+        }
+    }
+    return nullptr;
+}
+#else
 ELogTarget* getLogTarget(const char* logTargetName) {
     for (ELogTarget* logTarget : sLogTargets) {
         if (strcmp(logTarget->getName(), logTargetName) == 0) {
@@ -319,7 +468,61 @@ ELogTarget* getLogTarget(const char* logTargetName) {
     }
     return nullptr;
 }
+#endif
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+ELogTarget* acquireLogTarget(ELogTargetId targetId, uint64_t& epoch) {
+    if (targetId > sLogTargets.size()) {
+        ELOG_REPORT_ERROR("Cannot get log target by id %u, id out of range", targetId);
+        return nullptr;
+    }
+
+    // increment epoch before checking pointer
+    epoch = sLogTargetEpoch.fetch_add(1, std::memory_order_acquire);
+    sLogTargetGC->beginEpoch(epoch);
+
+    ELogTarget* logTarget = sLogTargets[targetId].m_atomicValue.load(std::memory_order_relaxed);
+    return logTarget;
+}
+
+ELogTarget* acquireLogTarget(const char* logTargetName, uint64_t& epoch) {
+    // increment epoch before checking pointers
+    epoch = sLogTargetEpoch.fetch_add(1, std::memory_order_acquire);
+    sLogTargetGC->beginEpoch(epoch);
+
+    for (ELogAtomic<ELogTarget*>& logTargetRef : sLogTargets) {
+        ELogTarget* logTarget = logTargetRef.m_atomicValue.load(std::memory_order_relaxed);
+        if (logTarget != nullptr) {
+            if (strcmp(logTarget->getName(), logTargetName) == 0) {
+                return logTarget;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+void releaseLogTarget(uint64_t epoch) { sLogTargetGC->endEpoch(epoch); }
+#endif
+
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+ELogTargetId getLogTargetId(const char* logTargetName) {
+    // NOTE: we must increment epoch before accessing log targets, to guard against concurrent
+    // remove
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+
+    for (uint32_t logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
+        ELogAtomic<ELogTarget*>& logTargetRef = sLogTargets[logTargetId];
+        ELogTarget* logTarget = logTargetRef.m_atomicValue.load(std::memory_order_relaxed);
+        if (logTarget != nullptr) {
+            if (strcmp(logTarget->getName(), logTargetName) == 0) {
+                return logTargetId;
+            }
+        }
+    }
+    return ELOG_INVALID_TARGET_ID;
+}
+#else
 ELogTargetId getLogTargetId(const char* logTargetName) {
     for (uint32_t logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
@@ -329,7 +532,9 @@ ELogTargetId getLogTargetId(const char* logTargetName) {
     }
     return ELOG_INVALID_TARGET_ID;
 }
+#endif
 
+#ifndef ELOG_ENABLE_DYNAMIC_CONFIG
 static void compactLogTargets() {
     // find largest suffix of removed log targets
     size_t maxLogTargetId = sLogTargets.size() - 1;
@@ -349,17 +554,69 @@ static void compactLogTargets() {
         }
     }
 }
+#endif
 
-void removeLogTarget(ELogTargetId targetId) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+
+// provide specialization for log target
+ELOG_IMPLEMENT_RECYCLE(ELogTarget) { object->destroy(); }
+
+inline bool retireLogTarget(ELogTarget* logTarget, uint64_t epoch) {
+    ELogManagedObjectWrapper<ELogTarget>* managedLogTarget =
+        new (std::nothrow) ELogManagedObjectWrapper<ELogTarget>(logTarget);
+    if (managedLogTarget == nullptr) {
+        ELOG_REPORT_ERROR(
+            "Cannot retire log target for asynchronous reclamation, out of memory (memory leak "
+            "inevitable)");
+        return false;
+    }
+    return sLogTargetGC->retire(managedLogTarget, epoch);
+}
+
+bool removeLogTarget(ELogTargetId targetId) {
     // be careful, if this is the last log target, we must put back stderr
     if (targetId >= sLogTargets.size()) {
         ELOG_REPORT_ERROR("Cannot remove log target %u, id out of range", targetId);
-        return;
+        return false;
+    }
+
+    ELogTarget* logTarget = sLogTargets[targetId].m_atomicValue.load(std::memory_order_acquire);
+    if (logTarget == nullptr) {
+        ELOG_REPORT_ERROR("Cannot remove log target %u, not found", targetId);
+        return false;
+    }
+
+    // in order to avoid race with other who try to remove the log target we first do a CAS
+    if (!sLogTargets[targetId].m_atomicValue.compare_exchange_strong(logTarget, nullptr,
+                                                                     std::memory_order_seq_cst)) {
+        // we consider this an error because it indicates the user is doing something wrong
+        // two threads should not be trying to remove the same log target
+        ELOG_REPORT_ERROR("Cannot remove log target %u, concurrent modification", targetId);
+        return false;
+    }
+
+    // now we can stop the log target
+    // NOTE: we cannot shrink the vector because that will change log target indices
+    ELOG_REPORT_TRACE("Stopping log target %s at %p", logTarget->getName(), logTarget);
+    logTarget->stop();
+
+    // NOTE: the epoch must be incremented only after the pointer was detached
+    ELOG_REPORT_TRACE("Retiring log target %s at %p for later reclamation", logTarget->getName(),
+                      logTarget);
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch)
+    return retireLogTarget(logTarget, ELOG_CURRENT_EPOCH);
+}
+#else
+bool removeLogTarget(ELogTargetId targetId) {
+    // be careful, if this is the last log target, we must put back stderr
+    if (targetId >= sLogTargets.size()) {
+        ELOG_REPORT_ERROR("Cannot remove log target %u, id out of range", targetId);
+        return false;
     }
 
     if (sLogTargets[targetId] == nullptr) {
         ELOG_REPORT_ERROR("Cannot remove log target %u, not found", targetId);
-        return;
+        return false;
     }
 
     // delete the log target and put null
@@ -372,8 +629,45 @@ void removeLogTarget(ELogTargetId targetId) {
 
     // if suffix entries contain nulls we can reduce array size
     compactLogTargets();
+    return true;
 }
+#endif
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+void clearAllLogTargets() {
+    // NOTE: since log target may have indirect dependencies (e.g. one log target, while writing a
+    // log message, issues another log message which is dispatched to all other log targets), we
+    // first stop all targets and then delete them, but this requires log target to be able to
+    // reject log messages after stop() was called.
+
+    // NOTE: in order to avoid race conditions, we first detach all log targets, then stop them,
+    // then retire to GC
+    std::vector<ELogTarget*> removedLogTargets;
+
+    for (ELogAtomic<ELogTarget*>& logTargetRef : sLogTargets) {
+        ELogTarget* logTarget = logTargetRef.m_atomicValue.load(std::memory_order_acquire);
+        if (logTarget != nullptr && logTargetRef.m_atomicValue.compare_exchange_strong(
+                                        logTarget, nullptr, std::memory_order_seq_cst)) {
+            if (isTerminating() || (logTarget != nullptr && !logTarget->isSystemTarget())) {
+                removedLogTargets.push_back(logTarget);
+            }
+        }
+    }
+
+    // NOTE: the epoch must be incremented only after each pointer was detached
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+
+    // now we can stop them one by one
+    for (ELogTarget* logTarget : removedLogTargets) {
+        logTarget->stop();
+    }
+
+    // and finally, retire them one by one
+    for (ELogTarget* logTarget : removedLogTargets) {
+        retireLogTarget(logTarget, ELOG_CURRENT_EPOCH);
+    }
+}
+#else
 void clearAllLogTargets() {
     // NOTE: since log target may have indirect dependencies (e.g. one log target, while writing a
     // log message, issues another log message which is dispatched to all other log targets), we
@@ -395,9 +689,27 @@ void clearAllLogTargets() {
         compactLogTargets();
     }
 }
+#endif
 
-void removeLogTarget(ELogTarget* target) { removeLogTarget(target->getId()); }
+bool removeLogTarget(ELogTarget* target) { return removeLogTarget(target->getId()); }
 
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+void resetThreadStatCounters(uint64_t slotId) {
+    // NOTE: we must increment epoch before accessing log targets, to guard against concurrent
+    // remove
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+
+    for (ELogAtomic<ELogTarget*>& logTargetRef : sLogTargets) {
+        ELogTarget* logTarget = logTargetRef.m_atomicValue.load(std::memory_order_acquire);
+        if (logTarget != nullptr) {
+            ELogStats* stats = logTarget->getStats();
+            if (stats != nullptr) {
+                stats->resetThreadCounters(slotId);
+            }
+        }
+    }
+}
+#else
 void resetThreadStatCounters(uint64_t slotId) {
     for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
         ELogTarget* logTarget = sLogTargets[logTargetId];
@@ -407,13 +719,20 @@ void resetThreadStatCounters(uint64_t slotId) {
         }
     }
 }
+#endif
 
-void logMsgTarget(const ELogRecord& logRecord, ELogTargetAffinityMask logTargetAffinityMask) {
+#ifdef ELOG_ENABLE_DYNAMIC_CONFIG
+bool logMsgTarget(const ELogRecord& logRecord, ELogTargetAffinityMask logTargetAffinityMask) {
+    // NOTE: we must increment epoch before accessing log targets, to guard against concurrent
+    // remove
+    ELOG_SCOPED_EPOCH(sLogTargetGC, sLogTargetEpoch);
+
     bool logged = false;
     for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
-        ELogTarget* logTarget = sLogTargets[logTargetId];
+        ELogTarget* logTarget =
+            sLogTargets[logTargetId].m_atomicValue.load(std::memory_order_relaxed);
         // NOTE: we may encounter a reserved entry (see addLogTarget above)
-        if (logTarget == ELOG_TARGET_RESERVED) {
+        if (logTarget == nullptr || logTarget == ELOG_TARGET_RESERVED) {
             continue;
         }
         if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY ||
@@ -436,6 +755,41 @@ void logMsgTarget(const ELogRecord& logRecord, ELogTargetAffinityMask logTargetA
             fprintf(stderr, "%s\n", logRecord.m_logMsg);
         }
     }
+
+    return logged;
 }
+#else
+bool logMsgTarget(const ELogRecord& logRecord, ELogTargetAffinityMask logTargetAffinityMask) {
+    bool logged = false;
+    for (ELogTargetId logTargetId = 0; logTargetId < sLogTargets.size(); ++logTargetId) {
+        ELogTarget* logTarget = sLogTargets[logTargetId];
+        // NOTE: we may encounter a reserved entry (see addLogTarget above)
+        if (logTarget == nullptr || logTarget == ELOG_TARGET_RESERVED) {
+            continue;
+        }
+        if (logTargetId > ELOG_MAX_LOG_TARGET_ID_AFFINITY ||
+            ELOG_HAS_TARGET_AFFINITY_MASK(logTargetAffinityMask, logTargetId)) {
+            // check also pass key if present
+            ELogPassKey passKey = logTarget->getPassKey();
+            if (passKey == ELOG_NO_PASSKEY ||
+                logRecord.m_logger->getLogSource()->hasPassKey(passKey)) {
+                logTarget->log(logRecord);
+                logged = true;
+            }
+        }
+    }
+
+    // by default, if no log target is defined yet, log is redirected to stderr
+    if (!logged) {
+        if (sDefaultLogTarget != nullptr) {
+            sDefaultLogTarget->log(logRecord);
+        } else {
+            fprintf(stderr, "%s\n", logRecord.m_logMsg);
+        }
+    }
+
+    return logged;
+}
+#endif
 
 }  // namespace elog

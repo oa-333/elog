@@ -27,6 +27,7 @@ public:
           m_id(0),
           m_gcFrequency(0),
           m_gcPeriodMillis(0),
+          m_gcThreadCount(0),
           m_maxThreads(0),
           m_retireCount(0),
           m_done(false),
@@ -45,6 +46,7 @@ public:
 
     /**
      * @brief Initializes the garbage collector.
+     *
      * @param name The garbage collector name (user may define several).
      * @param maxThreads The maximum number of threads that can access the garbage collector
      * concurrently. This value cannot exceed the number of threads configured during initialization
@@ -58,12 +60,25 @@ public:
      * recycling. This can be specified in addition to cooperative garbage collection frequency.
      * @param gcThreadCount Optionally specify the number of background garbage collection tasks.
      * This parameter is ignored when @ref gcPeriodMillis is zero.
+     * @param maxTxnSpan Optionally specifies the maximum range of transaction span, from oldest to
+     * newest transaction. If not specified a default reasonable value will be used. If the
+     * transaction span exceeds this limit (i.e. when some long running transaction fails to end in
+     * time), then new transaction will be blocked when calling @ref endEpoch(), until the long
+     * running transaction finishes.
      *
-     * @note Either one or both of cooperative and background garbage collectioncan can be
-     * configured.
+     * @note Either one or both of cooperative and background garbage collection can be configured.
+     * In case background garbage collection is used, a matching call to @ref start() and @ref
+     * stop() is required as well.
      */
     bool initialize(const char* name, uint32_t maxThreads, uint32_t gcFrequency,
-                    uint32_t gcPeriodMillis = 0, uint32_t gcThreadCount = 0);
+                    uint32_t gcPeriodMillis = 0, uint32_t gcThreadCount = 0,
+                    uint32_t maxTxnSpan = 0);
+
+    /** @brief Starts all background garbage collection threads. */
+    void start();
+
+    /** @brief Stops all background garbage collection threads. */
+    void stop();
 
     /** @brief Destroys the garbage collector. */
     bool destroy();
@@ -103,6 +118,7 @@ private:
     uint32_t m_id;  // global GC id, unique among all GCs
     uint32_t m_gcFrequency;
     uint32_t m_gcPeriodMillis;
+    uint32_t m_gcThreadCount;
     uint32_t m_maxThreads;
     std::atomic<uint64_t> m_retireCount;
     std::vector<std::thread> m_gcThreads;

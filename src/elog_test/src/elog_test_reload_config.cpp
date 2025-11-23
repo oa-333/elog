@@ -49,7 +49,7 @@ TEST(ELogCore, ReloadConfig) {
 
     const auto& logMessages = logTarget->getLogMessages();
 
-    // launch a fre threads with same log source, have them print a few times each second, then
+    // launch a few threads with same log source, have them print a few times each second, then
     // after 3 seconds change log level
     elog::defineLogSource("test_source");
 

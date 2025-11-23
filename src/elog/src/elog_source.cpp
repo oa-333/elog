@@ -2,6 +2,7 @@
 
 #include "elog_private_logger.h"
 #include "elog_shared_logger.h"
+#include "elog_target.h"
 
 namespace elog {
 
@@ -130,6 +131,15 @@ ELogLogger* ELogSource::createPrivateLogger() {
         m_loggers.insert(logger);
     }
     return logger;
+}
+
+void ELogSource::pairWithLogTarget(ELogTarget* logTarget) {
+    ELogTargetAffinityMask mask;
+    ELOG_CLEAR_TARGET_AFFINITY_MASK(mask);
+    ELOG_ADD_TARGET_AFFINITY_MASK(mask, logTarget->getId());
+    setLogTargetAffinity(mask);
+    logTarget->setPassKey();
+    addPassKey(logTarget->getPassKey());
 }
 
 }  // namespace elog
